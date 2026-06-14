@@ -10154,12 +10154,14 @@ function FamilyView() {
   // ★ Supabase 同期 (家族画面): 起動時 + 15秒ごとに最新 state を pull (店舗 ID 指定)
   useEffect(() => {
     if (!isSupabaseEnabled || !familyStoreId) return;
+    // ★ 本部管理者プレビューモード: subscribe 自体をスキップ (UI 確認用なのでリアルタイム同期不要)
+    //    setData(fresh) でセット済のダミー利用者を Supabase pull 結果で上書きしないため
+    const isPreviewMode = (typeof window !== 'undefined') && (sessionStorage.getItem('familyAuthAccId') === '__staff_preview__');
+    if (isPreviewMode) return;
     // 異なる店舗の家族でログインしたら古いキャッシュをクリア
     const lastFamilyStoreKey = 'tsumugiLastFamilyStoreId';
     const lastStore = (()=>{ try { return localStorage.getItem(lastFamilyStoreKey); } catch { return null; } })();
-    // ★ プレビューモードではダミー利用者を消さないようキャッシュクリアをスキップ
-    const isPreviewMode = (typeof window !== 'undefined') && (sessionStorage.getItem('familyAuthAccId') === '__staff_preview__');
-    if (!isPreviewMode && lastStore && lastStore !== familyStoreId) {
+    if (lastStore && lastStore !== familyStoreId) {
       // patients 等は新店舗の Supabase pull で置き換わるが、念のためクリア
       setData(prev => ({ ...prev, patients: [], ticketRecords: [], familyAnnouncements: [], familyPersonalAnnouncements: [], familyPhotos: [] }));
     }
