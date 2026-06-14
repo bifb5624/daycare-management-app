@@ -12274,8 +12274,24 @@ export default function App() {
     if (isSupabaseEnabled && staffSession?.storeId
         && !storeTransitionRef.current
         && dataLoadedForStoreRef.current === staffSession.storeId) {
-      const t = setTimeout(() => {
-        if (!storeTransitionRef.current && dataLoadedForStoreRef.current === staffSession.storeId) {
+      const t = setTimeout(async () => {
+        if (storeTransitionRef.current || dataLoadedForStoreRef.current !== staffSession.storeId) return;
+        // ★ 利用者データ消失防止: 0 件 patient で上書きする際は Supabase 側に既存があるか確認
+        //   既存に patients があるのに、こちらが 0 件なら push せず Supabase の値を尊重
+        try {
+          if ((appData.patients || []).length === 0) {
+            const remote = await supabaseLoadStateForStore(staffSession.storeId);
+            const remotePatients = remote?.data?.patients;
+            if (Array.isArray(remotePatients) && remotePatients.length > 0) {
+              console.warn('[safety] skip push: local patients=[], remote has', remotePatients.length, 'patients. Refusing to overwrite.');
+              // Supabase 側の値で local を再構築 (誤った 0 件 state を消す)
+              setAppData(prev => ({ ...remote.data, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] }));
+              return;
+            }
+          }
+          supabaseSyncStateForStore(staffSession.storeId, appData);
+        } catch (e) {
+          console.warn('[supabase] safety check failed, attempting push anyway', e);
           supabaseSyncStateForStore(staffSession.storeId, appData);
         }
       }, 1500);
@@ -20953,34 +20969,30 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 </div>
               </div>
 
-              {/* ④ 住所（郵便番号・自動補完・建物名） */}
+              {/* ④ 住所（郵便番号・自動補完・建物名） — 縦並びレイアウト */}
               <div>
                 <label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label>
-                <div className="flex gap-2 mb-2 items-end flex-wrap">
-                  <div style={{width:280}}>
+                <div className="space-y-2">
+                  <div>
                     <label className="block text-[12px] font-bold text-slate-500 mb-0.5">郵便番号（ハイフンなしで入力）</label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 items-center">
                       <input disabled={isOff} value={localPatient.zipCode||''} onChange={e=>{const raw=e.target.value.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[^0-9]/g,'').slice(0,7);const fmt=raw.length>3?raw.slice(0,3)+'-'+raw.slice(3):raw;updateLP('zipCode',fmt);}}
-                        placeholder="1350011" maxLength={8} inputMode="numeric"
-                        className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 tracking-widest"/>
-                      {/* ★ 郵便番号 → 住所 自動補完ボタン (目立つように強調) */}
+                        placeholder="1350011" maxLength={8} inputMode="numeric" style={{width:200}}
+                        className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 tracking-widest"/>
                       <button type="button" disabled={isOff} onClick={async ()=>{
                         const result = await lookupZipAddress(localPatient.zipCode);
-                        if (result?.full) {
-                          updateLP('address', result.full);
-                        } else {
-                          alert('住所が見つかりませんでした。郵便番号をご確認ください。');
-                        }
-                      }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold whitespace-nowrap shadow active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed" title="郵便番号から住所を自動取得">
+                        if (result?.full) updateLP('address', result.full);
+                        else alert('住所が見つかりませんでした。郵便番号をご確認ください。');
+                      }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
                         📍 住所検索
                       </button>
                     </div>
                   </div>
-                  <div className="flex-1">
+                  <div>
                     <label className="block text-[12px] font-bold text-slate-500 mb-0.5">住所</label>
                     <input disabled={isOff} value={localPatient.address||''} onChange={e=>updateLP('address',e.target.value)} placeholder="例: 東京都江東区扇橋1-1-1" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
                   </div>
-                  <div style={{width:180}}>
+                  <div>
                     <label className="block text-[12px] font-bold text-slate-500 mb-0.5">建物名・部屋番号</label>
                     <input disabled={isOff} value={localPatient.addressBuilding||''} onChange={e=>updateLP('addressBuilding',e.target.value)} placeholder="例: メイゾン白子101" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
                   </div>
@@ -22656,6 +22668,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                   </div>
                 </div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={facilityInfo.address || ""} onChange={e => setFacilityInfo({...facilityInfo, address: e.target.value})} placeholder="郵便番号から検索すると自動入力されます" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">建物名・部屋番号</label><input type="text" value={facilityInfo.addressBuilding || ""} onChange={e => setFacilityInfo({...facilityInfo, addressBuilding: e.target.value})} placeholder="例: メイゾン白子101" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" value={facilityInfo.phone || ""} onChange={e => setFacilityInfo({...facilityInfo, phone: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" value={facilityInfo.fax || ""} onChange={e => setFacilityInfo({...facilityInfo, fax: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">サービス提供時間</h4>
