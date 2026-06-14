@@ -13529,13 +13529,17 @@ export default function App() {
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
-            {/* ★ iPhone (isMobileScreen) では minWidth=1100 / scale 機構を全部外して素直なレスポンシブに → 過剰スクロール解消 */}
+            {/* ★ レイアウト方針:
+                - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
+                - iPad (768-1099px): scale で縮小表示
+                - PC (>= 1100px): scale なし
+                ★ height は常に 'auto' → 過剰縦スクロール解消 (scale 適用時の height:100/scale% バグを除去) */}
             <div style={{
-              minWidth: isMobileScreen ? 0 : DESIGN_WIDTH,
-              width: isMobileScreen ? '100%' : (contentScale<1 ? `${100/contentScale}%` : '100%'),
-              height: isMobileScreen ? 'auto' : (contentScale<1 ? `${100/contentScale}%` : '100%'),
+              minWidth: DESIGN_WIDTH,
+              width: (!isMobileScreen && contentScale<1) ? `${100/contentScale}%` : '100%',
+              height: 'auto',
               transformOrigin: 'top left',
-              transform: (isMobileScreen || contentScale>=1) ? 'none' : `scale(${contentScale})`,
+              transform: (!isMobileScreen && contentScale<1) ? `scale(${contentScale})` : 'none',
             }}>
             {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
