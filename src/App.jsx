@@ -886,12 +886,31 @@ const GLOBAL_STYLE = `
   #record-table * { -webkit-user-drag: none; -webkit-touch-callout: none; }
   #record-table td, #record-table th { -webkit-user-select: none; user-select: none; }
   #record-table img { -webkit-user-drag: none; pointer-events: none; }
+
+  /* ★ iPhone/iPad: テーブル横スクロール時にページ全体がずれない / 枠外までスクロールしない対策 */
+  html, body { overscroll-behavior: none; overflow-x: hidden; }
+  /* スクロールバウンドを内側のスクロール領域だけに閉じ込める */
+  .overflow-auto, .overflow-x-auto, .overflow-y-auto { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  /* テーブルラッパが横スクロールするときに body が引っ張られないように */
+  #record-table { touch-action: pan-x pan-y; }
+
+  /* ★ iPhone (768px 未満) 専用: 文字サイズ底上げ (老眼配慮) */
+  @media (max-width: 767px) {
+    body { font-size: 16px; }
+    input, select, textarea { font-size: 16px !important; }  /* iOS Safari 自動ズーム防止 = 16px 以上 */
+    .sidebar-item-label { font-size: 16px; }
+    button { min-height: 36px; }
+  }
 `;
 
 const GlobalStyle = () => React.createElement('style', null, GLOBAL_STYLE);
 
 // === 年齢計算ヘルパー ===
 const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(birthDate); const n=new Date(); let age=n.getFullYear()-b.getFullYear(); if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate())) age--; return age; };
+
+// ★ touch デバイス (iPhone/iPad) では autoFocus でキーボードが勝手に立ち上がるのを防ぐ
+// PC (マウス操作) のみ true → 各 input の autoFocus={IS_DESKTOP_AUTOFOCUS} で使用
+const IS_DESKTOP_AUTOFOCUS = (typeof window !== 'undefined') && !('ontouchstart' in window) && (window.matchMedia && window.matchMedia('(min-width: 1024px)').matches);
 
 // 全角→半角変換（ID/PW 入力用）
 const toHalfWidth = (s) => (s||'')
@@ -9468,7 +9487,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
                 <div style={{padding:'8px 8px 4px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px'}}>
                     <Search size={14} color="#94a3b8"/>
-                    <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
+                    <input autoFocus={IS_DESKTOP_AUTOFOCUS} type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
                       placeholder="氏名・ふりがなで検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
                     {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
                   </div>
@@ -9521,7 +9540,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
               <div className="text-sm font-bold text-slate-700">📱 利用者を選択してプレビュー</div>
               <div className="text-xs text-slate-400 font-bold">利用中 {allPats.length}名</div>
             </div>
-            <input type="text" autoFocus placeholder="🔍 氏名・ふりがな・ID で検索" value={patSearch}
+            <input type="text" autoFocus={IS_DESKTOP_AUTOFOCUS} placeholder="🔍 氏名・ふりがな・ID で検索" value={patSearch}
               onChange={e=>setPatSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-emerald-400" />
             <div className="flex flex-wrap gap-1 mb-3 pb-3 border-b border-slate-100">
@@ -12709,11 +12728,9 @@ export default function App() {
     setGlobalTip({text, x: r.left + r.width/2, y: r.top - 8});
   }, []);
   const hideTip = React.useCallback(() => setGlobalTip(null), []);
-  // ★ iPhone (768px 未満) はサイドバーを初期非表示、それ以外は表示
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.innerWidth >= 768;
-  });
+  // ★ サイドバーは全端末で初期表示 ON (iPhone 含む)
+  // ユーザー判断: 最初に何があるか見えた方が分かりやすい。手動で閉じれば OK
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const DESIGN_WIDTH = 1100;
   const contentRef = useRef(null);
   const [contentScale, setContentScale] = useState(1);
@@ -13430,10 +13447,11 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative min-w-0">
-          <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
+          <header className="h-14 md:h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
             <div className="flex items-center min-w-0 flex-1">
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
-              <h1 className="text-base md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
+              {/* ★ iPhone は QuickNav 非表示でスペース確保 → タイトルを切らずに表示 (老眼配慮で text-lg) */}
+              <h1 className="text-lg md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
                 {currentView === 'record' ? `サービス提供記録 入力　${formatDateDisplay(selectedDate)}` :
                  currentView === 'ticket' ? 'サービス提供記録' :
                  currentView === 'print' ? '連絡帳 作成・印刷' :
@@ -13450,8 +13468,11 @@ export default function App() {
               </h1>
             </div>
             {/* ジャンプナビをヘッダー右側に配置し、画面領域を節約 */}
+            {/* ★ iPhone (768px 未満) ではタイトルと重なるため非表示 → サイドバーから遷移してもらう */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
-              <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
+              <div className="hidden md:block">
+                <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
+              </div>
             )}
           </header>
 
@@ -15200,7 +15221,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
         <div className="max-w-5xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-            <input type="text" autoFocus placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
+            {/* ★ iPhone/iPad ではキーボードが勝手に出ないよう autoFocus を PC のみに限定 */}
+            <input type="text" autoFocus={IS_DESKTOP_AUTOFOCUS} placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
               onChange={e=>setPatientSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-blue-400" />
             {/* 行ジャンプボタン */}
@@ -18882,7 +18904,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 <div style={{padding:'8px 8px 4px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px'}}>
                     <Search size={14} color="#94a3b8"/>
-                    <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
+                    <input autoFocus={IS_DESKTOP_AUTOFOCUS} type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
                       placeholder="氏名で検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
                     {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
                   </div>
