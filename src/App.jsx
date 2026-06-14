@@ -887,12 +887,31 @@ const GLOBAL_STYLE = `
   #record-table td, #record-table th { -webkit-user-select: none; user-select: none; }
   #record-table img { -webkit-user-drag: none; pointer-events: none; }
 
-  /* ★ iPhone/iPad: テーブル横スクロール時にページ全体がずれない / 枠外までスクロールしない対策 */
-  html, body { overscroll-behavior: none; overflow-x: hidden; }
+  /* ★ iPhone/iPad: アプリ全体を画面領域に固定 = 画面外への無駄スクロール完全禁止 */
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  /* ★ タッチデバイス (iPhone/iPad) でのみ body fixed → URL バー伸縮で body がずれない / 過剰スクロール完全防止
+     PC では body fixed すると onFocus 時にカーソルが飛ぶことがあるので適用しない */
+  @media (pointer: coarse) {
+    body { position: fixed; width: 100%; left: 0; top: 0; -webkit-overflow-scrolling: auto; }
+  }
   /* スクロールバウンドを内側のスクロール領域だけに閉じ込める */
-  .overflow-auto, .overflow-x-auto, .overflow-y-auto { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+  .overflow-auto, .overflow-x-auto, .overflow-y-auto {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
   /* テーブルラッパが横スクロールするときに body が引っ張られないように */
   #record-table { touch-action: pan-x pan-y; }
+
+  /* ★ サービス提供記録テーブル: 入力欄を中央揃え統一 (iPhone/iPad で左詰めだったのを修正) */
+  #record-table td input,
+  #record-table td select { text-align: center; text-align-last: center; }
+  /* ただし特記事項 textarea / 自由記述だけ左揃え (デフォルト維持) */
+  #record-table td textarea,
+  #record-table td input[data-align="left"] { text-align: left; }
 
   /* ★ iPhone (768px 未満) 専用: 文字サイズ底上げ (老眼配慮) */
   @media (max-width: 767px) {
@@ -13093,7 +13112,7 @@ export default function App() {
     );
   }
   return (
-    <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15}}>
+    <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15,height:'100dvh',paddingTop:'env(safe-area-inset-top)',paddingLeft:'env(safe-area-inset-left)',paddingRight:'env(safe-area-inset-right)',paddingBottom:'env(safe-area-inset-bottom)'}}>
       <GlobalStyle />
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
