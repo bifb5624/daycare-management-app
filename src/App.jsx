@@ -886,12 +886,50 @@ const GLOBAL_STYLE = `
   #record-table * { -webkit-user-drag: none; -webkit-touch-callout: none; }
   #record-table td, #record-table th { -webkit-user-select: none; user-select: none; }
   #record-table img { -webkit-user-drag: none; pointer-events: none; }
+
+  /* ★ iPhone/iPad: アプリ全体を画面領域に固定 = 画面外への無駄スクロール完全禁止 */
+  html, body, #root {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  /* ★ タッチデバイス (iPhone/iPad) でのみ body fixed → URL バー伸縮で body がずれない / 過剰スクロール完全防止
+     PC では body fixed すると onFocus 時にカーソルが飛ぶことがあるので適用しない */
+  @media (pointer: coarse) {
+    body { position: fixed; width: 100%; left: 0; top: 0; -webkit-overflow-scrolling: auto; }
+  }
+  /* スクロールバウンドを内側のスクロール領域だけに閉じ込める */
+  .overflow-auto, .overflow-x-auto, .overflow-y-auto {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* テーブルラッパが横スクロールするときに body が引っ張られないように */
+  #record-table { touch-action: pan-x pan-y; }
+
+  /* ★ サービス提供記録テーブル: 入力欄を中央揃え統一 (iPhone/iPad で左詰めだったのを修正) */
+  #record-table td input,
+  #record-table td select { text-align: center; text-align-last: center; }
+  /* ただし特記事項 textarea / 自由記述だけ左揃え (デフォルト維持) */
+  #record-table td textarea,
+  #record-table td input[data-align="left"] { text-align: left; }
+
+  /* ★ iPhone (768px 未満) 専用: 文字サイズ底上げ (老眼配慮) */
+  @media (max-width: 767px) {
+    body { font-size: 16px; }
+    input, select, textarea { font-size: 16px !important; }  /* iOS Safari 自動ズーム防止 = 16px 以上 */
+    .sidebar-item-label { font-size: 16px; }
+    button { min-height: 36px; }
+  }
 `;
 
 const GlobalStyle = () => React.createElement('style', null, GLOBAL_STYLE);
 
 // === 年齢計算ヘルパー ===
 const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(birthDate); const n=new Date(); let age=n.getFullYear()-b.getFullYear(); if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate())) age--; return age; };
+
+// ★ touch デバイス (iPhone/iPad) では autoFocus でキーボードが勝手に立ち上がるのを防ぐ
+// PC (マウス操作) のみ true → 各 input の autoFocus={IS_DESKTOP_AUTOFOCUS} で使用
+const IS_DESKTOP_AUTOFOCUS = (typeof window !== 'undefined') && !('ontouchstart' in window) && (window.matchMedia && window.matchMedia('(min-width: 1024px)').matches);
 
 // 全角→半角変換（ID/PW 入力用）
 const toHalfWidth = (s) => (s||'')
@@ -9468,7 +9506,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
                 <div style={{padding:'8px 8px 4px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px'}}>
                     <Search size={14} color="#94a3b8"/>
-                    <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
+                    <input autoFocus={IS_DESKTOP_AUTOFOCUS} type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
                       placeholder="氏名・ふりがなで検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
                     {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
                   </div>
@@ -9521,7 +9559,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
               <div className="text-sm font-bold text-slate-700">📱 利用者を選択してプレビュー</div>
               <div className="text-xs text-slate-400 font-bold">利用中 {allPats.length}名</div>
             </div>
-            <input type="text" autoFocus placeholder="🔍 氏名・ふりがな・ID で検索" value={patSearch}
+            <input type="text" autoFocus={IS_DESKTOP_AUTOFOCUS} placeholder="🔍 氏名・ふりがな・ID で検索" value={patSearch}
               onChange={e=>setPatSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-emerald-400" />
             <div className="flex flex-wrap gap-1 mb-3 pb-3 border-b border-slate-100">
@@ -10106,12 +10144,20 @@ function FamilyView() {
   // ★ 家族側の店舗 ID (ログイン後に判明) → 店舗ごとの app_state を pull するため
   const familyStoreId = (() => {
     if (!authAccId) return null;
+    // ★ スタッフ ID でログインした家族 UI プレビューモード
+    if (String(authAccId) === '__staff_preview__') {
+      try { return sessionStorage.getItem('familyStaffPreviewStoreId') || null; } catch { return null; }
+    }
     const acc = (data.familyAccounts || []).find(a => String(a.id) === String(authAccId));
     return acc?.storeId || acc?.store_id || null;
   })();
   // ★ Supabase 同期 (家族画面): 起動時 + 15秒ごとに最新 state を pull (店舗 ID 指定)
   useEffect(() => {
     if (!isSupabaseEnabled || !familyStoreId) return;
+    // ★ 本部管理者プレビューモード: subscribe 自体をスキップ (UI 確認用なのでリアルタイム同期不要)
+    //    setData(fresh) でセット済のダミー利用者を Supabase pull 結果で上書きしないため
+    const isPreviewMode = (typeof window !== 'undefined') && (sessionStorage.getItem('familyAuthAccId') === '__staff_preview__');
+    if (isPreviewMode) return;
     // 異なる店舗の家族でログインしたら古いキャッシュをクリア
     const lastFamilyStoreKey = 'tsumugiLastFamilyStoreId';
     const lastStore = (()=>{ try { return localStorage.getItem(lastFamilyStoreKey); } catch { return null; } })();
@@ -10124,6 +10170,12 @@ function FamilyView() {
       if (!sbData) return;
       setData(prev => {
         const merged = { ...prev, ...sbData };
+        // ★ 本部管理者プレビュー: 店舗に利用者が 0 のとき、merge で patients が空配列になるとダミーが消える
+        //    prev.patients (ダミー含む) を保持する
+        const isPreview = (typeof window !== 'undefined') && (sessionStorage.getItem('familyAuthAccId') === '__staff_preview__');
+        if (isPreview && (!merged.patients || merged.patients.length === 0)) {
+          merged.patients = prev.patients || [];
+        }
         try { localStorage.setItem('daycareAppData_v3', JSON.stringify(merged)); } catch {}
         return merged;
       });
@@ -10304,6 +10356,88 @@ function FamilyView() {
           return;
         } catch (sbErr) {
           console.warn('[supabase] login fallback', sbErr?.message);
+        }
+      }
+      // ★ 本部管理者 (super_admin) ID/PW でも通過させる (家族画面 UI 確認用プレビューモード)
+      // 事業所スタッフは家族画面プレビュー対象外 (本部管理者のみ)
+      if (isSupabaseEnabled) {
+        let staff = null;
+        try {
+          staff = await supabaseStaffLogin({
+            username: loginForm.username.trim(),
+            password: loginForm.password,
+          });
+        } catch (staffErr) {
+          // staff 認証失敗 → 後続のローカル fallback へ。 ログは残す
+          console.warn('[family-preview] staff login failed:', staffErr?.message);
+        }
+        if (staff) {
+          // ★ 本部管理者のみ許可 (事業所スタッフ/manager 等は通さない)
+          if (staff.role !== 'super_admin') {
+            setLoginForm(f=>({...f, error:'本部管理者のみログイン可能です (role: '+staff.role+')'}));
+            return;
+          }
+          // 本部管理者: 全店舗を取得し、利用者が登録されている最初の店舗を選ぶ
+          // (stores[0] が空店舗の場合があるため、patient が見つかる店舗まで探索)
+          let stores = [];
+          try {
+            stores = await supabaseListStores();
+            if (!stores || stores.length === 0) {
+              setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
+              return;
+            }
+          } catch (e) {
+            setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
+            return;
+          }
+          // 利用者がいる店舗を優先、なければ最初に state 取得できた店舗にダミー利用者を挿入
+          let sbState = null;
+          let previewStoreId = null;
+          let previewStoreName = '';
+          let fallbackState = null;
+          let fallbackStore = null;
+          for (const s of stores) {
+            try {
+              const st = await supabaseLoadStateForStore(s.id);
+              if (!fallbackState) { fallbackState = st || {}; fallbackStore = s; } // 最初に到達した店舗を fallback
+              if (st?.patients && st.patients.length > 0) {
+                sbState = st;
+                previewStoreId = s.id;
+                previewStoreName = s.name || '';
+                break;
+              }
+            } catch (e) { /* 店舗ごとの失敗はスキップ */ }
+          }
+          // ★ どの店舗にも利用者がいない場合: ダミー利用者を挿入してプレビュー画面を表示
+          if (!sbState) {
+            const baseStore = fallbackStore || stores[0];
+            const dummy = {
+              id: 'preview-dummy-001',
+              name: 'プレビュー 利用者',
+              kana: 'ぷれびゅー りようしゃ',
+              birthDate: '1950-01-01',
+              status: '利用中',
+              startDate: '2026-01-01',
+              height: '', weight: '', kiou: '—', ryui: '—',
+            };
+            sbState = { ...(fallbackState || {}), patients: [dummy] };
+            previewStoreId = baseStore.id;
+            previewStoreName = (baseStore.name || '') + ' (利用者なし → ダミー表示)';
+          }
+          const firstPatient = sbState.patients[0];
+          // プレビュー用のデータをセット
+          try {
+            const fresh = { ...(sbState || {}), familyAccounts: [] };
+            localStorage.setItem('daycareAppData_v3', JSON.stringify(fresh));
+            setData(fresh);
+          } catch {}
+          // プレビューモードを sessionStorage に保存 (familyStoreId 解決時に利用)
+          sessionStorage.setItem('familyStaffPreviewStoreId', previewStoreId);
+          sessionStorage.setItem('familyAuthPid', String(firstPatient.id));
+          sessionStorage.setItem('familyAuthAccId', '__staff_preview__');
+          setAuthPid(String(firstPatient.id));
+          setAuthAccId('__staff_preview__');
+          return;
         }
       }
       // フォールバック: localStorage 内でログイン (同一端末で登録済みの場合)
@@ -10874,6 +11008,10 @@ function FamilyView() {
             <p style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
+            {/* ★ 本部管理者 ID/PW でも入れる (UI 確認用プレビューモード) */}
+            <p style={{fontSize:10,color:'#cbd5e1',textAlign:'center',marginTop:6,lineHeight:1.5,fontStyle:'italic'}}>
+              ※ 本部管理者 ID でもログイン可 (家族画面プレビュー)
+            </p>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
           )}
@@ -10888,6 +11026,7 @@ function FamilyView() {
   const handleLogout = () => {
     sessionStorage.removeItem('familyAuthPid');
     sessionStorage.removeItem('familyAuthAccId');
+    sessionStorage.removeItem('familyStaffPreviewStoreId'); // ★ スタッフプレビュー用フラグもクリア
     setAuthPid(null);
     setAuthAccId(null);
     setLoginForm({ username:'', password:'', error:'', showPw:false });
@@ -12709,17 +12848,21 @@ export default function App() {
     setGlobalTip({text, x: r.left + r.width/2, y: r.top - 8});
   }, []);
   const hideTip = React.useCallback(() => setGlobalTip(null), []);
-  // ★ iPhone (768px 未満) はサイドバーを初期非表示、それ以外は表示
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return window.innerWidth >= 768;
-  });
+  // ★ サイドバーは全端末で初期表示 ON (iPhone 含む)
+  // ユーザー判断: 最初に何があるか見えた方が分かりやすい。手動で閉じれば OK
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const DESIGN_WIDTH = 1100;
   const contentRef = useRef(null);
   const [contentScale, setContentScale] = useState(1);
+  // ★ iPhone (768px 未満) かどうか — true のときは scale 機構を完全に無効化して素直にレスポンシブ表示
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   useEffect(()=>{
     const calc = ()=>{
+      const mobile = window.innerWidth < 768;
+      setIsMobileScreen(mobile);
       if(!contentRef.current) return;
+      // ★ iPhone は scale=1 に固定 (PC 用デザインを縮小すると過剰スクロールが発生するため)
+      if (mobile) { setContentScale(1); return; }
       const avail = contentRef.current.parentElement?.clientWidth || window.innerWidth;
       setContentScale(Math.min(1, avail / DESIGN_WIDTH));
     };
@@ -13076,7 +13219,7 @@ export default function App() {
     );
   }
   return (
-    <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15}}>
+    <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15,height:'100dvh',paddingTop:'env(safe-area-inset-top)',paddingLeft:'env(safe-area-inset-left)',paddingRight:'env(safe-area-inset-right)',paddingBottom:'env(safe-area-inset-bottom)'}}>
       <GlobalStyle />
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
@@ -13430,10 +13573,11 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative min-w-0">
-          <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
+          <header className="h-14 md:h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
             <div className="flex items-center min-w-0 flex-1">
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
-              <h1 className="text-base md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
+              {/* ★ iPhone は QuickNav 非表示でスペース確保 → タイトルを切らずに表示 (老眼配慮で text-lg) */}
+              <h1 className="text-lg md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
                 {currentView === 'record' ? `サービス提供記録 入力　${formatDateDisplay(selectedDate)}` :
                  currentView === 'ticket' ? 'サービス提供記録' :
                  currentView === 'print' ? '連絡帳 作成・印刷' :
@@ -13450,8 +13594,11 @@ export default function App() {
               </h1>
             </div>
             {/* ジャンプナビをヘッダー右側に配置し、画面領域を節約 */}
+            {/* ★ iPhone (768px 未満) ではタイトルと重なるため非表示 → サイドバーから遷移してもらう */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
-              <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
+              <div className="hidden md:block">
+                <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
+              </div>
             )}
           </header>
 
@@ -13483,7 +13630,18 @@ export default function App() {
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
-            <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
+            {/* ★ レイアウト方針:
+                - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
+                - iPad (768-1099px): scale で縮小表示
+                - PC (>= 1100px): scale なし
+                ★ height は常に 'auto' → 過剰縦スクロール解消 (scale 適用時の height:100/scale% バグを除去) */}
+            <div style={{
+              minWidth: DESIGN_WIDTH,
+              width: (!isMobileScreen && contentScale<1) ? `${100/contentScale}%` : '100%',
+              height: 'auto',
+              transformOrigin: 'top left',
+              transform: (!isMobileScreen && contentScale<1) ? `scale(${contentScale})` : 'none',
+            }}>
             {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
@@ -14382,8 +14540,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
            style={{overflowX:'auto',overflowY:'hidden',height:14,flexShrink:0,marginBottom:-1}}>
         <div style={{width: tableScrollWidth, height: 1}}/>
       </div>
-      <div ref={tableScrollRef} onScroll={_syncFromTable}
-           ref={tableContainerRef}
+      <div ref={el => { tableScrollRef.current = el; tableContainerRef.current = el; }} onScroll={_syncFromTable}
            className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y pinch-zoom',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
         <style>{`
           /* スクロールバーを常時表示 (macOS Safari 等) */
@@ -15027,7 +15184,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [customTo, setCustomTo]   = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   // セクション選択（プレビュー用） [id, label, size]
   const ALL_SECTIONS = familyMode
-    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-tokki','日々の記録','中'],['sec-monitoring','モニタリング','中']]
+    // ★ 家族向け: スマホで見やすいよう最小構成 (運動トレンド/通所/基本指標/日々の記録は非表示)
+    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-vital','バイタルトレンド','長'],['sec-kibun','気分','中'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
@@ -15200,7 +15358,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
         <div className="max-w-5xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-            <input type="text" autoFocus placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
+            {/* ★ iPhone/iPad ではキーボードが勝手に出ないよう autoFocus を PC のみに限定 */}
+            <input type="text" autoFocus={IS_DESKTOP_AUTOFOCUS} placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
               onChange={e=>setPatientSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-blue-400" />
             {/* 行ジャンプボタン */}
@@ -15262,7 +15421,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     <div className="w-full" style={{backgroundColor:'#f0f4f9',minHeight:'100%'}}>
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
-      <div style={{background: familyMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: familyMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+      {/* ★ familyMode: iPhone 幅で見やすいよう縦スタック (利用者名行 → 期間ボタン行) */}
+      <div style={{background: familyMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: familyMode ? '#3d5021' : 'white',padding: familyMode ? '10px 14px' : '12px 24px',display:'flex',flexDirection: familyMode ? 'column' : 'row',justifyContent:'space-between',alignItems: familyMode ? 'stretch' : 'center',flexWrap:'wrap',gap:8}}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <div style={{width:36,height:36,background:'rgba(255,255,255,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
             <BarChart3 size={20}/>
@@ -15282,7 +15442,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </button>
           )}
           {/* 利用者プルダウン: かな昇順 + ア行/カ行... の optgroup でラベル付け */}
-          {!hidePatientSelector && (
+          {/* ★ familyMode: 家族は自分の利用者しかいないので検索/プルダウンは非表示 */}
+          {!familyMode && !hidePatientSelector && (
             <>
               <input type="text" placeholder="🔍 利用者を検索" value={patientSearch}
                 onChange={e=>setPatientSearch(e.target.value)}
@@ -15298,7 +15459,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </>
           )}
           <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
-            {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'],['custom','期間指定']].map(([v,l])=>(
+            {/* ★ familyMode では「期間指定」(custom) を除外 → 1ヶ月/3ヶ月/半年/1年 のみ */}
+            {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'], ...(familyMode ? [] : [['custom','期間指定']])].map(([v,l])=>(
               <button key={v} onClick={()=>setPeriod(v)} style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',color:period===v?(familyMode?'#3d5021':'#1e40af'):'white',background:period===v?'white':'transparent',border:'none',cursor:'pointer',borderRight:'1px solid rgba(255,255,255,0.2)',transition:'all 0.15s'}}>{l}</button>
             ))}
           </div>
@@ -15741,6 +15903,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       )}
 
       {/* ページ内ナビゲーション (ALL_SECTIONS と連動。familyMode では非表示セクションを自動除外) */}
+      {/* ★ 家族モードでは表示項目が少ないためジャンプナビ自体を非表示 */}
+      {!familyMode && (
       <div style={{background:'white',borderBottom:'1px solid #e2e8f0',padding:'8px 24px',display:'flex',gap:4,overflowX:'auto',flexWrap:'nowrap'}}>
         {ALL_SECTIONS.map(([id,label])=>(
           <button key={id} onClick={()=>{const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}}
@@ -15751,14 +15915,20 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </button>
         ))}
       </div>
+      )}
       </div>{/* end sticky wrapper */}
       <div id="print-content-analysis" style={{padding:'20px 24px',maxWidth:1280,margin:'0 auto'}}>
 
         {/* === 基本指標 === */}
         {/* === 基本情報 === */}
         <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
-          <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>基本情報</div>
-          {selectedPatient && (()=>{
+          {/* ★ familyMode: クリックで折りたたみ可能なヘッダー (デフォルト展開) */}
+          <div onClick={familyMode ? ()=>toggleSec('sec-basicinfo') : undefined}
+               style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:familyMode?'pointer':'default',userSelect:'none',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>基本情報</span>
+            {familyMode && <span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-basicinfo')?'▶':'▼'}</span>}
+          </div>
+          {!(familyMode && isCol('sec-basicinfo')) && selectedPatient && (()=>{
             const age = calcAge(selectedPatient.birthDate);
             // 利用開始日からの経過日数を計算
             let elapsedLabel = '—';
@@ -15785,38 +15955,54 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 }
               }
             }
+            // ★ familyMode は最小限の項目のみ: 利用者名(+年齢) / 利用開始日 / 経過日数
+            const familyFields = [
+              {label:'利用者名',value:(<>
+                <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
+                  {age!==null && <span style={{fontSize:13,color:'#475569',fontWeight:'bold',marginLeft:8}}>（{age}歳）</span>}
+                </span>
+              </>)},
+              {label:'利用開始日',value:startLabel},
+              {label:'経過日数',value:elapsedLabel},
+            ];
+            const staffFields = [
+              {label:'利用者名',value:(<>
+                <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
+                  {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
+                </span>
+              </>)},
+              {label:'生年月日',value:selectedPatient.birthDate?new Date(selectedPatient.birthDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}):'—'},
+              {label:'年齢',value:age!==null?`${age}歳`:'—'},
+              {label:'身長',value:selectedPatient.height?`${selectedPatient.height}cm`:'—'},
+              {label:'体重',value:selectedPatient.weight?`${selectedPatient.weight}kg`:'—'},
+              {label:'利用開始日',value:startLabel},
+              {label:'経過日数',value:elapsedLabel},
+            ];
+            const fields = familyMode ? familyFields : staffFields;
             return (
               <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
-                  {[
-                    {label:'利用者名',value:(<>
-                      <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
-                        {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
-                      </span>
-                    </>)},
-                    {label:'生年月日',value:selectedPatient.birthDate?new Date(selectedPatient.birthDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}):'—'},
-                    {label:'年齢',value:age!==null?`${age}歳`:'—'},
-                    {label:'身長',value:selectedPatient.height?`${selectedPatient.height}cm`:'—'},
-                    {label:'体重',value:selectedPatient.weight?`${selectedPatient.weight}kg`:'—'},
-                    {label:'利用開始日',value:startLabel},
-                    {label:'経過日数',value:elapsedLabel},
-                  ].map(({label,value})=>(
+                {/* ★ familyMode (家族スマホ閲覧) は縦1列 / スタッフは横並び */}
+                <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom: familyMode ? 0 : 12}}>
+                  {fields.map(({label,value})=>(
                     <div key={label} style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #e2e8f0'}}>
                       <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>{label}</div>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{value}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                  <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
-                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.kiou||'—'}</div>
+                {/* ★ 家族モードでは既往歴/留意点を非表示 (利用者・家族には不要な情報) */}
+                {!familyMode && (
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                    <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
+                      <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
+                      <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.kiou||'—'}</div>
+                    </div>
+                    <div style={{background:'#fef2f2',borderRadius:10,padding:'8px 12px',border:'1px solid #fecaca'}}>
+                      <div style={{fontSize:11,fontWeight:'bold',color:'#991b1b',marginBottom:3}}>留意点</div>
+                      <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.ryui||'—'}</div>
+                    </div>
                   </div>
-                  <div style={{background:'#fef2f2',borderRadius:10,padding:'8px 12px',border:'1px solid #fecaca'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#991b1b',marginBottom:3}}>留意点</div>
-                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.ryui||'—'}</div>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })()}
@@ -15852,7 +16038,22 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const latestPair = withDates[0];
           const latest = latestPair?.r;
           const latestFullDate = latestPair?.d;
-          if (!latest) return null;
+          // ★ 家族モードでは記録がなくてもセクション枠を表示 (空状態)
+          if (!latest) {
+            if (familyMode) {
+              return (
+                <div id="sec-latest" style={{marginBottom:16,scrollMarginTop:120}}>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>📋 今回の記録</div>
+                  <div style={{background:'white',borderRadius:14,padding:'32px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px dashed #cbd5e1',textAlign:'center'}}>
+                    <div style={{fontSize:32,marginBottom:8}}>📝</div>
+                    <div style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>まだ通所記録がありません</div>
+                    <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>通所が始まると、体温・血圧・気分などがここに表示されます</div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          }
           const MOODS = {'excellent':'🤩 とても良い','good':'😊 良い','normal':'😐 普通','bad':'😞 良くない','terrible':'😫 とても良くない'};
           const _ftoPid = (appData.familyTokkiOverrides||{})[selectedPatientId] || {};
           const tokkiOv = _ftoPid[latest.date] || _ftoPid[latest.id] || {};
@@ -15913,7 +16114,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 ) : (
                   /* 出席/振替: 1行に 体温 | 血圧+脈(開始) | 血圧+脈(終了) | 気分 */
                   <>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'10px 16px',fontSize:13}}>
+                    <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : 'repeat(auto-fit,minmax(160px,1fr))',gap:'10px 16px',fontSize:13}}>
                       {/* 体温 */}
                       <div>
                         <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>体温</span>
@@ -15981,7 +16182,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
         })()}
 
-        <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120}}>
+        <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120,display: familyMode ? 'none' : 'block'}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span>基本指標</span>
             <span style={{fontSize:13,color:'#334155',fontWeight:'bold',display:'flex',gap:14}}>
@@ -15992,7 +16193,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               {kyushi>0&&<span style={{color:'#f97316'}}>休止: <b>{kyushi}</b>件</span>}
             </span>
           </div>
-          <div style={{display:'flex',gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
+          {/* ★ familyMode (家族スマホ) は縦 1 列、スタッフは横並び */}
+          <div style={{display:'flex',gap:10,alignItems:'stretch',flexWrap:'wrap',flexDirection: familyMode ? 'column' : 'row'}}>
             {/* 通所率 */}
             {(()=>{
               const furikaeCount=records.filter(r=>r.tokki&&r.tokki.includes('振替')).length;
@@ -16150,7 +16352,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </div>
         </div>
 
-        <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16}}>
+        <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16,display: familyMode ? 'none' : 'block'}}>
 
 
 
@@ -16420,6 +16622,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
         {/* === バイタルトレンド（日別） === */}
         <div id="sec-vital" data-sec="sec-vital" style={{scrollMarginTop:120}}/>
+        {/* ★ familyMode: 記録ゼロでも空状態のセクションを表示 */}
+        {validRecs.length === 0 && familyMode && (
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>📊 バイタルトレンド</div>
+            <div style={{background:'white',borderRadius:14,padding:'32px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px dashed #cbd5e1',textAlign:'center'}}>
+              <div style={{fontSize:32,marginBottom:8}}>📈</div>
+              <div style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>まだ通所記録がありません</div>
+              <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>通所が始まると、体温・血圧・脈拍のグラフがここに表示されます</div>
+            </div>
+          </div>
+        )}
         {validRecs.length > 0 && (()=>{
           // 全期間は月別平均、それ以外は日別
           const rawData = validRecs.map(r=>({
@@ -16742,7 +16955,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
 
         })()}
-        <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16}}>
+        <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16,display: familyMode ? 'none' : 'block'}}>
 <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>運動トレンド</div>
           {(() => {
             const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
@@ -17084,7 +17297,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           )}
         </div>}
 
-        {familyMode && (()=>{
+        {/* ★ 「日々の記録」セクションは廃止 → 特記事項は「今回の記録」セクションに統合表示 */}
+        {false && familyMode && (()=>{
           // 家族向け: 特記コメントだけを独立セクションとして表示 (familyTokkiOverrides で制御)
           // モニタリングの前に配置 (ジャンプナビ順と一致)
           const overrides = ((appData.familyTokkiOverrides||{})[selectedPatientId]) || {};
@@ -18882,7 +19096,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 <div style={{padding:'8px 8px 4px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px'}}>
                     <Search size={14} color="#94a3b8"/>
-                    <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
+                    <input autoFocus={IS_DESKTOP_AUTOFOCUS} type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
                       placeholder="氏名で検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
                     {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
                   </div>
