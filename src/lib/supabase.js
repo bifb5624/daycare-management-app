@@ -342,8 +342,16 @@ export async function supabaseListSystemNotices(storeId) {
     if (error) { console.warn('[supabase] listSystemNotices error', error); return []; }
     // ends_at が NULL OR 未来 のみ表示
     const active = (data || []).filter(n => !n.ends_at || new Date(n.ends_at) > new Date(now));
-    // 対象店舗フィルタ: target_store_id が NULL なら全店、storeId と一致するもの
-    return active.filter(n => !n.target_store_id || n.target_store_id === storeId);
+    // ★ 対象店舗フィルタ:
+    //   - target_store_ids が null OR 空配列 → 全店共通
+    //   - target_store_ids 配列に storeId 含まれる → 対象
+    //   - 後方互換: target_store_id (旧 単一) も維持
+    return active.filter(n => {
+      const ids = Array.isArray(n.target_store_ids) ? n.target_store_ids : null;
+      if (ids && ids.length > 0) return ids.includes(storeId);
+      if (n.target_store_id) return n.target_store_id === storeId;
+      return true; // 全店共通
+    });
   } catch (e) {
     console.warn('[supabase] listSystemNotices exception', e);
     return [];
@@ -361,14 +369,17 @@ export async function supabaseListAllSystemNotices() {
   } catch { return []; }
 }
 
-export async function supabaseCreateSystemNotice({ title, body, targetStoreId, severity, startsAt, endsAt, createdBy }) {
+export async function supabaseCreateSystemNotice({ title, body, targetStoreIds, severity, startsAt, endsAt, createdBy }) {
   if (!supabase) throw new Error('Supabase 未接続');
+  // ★ targetStoreIds: 配列 (空 or null → 全店)
+  const ids = Array.isArray(targetStoreIds) && targetStoreIds.length > 0 ? targetStoreIds : null;
   const { data, error } = await supabase
     .from('system_notices')
     .insert({
       title,
       body,
-      target_store_id: targetStoreId || null,
+      target_store_ids: ids,
+      target_store_id: ids && ids.length === 1 ? ids[0] : null, // 単一なら旧カラムも埋める (後方互換)
       severity: severity || 'info',
       starts_at: startsAt || new Date().toISOString(),
       ends_at: endsAt || null,
