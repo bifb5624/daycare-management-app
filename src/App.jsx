@@ -21125,31 +21125,38 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 );
               })()}
 
-              {/* ③ 被保険者番号・介護度・適用期間・負担割合 */}
-              <div style={{display:'grid',gridTemplateColumns:'160px 140px 1fr 120px',gap:16}}>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">被保険者番号</label><input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/></div>
+              {/* ③ 介護保険関連 — 縦並びレイアウト (関連項目はペアで横並び) */}
+              <div className="space-y-3">
+                {/* 被保険者番号 (単独行) */}
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度</label>
-                  <select disabled={isOff} value={localPatient.careLevel||""} onChange={e=>{
-                    const newVal = e.target.value;
-                    if (!newVal || newVal === localPatient.careLevel) return;
-                    // 今日を開始日として初期設定
-                    const today = new Date().toISOString().split('T')[0];
-                    setCareLevelModal({ newValue: newVal, from: today, to: '' });
-                  }} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                    <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v=><option key={v} value={v}>{v}</option>)}
-                  </select>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">被保険者番号</label>
+                  <input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" style={{maxWidth:240}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/>
                 </div>
+                {/* 介護度 + 負担割合 (関連するので横並び) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度</label>
+                    <select disabled={isOff} value={localPatient.careLevel||""} onChange={e=>{
+                      const newVal = e.target.value;
+                      if (!newVal || newVal === localPatient.careLevel) return;
+                      const today = new Date().toISOString().split('T')[0];
+                      setCareLevelModal({ newValue: newVal, from: today, to: '' });
+                    }} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                      <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v=><option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-1.5">負担割合</label>
+                    <select disabled={isOff} value={localPatient.costBurden||''} onChange={e=>updateLP('costBurden',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                      <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
+                    </select>
+                    {/* 履歴は「変更履歴」タブで確認 */}
+                  </div>
+                </div>
+                {/* 介護度 適用期間 (横幅広めなので独立行) */}
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1.5">適用期間</label>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度 適用期間</label>
                   <DateRangePicker fromValue={localPatient.careLevelFrom||''} toValue={localPatient.careLevelTo||''} onFromChange={v=>updateLP('careLevelFrom',v)} onToChange={v=>updateLP('careLevelTo',v)} disabled={isOff}/>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1.5">負担割合</label>
-                  <select disabled={isOff} value={localPatient.costBurden||''} onChange={e=>updateLP('costBurden',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                    <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
-                  </select>
-                  {/* 履歴は「変更履歴」タブで確認 */}
                 </div>
               </div>
 
@@ -21233,10 +21240,59 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 })()}
               </div>
 
-              {/* ⑦ 緊急連絡先 */}
-              <div className="border-t border-slate-200 pt-4"><h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>緊急連絡先</h3>
-                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">氏名</label><input disabled={isOff} value={localPatient.familyName||''} onChange={e=>updateLP('familyName',e.target.value)} placeholder="例: 介護 花子" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label><input disabled={isOff} value={localPatient.familyRelation||''} onChange={e=>updateLP('familyRelation',e.target.value)} placeholder="例: 長女" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div></div>
-                <div className="grid grid-cols-3 gap-4 mt-3"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（固定）</label><input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhone||'')} onChange={e=>updateLP('familyPhone',e.target.value.replace(/[^0-9]/g,''))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（携帯）</label><input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhoneMobile||'')} onChange={e=>updateLP('familyPhoneMobile',e.target.value.replace(/[^0-9]/g,''))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">メールアドレス</label><input type="email" disabled={isOff} value={localPatient.familyEmail||''} onChange={e=>updateLP('familyEmail',e.target.value)} placeholder="hanako@example.com" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div></div>
+              {/* ⑦ 緊急連絡先 — 縦並びレイアウト */}
+              <div className="border-t border-slate-200 pt-4">
+                <h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>緊急連絡先 (主要)</h3>
+                {/* ★ 登録済家族閲覧アカウントのサマリー表示 (readonly) */}
+                {(()=>{
+                  const familyAccs = (appData.familyAccounts||[]).filter(a => a.patientId === localPatient.id && (a.kind||'family') === 'family');
+                  if (familyAccs.length === 0) return null;
+                  return (
+                    <div className="mb-4 p-3 bg-violet-50 border border-violet-200 rounded-xl">
+                      <div className="text-xs font-bold text-violet-700 mb-2 flex items-center gap-1.5">👨‍👩‍👧 登録済 家族閲覧アカウント ({familyAccs.length}件)</div>
+                      <div className="space-y-1">
+                        {familyAccs.map(a => (
+                          <div key={a.id} className="text-xs text-violet-900 flex flex-wrap gap-x-3 gap-y-0.5">
+                            <span className="font-bold">{a.displayName || a.username || '(名前未設定)'}</span>
+                            {a.relation && <span className="bg-white px-1.5 py-0.5 rounded text-[10px] font-bold">{a.relation}</span>}
+                            {a.email && <span className="text-violet-600">📧 {a.email}</span>}
+                            <span className="text-[10px] text-violet-400">ID: {a.username}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="text-[10px] text-violet-500 mt-2">※ 上の「アカウント管理」ボタンから追加・編集・削除できます</div>
+                    </div>
+                  );
+                })()}
+                <div className="space-y-3">
+                  {/* 氏名 + 続柄 */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">氏名</label>
+                      <input disabled={isOff} value={localPatient.familyName||''} onChange={e=>updateLP('familyName',e.target.value)} placeholder="例: 介護 花子" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label>
+                      <input disabled={isOff} value={localPatient.familyRelation||''} onChange={e=>updateLP('familyRelation',e.target.value)} placeholder="例: 長女" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                  </div>
+                  {/* 電話番号 (固定 + 携帯) */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号 (固定)</label>
+                      <input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhone||'')} onChange={e=>updateLP('familyPhone',e.target.value.replace(/[^0-9]/g,''))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号 (携帯)</label>
+                      <input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhoneMobile||'')} onChange={e=>updateLP('familyPhoneMobile',e.target.value.replace(/[^0-9]/g,''))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                  </div>
+                  {/* メールアドレス (単独行) */}
+                  <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-1.5">メールアドレス</label>
+                    <input type="email" disabled={isOff} value={localPatient.familyEmail||''} onChange={e=>updateLP('familyEmail',e.target.value)} placeholder="hanako@example.com" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                  </div>
+                </div>
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-500">追加の緊急連絡先</span>{!isOff&&<button type="button" onClick={()=>updateLP('emergencyContacts',[...(localPatient.emergencyContacts||[]),{name:'',relation:'',phone:'',phoneMobile:'',email:''}])} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-100">＋ 追加</button>}</div>
                   {(localPatient.emergencyContacts||[]).length===0&&<div className="text-xs text-slate-400 py-2">追加の緊急連絡先なし</div>}
