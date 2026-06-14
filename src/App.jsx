@@ -14439,8 +14439,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
            style={{overflowX:'auto',overflowY:'hidden',height:14,flexShrink:0,marginBottom:-1}}>
         <div style={{width: tableScrollWidth, height: 1}}/>
       </div>
-      <div ref={tableScrollRef} onScroll={_syncFromTable}
-           ref={tableContainerRef}
+      <div ref={el => { tableScrollRef.current = el; tableContainerRef.current = el; }} onScroll={_syncFromTable}
            className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y pinch-zoom',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
         <style>{`
           /* スクロールバーを常時表示 (macOS Safari 等) */
