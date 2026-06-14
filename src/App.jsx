@@ -12709,7 +12709,11 @@ export default function App() {
     setGlobalTip({text, x: r.left + r.width/2, y: r.top - 8});
   }, []);
   const hideTip = React.useCallback(() => setGlobalTip(null), []);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // ★ iPhone (768px 未満) はサイドバーを初期非表示、それ以外は表示
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 768;
+  });
   const DESIGN_WIDTH = 1100;
   const contentRef = useRef(null);
   const [contentScale, setContentScale] = useState(1);
@@ -13206,7 +13210,15 @@ export default function App() {
       )}
 
 
-      <div className={`no-print bg-slate-900 text-slate-300 flex flex-col flex-shrink-0 shadow-2xl transition-all duration-300 ${isSidebarOpen ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+      {/* ★ モバイル時のサイドバー背景オーバーレイ (タップで閉じる) */}
+      {isSidebarOpen && (
+        <div onClick={()=>setIsSidebarOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-40" aria-hidden="true"/>
+      )}
+      <div className={`no-print bg-slate-900 text-slate-300 flex flex-col shadow-2xl transition-all duration-300 ${
+        isSidebarOpen
+          ? 'w-64 opacity-100 fixed md:relative md:flex-shrink-0 inset-y-0 left-0 z-50 md:z-auto'
+          : 'w-0 opacity-0 overflow-hidden flex-shrink-0'
+      }`}>
           <div className="w-64 h-full flex flex-col">
             <div className="h-16 flex items-center px-5 border-b" style={{background:'#fafef1',borderColor:'#d4e7a5'}}>
               <svg viewBox="0 0 100 100" className="w-8 h-8 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
@@ -13418,10 +13430,10 @@ export default function App() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative min-w-0">
-          <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-6 z-10 shadow-sm flex-shrink-0">
-            <div className="flex items-center">
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none"><Menu size={22} /></button>
-              <h1 className="text-lg font-bold text-slate-700">
+          <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
+            <div className="flex items-center min-w-0 flex-1">
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
+              <h1 className="text-base md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
                 {currentView === 'record' ? `サービス提供記録 入力　${formatDateDisplay(selectedDate)}` :
                  currentView === 'ticket' ? 'サービス提供記録' :
                  currentView === 'print' ? '連絡帳 作成・印刷' :
