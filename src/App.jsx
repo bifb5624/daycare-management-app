@@ -28,6 +28,10 @@ import {
   supabaseListInvitesAndAccountsForPatient,
   supabaseMergePatientFromFamily,
   supabaseDeletePatientFamily,
+  supabaseListSystemNotices,
+  supabaseListAllSystemNotices,
+  supabaseCreateSystemNotice,
+  supabaseDeleteSystemNotice,
   supabaseCreateStaff,
   supabaseListStaff,
 } from './lib/supabase.js';
@@ -11732,6 +11736,128 @@ function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMemb
 // ===========================================
 // 本部管理者用 店舗選択 + 店舗追加 + スタッフ追加画面
 // ===========================================
+// ★ 本部 → 店舗お知らせ管理パネル (メンテナンス通知等)
+function SystemNoticesPanel({ stores, staffSession }) {
+  const [notices, setNotices] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [showForm, setShowForm] = React.useState(false);
+  const [form, setForm] = React.useState({ title:'', body:'', targetStoreId:'', severity:'info', endsAt:'' });
+
+  const load = async () => {
+    setLoading(true);
+    const list = await supabaseListAllSystemNotices();
+    setNotices(list);
+    setLoading(false);
+  };
+  React.useEffect(() => { load(); }, []);
+
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    try {
+      await supabaseCreateSystemNotice({
+        title: form.title.trim(),
+        body: form.body.trim(),
+        targetStoreId: form.targetStoreId || null,
+        severity: form.severity,
+        endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
+        createdBy: staffSession?.username || staffSession?.displayName || 'honbu',
+      });
+      setForm({ title:'', body:'', targetStoreId:'', severity:'info', endsAt:'' });
+      setShowForm(false);
+      load();
+    } catch (err) {
+      alert('作成に失敗しました: ' + (err?.message || ''));
+    }
+  };
+  const handleDelete = async (id) => {
+    if (!window.confirm('このお知らせを削除しますか?')) return;
+    await supabaseDeleteSystemNotice(id);
+    load();
+  };
+  return (
+    <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📣 全店舗お知らせ ({notices.length} 件)</div>
+        <button onClick={()=>setShowForm(true)} style={{padding:'8px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>+ お知らせを追加</button>
+      </div>
+      {loading ? (
+        <div style={{textAlign:'center',padding:24,color:'#94a3b8'}}>読込中...</div>
+      ) : notices.length === 0 ? (
+        <div style={{textAlign:'center',padding:24,color:'#94a3b8',background:'#f8fafc',borderRadius:12,fontSize:12}}>
+          お知らせはまだありません。「+ お知らせを追加」からメンテナンス通知などを作成できます。
+        </div>
+      ) : (
+        <div style={{display:'grid',gap:8}}>
+          {notices.map(n => {
+            const isExpired = n.ends_at && new Date(n.ends_at) < new Date();
+            const targetName = n.target_store_id
+              ? (stores.find(s => s.id === n.target_store_id)?.name || n.target_store_id)
+              : '全店共通';
+            const sevColor = n.severity === 'critical' ? '#dc2626' : n.severity === 'warning' ? '#d97706' : '#3b82f6';
+            return (
+              <div key={n.id} style={{padding:'10px 12px',background:isExpired?'#f1f5f9':'#f8fafc',borderLeft:`4px solid ${sevColor}`,borderRadius:8,display:'flex',gap:10,alignItems:'flex-start'}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{n.title} {isExpired && <span style={{fontSize:9,color:'#94a3b8',marginLeft:6}}>(期限切れ)</span>}</div>
+                  {n.body && <div style={{fontSize:11,color:'#475569',marginTop:2,whiteSpace:'pre-wrap'}}>{n.body}</div>}
+                  <div style={{fontSize:9,color:'#64748b',marginTop:4}}>
+                    対象: <b>{targetName}</b> / 重要度: <b style={{color:sevColor}}>{n.severity}</b>
+                    {n.ends_at && ` / 〜${new Date(n.ends_at).toLocaleDateString('ja-JP')}`}
+                  </div>
+                </div>
+                <button onClick={()=>handleDelete(n.id)} style={{padding:'4px 10px',background:'#fef2f2',color:'#dc2626',border:'1px solid #fecaca',borderRadius:6,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>削除</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {showForm && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}}>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021',marginBottom:16}}>📣 お知らせを追加</div>
+            <form onSubmit={handleCreate} style={{display:'grid',gap:10}}>
+              <div>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>タイトル <span style={{color:'#dc2626'}}>*</span></label>
+                <input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="例: 6/15 23:00〜25:00 メンテナンスのお知らせ" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>本文</label>
+                <textarea value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder="例: 上記時間帯はシステムをご利用いただけません。ご不便をおかけしますが、ご理解のほどよろしくお願いいたします。" rows={4} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',resize:'vertical'}}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>対象店舗</label>
+                  <select value={form.targetStoreId} onChange={e=>setForm({...form,targetStoreId:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
+                    <option value="">全店共通</option>
+                    {stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>重要度</label>
+                  <select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
+                    <option value="info">📣 通常 (青)</option>
+                    <option value="warning">⚠️ 注意 (黄)</option>
+                    <option value="critical">🚨 重要 (赤)</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>表示終了日時 (任意)</label>
+                <input type="datetime-local" value={form.endsAt} onChange={e=>setForm({...form,endsAt:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>未指定なら永続的に表示</div>
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:8}}>
+                <button type="button" onClick={()=>setShowForm(false)} style={{flex:1,padding:'12px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+                <button type="submit" style={{flex:1,padding:'12px',background:'#3b82f6',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>作成</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11840,6 +11966,8 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
           </div>
           <button onClick={onLogout} style={{padding:'8px 16px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>ログアウト</button>
         </div>
+        {/* システムお知らせ管理 */}
+        <SystemNoticesPanel stores={stores} staffSession={staffSession}/>
         {/* 店舗一覧 */}
         <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -12237,6 +12365,28 @@ export default function App() {
   });
   // ★ ローカル編集タイムスタンプ (Supabase pull の race condition 防止)
   const lastLocalEditRef = React.useRef(0);
+  // ★ システムお知らせ (本部 → 全店舗のメンテナンス通知等)
+  const [systemNotices, setSystemNotices] = React.useState([]);
+  const [dismissedNoticeIds, setDismissedNoticeIds] = React.useState(() => {
+    try { return JSON.parse(localStorage.getItem('tsumugiDismissedNotices')||'[]'); } catch { return []; }
+  });
+  React.useEffect(() => {
+    if (!isSupabaseEnabled || !staffSession?.storeId) return;
+    let stopped = false;
+    const load = async () => {
+      const list = await supabaseListSystemNotices(staffSession.storeId);
+      if (!stopped) setSystemNotices(list);
+    };
+    load();
+    const t = setInterval(load, 60000); // 1分ごと更新
+    return () => { stopped = true; clearInterval(t); };
+  }, [staffSession?.storeId]);
+  const dismissNotice = (id) => {
+    const updated = [...dismissedNoticeIds, id];
+    setDismissedNoticeIds(updated);
+    try { localStorage.setItem('tsumugiDismissedNotices', JSON.stringify(updated)); } catch {}
+  };
+  const visibleNotices = systemNotices.filter(n => !dismissedNoticeIds.includes(n.id));
   // ★ 店舗切替中フラグ (切替中の push を完全に無効化)
   //   true の間は appData が空でもクリアでも Supabase へ push しない
   const storeTransitionRef = React.useRef(false);
@@ -13168,7 +13318,32 @@ export default function App() {
             )}
           </header>
 
-          <main className="flex-1 overflow-auto relative min-w-0 flex flex-col" style={{padding:0}}>{/* QuickNav はヘッダー内に移動 */}
+          <main className="flex-1 overflow-auto relative min-w-0 flex flex-col" style={{padding:0}}>
+            {/* ★ システムお知らせバナー (本部からのメンテナンス通知等) */}
+            {visibleNotices.length > 0 && (
+              <div className="flex-shrink-0">
+                {visibleNotices.map(n => {
+                  const colors = n.severity === 'critical'
+                    ? 'bg-red-100 border-red-300 text-red-900'
+                    : n.severity === 'warning'
+                      ? 'bg-amber-100 border-amber-300 text-amber-900'
+                      : 'bg-blue-50 border-blue-300 text-blue-900';
+                  const icon = n.severity === 'critical' ? '🚨' : n.severity === 'warning' ? '⚠️' : '📣';
+                  return (
+                    <div key={n.id} className={`border-b ${colors} px-4 py-2.5 flex items-start gap-3`}>
+                      <span className="text-lg shrink-0">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-sm">{n.title}</div>
+                        {n.body && <div className="text-xs mt-0.5 whitespace-pre-wrap">{n.body}</div>}
+                        {n.ends_at && <div className="text-[10px] opacity-70 mt-1">表示期間: 〜{new Date(n.ends_at).toLocaleDateString('ja-JP')}</div>}
+                      </div>
+                      <button onClick={() => dismissNotice(n.id)} className="text-current opacity-60 hover:opacity-100 text-lg shrink-0 px-1" title="閉じる">✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
             <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
@@ -20896,46 +21071,55 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               {/* ① 状態・利用開始日・利用終了日 */}
               <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => updateLP('endDate', e.target.value)} /></div>
 
-              {/* ② 氏名（姓+名）・ふりがな（姓+名）・性別・生年月日 */}
+              {/* ② 氏名・ふりがな・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
               {(() => {
-                // 半角スペース区切りで姓/名を分離。保存値は "姓 名" の単一文字列のまま。
                 const _splitSG = (s) => { const a=(s||'').split(/[\s　]+/).filter(Boolean); return { sn: a[0]||'', gn: a.slice(1).join(' ')||'' }; };
                 const _joinSG = (sn,gn) => { sn=(sn||'').trim(); gn=(gn||'').trim(); return sn && gn ? `${sn} ${gn}` : (sn || gn || ''); };
                 const ns = _splitSG(localPatient.name);
                 const ks = _splitSG(localPatient.kana);
                 return (
-                <div className="grid grid-cols-4 gap-4">
-                  {/* 氏名: 漢字とふりがなを横並びで配置し縦余白を節約 */}
-                  <div className="col-span-2">
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">氏名 / ふりがな</label>
-                    <div className="flex gap-2 items-stretch">
-                      <div className="flex gap-1 flex-1 min-w-0">
-                        <input disabled={isOff} value={ns.sn}
-                          onChange={e=>updateLP('name',_joinSG(e.target.value.replace(/[\s　]/g,''),ns.gn))}
-                          placeholder="山田"
-                          className="flex-1 min-w-0 px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-l-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                        <input disabled={isOff} value={ns.gn}
-                          onChange={e=>updateLP('name',_joinSG(ns.sn,e.target.value.replace(/[\s　]/g,'')))}
-                          placeholder="太郎"
-                          className="flex-1 min-w-0 px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-r-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                      </div>
-                      <div className="flex gap-1 flex-1 min-w-0">
-                        <input disabled={isOff} value={ks.sn}
-                          onChange={e=>updateLP('kana',_joinSG(e.target.value.replace(/[\s　]/g,''),ks.gn))}
-                          placeholder="やまだ"
-                          className="flex-1 min-w-0 px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-l-xl text-xs text-slate-500 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                        <input disabled={isOff} value={ks.gn}
-                          onChange={e=>updateLP('kana',_joinSG(ks.sn,e.target.value.replace(/[\s　]/g,'')))}
-                          placeholder="たろう"
-                          className="flex-1 min-w-0 px-2 py-2.5 bg-slate-50 border border-slate-300 rounded-r-xl text-xs text-slate-500 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                      </div>
+                <div className="space-y-3">
+                  {/* 氏名 行 */}
+                  <div>
+                    <label className="block text-sm font-bold text-slate-600 mb-1.5">氏名 (姓 / 名)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input disabled={isOff} value={ns.sn}
+                        onChange={e=>updateLP('name',_joinSG(e.target.value.replace(/[\s　]/g,''),ns.gn))}
+                        placeholder="姓 (例: 山田)"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <input disabled={isOff} value={ns.gn}
+                        onChange={e=>updateLP('name',_joinSG(ns.sn,e.target.value.replace(/[\s　]/g,'')))}
+                        placeholder="名 (例: 太郎)"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                   </div>
-                  <div><label className="block text-sm font-bold text-slate-600 mb-1.5">性別</label><select disabled={isOff} value={localPatient.gender||""} onChange={e=>updateLP('gender',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="">未選択</option><option value="男性">男性</option><option value="女性">女性</option></select></div>
+                  {/* ふりがな 行 */}
                   <div>
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
-                    <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
-                    {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
+                    <label className="block text-sm font-bold text-slate-600 mb-1.5">ふりがな (姓 / 名)</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input disabled={isOff} value={ks.sn}
+                        onChange={e=>updateLP('kana',_joinSG(e.target.value.replace(/[\s　]/g,''),ks.gn))}
+                        placeholder="やまだ"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <input disabled={isOff} value={ks.gn}
+                        onChange={e=>updateLP('kana',_joinSG(ks.sn,e.target.value.replace(/[\s　]/g,'')))}
+                        placeholder="たろう"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                  </div>
+                  {/* 性別 + 生年月日 行 (関連項目なので横並び) */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">性別</label>
+                      <select disabled={isOff} value={localPatient.gender||""} onChange={e=>updateLP('gender',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                        <option value="">未選択</option><option value="男性">男性</option><option value="女性">女性</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
+                      <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
+                      {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
+                    </div>
                   </div>
                 </div>
                 );
