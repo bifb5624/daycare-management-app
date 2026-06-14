@@ -12391,6 +12391,21 @@ export default function App() {
   });
   // ★ ローカル編集タイムスタンプ (Supabase pull の race condition 防止)
   const lastLocalEditRef = React.useRef(0);
+  // ★ 本部管理者用 店舗リスト (サイドバーで切替するため)
+  const [adminStoresList, setAdminStoresList] = React.useState([]);
+  const [adminStoreDropdownOpen, setAdminStoreDropdownOpen] = React.useState(false);
+  React.useEffect(() => {
+    if (staffSession?.role !== 'super_admin' || !isSupabaseEnabled) return;
+    let stopped = false;
+    (async () => {
+      try {
+        const list = await supabaseListStores();
+        if (!stopped) setAdminStoresList(list || []);
+      } catch {}
+    })();
+    return () => { stopped = true; };
+  }, [staffSession?.role]);
+
   // ★ システムお知らせ (本部 → 全店舗のメンテナンス通知等)
   const [systemNotices, setSystemNotices] = React.useState([]);
   const [dismissedNoticeIds, setDismissedNoticeIds] = React.useState(() => {
@@ -13228,45 +13243,111 @@ export default function App() {
                 <button onClick={handleLogout} className="text-[10px] font-bold text-slate-500 hover:text-red-400 px-2 py-1 rounded whitespace-nowrap">ログアウト</button>
               </div>
             )}
+            {/* ★ 本部管理者専用: 店舗切替ドロップダウン (各店舗を直接切替 + ログアウト) - 店舗切替を上に */}
+            {staffSession?.role === 'super_admin' && staffSession?.storeId && (
+              <div className="border-b border-amber-700/50">
+                <button onClick={()=>setAdminStoreDropdownOpen(v=>!v)}
+                  className="w-full px-4 py-2 bg-amber-900/40 hover:bg-amber-900/60 flex items-center justify-between gap-2 transition-colors">
+                  <span className="text-[11px] font-bold text-amber-200 truncate flex items-center gap-1.5">
+                    <span>🏢</span>
+                    <span className="truncate">{staffSession.storeName || staffSession.storeShortName || '店舗'}</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-300 px-2 py-1 rounded whitespace-nowrap bg-amber-800/50">
+                    {adminStoreDropdownOpen ? '▲' : '▼'} 店舗切替
+                  </span>
+                </button>
+                {adminStoreDropdownOpen && (
+                  <div className="bg-amber-900/30 border-t border-amber-700/30 max-h-[300px] overflow-y-auto">
+                    {adminStoresList.length === 0 ? (
+                      <div className="px-4 py-3 text-[10px] text-amber-300/70">読込中...</div>
+                    ) : (
+                      <>
+                        {adminStoresList.map(s => {
+                          const isCurrent = s.id === staffSession.storeId;
+                          return (
+                            <button key={s.id}
+                              onClick={() => {
+                                setAdminStoreDropdownOpen(false);
+                                if (isCurrent) return;
+                                // ★ 別店舗に直接切替 (完全データクリア)
+                                storeTransitionRef.current = true;
+                                dataLoadedForStoreRef.current = null;
+                                pendingPullForStoreRef.current = s.id;
+                                const updated = { ...staffSession, storeId: s.id, storeName: s.name, storeShortName: s.short_name || s.name };
+                                sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
+                                sessionStorage.removeItem('tsumugiActiveRecorder');
+                                try { localStorage.removeItem('daycareAppData_v3'); } catch {}
+                                try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
+                                try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
+                                setStaffSession(updated);
+                                // 本部管理者は自動で「本部」recorder に
+                                const recorder = { id: `recorder_honbu_${staffSession.staffId}`, name: '本部 ' + (staffSession.displayName || '管理者'), roleLabel: '本部管理', isSuperAdmin: true };
+                                sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(recorder));
+                                setActiveRecorder(recorder);
+                                setAppData({
+                                  patients: [], ticketRecords: [], familyAnnouncements: [],
+                                  familyPersonalAnnouncements: [], familyPhotos: [],
+                                  monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
+                                  contactBooks: [], familyAccounts: [], familyInvites: [],
+                                  systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
+                                  storeMembers: [],
+                                  contactBookConfig: { items: [] },
+                                });
+                              }}
+                              className={`w-full text-left px-4 py-2 text-[11px] font-bold flex items-center justify-between border-b border-amber-700/20 ${
+                                isCurrent
+                                  ? 'bg-amber-700/60 text-white cursor-default'
+                                  : 'text-amber-100 hover:bg-amber-800/60'
+                              }`}>
+                              <span className="flex items-center gap-1.5 truncate">
+                                <span>🏢</span>
+                                <span className="truncate">{s.name}</span>
+                              </span>
+                              <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">
+                                {isCurrent ? '✓ 現在' : 'ログアウトして開く →'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {/* 店舗選択画面に戻る */}
+                        <button onClick={() => {
+                          setAdminStoreDropdownOpen(false);
+                          storeTransitionRef.current = true;
+                          dataLoadedForStoreRef.current = null;
+                          const updated = { ...staffSession, storeId: null, storeName: '', storeShortName: '' };
+                          sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
+                          sessionStorage.removeItem('tsumugiActiveRecorder');
+                          try { localStorage.removeItem('daycareAppData_v3'); } catch {}
+                          try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
+                          try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
+                          setStaffSession(updated);
+                          setActiveRecorder(null);
+                          setAppData({
+                            patients: [], ticketRecords: [], familyAnnouncements: [],
+                            familyPersonalAnnouncements: [], familyPhotos: [],
+                            monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
+                            contactBooks: [], familyAccounts: [], familyInvites: [],
+                            systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
+                            storeMembers: [],
+                            contactBookConfig: { items: [] },
+                          });
+                        }} className="w-full text-left px-4 py-2 text-[10px] font-bold text-amber-300/80 hover:bg-amber-800/60 italic">
+                          🏠 店舗選択画面に戻る
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {/* スタッフ切替 (店舗切替の下) */}
             {activeRecorder && (
               <div className="px-4 py-2 bg-emerald-900/40 border-b border-emerald-700/50 flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold text-emerald-200 truncate flex items-center gap-1.5">
                   <span className="text-[14px]">👤</span>
                   <span className="truncate">{activeRecorder.name} さん{activeRecorder.roleLabel && <span className="text-[9px] opacity-70 ml-1">({activeRecorder.roleLabel})</span>}</span>
                 </span>
-                <button onClick={() => { sessionStorage.removeItem('tsumugiActiveRecorder'); setActiveRecorder(null); }} className="text-[10px] font-bold text-emerald-300 hover:text-white px-2 py-1 rounded whitespace-nowrap bg-emerald-800/50 hover:bg-emerald-700">切替</button>
-              </div>
-            )}
-            {/* ★ 本部管理者専用: 店舗切替ボタン (ログアウトせずに別店舗へ) */}
-            {staffSession?.role === 'super_admin' && staffSession?.storeId && (
-              <div className="px-4 py-2 bg-amber-900/40 border-b border-amber-700/50 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-amber-200 truncate flex items-center gap-1.5">
-                  <span>🏢</span>
-                  <span className="truncate">{staffSession.storeName || staffSession.storeShortName || '店舗'}</span>
-                </span>
-                <button onClick={() => {
-                  // 店舗切替 = 店舗選択画面に戻る (データ完全クリア)
-                  // ★ push を完全に塞ぐ
-                  storeTransitionRef.current = true;
-                  dataLoadedForStoreRef.current = null;
-                  const updated = { ...staffSession, storeId: null, storeName: '', storeShortName: '' };
-                  sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
-                  sessionStorage.removeItem('tsumugiActiveRecorder');
-                  try { localStorage.removeItem('daycareAppData_v3'); } catch {}
-                  try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
-                  try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
-                  setStaffSession(updated);
-                  setActiveRecorder(null);
-                  setAppData({
-                    patients: [], ticketRecords: [], familyAnnouncements: [],
-                    familyPersonalAnnouncements: [], familyPhotos: [],
-                    monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
-                    contactBooks: [], familyAccounts: [], familyInvites: [],
-                    systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
-                    storeMembers: [],
-                    contactBookConfig: { items: [] },
-                  });
-                }} className="text-[10px] font-bold text-amber-300 hover:text-white px-2 py-1 rounded whitespace-nowrap bg-amber-800/50 hover:bg-amber-700">🔄 店舗切替</button>
+                <button onClick={() => { sessionStorage.removeItem('tsumugiActiveRecorder'); setActiveRecorder(null); }} className="text-[10px] font-bold text-emerald-300 hover:text-white px-2 py-1 rounded whitespace-nowrap bg-emerald-800/50 hover:bg-emerald-700">スタッフ切替</button>
               </div>
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
