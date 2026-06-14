@@ -10144,6 +10144,10 @@ function FamilyView() {
   // ★ 家族側の店舗 ID (ログイン後に判明) → 店舗ごとの app_state を pull するため
   const familyStoreId = (() => {
     if (!authAccId) return null;
+    // ★ スタッフ ID でログインした家族 UI プレビューモード
+    if (String(authAccId) === '__staff_preview__') {
+      try { return sessionStorage.getItem('familyStaffPreviewStoreId') || null; } catch { return null; }
+    }
     const acc = (data.familyAccounts || []).find(a => String(a.id) === String(authAccId));
     return acc?.storeId || acc?.store_id || null;
   })();
@@ -10342,6 +10346,47 @@ function FamilyView() {
           return;
         } catch (sbErr) {
           console.warn('[supabase] login fallback', sbErr?.message);
+        }
+      }
+      // ★ スタッフ ID/PW でも通過させる (家族画面 UI 確認用プレビューモード)
+      // 家族認証失敗後、スタッフ認証を試して通れば「最初の利用者」を表示
+      if (isSupabaseEnabled) {
+        try {
+          const staff = await supabaseStaffLogin({
+            username: loginForm.username.trim(),
+            password: loginForm.password,
+          });
+          if (staff.role === 'super_admin' && !staff.store_id) {
+            setLoginForm(f=>({...f, error:'本部管理者の家族プレビューは未対応です。事業所スタッフでお試しください'}));
+            return;
+          }
+          const previewStoreId = staff.store_id || null;
+          if (!previewStoreId) {
+            setLoginForm(f=>({...f, error:'店舗 ID が確認できませんでした'}));
+            return;
+          }
+          // 店舗の app_state を pull して最初の利用者を取得
+          const sbState = await supabaseLoadStateForStore(previewStoreId);
+          const firstPatient = (sbState?.patients || [])[0];
+          if (!firstPatient) {
+            setLoginForm(f=>({...f, error:`店舗「${staff.stores?.name||''}」に利用者が登録されていません`}));
+            return;
+          }
+          // プレビュー用のデータをセット
+          try {
+            const fresh = { ...(sbState || {}), familyAccounts: [] };
+            localStorage.setItem('daycareAppData_v3', JSON.stringify(fresh));
+            setData(fresh);
+          } catch {}
+          // プレビューモードを sessionStorage に保存 (familyStoreId 解決時に利用)
+          sessionStorage.setItem('familyStaffPreviewStoreId', previewStoreId);
+          sessionStorage.setItem('familyAuthPid', String(firstPatient.id));
+          sessionStorage.setItem('familyAuthAccId', '__staff_preview__');
+          setAuthPid(String(firstPatient.id));
+          setAuthAccId('__staff_preview__');
+          return;
+        } catch (staffErr) {
+          // スタッフ認証も失敗 → 既存のローカル認証に進む
         }
       }
       // フォールバック: localStorage 内でログイン (同一端末で登録済みの場合)
@@ -10912,6 +10957,10 @@ function FamilyView() {
             <p style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
+            {/* ★ 事業所スタッフ ID/PW でも入れる (UI 確認用プレビューモード) */}
+            <p style={{fontSize:10,color:'#cbd5e1',textAlign:'center',marginTop:6,lineHeight:1.5,fontStyle:'italic'}}>
+              ※ 事業所スタッフ ID/PW でもログイン可 (家族画面プレビュー)
+            </p>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
           )}
@@ -10926,6 +10975,7 @@ function FamilyView() {
   const handleLogout = () => {
     sessionStorage.removeItem('familyAuthPid');
     sessionStorage.removeItem('familyAuthAccId');
+    sessionStorage.removeItem('familyStaffPreviewStoreId'); // ★ スタッフプレビュー用フラグもクリア
     setAuthPid(null);
     setAuthAccId(null);
     setLoginForm({ username:'', password:'', error:'', showPw:false });
