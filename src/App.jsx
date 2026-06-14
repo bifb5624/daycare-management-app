@@ -15459,7 +15459,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </>
           )}
           <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
-            {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'],['custom','期間指定']].map(([v,l])=>(
+            {/* ★ familyMode では「期間指定」(custom) を除外 → 1ヶ月/3ヶ月/半年/1年 のみ */}
+            {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'], ...(familyMode ? [] : [['custom','期間指定']])].map(([v,l])=>(
               <button key={v} onClick={()=>setPeriod(v)} style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',color:period===v?(familyMode?'#3d5021':'#1e40af'):'white',background:period===v?'white':'transparent',border:'none',cursor:'pointer',borderRight:'1px solid rgba(255,255,255,0.2)',transition:'all 0.15s'}}>{l}</button>
             ))}
           </div>
@@ -15954,39 +15955,54 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 }
               }
             }
+            // ★ familyMode は最小限の項目のみ: 利用者名(+年齢) / 利用開始日 / 経過日数
+            const familyFields = [
+              {label:'利用者名',value:(<>
+                <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
+                  {age!==null && <span style={{fontSize:13,color:'#475569',fontWeight:'bold',marginLeft:8}}>（{age}歳）</span>}
+                </span>
+              </>)},
+              {label:'利用開始日',value:startLabel},
+              {label:'経過日数',value:elapsedLabel},
+            ];
+            const staffFields = [
+              {label:'利用者名',value:(<>
+                <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
+                  {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
+                </span>
+              </>)},
+              {label:'生年月日',value:selectedPatient.birthDate?new Date(selectedPatient.birthDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}):'—'},
+              {label:'年齢',value:age!==null?`${age}歳`:'—'},
+              {label:'身長',value:selectedPatient.height?`${selectedPatient.height}cm`:'—'},
+              {label:'体重',value:selectedPatient.weight?`${selectedPatient.weight}kg`:'—'},
+              {label:'利用開始日',value:startLabel},
+              {label:'経過日数',value:elapsedLabel},
+            ];
+            const fields = familyMode ? familyFields : staffFields;
             return (
               <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
                 {/* ★ familyMode (家族スマホ閲覧) は縦1列 / スタッフは横並び */}
-                <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
-                  {[
-                    {label:'利用者名',value:(<>
-                      <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
-                        {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
-                      </span>
-                    </>)},
-                    {label:'生年月日',value:selectedPatient.birthDate?new Date(selectedPatient.birthDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}):'—'},
-                    {label:'年齢',value:age!==null?`${age}歳`:'—'},
-                    {label:'身長',value:selectedPatient.height?`${selectedPatient.height}cm`:'—'},
-                    {label:'体重',value:selectedPatient.weight?`${selectedPatient.weight}kg`:'—'},
-                    {label:'利用開始日',value:startLabel},
-                    {label:'経過日数',value:elapsedLabel},
-                  ].map(({label,value})=>(
+                <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom: familyMode ? 0 : 12}}>
+                  {fields.map(({label,value})=>(
                     <div key={label} style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #e2e8f0'}}>
                       <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>{label}</div>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{value}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : '1fr 1fr',gap:10}}>
-                  <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
-                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.kiou||'—'}</div>
+                {/* ★ 家族モードでは既往歴/留意点を非表示 (利用者・家族には不要な情報) */}
+                {!familyMode && (
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                    <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
+                      <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
+                      <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.kiou||'—'}</div>
+                    </div>
+                    <div style={{background:'#fef2f2',borderRadius:10,padding:'8px 12px',border:'1px solid #fecaca'}}>
+                      <div style={{fontSize:11,fontWeight:'bold',color:'#991b1b',marginBottom:3}}>留意点</div>
+                      <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.ryui||'—'}</div>
+                    </div>
                   </div>
-                  <div style={{background:'#fef2f2',borderRadius:10,padding:'8px 12px',border:'1px solid #fecaca'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#991b1b',marginBottom:3}}>留意点</div>
-                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.ryui||'—'}</div>
-                  </div>
-                </div>
+                )}
               </div>
             );
           })()}
@@ -16022,7 +16038,22 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const latestPair = withDates[0];
           const latest = latestPair?.r;
           const latestFullDate = latestPair?.d;
-          if (!latest) return null;
+          // ★ 家族モードでは記録がなくてもセクション枠を表示 (空状態)
+          if (!latest) {
+            if (familyMode) {
+              return (
+                <div id="sec-latest" style={{marginBottom:16,scrollMarginTop:120}}>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>📋 今回の記録</div>
+                  <div style={{background:'white',borderRadius:14,padding:'32px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px dashed #cbd5e1',textAlign:'center'}}>
+                    <div style={{fontSize:32,marginBottom:8}}>📝</div>
+                    <div style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>まだ通所記録がありません</div>
+                    <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>通所が始まると、体温・血圧・気分などがここに表示されます</div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          }
           const MOODS = {'excellent':'🤩 とても良い','good':'😊 良い','normal':'😐 普通','bad':'😞 良くない','terrible':'😫 とても良くない'};
           const _ftoPid = (appData.familyTokkiOverrides||{})[selectedPatientId] || {};
           const tokkiOv = _ftoPid[latest.date] || _ftoPid[latest.id] || {};
@@ -16591,6 +16622,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
         {/* === バイタルトレンド（日別） === */}
         <div id="sec-vital" data-sec="sec-vital" style={{scrollMarginTop:120}}/>
+        {/* ★ familyMode: 記録ゼロでも空状態のセクションを表示 */}
+        {validRecs.length === 0 && familyMode && (
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>📊 バイタルトレンド</div>
+            <div style={{background:'white',borderRadius:14,padding:'32px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px dashed #cbd5e1',textAlign:'center'}}>
+              <div style={{fontSize:32,marginBottom:8}}>📈</div>
+              <div style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>まだ通所記録がありません</div>
+              <div style={{fontSize:11,color:'#94a3b8',marginTop:4}}>通所が始まると、体温・血圧・脈拍のグラフがここに表示されます</div>
+            </div>
+          </div>
+        )}
         {validRecs.length > 0 && (()=>{
           // 全期間は月別平均、それ以外は日別
           const rawData = validRecs.map(r=>({
