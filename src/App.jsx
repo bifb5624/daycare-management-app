@@ -11741,7 +11741,8 @@ function SystemNoticesPanel({ stores, staffSession }) {
   const [notices, setNotices] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [showForm, setShowForm] = React.useState(false);
-  const [form, setForm] = React.useState({ title:'', body:'', targetStoreId:'', severity:'info', endsAt:'' });
+  // ★ 複数店舗選択対応: targetStoreIds = 配列、空=全店共通
+  const [form, setForm] = React.useState({ title:'', body:'', targetStoreIds:[], severity:'info', endsAt:'' });
 
   const load = async () => {
     setLoading(true);
@@ -11758,12 +11759,12 @@ function SystemNoticesPanel({ stores, staffSession }) {
       await supabaseCreateSystemNotice({
         title: form.title.trim(),
         body: form.body.trim(),
-        targetStoreId: form.targetStoreId || null,
+        targetStoreIds: form.targetStoreIds || [],
         severity: form.severity,
         endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : null,
         createdBy: staffSession?.username || staffSession?.displayName || 'honbu',
       });
-      setForm({ title:'', body:'', targetStoreId:'', severity:'info', endsAt:'' });
+      setForm({ title:'', body:'', targetStoreIds:[], severity:'info', endsAt:'' });
       setShowForm(false);
       load();
     } catch (err) {
@@ -11778,7 +11779,7 @@ function SystemNoticesPanel({ stores, staffSession }) {
   return (
     <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-        <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📣 全店舗お知らせ ({notices.length} 件)</div>
+        <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📣 事業所用お知らせ ({notices.length} 件)</div>
         <button onClick={()=>setShowForm(true)} style={{padding:'8px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>+ お知らせを追加</button>
       </div>
       {loading ? (
@@ -11791,9 +11792,11 @@ function SystemNoticesPanel({ stores, staffSession }) {
         <div style={{display:'grid',gap:8}}>
           {notices.map(n => {
             const isExpired = n.ends_at && new Date(n.ends_at) < new Date();
-            const targetName = n.target_store_id
-              ? (stores.find(s => s.id === n.target_store_id)?.name || n.target_store_id)
-              : '全店共通';
+            // 複数店舗対応: target_store_ids 配列 (空なら全店、それ以外は店舗名を結合表示)
+            const ids = Array.isArray(n.target_store_ids) ? n.target_store_ids : (n.target_store_id ? [n.target_store_id] : []);
+            const targetName = ids.length === 0
+              ? '全店共通'
+              : ids.map(sid => stores.find(s => s.id === sid)?.name || sid).join(' / ');
             const sevColor = n.severity === 'critical' ? '#dc2626' : n.severity === 'warning' ? '#d97706' : '#3b82f6';
             return (
               <div key={n.id} style={{padding:'10px 12px',background:isExpired?'#f1f5f9':'#f8fafc',borderLeft:`4px solid ${sevColor}`,borderRadius:8,display:'flex',gap:10,alignItems:'flex-start'}}>
@@ -11824,22 +11827,45 @@ function SystemNoticesPanel({ stores, staffSession }) {
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>本文</label>
                 <textarea value={form.body} onChange={e=>setForm({...form,body:e.target.value})} placeholder="例: 上記時間帯はシステムをご利用いただけません。ご不便をおかけしますが、ご理解のほどよろしくお願いいたします。" rows={4} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',resize:'vertical'}}/>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>対象店舗</label>
-                  <select value={form.targetStoreId} onChange={e=>setForm({...form,targetStoreId:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
-                    <option value="">全店共通</option>
-                    {stores.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+              {/* ★ 対象店舗 (複数選択可) */}
+              <div>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>対象店舗 (複数選択可)</label>
+                <div style={{border:'1px solid #cbd5e1',borderRadius:10,padding:'8px 12px',background:'#f8fafc',maxHeight:160,overflowY:'auto'}}>
+                  {/* 全店選択トグル */}
+                  <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:'bold',padding:'4px 0',color:'#3b82f6',borderBottom:'1px dashed #cbd5e1',marginBottom:4,paddingBottom:6,cursor:'pointer'}}>
+                    <input type="checkbox" checked={form.targetStoreIds.length === 0}
+                      onChange={(e)=>setForm({...form, targetStoreIds: e.target.checked ? [] : (stores[0] ? [stores[0].id] : [])})}
+                      style={{width:14,height:14}}/>
+                    📣 全店舗 (チェックを外して個別選択)
+                  </label>
+                  {stores.map(s => (
+                    <label key={s.id} style={{display:'flex',alignItems:'center',gap:6,fontSize:12,padding:'4px 0',cursor:'pointer',opacity:form.targetStoreIds.length === 0 ? 0.5 : 1}}>
+                      <input type="checkbox"
+                        checked={form.targetStoreIds.includes(s.id)}
+                        disabled={form.targetStoreIds.length === 0}
+                        onChange={(e)=>{
+                          if (e.target.checked) {
+                            setForm({...form, targetStoreIds: [...form.targetStoreIds, s.id]});
+                          } else {
+                            setForm({...form, targetStoreIds: form.targetStoreIds.filter(id => id !== s.id)});
+                          }
+                        }}
+                        style={{width:14,height:14}}/>
+                      🏢 {s.name}
+                    </label>
+                  ))}
                 </div>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>重要度</label>
-                  <select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
-                    <option value="info">📣 通常 (青)</option>
-                    <option value="warning">⚠️ 注意 (黄)</option>
-                    <option value="critical">🚨 重要 (赤)</option>
-                  </select>
+                <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>
+                  {form.targetStoreIds.length === 0 ? '→ 全店舗に表示' : `→ ${form.targetStoreIds.length} 店舗に表示`}
                 </div>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>重要度</label>
+                <select value={form.severity} onChange={e=>setForm({...form,severity:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
+                  <option value="info">📣 通常 (青)</option>
+                  <option value="warning">⚠️ 注意 (黄)</option>
+                  <option value="critical">🚨 重要 (赤)</option>
+                </select>
               </div>
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>表示終了日時 (任意)</label>
@@ -21213,7 +21239,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-base font-bold text-slate-700">{localPatient.cmPhone||'ー'}</div></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-base font-bold text-slate-700">{localPatient.cmFax||'ー'}</div></div></div>
+                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{localPatient.cmPhone||'ー'}</div></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{localPatient.cmFax||'ー'}</div></div></div>
 
                 {/* ケアマネ担当者の名刺 (各種設定で登録した内容を参照表示) */}
                 {(() => {
@@ -23343,13 +23369,27 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
           {activeTab === 'cm-OLD' && (<>
             <SectionCard title="ケアマネ事業所の登録">
               <p className="text-xs text-slate-500 mb-3">事業所を登録すると、担当者登録時にプルダウンで選択できます。</p>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4">
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label><input type="text" value={newOffice.name} onChange={e => setNewOffice({...newOffice, name: e.target.value})} placeholder="例: あおぞら居宅介護" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
+              {/* ★ 縦並びレイアウト + 郵便番号→住所自動補完 */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 space-y-3">
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label><input type="text" value={newOffice.name} onChange={e => setNewOffice({...newOffice, name: e.target.value})} placeholder="例: あおぞら居宅介護" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
+                <div className="grid grid-cols-2 gap-3">
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" value={newOffice.phone} onChange={e => setNewOffice({...newOffice, phone: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" value={newOffice.fax} onChange={e => setNewOffice({...newOffice, fax: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 </div>
-                <button type="button" onClick={() => { if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice}]); setNewOffice({name:"",phone:"",fax:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">郵便番号</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="tel" inputMode="numeric" value={newOffice.zipCode||''} onChange={e=>{const raw=e.target.value.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[^0-9]/g,'').slice(0,7);const fmt=raw.length>3?raw.slice(0,3)+'-'+raw.slice(3):raw;setNewOffice({...newOffice, zipCode: fmt});}} placeholder="1350011" style={{width:200}} className="px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm tracking-widest"/>
+                    <button type="button" onClick={async ()=>{
+                      const r = await lookupZipAddress(newOffice.zipCode);
+                      if (r?.full) setNewOffice({...newOffice, address: r.full});
+                      else alert('住所が見つかりませんでした');
+                    }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95">📍 住所検索</button>
+                  </div>
+                </div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={newOffice.address||''} onChange={e => setNewOffice({...newOffice, address: e.target.value})} placeholder="例: 東京都江東区扇橋1-1-1" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">建物名・部屋番号</label><input type="text" value={newOffice.addressBuilding||''} onChange={e => setNewOffice({...newOffice, addressBuilding: e.target.value})} placeholder="例: メイゾン白子101" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
+                <button type="button" onClick={() => { if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice}]); setNewOffice({name:"",phone:"",fax:"",zipCode:"",address:"",addressBuilding:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
               </div>
               {cmOffices.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
                 <div className="space-y-2">{cmOffices.map((o, i) => (
