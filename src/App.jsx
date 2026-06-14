@@ -15844,7 +15844,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             }
             return (
               <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
+                {/* ★ familyMode (家族スマホ閲覧) は縦1列 / スタッフは横並び */}
+                <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
                   {[
                     {label:'利用者名',value:(<>
                       <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
@@ -15864,7 +15865,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                   ))}
                 </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : '1fr 1fr',gap:10}}>
                   <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
                     <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
                     <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.kiou||'—'}</div>
@@ -15970,7 +15971,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 ) : (
                   /* 出席/振替: 1行に 体温 | 血圧+脈(開始) | 血圧+脈(終了) | 気分 */
                   <>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'10px 16px',fontSize:13}}>
+                    <div style={{display:'grid',gridTemplateColumns: familyMode ? '1fr' : 'repeat(auto-fit,minmax(160px,1fr))',gap:'10px 16px',fontSize:13}}>
                       {/* 体温 */}
                       <div>
                         <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>体温</span>
@@ -16049,7 +16050,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               {kyushi>0&&<span style={{color:'#f97316'}}>休止: <b>{kyushi}</b>件</span>}
             </span>
           </div>
-          <div style={{display:'flex',gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
+          {/* ★ familyMode (家族スマホ) は縦 1 列、スタッフは横並び */}
+          <div style={{display:'flex',gap:10,alignItems:'stretch',flexWrap:'wrap',flexDirection: familyMode ? 'column' : 'row'}}>
             {/* 通所率 */}
             {(()=>{
               const furikaeCount=records.filter(r=>r.tokki&&r.tokki.includes('振替')).length;
