@@ -15775,7 +15775,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             }
             return (
               <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
-                <div style={{display:'grid',gridTemplateColumns:'1.6fr 1.3fr 0.7fr 0.7fr 0.7fr 1.2fr 0.9fr',gap:8,marginBottom:12}}>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
                   {[
                     {label:'利用者名',value:(<>
                       <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
@@ -16371,7 +16371,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </div>
           );
           const renderGrid = (counts, total) => (
-            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:4}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(70px,1fr))',gap:4}}>
               {MOODS.map(m=>(
                 <div key={m.key} style={{background:m.bg,border:`1.5px solid ${m.color}`,borderRadius:8,padding:'6px 4px',textAlign:'center'}}>
                   <div style={{fontSize:16,lineHeight:1,marginBottom:2}}>{m.emoji}</div>
@@ -21586,7 +21586,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const fkey=si.id==='massage'?'massageNeed':si.id==='onyoku'?'onyokuDenryo':`svc_${si.id}`;
                 return(<div key={si.id} className="flex-1 min-w-[120px]"><label className="block text-sm font-bold text-slate-600 mb-1">{si.label}</label><select disabled={isOff} value={localPatient[fkey]||''} onChange={e=>updateLP(fkey,e.target.value)} className="w-full px-3 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-base outline-none cursor-pointer disabled:opacity-60">{opts.map(o=><option key={o} value={o}>{o}</option>)}</select></div>);
               })}</div>
-              <div><h3 className="text-sm font-bold text-slate-600 mb-3">運動メニュー</h3><div className="grid grid-cols-5 gap-3">{(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => { const isActive = keypad.isOpen && keypad.exerciseId === item.id; return (<div key={item.id} className={`p-2.5 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' : 'bg-slate-50 border-slate-200'}`}><label className="block text-[12px] font-bold text-slate-500 mb-1 text-center truncate">{item.name}{item.defaultUnit && item.type !== 'individual' && <span className="text-[9px] text-slate-400 font-normal ml-1">({item.defaultUnit})</span>}</label><input type="text" readOnly disabled={isOff} value={(localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || ""} onClick={() => { if (!isOff) setKeypad({ isOpen: true, field: 'plannedExercise', exerciseId: item.id, value: (localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || "", isFirstInput: true, mode: 'exercise' }); }} placeholder="未設定" className={`keypad-trigger w-full px-2 py-2 border rounded-lg font-bold text-sm text-center outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${isActive ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-300'}`} /></div>); })}</div></div>
+              <div><h3 className="text-sm font-bold text-slate-600 mb-3">運動メニュー</h3><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">{(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => { const isActive = keypad.isOpen && keypad.exerciseId === item.id; return (<div key={item.id} className={`p-2.5 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' : 'bg-slate-50 border-slate-200'}`}><label className="block text-[12px] font-bold text-slate-500 mb-1 text-center truncate">{item.name}{item.defaultUnit && item.type !== 'individual' && <span className="text-[9px] text-slate-400 font-normal ml-1">({item.defaultUnit})</span>}</label><input type="text" readOnly disabled={isOff} value={(localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || ""} onClick={() => { if (!isOff) setKeypad({ isOpen: true, field: 'plannedExercise', exerciseId: item.id, value: (localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || "", isFirstInput: true, mode: 'exercise' }); }} placeholder="未設定" className={`keypad-trigger w-full px-2 py-2 border rounded-lg font-bold text-sm text-center outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${isActive ? 'bg-blue-50 border-blue-500' : 'bg-white border-slate-300'}`} /></div>); })}</div></div>
               {(()=>{
                 const indItems = appData.systemSettings?.individualExerciseItems || [];
                 if (indItems.length === 0) return null;
@@ -21607,7 +21607,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 return (
                   <div className="mt-4 pt-4 border-t border-slate-200">
                     <h3 className="text-sm font-bold text-slate-600 mb-1">個別運動メニュー <span className="text-[10px] text-slate-400 font-normal">（既定: 全選択。チェックを外すとサービス提供記録入力のプルダウンから除外されます）</span></h3>
-                    <div className="grid grid-cols-4 gap-2 mt-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
                       {indItems.map(item => {
                         const selected = patIndEx.find(x => x.itemId === item.id);
                         return (
