@@ -12394,6 +12394,8 @@ export default function App() {
   // ★ 本部管理者用 店舗リスト (サイドバーで切替するため)
   const [adminStoresList, setAdminStoresList] = React.useState([]);
   const [adminStoreDropdownOpen, setAdminStoreDropdownOpen] = React.useState(false);
+  // ★ スタッフ切替ドロップダウン
+  const [staffDropdownOpen, setStaffDropdownOpen] = React.useState(false);
   React.useEffect(() => {
     if (staffSession?.role !== 'super_admin' || !isSupabaseEnabled) return;
     let stopped = false;
@@ -13309,45 +13311,91 @@ export default function App() {
                             </button>
                           );
                         })}
-                        {/* 店舗選択画面に戻る */}
-                        <button onClick={() => {
-                          setAdminStoreDropdownOpen(false);
-                          storeTransitionRef.current = true;
-                          dataLoadedForStoreRef.current = null;
-                          const updated = { ...staffSession, storeId: null, storeName: '', storeShortName: '' };
-                          sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
-                          sessionStorage.removeItem('tsumugiActiveRecorder');
-                          try { localStorage.removeItem('daycareAppData_v3'); } catch {}
-                          try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
-                          try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
-                          setStaffSession(updated);
-                          setActiveRecorder(null);
-                          setAppData({
-                            patients: [], ticketRecords: [], familyAnnouncements: [],
-                            familyPersonalAnnouncements: [], familyPhotos: [],
-                            monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
-                            contactBooks: [], familyAccounts: [], familyInvites: [],
-                            systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
-                            storeMembers: [],
-                            contactBookConfig: { items: [] },
-                          });
-                        }} className="w-full text-left px-4 py-2 text-[10px] font-bold text-amber-300/80 hover:bg-amber-800/60 italic">
-                          🏠 店舗選択画面に戻る
-                        </button>
                       </>
                     )}
                   </div>
                 )}
               </div>
             )}
-            {/* スタッフ切替 (店舗切替の下) */}
-            {activeRecorder && (
-              <div className="px-4 py-2 bg-emerald-900/40 border-b border-emerald-700/50 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-emerald-200 truncate flex items-center gap-1.5">
-                  <span className="text-[14px]">👤</span>
-                  <span className="truncate">{activeRecorder.name} さん{activeRecorder.roleLabel && <span className="text-[9px] opacity-70 ml-1">({activeRecorder.roleLabel})</span>}</span>
+            {/* ★ 本部管理者専用 (中段): この店舗をログアウト (= 店舗選択画面に戻る) */}
+            {staffSession?.role === 'super_admin' && staffSession?.storeId && (
+              <div className="px-4 py-2 bg-orange-900/40 border-b border-orange-700/50 flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-orange-200 truncate flex items-center gap-1.5">
+                  <span>🏢</span>
+                  <span className="truncate">{staffSession.storeName || staffSession.storeShortName || '店舗'}</span>
                 </span>
-                <button onClick={() => { sessionStorage.removeItem('tsumugiActiveRecorder'); setActiveRecorder(null); }} className="text-[10px] font-bold text-emerald-300 hover:text-white px-2 py-1 rounded whitespace-nowrap bg-emerald-800/50 hover:bg-emerald-700">スタッフ切替</button>
+                <button onClick={() => {
+                  // この店舗をログアウト (店舗選択画面に戻る)
+                  storeTransitionRef.current = true;
+                  dataLoadedForStoreRef.current = null;
+                  const updated = { ...staffSession, storeId: null, storeName: '', storeShortName: '' };
+                  sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
+                  sessionStorage.removeItem('tsumugiActiveRecorder');
+                  try { localStorage.removeItem('daycareAppData_v3'); } catch {}
+                  try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
+                  try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
+                  setStaffSession(updated);
+                  setActiveRecorder(null);
+                  setAppData({
+                    patients: [], ticketRecords: [], familyAnnouncements: [],
+                    familyPersonalAnnouncements: [], familyPhotos: [],
+                    monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
+                    contactBooks: [], familyAccounts: [], familyInvites: [],
+                    systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
+                    storeMembers: [],
+                    contactBookConfig: { items: [] },
+                  });
+                }} className="text-[10px] font-bold text-orange-300 hover:text-white px-2 py-1 rounded whitespace-nowrap bg-orange-800/50 hover:bg-orange-700">ログアウト</button>
+              </div>
+            )}
+            {/* スタッフ切替 (店舗切替の下) — ドロップダウン形式でホーム画面のままスタッフを切り替え */}
+            {activeRecorder && (
+              <div className="border-b border-emerald-700/50">
+                <button onClick={()=>setStaffDropdownOpen(v=>!v)} className="w-full px-4 py-2 bg-emerald-900/40 hover:bg-emerald-900/60 flex items-center justify-between gap-2 transition-colors">
+                  <span className="text-[11px] font-bold text-emerald-200 truncate flex items-center gap-1.5">
+                    <span className="text-[14px]">👤</span>
+                    <span className="truncate">{activeRecorder.name} さん{activeRecorder.roleLabel && <span className="text-[9px] opacity-70 ml-1">({activeRecorder.roleLabel})</span>}</span>
+                  </span>
+                  <span className="text-[10px] font-bold text-emerald-300 px-2 py-1 rounded whitespace-nowrap bg-emerald-800/50">
+                    {staffDropdownOpen ? '▲' : '▼'} スタッフ切替
+                  </span>
+                </button>
+                {staffDropdownOpen && (() => {
+                  const members = appData.storeMembers || [];
+                  return (
+                    <div className="bg-emerald-900/30 border-t border-emerald-700/30 max-h-[250px] overflow-y-auto">
+                      {members.length === 0 ? (
+                        <div className="px-4 py-3 text-[10px] text-emerald-300/70">登録メンバーがいません</div>
+                      ) : (
+                        members.map(m => {
+                          const isCurrent = m.id === activeRecorder.id;
+                          return (
+                            <button key={m.id}
+                              onClick={() => {
+                                setStaffDropdownOpen(false);
+                                if (isCurrent) return;
+                                sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
+                                setActiveRecorder(m);
+                              }}
+                              className={`w-full text-left px-4 py-2 text-[11px] font-bold flex items-center justify-between border-b border-emerald-700/20 ${
+                                isCurrent
+                                  ? 'bg-emerald-700/60 text-white cursor-default'
+                                  : 'text-emerald-100 hover:bg-emerald-800/60'
+                              }`}>
+                              <span className="flex items-center gap-1.5 truncate">
+                                <span>👤</span>
+                                <span className="truncate">{m.name}{m.roleLabel && <span className="text-[9px] opacity-70 ml-1">({m.roleLabel})</span>}</span>
+                              </span>
+                              <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">
+                                {isCurrent ? '✓ 現在' : '切替 →'}
+                              </span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
