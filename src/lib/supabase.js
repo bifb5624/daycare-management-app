@@ -326,6 +326,68 @@ export async function supabaseLoadStateForStore(storeId) {
   }
 }
 
+// =========================================================
+// システムお知らせ (本部 → 全店舗 / 個別店舗)
+// =========================================================
+export async function supabaseListSystemNotices(storeId) {
+  if (!supabase) return [];
+  try {
+    const now = new Date().toISOString();
+    let q = supabase
+      .from('system_notices')
+      .select('*')
+      .lte('starts_at', now)
+      .order('created_at', { ascending: false });
+    const { data, error } = await q;
+    if (error) { console.warn('[supabase] listSystemNotices error', error); return []; }
+    // ends_at が NULL OR 未来 のみ表示
+    const active = (data || []).filter(n => !n.ends_at || new Date(n.ends_at) > new Date(now));
+    // 対象店舗フィルタ: target_store_id が NULL なら全店、storeId と一致するもの
+    return active.filter(n => !n.target_store_id || n.target_store_id === storeId);
+  } catch (e) {
+    console.warn('[supabase] listSystemNotices exception', e);
+    return [];
+  }
+}
+
+export async function supabaseListAllSystemNotices() {
+  if (!supabase) return [];
+  try {
+    const { data } = await supabase
+      .from('system_notices')
+      .select('*')
+      .order('created_at', { ascending: false });
+    return data || [];
+  } catch { return []; }
+}
+
+export async function supabaseCreateSystemNotice({ title, body, targetStoreId, severity, startsAt, endsAt, createdBy }) {
+  if (!supabase) throw new Error('Supabase 未接続');
+  const { data, error } = await supabase
+    .from('system_notices')
+    .insert({
+      title,
+      body,
+      target_store_id: targetStoreId || null,
+      severity: severity || 'info',
+      starts_at: startsAt || new Date().toISOString(),
+      ends_at: endsAt || null,
+      created_by: createdBy || null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function supabaseDeleteSystemNotice(id) {
+  if (!supabase) return false;
+  try {
+    await supabase.from('system_notices').delete().eq('id', id);
+    return true;
+  } catch { return false; }
+}
+
 // ★ 家族側から patient 1件だけを安全に update する
 //   (家族側でデータ全体を push すると、staff の編集を上書きしてしまうため)
 //   最新の app_state を取得 → 対象 patient を merge → 戻す
