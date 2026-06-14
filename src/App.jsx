@@ -10367,34 +10367,42 @@ function FamilyView() {
             setLoginForm(f=>({...f, error:'本部管理者のみログイン可能です (role: '+staff.role+')'}));
             return;
           }
-          // 本部管理者: 最初の店舗を取得して使う
-          let previewStoreId = null;
-          let previewStoreName = '';
+          // 本部管理者: 全店舗を取得し、利用者が登録されている最初の店舗を選ぶ
+          // (stores[0] が空店舗の場合があるため、patient が見つかる店舗まで探索)
+          let stores = [];
           try {
-            const stores = await supabaseListStores();
+            stores = await supabaseListStores();
             if (!stores || stores.length === 0) {
               setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
               return;
             }
-            previewStoreId = stores[0].id;
-            previewStoreName = stores[0].name || '';
           } catch (e) {
             setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
             return;
           }
-          // 店舗の app_state を pull して最初の利用者を取得
           let sbState = null;
-          try {
-            sbState = await supabaseLoadStateForStore(previewStoreId);
-          } catch (e) {
-            setLoginForm(f=>({...f, error:'店舗データの取得に失敗: '+(e?.message||'unknown')}));
+          let previewStoreId = null;
+          let previewStoreName = '';
+          const triedStores = [];
+          for (const s of stores) {
+            try {
+              const st = await supabaseLoadStateForStore(s.id);
+              triedStores.push(`${s.name||s.id}(${(st?.patients||[]).length}名)`);
+              if (st?.patients && st.patients.length > 0) {
+                sbState = st;
+                previewStoreId = s.id;
+                previewStoreName = s.name || '';
+                break;
+              }
+            } catch (e) {
+              triedStores.push(`${s.name||s.id}(取得失敗)`);
+            }
+          }
+          if (!sbState) {
+            setLoginForm(f=>({...f, error:'利用者が登録されている店舗が見つかりませんでした (確認: '+triedStores.join(', ')+')'}));
             return;
           }
-          const firstPatient = (sbState?.patients || [])[0];
-          if (!firstPatient) {
-            setLoginForm(f=>({...f, error:`店舗「${previewStoreName}」に利用者が登録されていません`}));
-            return;
-          }
+          const firstPatient = sbState.patients[0];
           // プレビュー用のデータをセット
           try {
             const fresh = { ...(sbState || {}), familyAccounts: [] };
