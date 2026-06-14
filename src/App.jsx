@@ -10157,7 +10157,9 @@ function FamilyView() {
     // 異なる店舗の家族でログインしたら古いキャッシュをクリア
     const lastFamilyStoreKey = 'tsumugiLastFamilyStoreId';
     const lastStore = (()=>{ try { return localStorage.getItem(lastFamilyStoreKey); } catch { return null; } })();
-    if (lastStore && lastStore !== familyStoreId) {
+    // ★ プレビューモードではダミー利用者を消さないようキャッシュクリアをスキップ
+    const isPreviewMode = (typeof window !== 'undefined') && (sessionStorage.getItem('familyAuthAccId') === '__staff_preview__');
+    if (!isPreviewMode && lastStore && lastStore !== familyStoreId) {
       // patients 等は新店舗の Supabase pull で置き換わるが、念のためクリア
       setData(prev => ({ ...prev, patients: [], ticketRecords: [], familyAnnouncements: [], familyPersonalAnnouncements: [], familyPhotos: [] }));
     }
