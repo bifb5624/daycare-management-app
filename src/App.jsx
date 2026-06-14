@@ -13239,13 +13239,7 @@ export default function App() {
                 {session?.mode==='demo' && <span className="ml-2 text-[9px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded">DEMO</span>}
               </div>
             </div>
-            {session && (
-              <div className="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-bold text-slate-400 truncate">{session.storeName}</span>
-                <button onClick={handleLogout} className="text-[10px] font-bold text-slate-500 hover:text-red-400 px-2 py-1 rounded whitespace-nowrap">ログアウト</button>
-              </div>
-            )}
-            {/* ★ 本部管理者専用: 店舗切替ドロップダウン (各店舗を直接切替 + ログアウト) - 店舗切替を上に */}
+            {/* ★ 本部管理者専用: 店舗切替ドロップダウン (各店舗を直接切替) - 一番上に表示 */}
             {staffSession?.role === 'super_admin' && staffSession?.storeId && (
               <div className="border-b border-amber-700/50">
                 <button onClick={()=>setAdminStoreDropdownOpen(v=>!v)}
@@ -13317,38 +13311,14 @@ export default function App() {
                 )}
               </div>
             )}
-            {/* ★ 本部管理者専用 (中段): この店舗をログアウト (= 店舗選択画面に戻る) */}
-            {staffSession?.role === 'super_admin' && staffSession?.storeId && (
-              <div className="px-4 py-2 bg-orange-900/40 border-b border-orange-700/50 flex items-center justify-between gap-2">
-                <span className="text-[11px] font-bold text-orange-200 truncate flex items-center gap-1.5">
-                  <span>🏢</span>
-                  <span className="truncate">{staffSession.storeName || staffSession.storeShortName || '店舗'}</span>
-                </span>
-                <button onClick={() => {
-                  // この店舗をログアウト (店舗選択画面に戻る)
-                  storeTransitionRef.current = true;
-                  dataLoadedForStoreRef.current = null;
-                  const updated = { ...staffSession, storeId: null, storeName: '', storeShortName: '' };
-                  sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
-                  sessionStorage.removeItem('tsumugiActiveRecorder');
-                  try { localStorage.removeItem('daycareAppData_v3'); } catch {}
-                  try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
-                  try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
-                  setStaffSession(updated);
-                  setActiveRecorder(null);
-                  setAppData({
-                    patients: [], ticketRecords: [], familyAnnouncements: [],
-                    familyPersonalAnnouncements: [], familyPhotos: [],
-                    monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
-                    contactBooks: [], familyAccounts: [], familyInvites: [],
-                    systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
-                    storeMembers: [],
-                    contactBookConfig: { items: [] },
-                  });
-                }} className="text-[10px] font-bold text-orange-300 hover:text-white px-2 py-1 rounded whitespace-nowrap bg-orange-800/50 hover:bg-orange-700">ログアウト</button>
+            {/* 店舗名 + ログアウト (店舗切替の下に表示) */}
+            {session && (
+              <div className="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold text-slate-400 truncate">{session.storeName}</span>
+                <button onClick={handleLogout} className="text-[10px] font-bold text-slate-500 hover:text-red-400 px-2 py-1 rounded whitespace-nowrap">ログアウト</button>
               </div>
             )}
-            {/* スタッフ切替 (店舗切替の下) — ドロップダウン形式でホーム画面のままスタッフを切り替え */}
+            {/* スタッフ切替 (一番下) — ドロップダウン形式でホーム画面のままスタッフを切り替え */}
             {activeRecorder && (
               <div className="border-b border-emerald-700/50">
                 <button onClick={()=>setStaffDropdownOpen(v=>!v)} className="w-full px-4 py-2 bg-emerald-900/40 hover:bg-emerald-900/60 flex items-center justify-between gap-2 transition-colors">
