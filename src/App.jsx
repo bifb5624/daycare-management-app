@@ -10380,27 +10380,39 @@ function FamilyView() {
             setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
             return;
           }
+          // 利用者がいる店舗を優先、なければ最初に state 取得できた店舗にダミー利用者を挿入
           let sbState = null;
           let previewStoreId = null;
           let previewStoreName = '';
-          const triedStores = [];
+          let fallbackState = null;
+          let fallbackStore = null;
           for (const s of stores) {
             try {
               const st = await supabaseLoadStateForStore(s.id);
-              triedStores.push(`${s.name||s.id}(${(st?.patients||[]).length}名)`);
+              if (!fallbackState) { fallbackState = st || {}; fallbackStore = s; } // 最初に到達した店舗を fallback
               if (st?.patients && st.patients.length > 0) {
                 sbState = st;
                 previewStoreId = s.id;
                 previewStoreName = s.name || '';
                 break;
               }
-            } catch (e) {
-              triedStores.push(`${s.name||s.id}(取得失敗)`);
-            }
+            } catch (e) { /* 店舗ごとの失敗はスキップ */ }
           }
+          // ★ どの店舗にも利用者がいない場合: ダミー利用者を挿入してプレビュー画面を表示
           if (!sbState) {
-            setLoginForm(f=>({...f, error:'利用者が登録されている店舗が見つかりませんでした (確認: '+triedStores.join(', ')+')'}));
-            return;
+            const baseStore = fallbackStore || stores[0];
+            const dummy = {
+              id: 'preview-dummy-001',
+              name: 'プレビュー 利用者',
+              kana: 'ぷれびゅー りようしゃ',
+              birthDate: '1950-01-01',
+              status: '利用中',
+              startDate: '2026-01-01',
+              height: '', weight: '', kiou: '—', ryui: '—',
+            };
+            sbState = { ...(fallbackState || {}), patients: [dummy] };
+            previewStoreId = baseStore.id;
+            previewStoreName = (baseStore.name || '') + ' (利用者なし → ダミー表示)';
           }
           const firstPatient = sbState.patients[0];
           // プレビュー用のデータをセット
