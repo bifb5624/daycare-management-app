@@ -12753,9 +12753,15 @@ export default function App() {
   const DESIGN_WIDTH = 1100;
   const contentRef = useRef(null);
   const [contentScale, setContentScale] = useState(1);
+  // ★ iPhone (768px 未満) かどうか — true のときは scale 機構を完全に無効化して素直にレスポンシブ表示
+  const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   useEffect(()=>{
     const calc = ()=>{
+      const mobile = window.innerWidth < 768;
+      setIsMobileScreen(mobile);
       if(!contentRef.current) return;
+      // ★ iPhone は scale=1 に固定 (PC 用デザインを縮小すると過剰スクロールが発生するため)
+      if (mobile) { setContentScale(1); return; }
       const avail = contentRef.current.parentElement?.clientWidth || window.innerWidth;
       setContentScale(Math.min(1, avail / DESIGN_WIDTH));
     };
@@ -13523,7 +13529,14 @@ export default function App() {
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
-            <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
+            {/* ★ iPhone (isMobileScreen) では minWidth=1100 / scale 機構を全部外して素直なレスポンシブに → 過剰スクロール解消 */}
+            <div style={{
+              minWidth: isMobileScreen ? 0 : DESIGN_WIDTH,
+              width: isMobileScreen ? '100%' : (contentScale<1 ? `${100/contentScale}%` : '100%'),
+              height: isMobileScreen ? 'auto' : (contentScale<1 ? `${100/contentScale}%` : '100%'),
+              transformOrigin: 'top left',
+              transform: (isMobileScreen || contentScale>=1) ? 'none' : `scale(${contentScale})`,
+            }}>
             {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
