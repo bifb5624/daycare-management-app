@@ -10166,6 +10166,12 @@ function FamilyView() {
       if (!sbData) return;
       setData(prev => {
         const merged = { ...prev, ...sbData };
+        // ★ 本部管理者プレビュー: 店舗に利用者が 0 のとき、merge で patients が空配列になるとダミーが消える
+        //    prev.patients (ダミー含む) を保持する
+        const isPreview = (typeof window !== 'undefined') && (sessionStorage.getItem('familyAuthAccId') === '__staff_preview__');
+        if (isPreview && (!merged.patients || merged.patients.length === 0)) {
+          merged.patients = prev.patients || [];
+        }
         try { localStorage.setItem('daycareAppData_v3', JSON.stringify(merged)); } catch {}
         return merged;
       });
