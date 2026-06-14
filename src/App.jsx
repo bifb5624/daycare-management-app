@@ -10348,34 +10348,48 @@ function FamilyView() {
           console.warn('[supabase] login fallback', sbErr?.message);
         }
       }
-      // ★ スタッフ / 本部管理者 ID/PW でも通過させる (家族画面 UI 確認用プレビューモード)
-      // 家族認証失敗後、スタッフ認証を試して通れば「最初の利用者」を表示
+      // ★ 本部管理者 (super_admin) ID/PW でも通過させる (家族画面 UI 確認用プレビューモード)
+      // 事業所スタッフは家族画面プレビュー対象外 (本部管理者のみ)
       if (isSupabaseEnabled) {
+        let staff = null;
         try {
-          const staff = await supabaseStaffLogin({
+          staff = await supabaseStaffLogin({
             username: loginForm.username.trim(),
             password: loginForm.password,
           });
-          // 店舗 ID の決定: 事業所スタッフは staff.store_id、本部管理者は最初の店舗を採用
-          let previewStoreId = staff.store_id || null;
-          let previewStoreName = staff.stores?.name || '';
-          if (!previewStoreId) {
-            // 本部管理者 (super_admin): 最初の店舗を取得して使う
-            try {
-              const stores = await supabaseListStores();
-              if (!stores || stores.length === 0) {
-                setLoginForm(f=>({...f, error:'店舗が登録されていません'}));
-                return;
-              }
-              previewStoreId = stores[0].id;
-              previewStoreName = stores[0].name || '';
-            } catch (e) {
-              setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗しました'}));
+        } catch (staffErr) {
+          // staff 認証失敗 → 後続のローカル fallback へ。 ログは残す
+          console.warn('[family-preview] staff login failed:', staffErr?.message);
+        }
+        if (staff) {
+          // ★ 本部管理者のみ許可 (事業所スタッフ/manager 等は通さない)
+          if (staff.role !== 'super_admin') {
+            setLoginForm(f=>({...f, error:'本部管理者のみログイン可能です (role: '+staff.role+')'}));
+            return;
+          }
+          // 本部管理者: 最初の店舗を取得して使う
+          let previewStoreId = null;
+          let previewStoreName = '';
+          try {
+            const stores = await supabaseListStores();
+            if (!stores || stores.length === 0) {
+              setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
               return;
             }
+            previewStoreId = stores[0].id;
+            previewStoreName = stores[0].name || '';
+          } catch (e) {
+            setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
+            return;
           }
           // 店舗の app_state を pull して最初の利用者を取得
-          const sbState = await supabaseLoadStateForStore(previewStoreId);
+          let sbState = null;
+          try {
+            sbState = await supabaseLoadStateForStore(previewStoreId);
+          } catch (e) {
+            setLoginForm(f=>({...f, error:'店舗データの取得に失敗: '+(e?.message||'unknown')}));
+            return;
+          }
           const firstPatient = (sbState?.patients || [])[0];
           if (!firstPatient) {
             setLoginForm(f=>({...f, error:`店舗「${previewStoreName}」に利用者が登録されていません`}));
@@ -10394,8 +10408,6 @@ function FamilyView() {
           setAuthPid(String(firstPatient.id));
           setAuthAccId('__staff_preview__');
           return;
-        } catch (staffErr) {
-          // スタッフ認証も失敗 → 既存のローカル認証に進む
         }
       }
       // フォールバック: localStorage 内でログイン (同一端末で登録済みの場合)
@@ -10966,9 +10978,9 @@ function FamilyView() {
             <p style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
-            {/* ★ 本部管理者 / 事業所スタッフ ID/PW でも入れる (UI 確認用プレビューモード) */}
+            {/* ★ 本部管理者 ID/PW でも入れる (UI 確認用プレビューモード) */}
             <p style={{fontSize:10,color:'#cbd5e1',textAlign:'center',marginTop:6,lineHeight:1.5,fontStyle:'italic'}}>
-              ※ 本部管理者 / 事業所スタッフ ID でもログイン可 (家族画面プレビュー)
+              ※ 本部管理者 ID でもログイン可 (家族画面プレビュー)
             </p>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
