@@ -15083,7 +15083,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [customTo, setCustomTo]   = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   // セクション選択（プレビュー用） [id, label, size]
   const ALL_SECTIONS = familyMode
-    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-tokki','日々の記録','中'],['sec-monitoring','モニタリング','中']]
+    // ★ 家族向け: スマホで見やすいよう最小構成 (運動トレンド/通所/基本指標/日々の記録は非表示)
+    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-vital','バイタルトレンド','長'],['sec-kibun','気分','中'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
@@ -15319,7 +15320,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     <div className="w-full" style={{backgroundColor:'#f0f4f9',minHeight:'100%'}}>
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
-      <div style={{background: familyMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: familyMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+      {/* ★ familyMode: iPhone 幅で見やすいよう縦スタック (利用者名行 → 期間ボタン行) */}
+      <div style={{background: familyMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: familyMode ? '#3d5021' : 'white',padding: familyMode ? '10px 14px' : '12px 24px',display:'flex',flexDirection: familyMode ? 'column' : 'row',justifyContent:'space-between',alignItems: familyMode ? 'stretch' : 'center',flexWrap:'wrap',gap:8}}>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <div style={{width:36,height:36,background:'rgba(255,255,255,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
             <BarChart3 size={20}/>
@@ -15339,7 +15341,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </button>
           )}
           {/* 利用者プルダウン: かな昇順 + ア行/カ行... の optgroup でラベル付け */}
-          {!hidePatientSelector && (
+          {/* ★ familyMode: 家族は自分の利用者しかいないので検索/プルダウンは非表示 */}
+          {!familyMode && !hidePatientSelector && (
             <>
               <input type="text" placeholder="🔍 利用者を検索" value={patientSearch}
                 onChange={e=>setPatientSearch(e.target.value)}
@@ -15798,6 +15801,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       )}
 
       {/* ページ内ナビゲーション (ALL_SECTIONS と連動。familyMode では非表示セクションを自動除外) */}
+      {/* ★ 家族モードでは表示項目が少ないためジャンプナビ自体を非表示 */}
+      {!familyMode && (
       <div style={{background:'white',borderBottom:'1px solid #e2e8f0',padding:'8px 24px',display:'flex',gap:4,overflowX:'auto',flexWrap:'nowrap'}}>
         {ALL_SECTIONS.map(([id,label])=>(
           <button key={id} onClick={()=>{const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}}
@@ -15808,14 +15813,20 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </button>
         ))}
       </div>
+      )}
       </div>{/* end sticky wrapper */}
       <div id="print-content-analysis" style={{padding:'20px 24px',maxWidth:1280,margin:'0 auto'}}>
 
         {/* === 基本指標 === */}
         {/* === 基本情報 === */}
         <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
-          <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>基本情報</div>
-          {selectedPatient && (()=>{
+          {/* ★ familyMode: クリックで折りたたみ可能なヘッダー (デフォルト展開) */}
+          <div onClick={familyMode ? ()=>toggleSec('sec-basicinfo') : undefined}
+               style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:familyMode?'pointer':'default',userSelect:'none',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span>基本情報</span>
+            {familyMode && <span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-basicinfo')?'▶':'▼'}</span>}
+          </div>
+          {!(familyMode && isCol('sec-basicinfo')) && selectedPatient && (()=>{
             const age = calcAge(selectedPatient.birthDate);
             // 利用開始日からの経過日数を計算
             let elapsedLabel = '—';
@@ -16039,7 +16050,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
         })()}
 
-        <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120}}>
+        <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120,display: familyMode ? 'none' : 'block'}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span>基本指標</span>
             <span style={{fontSize:13,color:'#334155',fontWeight:'bold',display:'flex',gap:14}}>
@@ -16209,7 +16220,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </div>
         </div>
 
-        <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16}}>
+        <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16,display: familyMode ? 'none' : 'block'}}>
 
 
 
@@ -16801,7 +16812,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
 
         })()}
-        <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16}}>
+        <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16,display: familyMode ? 'none' : 'block'}}>
 <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>運動トレンド</div>
           {(() => {
             const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
@@ -17143,7 +17154,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           )}
         </div>}
 
-        {familyMode && (()=>{
+        {/* ★ 「日々の記録」セクションは廃止 → 特記事項は「今回の記録」セクションに統合表示 */}
+        {false && familyMode && (()=>{
           // 家族向け: 特記コメントだけを独立セクションとして表示 (familyTokkiOverrides で制御)
           // モニタリングの前に配置 (ジャンプナビ順と一致)
           const overrides = ((appData.familyTokkiOverrides||{})[selectedPatientId]) || {};
