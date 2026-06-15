@@ -14092,8 +14092,18 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
       return;
     }
     setKeypad(prev => ({ ...prev, value: formatted, isFirstInput: false }));
-    if ((appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(i => i.id === keypad.field)) updateExercise(keypad.recordId, keypad.field, formatted);
-    else updateRecord(keypad.recordId, keypad.field, formatted);
+    // ★ 運動メニュー項目: keypad で「3」確定 → 内部値も「3分」として保存 (defaultUnit を本体に含める)
+    //   既存値で末尾が既に単位なら二重付与しない。 空のときは付けない。
+    const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
+    const _exItm = _exItems.find(i => i.id === keypad.field);
+    if (_exItm) {
+      const _unit = _exItm.defaultUnit || appSettings.exerciseItems.find(it => it.name === _exItm.name)?.defaultUnit || '';
+      let toSave = formatted;
+      if (toSave && _unit && !String(toSave).endsWith(_unit)) toSave = `${toSave}${_unit}`;
+      updateExercise(keypad.recordId, keypad.field, toSave);
+    } else {
+      updateRecord(keypad.recordId, keypad.field, formatted);
+    }
   };
 
   const handleTab = () => {
@@ -14629,9 +14639,10 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                           onClick={() => { if(item.useKeypad) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
                           onChange={(e) => {
                             if (item.useKeypad) return;
-                            // ★ 末尾の単位を取り除いてから内部値として保存 (重複防止)
-                            let v = e.target.value;
-                            if (_unit && v.endsWith(_unit)) v = v.slice(0, -_unit.length);
+                            // ★ 内部値も単位込みで保存 (空でなく defaultUnit があるとき末尾に補完)
+                            //   既に末尾が unit ならそのまま (重複防止)
+                            let v = e.target.value.trim();
+                            if (v && _unit && !v.endsWith(_unit)) v = `${v}${_unit}`;
                             updateExercise(p.id, item.id, v);
                           }}
                           style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14, fontWeight:'bold'}}
@@ -17233,9 +17244,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         {r.bpUpEn?`${r.bpUpEn}/${r.bpDnEn}`:'-'}{r.plEn&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plEn})</span>}
                       </td>
                       {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>(
-                        <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:r.exercises?.[ex.id]&&r.exercises[ex.id]!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
-                          {r.exercises?.[ex.id]||'-'}
-                        </td>
+                        {(() => {
+                          const rawV = r.exercises?.[ex.id];
+                          // ★ 単位を後ろに自動補完 (内部値が数値だけでも「3分」と表示)
+                          const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => it.name === ex.name)?.defaultUnit || '';
+                          const vStr = String(rawV ?? '');
+                          const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
+                          return (
+                          <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:rawV&&rawV!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
+                            {disp||'-'}
+                          </td>
+                          );
+                        })()}
                       ))}
                       <td style={{padding:'8px 10px',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
                       <td style={{padding:'8px 10px',color:'#1e293b',fontSize:14,minWidth:120}}>{r.tokki||'-'}</td>
@@ -19760,8 +19780,9 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
             </tbody>
           </table>
 
-          {/* 運動テーブル（残りスペースをフルに使う、項目増えれば自動で行が縮む。フォントは大きめ・はみ出し時は CSS で縮小） */}
-          <div className="mb-2 border-2 border-black overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" style={{flex:'1 1 0', minHeight:0}} onClick={onOpenConfig}>
+          {/* 運動テーブル — ★ セル高さ統一 + 行高に上限あり
+              項目少ない時に巨大化しないよう max-height、 増減で揺れないよう全行均等 */}
+          <div className="mb-2 border-2 border-black overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" style={{flex:'1 1 0', minHeight:0, maxHeight:480}} onClick={onOpenConfig}>
             <table className="w-full border-collapse text-center table-fixed" style={{height:'100%'}}>
               <tbody>
                 {rows.map((row, idx) => {
@@ -19769,13 +19790,15 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
                   // 行が多いほどフォント縮小: 行数 6 までは大、それ以降は段階的に縮小
                   const labelFs = rows.length <= 6 ? 16 : rows.length <= 9 ? 14 : rows.length <= 12 ? 12 : 10;
                   const valueFs = rows.length <= 6 ? 24 : rows.length <= 9 ? 22 : rows.length <= 12 ? 20 : 18;
+                  // ★ 各行の高さを均等に分割 (空セル/値ありセルで揺れない)
+                  const rowHeightPct = `${100/rows.length}%`;
                   return (
-                  <tr key={idx} className={idx !== rows.length - 1 ? "border-b border-black" : ""}>
-                    <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row[0].label}</th>
-                    <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden'}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
+                  <tr key={idx} className={idx !== rows.length - 1 ? "border-b border-black" : ""} style={{height: rowHeightPct}}>
+                    <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[0].label}</th>
+                    <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
                     {row[1]
-                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden'}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
-                      : (<><th className="border-r border-black w-[30%] bg-white"></th><td className="w-[20%]"></td></>)}
+                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
+                      : (<><th className="border-r border-black w-[30%] bg-white" style={{height: rowHeightPct}}></th><td className="w-[20%]" style={{height: rowHeightPct}}></td></>)}
                   </tr>
                   );
                 })}
