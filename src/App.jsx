@@ -12736,12 +12736,8 @@ export default function App() {
           }
         }
         // 通常: 既存データをロード
-        // ★ 同じ内容なら setState スキップ (30秒に1回でも appData は巨大 → 再レンダー回避が重要)
         setAppData(prev => {
           const merged = { ...row.data, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
-          try {
-            if (JSON.stringify(prev) === JSON.stringify(merged)) return prev;
-          } catch {}
           return merged;
         });
         // ★ load 完了 → push 解禁
@@ -13672,14 +13668,17 @@ export default function App() {
                  → wheel は内側で消費されるが、 動く方を優先 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
 
-            {/* ★ スケール機構を完全停止 (zoom/transform 共に不適用)
-                  - PC: minWidth=1100 で通常表示、 ホイールスクロール完全動作
-                  - iPad/iPhone: 横スクロールで対応 (contentRef の overflow:auto)
-                  - scale を介すと wheel/再レンダーの問題が多発するため、 一旦シンプルに */}
+            {/* ★ レイアウト方針 (transform → zoom に変更):
+                - iPhone (< 768px): minWidth=1100 維持 + zoom=1 → PC デザイン崩さず、横スクロールで全部見える
+                - iPad (768-1099px): zoom で縮小表示 (transform より wheel イベントとの相性が良い)
+                - PC (>= 1100px): zoom=1 → 通常表示
+                ★ transform:scale は wheel イベントを阻害するため CSS zoom を採用
+                ★ height は常に 'auto' */}
             <div style={{
               minWidth: DESIGN_WIDTH,
               width: '100%',
               height: 'auto',
+              zoom: (!isMobileScreen && contentScale < 1) ? contentScale : 1,
             }}>
             {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
