@@ -1124,17 +1124,19 @@ const appSettings = {
     { id: 'tug',      name: 'TUGテスト',      unit: '秒',  fixed: false },
   ],
   exerciseItems: [
-    { id: "u1", name: "①ﾊﾞｲｸ", type: "text", useKeypad: true },
-    { id: "u2", name: "②ﾚｯｸﾞP", type: "text", useKeypad: true },
-    { id: "u3", name: "③ﾁｪｽﾄ", type: "text", useKeypad: true },
-    { id: "u4", name: "④ﾋｯﾌﾟ", type: "text", useKeypad: true },
-    { id: "u5", name: "⑤ﾚｯｸﾞE", type: "text", useKeypad: true },
-    { id: "u6", name: "⑥滑車", type: "text", useKeypad: true },
-    { id: "heikobo", name: "平行棒", type: "text", useKeypad: true },
-    { id: "fumidai", name: "踏み台", type: "text", useKeypad: true },
-    { id: "stepper", name: "ステッパー", type: "text", useKeypad: true },
-    { id: "okugai", name: "屋外歩行", type: "text", useKeypad: true },
-    { id: "onyoku", name: "温浴", type: "text", useKeypad: true },
+    // ★ 各項目に defaultUnit を初期値として設定 → サービス提供記録/連絡帳で自動表示
+    //   各種設定の運動メニューで「単位」列を編集すれば後から変更可能
+    { id: "u1", name: "①ﾊﾞｲｸ", type: "text", useKeypad: true, defaultUnit: "分" },
+    { id: "u2", name: "②ﾚｯｸﾞP", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u3", name: "③ﾁｪｽﾄ", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u4", name: "④ﾋｯﾌﾟ", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u5", name: "⑤ﾚｯｸﾞE", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u6", name: "⑥滑車", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "heikobo", name: "平行棒", type: "text", useKeypad: true, defaultUnit: "往復" },
+    { id: "fumidai", name: "踏み台", type: "text", useKeypad: true, defaultUnit: "回" },
+    { id: "stepper", name: "ステッパー", type: "text", useKeypad: true, defaultUnit: "回" },
+    { id: "okugai", name: "屋外歩行", type: "text", useKeypad: true, defaultUnit: "分" },
+    { id: "onyoku", name: "温浴", type: "text", useKeypad: true, defaultUnit: "分" },
   ]
 };
 
@@ -13623,7 +13625,10 @@ export default function App() {
             )}
           </header>
 
-          <main className="flex-1 overflow-auto relative min-w-0 flex flex-col" style={{padding:0}}>
+          {/* ★ main の overflow:auto → overflow:hidden に変更
+              (内側の contentRef div だけスクロール領域にすることで、 マウスホイールが
+               意図せず main 側で消費される問題を回避) */}
+          <main className="flex-1 overflow-hidden relative min-w-0 flex flex-col" style={{padding:0}}>
             {/* ★ システムお知らせバナー (本部からのメンテナンス通知等) */}
             {visibleNotices.length > 0 && (
               <div className="flex-shrink-0">
@@ -13650,7 +13655,15 @@ export default function App() {
             )}
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
-            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
+            {/* ★ transform:scale 適用時のみ onWheel で手動 scroll を補完
+                 (scale=1 のときは native 通り → 二重スクロール防止) */}
+            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}
+              onWheel={contentScale < 1 ? (e) => {
+                const el = contentRef.current; if (!el) return;
+                if (Math.abs(e.deltaY) > 0) el.scrollTop += e.deltaY;
+                if (Math.abs(e.deltaX) > 0) el.scrollLeft += e.deltaX;
+              } : undefined}>
+
             {/* ★ レイアウト方針:
                 - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
                 - iPad (768-1099px): scale で縮小表示
@@ -16756,10 +16769,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
             return (
               <div style={{display:'flex',alignItems:'stretch'}}>
-                {/* Y軸ラベル列（固定） */}
-                <div style={{flexShrink:0,width:32,position:'relative',height:H+14}}>
+                {/* Y軸ラベル列（固定） — ★ 体温 (field='temp') は小数 1 桁で表示 (38.0 など) */}
+                <div style={{flexShrink:0,width:field==='temp'?38:32,position:'relative',height:H+14}}>
                   {yTicks.map(v=>(
-                    <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:13,color:'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{v}</div>
+                    <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:13,color:'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{field==='temp' ? Number(v).toFixed(1) : v}</div>
                   ))}
                 </div>
                 {/* グラフ本体（横スクロール） */}
@@ -17015,7 +17028,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               const m=v.match(/(\d+(?:\.\d+)?)/);return m?+m[1]:null;
             };
             const toDen = v => { if(!v||unit!=='fraction') return null; const m=v.match(/\/(\d+)/);return m?+m[1]:null; };
-            const unitLabel = unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'';
+            // ★ 各種設定の defaultUnit を最優先 (項目ごとにユーザー設定した単位) → 無い場合は type ベースの既定値
+            const unitLabel = selEx.defaultUnit || (unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'');
 
             const dailyEx = validRecs.map(r=>({
               date:r.date, label:r.date.replace(/(\d+)月(\d+)日/,'$1/$2'),
@@ -17149,30 +17163,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                     </div></div>
                   </div>
-                  {!familyMode && (
-                  <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
-                    <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 月別平均</div>
-                    <div style={{overflowX:'auto'}}>
-                      <div style={{minWidth:totalW}}>
-                        <div style={{border:'1px solid #f1f5f9',borderRadius:8,overflow:'hidden',marginTop:4}}>
-                          <table style={{width:'100%',minWidth:totalW,borderCollapse:'collapse',fontSize:14,tableLayout:'fixed'}}>
-                            <colgroup><col style={{width:LABEL_W_T}}/>{monthlyEx.map((_,i)=><col key={i} style={{width:COL_W}}/>)}</colgroup>
-                            <thead><tr style={{background:'#f8fafc'}}>
-                              <th style={{padding:'5px 8px',textAlign:'left',color:'#334155',fontWeight:'bold',fontSize:13}}>　</th>
-                              {monthlyEx.map(d=><th key={d.month} style={{padding:'5px 0',textAlign:'center',color:'#1e293b',fontWeight:'bold'}}>{d.month}月</th>)}
-                            </tr></thead>
-                            <tbody>
-
-                              <tr><td style={{padding:'4px 8px',fontWeight:'bold',color:'#6366f1'}}>平均</td>{monthlyEx.map(d=><td key={d.month} style={{padding:'4px 6px',textAlign:'center',fontWeight:'bold',color:'#6366f1'}}>{d.hasData?`${d.avg.toFixed(1)}${unitLabel}`:'-'}</td>)}</tr>
-                              <tr><td style={{padding:'4px 8px',fontWeight:'bold',color:'#ef4444'}}>最高</td>{monthlyEx.map(d=><td key={d.month} style={{padding:'4px 6px',textAlign:'center',fontWeight:'bold',color:'#ef4444'}}>{d.hasData?`${d.max}${unitLabel}`:'-'}</td>)}</tr>
-                              <tr><td style={{padding:'4px 8px',fontWeight:'bold',color:'#3b82f6'}}>最低</td>{monthlyEx.map(d=><td key={d.month} style={{padding:'4px 6px',textAlign:'center',fontWeight:'bold',color:'#3b82f6'}}>{d.hasData?`${d.min}${unitLabel}`:'-'}</td>)}</tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  )}
+                  {/* ★ 月別平均テーブルはユーザー要望により削除 (グラフのみで十分) */}
                 </div>
               </div>
             );
@@ -19870,7 +19861,24 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const patientValues = patient?.contactBookValues || {};
   const renderItemValue = (item) => {
     if (item.type === 'linked') {
-      const raw = dispEx(ex[item.linkedField]);
+      let rawVal = ex[item.linkedField];
+      // ★ フォールバック: linkedField の id では値がない場合、 同じ name の別 id を探して値を取得
+      //   (各種設定で運動メニューを編集・再追加して id が変わってしまったケースに対応)
+      //   ①バイクなど、 半角/全角や旧 id の互換ズレで連動失敗していた問題の解消
+      if (!rawVal && rawVal !== 0) {
+        const linkedItem = exerciseItemMap[item.linkedField];
+        const linkedName = linkedItem?.name;
+        if (linkedName) {
+          for (const key of Object.keys(ex)) {
+            const it = exerciseItemMap[key];
+            if (it && it.name === linkedName && (ex[key] !== '' && ex[key] != null)) {
+              rawVal = ex[key];
+              break;
+            }
+          }
+        }
+      }
+      const raw = dispEx(rawVal);
       if (!raw) return '';
       // ★ 連動先の defaultUnit を後ろに付与 (例: "3" → "3分")
       const linked = exerciseItemMap[item.linkedField];
@@ -20095,7 +20103,8 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
     setLocalConfig(prev => ({ ...prev, items: newItems }));
   };
   const deleteItem = (id) => setLocalConfig(prev => ({ ...prev, items: prev.items.filter(item => item.id !== id) }));
-  const addItem = () => setLocalConfig(prev => ({ ...prev, items: [...prev.items, { id: `cb${Date.now()}`, label: "新しい項目", type: "fixed", value: "〇", linkedField: "" }] }));
+  // ★ 新項目は label を空にして placeholder で「新しい項目」を表示 → そのまま入力可能
+  const addItem = () => setLocalConfig(prev => ({ ...prev, items: [...prev.items, { id: `cb${Date.now()}`, label: "", type: "fixed", value: "〇", linkedField: "" }] }));
 
   // ★ Portal で document.body にレンダリング → 親の scale transform に影響されず画面中央/上部に固定
   return ReactDOM.createPortal(
@@ -20136,7 +20145,7 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
                     <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">利用者ごと</span>
                   </label>
                   <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                    <div className="col-span-4"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">項目名</label><input type="text" value={item.label || ""} onChange={e => handleItemChange(item.id, 'label', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /></div>
+                    <div className="col-span-4"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">項目名</label><input type="text" value={item.label || ""} onChange={e => handleItemChange(item.id, 'label', e.target.value)} placeholder="新しい項目" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none placeholder-slate-300" /></div>
                     <div className="col-span-3"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">反映方法</label><select value={item.type || "fixed"} onChange={e => handleItemChange(item.id, 'type', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"><option value="fixed">自由入力</option><option value="linked">提供記録連動</option></select></div>
                     <div className="col-span-5"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">{item.type === 'fixed' ? '表示文字' : '反映元'}</label>
                       {item.type === 'fixed' ? <input type="text" value={item.value || ""} onChange={e => handleItemChange(item.id, 'value', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /> : <select value={item.linkedField || ""} onChange={e => handleItemChange(item.id, 'linkedField', e.target.value)} className="w-full px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-sm font-bold outline-none">{exerciseItems.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}</select>}
