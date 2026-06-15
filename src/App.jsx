@@ -16794,9 +16794,20 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             };
             const toDen = v => { if(!v||unit!=='fraction') return null; const m=v.match(/\/(\d+)/);return m?+m[1]:null; };
             // ★ defaultUnit (各種設定でユーザー指定した単位) を最優先で採用
-            //   無ければ type ベース既定値、 さらに appSettings 同名項目から fallback
+            //   無ければ appSettings 同名項目から fallback
+            //   最終 fallback: 内部値から単位部分を抽出 (「3往復」→「往復」、 「3kg」→「kg」 等)
+            const _extractUnitFromValues = (vals) => {
+              for (const v of vals) {
+                if (!v) continue;
+                // 数値の後ろにある文字列を単位として抽出
+                const m = String(v).match(/^[\d.]+(.+)$/);
+                if (m && m[1]) return m[1].trim();
+              }
+              return '';
+            };
             const unitLabel = selEx.defaultUnit
               || appSettings.exerciseItems.find(it => it.name === selEx.name)?.defaultUnit
+              || _extractUnitFromValues(allVals)
               || (unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'');
 
             const dailyEx = validRecs.map(r=>({
