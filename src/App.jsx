@@ -1085,17 +1085,19 @@ const appSettings = {
     { id: 'tug',      name: 'TUGテスト',      unit: '秒',  fixed: false },
   ],
   exerciseItems: [
-    { id: "u1", name: "①ﾊﾞｲｸ", type: "text", useKeypad: true },
-    { id: "u2", name: "②ﾚｯｸﾞP", type: "text", useKeypad: true },
-    { id: "u3", name: "③ﾁｪｽﾄ", type: "text", useKeypad: true },
-    { id: "u4", name: "④ﾋｯﾌﾟ", type: "text", useKeypad: true },
-    { id: "u5", name: "⑤ﾚｯｸﾞE", type: "text", useKeypad: true },
-    { id: "u6", name: "⑥滑車", type: "text", useKeypad: true },
-    { id: "heikobo", name: "平行棒", type: "text", useKeypad: true },
-    { id: "fumidai", name: "踏み台", type: "text", useKeypad: true },
-    { id: "stepper", name: "ステッパー", type: "text", useKeypad: true },
-    { id: "okugai", name: "屋外歩行", type: "text", useKeypad: true },
-    { id: "onyoku", name: "温浴", type: "text", useKeypad: true },
+    // ★ defaultUnit: 各項目の標準単位。 各種設定で変更可能。
+    //   サービス提供記録/連絡帳/分析個人で値の後ろに自動表示される。
+    { id: "u1", name: "①ﾊﾞｲｸ", type: "text", useKeypad: true, defaultUnit: "分" },
+    { id: "u2", name: "②ﾚｯｸﾞP", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u3", name: "③ﾁｪｽﾄ", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u4", name: "④ﾋｯﾌﾟ", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u5", name: "⑤ﾚｯｸﾞE", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "u6", name: "⑥滑車", type: "text", useKeypad: true, defaultUnit: "kg" },
+    { id: "heikobo", name: "平行棒", type: "text", useKeypad: true, defaultUnit: "往復" },
+    { id: "fumidai", name: "踏み台", type: "text", useKeypad: true, defaultUnit: "回" },
+    { id: "stepper", name: "ステッパー", type: "text", useKeypad: true, defaultUnit: "回" },
+    { id: "okugai", name: "屋外歩行", type: "text", useKeypad: true, defaultUnit: "分" },
+    { id: "onyoku", name: "温浴", type: "text", useKeypad: true, defaultUnit: "分" },
   ]
 };
 
@@ -14606,22 +14608,33 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const placeholderText = isEditMode ? (plannedEx[item.id] || "") : "";
                     const cellKey = `${p.id}-${item.id}`;
                     const isActive = activeCell === cellKey;
+                    // ★ 単位自動付与: defaultUnit を後ろに表示 (appData → 無ければ appSettings から fallback)
+                    //   内部値は数値のみのまま、 表示時のみ単位付加 (連動先で値が空にならない安全な実装)
+                    const _unit = item.defaultUnit || appSettings.exerciseItems.find(it => it.name === item.name)?.defaultUnit || '';
+                    const _vstr = String(val ?? '');
+                    const displayVal = (_vstr !== '' && _unit && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
                     return (
                     <td key={item.id} className={`px-0.5 py-2 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
-                        <button disabled={isAbsent || isReadOnly || isPause} onClick={() => toggleMark(p.id, item.id, val, isAbsent)} 
+                        <button disabled={isAbsent || isReadOnly || isPause} onClick={() => toggleMark(p.id, item.id, val, isAbsent)}
                           className={`w-8 h-8 rounded-full font-bold text-base flex items-center justify-center mx-auto transition-all disabled:opacity-60 border
-                            ${val === '○' ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 
-                              val === '×' ? 'bg-red-500 text-white border-red-500 shadow-md' : 
-                              val === 'ー' ? 'bg-slate-200 text-slate-500 border-slate-300' : 
+                            ${val === '○' ? 'bg-blue-500 text-white border-blue-500 shadow-md' :
+                              val === '×' ? 'bg-red-500 text-white border-red-500 shadow-md' :
+                              val === 'ー' ? 'bg-slate-200 text-slate-500 border-slate-300' :
                               isReadOnly ? 'bg-transparent border-slate-300' : 'bg-white text-slate-400 hover:bg-slate-100 border-slate-300 shadow-sm'}`}>
                           {val}
                         </button>
                       ) : (
-                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad} value={val || ""}
+                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad} value={displayVal}
                           onClick={() => { if(item.useKeypad) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
-                          onChange={(e) => { if(!item.useKeypad) updateExercise(p.id, item.id, e.target.value); }}
-                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: (val||'').length > 7 ? 9 : (val||'').length > 5 ? 10 : (val||'').length > 3 ? 12 : 14, fontWeight:'bold'}}
+                          onChange={(e) => {
+                            if (item.useKeypad) return;
+                            // ★ 末尾の単位を取り除いてから内部値として保存 (重複防止)
+                            let v = e.target.value;
+                            if (_unit && v.endsWith(_unit)) v = v.slice(0, -_unit.length);
+                            updateExercise(p.id, item.id, v);
+                          }}
+                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14, fontWeight:'bold'}}
                           className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
@@ -16769,7 +16782,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               const m=v.match(/(\d+(?:\.\d+)?)/);return m?+m[1]:null;
             };
             const toDen = v => { if(!v||unit!=='fraction') return null; const m=v.match(/\/(\d+)/);return m?+m[1]:null; };
-            const unitLabel = unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'';
+            // ★ defaultUnit (各種設定でユーザー指定した単位) を最優先で採用
+            //   無ければ type ベース既定値、 さらに appSettings 同名項目から fallback
+            const unitLabel = selEx.defaultUnit
+              || appSettings.exerciseItems.find(it => it.name === selEx.name)?.defaultUnit
+              || (unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'');
 
             const dailyEx = validRecs.map(r=>({
               date:r.date, label:r.date.replace(/(\d+)月(\d+)日/,'$1/$2'),
@@ -16796,12 +16813,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 {tabs}
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 記録一覧</div>
-                  {validRecs.filter(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー').slice(0,20).map((r,i)=>(
+                  {validRecs.filter(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー').slice(0,20).map((r,i)=>{
+                    const rawV = r.exercises[selEx.id];
+                    const vStr = String(rawV ?? '');
+                    // ★ 単位を後ろに付与 (unitLabel = selEx.defaultUnit 等)
+                    const disp = (vStr && unitLabel && !vStr.endsWith(unitLabel)) ? `${vStr}${unitLabel}` : vStr;
+                    return (
                     <div key={i} style={{display:'flex',gap:12,padding:'6px 0',borderBottom:'1px solid #f8fafc',fontSize:14}}>
                       <span style={{color:'#334155',minWidth:56,fontWeight:'bold'}}>{r.date}</span>
-                      <span style={{color:'#475569'}}>{r.exercises[selEx.id]}</span>
+                      <span style={{color:'#475569'}}>{disp}</span>
                     </div>
-                  ))}
+                    );
+                  })}
                   {!validRecs.some(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー')&&<div style={{color:'#000',textAlign:'center',padding:24}}>記録なし</div>}
                 </div>
               </div>
@@ -19609,10 +19632,58 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const rows = [];
   for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1]]);
 
+  // ★ 提供記録連動 + 単位表示の準備
+  //    exerciseItemMap: id → item を引ける map (appData) と name fallback 用 index
+  const _exItems = appData?.systemSettings?.exerciseItems || appSettings.exerciseItems;
+  const exerciseItemMap = React.useMemo(() => {
+    const m = {};
+    _exItems.forEach(it => { m[it.id] = it; });
+    return m;
+  }, [_exItems]);
+  const exerciseIdsByName = React.useMemo(() => {
+    const m = {};
+    _exItems.forEach(it => { if (!m[it.name]) m[it.name] = []; m[it.name].push(it.id); });
+    return m;
+  }, [_exItems]);
+
   // 利用者ごと項目のオーバーライド値（patient.contactBookValues[itemId]）
   const patientValues = patient?.contactBookValues || {};
   const renderItemValue = (item) => {
-    if (item.type === 'linked') return dispEx(ex[item.linkedField]);
+    if (item.type === 'linked') {
+      // 1. linkedField の id で値を引く
+      let rawVal = ex[item.linkedField];
+      // 2. ★ fallback: 値が空なら、 同じ name の別 id から値を探す
+      //    (各種設定で運動メニューを編集・再追加して id がズレた場合の救済 = ①バイク対策)
+      if (!rawVal && rawVal !== 0) {
+        const linkedItem = exerciseItemMap[item.linkedField];
+        const linkedName = linkedItem?.name;
+        const candidates = linkedName ? (exerciseIdsByName[linkedName] || []) : [];
+        for (const cid of candidates) {
+          const v = ex[cid];
+          if (v !== '' && v != null) { rawVal = v; break; }
+        }
+        // 3. それでも空なら appSettings の同名から fallback
+        if (!rawVal) {
+          const altName = appSettings.exerciseItems.find(it => it.name === linkedName)?.name;
+          if (altName) {
+            const altCandidates = exerciseIdsByName[altName] || [];
+            for (const cid of altCandidates) {
+              const v = ex[cid];
+              if (v !== '' && v != null) { rawVal = v; break; }
+            }
+          }
+        }
+      }
+      const raw = dispEx(rawVal);
+      if (!raw) return '';
+      // ★ defaultUnit を後ろに付与 (内部値が数値だけでも「3分」と表示)
+      const linkedItem = exerciseItemMap[item.linkedField];
+      const unit = linkedItem?.defaultUnit
+        || appSettings.exerciseItems.find(it => it.name === linkedItem?.name)?.defaultUnit
+        || '';
+      const rawStr = String(raw);
+      return (unit && !rawStr.endsWith(unit)) ? `${rawStr}${unit}` : rawStr;
+    }
     // fixed: 利用者ごと設定があれば優先、なければ全体の値
     if (item.perPatient && Object.prototype.hasOwnProperty.call(patientValues, item.id)) return patientValues[item.id];
     return item.value;
