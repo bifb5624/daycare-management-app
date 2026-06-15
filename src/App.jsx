@@ -13205,10 +13205,12 @@ export default function App() {
           {globalTip.text}
         </div>
       )}
-      {showToast && (
-        <div className="fixed top-6 right-8 z-50 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center animate-bounce">
+      {/* ★ トーストを Portal で body 直下にレンダリング → 全画面表示時も確実に見える */}
+      {showToast && ReactDOM.createPortal(
+        <div style={{position:'fixed',top:24,right:32,zIndex:99999}} className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center animate-bounce">
           <CheckCircle2 className="text-emerald-400 mr-2" />{toastMsg}
-        </div>
+        </div>,
+        document.body
       )}
 
 
@@ -14204,7 +14206,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           }
         }
       });
-      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts });
+      // ★ manual:true でトースト「✓ 保存しました」表示
+      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts }, { manual: true, message: '✓ 保存しました' });
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
       if (dirtyRef) dirtyRef.current = false;
@@ -14771,9 +14774,9 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
       </div>
       <DigitalKeypad isOpen={keypad.isOpen} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
 
-      {/* === 状態変更モーダル === */}
-      {statusModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
+      {statusModal.isOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center gap-3 mb-5">
               <span className={`px-3 py-1 rounded-full text-sm font-bold ${statusModal.status==='欠席'?'bg-red-100 text-red-700':statusModal.status==='休業'?'bg-slate-100 text-slate-600':statusModal.status==='休止'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{statusModal.status}</span>
@@ -14871,7 +14874,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                 className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${statusModal.status==='休止'?'bg-orange-600 hover:bg-orange-700':'bg-blue-600 hover:bg-blue-700'}`}>確定</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* === 気分入力モーダル === */}
@@ -14881,7 +14885,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
         const moodKey = timing === 'arrival' ? 'kibunArrival' : 'kibunDeparture';
         const reasonKey = timing === 'arrival' ? 'kibunArrivalReason' : 'kibunDepartureReason';
         const currentRec = localPatients.find(p => p.id === recId) || localTicketRecords.find(p => p.id === recId);
-        return (
+        return ReactDOM.createPortal(
           <div className="fixed inset-0 z-50 flex flex-col bg-white">
             <div className="flex items-center justify-between px-6 py-4 bg-slate-100 border-b border-slate-200">
               <div className="text-slate-800 font-bold text-lg">{timing==='arrival'?'🏢 通所時の気分':'🏠 帰宅時の気分'}{kibunStep==='reason'&&` — ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.emoji} ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.label}`}</div>
@@ -14941,12 +14945,12 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                 </div>
               </div>
             )}
-          </div>
-        );
+          </div>,
+          document.body);
       })()}
-      {/* === 未保存確認モーダル === */}
-      {unsavedModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      {/* === 未保存確認モーダル — ★ Portal + 上部固定 === */}
+      {unsavedModal.isOpen && ReactDOM.createPortal(
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-20">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
             <div className="w-14 h-14 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <CloudUpload size={28} />
@@ -14976,7 +14980,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       {/* 介護整体確認ツールチップ（固定位置） */}
       <div id="massage-tooltip" onClick={()=>{const el=document.getElementById('massage-tooltip');if(el)el.style.display='none';}}
@@ -19566,11 +19571,11 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           </div>
         )}
 
-        {/* 利用者ごと項目の編集ダイアログ */}
+        {/* 利用者ごと項目の編集ダイアログ — ★ Portal + 画面上部固定 */}
         {patientValueModal && (() => {
           const pat = (appData.patients||[]).find(p => p.id === patientValueModal.patientId);
-          return (
-          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={()=>setPatientValueModal(null)}>
+          return ReactDOM.createPortal(
+          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-start justify-center p-4 pt-20" onClick={()=>setPatientValueModal(null)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e=>e.stopPropagation()}>
               <div className="font-bold text-slate-800 text-base mb-1">利用者ごとの値を設定</div>
               <div className="text-xs text-slate-500 mb-4">
@@ -19591,8 +19596,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 <button onClick={savePatientValue} className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold text-sm shadow">保存</button>
               </div>
             </div>
-          </div>
-          );
+          </div>,
+          document.body);
         })()}
 
         {/* 印刷用の隠しカード群 — 利用者ID単位で id を付与し、選択された利用者の DOM を doPrint で取得する */}
@@ -19931,10 +19936,12 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
     setLocalConfig(prev => ({ ...prev, items: newItems }));
   };
   const deleteItem = (id) => setLocalConfig(prev => ({ ...prev, items: prev.items.filter(item => item.id !== id) }));
-  const addItem = () => setLocalConfig(prev => ({ ...prev, items: [...prev.items, { id: `cb${Date.now()}`, label: "新しい項目", type: "fixed", value: "〇", linkedField: "" }] }));
+  // ★ 新項目は label を空にして placeholder で「新しい項目」を表示 → そのまま入力可能
+  const addItem = () => setLocalConfig(prev => ({ ...prev, items: [...prev.items, { id: `cb${Date.now()}`, label: "", type: "fixed", value: "〇", linkedField: "" }] }));
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2">
+  // ★ Portal で body 直下にレンダリング → 親 div の scale/transform に影響されず画面上部に固定
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-2 pt-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden" style={{maxHeight:'95vh', height:'95vh'}}>
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-shrink-0">
           <h2 className="text-lg font-bold text-slate-800 flex items-center"><Settings size={20} className="mr-2 text-blue-600"/> 連絡帳フォーマット設定</h2>
@@ -19971,7 +19978,7 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
                     <span className="text-[10px] font-bold text-slate-500 whitespace-nowrap">利用者ごと</span>
                   </label>
                   <div className="flex-1 grid grid-cols-12 gap-3 items-center">
-                    <div className="col-span-4"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">項目名</label><input type="text" value={item.label || ""} onChange={e => handleItemChange(item.id, 'label', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /></div>
+                    <div className="col-span-4"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">項目名</label><input type="text" value={item.label || ""} onChange={e => handleItemChange(item.id, 'label', e.target.value)} placeholder="新しい項目" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none placeholder-slate-300" /></div>
                     <div className="col-span-3"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">反映方法</label><select value={item.type || "fixed"} onChange={e => handleItemChange(item.id, 'type', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"><option value="fixed">自由入力</option><option value="linked">提供記録連動</option></select></div>
                     <div className="col-span-5"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">{item.type === 'fixed' ? '表示文字' : '反映元'}</label>
                       {item.type === 'fixed' ? <input type="text" value={item.value || ""} onChange={e => handleItemChange(item.id, 'value', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /> : <select value={item.linkedField || ""} onChange={e => handleItemChange(item.id, 'linkedField', e.target.value)} className="w-full px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-sm font-bold outline-none">{exerciseItems.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}</select>}
@@ -19989,8 +19996,8 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
           <button onClick={() => onSave(localConfig)} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95">保存</button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body);
 }
 
 
@@ -20789,7 +20796,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
-    onSave({ ...appData, patients: appData.patients.map(p => p.id === pat.id ? pat : p) });
+    // ★ manual:true でトースト表示
+    onSave({ ...appData, patients: appData.patients.map(p => p.id === pat.id ? pat : p) }, { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
 
   const handleStatusChange = (val) => {
@@ -22345,9 +22353,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           setNewPatientLast(''); setNewPatientFirst('');
           setNewPatientKanaLast(''); setNewPatientKanaFirst('');
         };
-        // ★ 縦並びレイアウトで入力しやすく (Web フォームの一般的なパターン)
-        return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        // ★ 縦並びレイアウト + Portal で body 直下 + flex items-start で画面上部に固定表示
+        return ReactDOM.createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-10">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-5 text-center">新規利用者の追加</h3>
             <div className="space-y-3 mb-5">
@@ -22381,8 +22389,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <button disabled={!canSubmit} onClick={submit} className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">追加する</button>
             </div>
           </div>
-        </div>
-        );
+        </div>,
+        document.body);
       })()}
       {/* 利用者切替時の未保存確認モーダル (保存/破棄/キャンセル) */}
       {switchPatientConfirm && (
@@ -24156,7 +24164,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if (pendingStaff) {
       next.diarySettings = { ..._baseDs, staff: pendingStaff };
     }
-    onSave(next);
+    // ★ manual:true でトースト表示
+    onSave(next, { manual: true, message: '✓ 日誌を保存しました' });
     if (pendingStaff) setPendingStaff(null);
     markClean();
   };
