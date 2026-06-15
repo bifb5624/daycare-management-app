@@ -13659,9 +13659,9 @@ export default function App() {
             )}
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
-            {/* ★ onWheel: scale 比に依存しない固定ハンドラ → contentScale 変化で再レンダーされない
-                 (前回は contentScale<1 で switch していたが、 これが頻繁な再レンダー原因の懸念) */}
-            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
+            {/* ★ contentRef を overflow:hidden に → main 側で wheel イベントを受けてスクロール
+                 (両方 overflow:auto だと PC でホイールが内側で消費されて動かないケースを解消) */}
+            <div ref={contentRef} style={{flex:1,overflow:'hidden',padding:0}}>
 
             {/* ★ レイアウト方針:
                 - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
@@ -16583,7 +16583,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       return (
                         <g key={m.key}>
                           <line x1={PAD_L} y1={y} x2={W-PAD_R} y2={y} stroke="#f1f5f9" strokeWidth={1}/>
-                          <text x={PAD_L-4} y={y+5} textAnchor="end" fontSize={16}>{m.emoji}</text>
+                          {/* ★ 絵文字を小さく + 右マージン拡大 → iPad で枠外にはみ出す問題対応 */}
+                          <text x={PAD_L-6} y={y+4} textAnchor="end" fontSize={13}>{m.emoji}</text>
                         </g>
                       );
                     })}
@@ -19874,33 +19875,38 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const rows = [];
   for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1]]);
 
-  // ★ 提供記録連動先の exerciseItem を id で引けるよう Map 化
-  //   defaultUnit (分/回/往復 等) を値に自動付与する
-  const allExerciseItems = appData?.systemSettings?.exerciseItems || [];
+  // ★ 提供記録連動先の exerciseItem を id で引けるよう Map 化 + 同名インデックスも作成
+  //   useMemo の依存を appData.systemSettings.exerciseItems 自体に絞る → 不要な再計算を抑制
+  const _exItemsForMap = appData?.systemSettings?.exerciseItems;
   const exerciseItemMap = React.useMemo(() => {
     const m = {};
-    allExerciseItems.forEach(it => { m[it.id] = it; });
+    (_exItemsForMap || []).forEach(it => { m[it.id] = it; });
     return m;
-  }, [allExerciseItems]);
+  }, [_exItemsForMap]);
+  // 同じ name の項目の id 一覧 (fallback 用)
+  const exerciseIdsByName = React.useMemo(() => {
+    const m = {};
+    (_exItemsForMap || []).forEach(it => {
+      if (!m[it.name]) m[it.name] = [];
+      m[it.name].push(it.id);
+    });
+    return m;
+  }, [_exItemsForMap]);
 
   // 利用者ごと項目のオーバーライド値（patient.contactBookValues[itemId]）
   const patientValues = patient?.contactBookValues || {};
   const renderItemValue = (item) => {
     if (item.type === 'linked') {
       let rawVal = ex[item.linkedField];
-      // ★ フォールバック: linkedField の id では値がない場合、 同じ name の別 id を探して値を取得
-      //   (各種設定で運動メニューを編集・再追加して id が変わってしまったケースに対応)
-      //   ①バイクなど、 半角/全角や旧 id の互換ズレで連動失敗していた問題の解消
+      // ★ フォールバック: name 経由で別 id を引く (O(1) lookup)
       if (!rawVal && rawVal !== 0) {
         const linkedItem = exerciseItemMap[item.linkedField];
         const linkedName = linkedItem?.name;
-        if (linkedName) {
-          for (const key of Object.keys(ex)) {
-            const it = exerciseItemMap[key];
-            if (it && it.name === linkedName && (ex[key] !== '' && ex[key] != null)) {
-              rawVal = ex[key];
-              break;
-            }
+        const candidates = linkedName ? exerciseIdsByName[linkedName] : null;
+        if (candidates) {
+          for (const cid of candidates) {
+            const v = ex[cid];
+            if (v !== '' && v != null) { rawVal = v; break; }
           }
         }
       }
