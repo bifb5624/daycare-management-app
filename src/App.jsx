@@ -13667,12 +13667,13 @@ export default function App() {
                 - iPad (768-1099px): scale で縮小表示
                 - PC (>= 1100px): scale なし
                 ★ height は常に 'auto' → 過剰縦スクロール解消 (scale 適用時の height:100/scale% バグを除去) */}
+            {/* ★ transform:scale 機構を完全無効化 → wheel イベントが効くようになる
+                 (transform で縮小すると wheel が阻害される問題)
+                 画面が小さいときは横スクロールで対応 (contentRef:auto) */}
             <div style={{
               minWidth: DESIGN_WIDTH,
-              width: (!isMobileScreen && contentScale<1) ? `${100/contentScale}%` : '100%',
+              width: '100%',
               height: 'auto',
-              transformOrigin: 'top left',
-              transform: (!isMobileScreen && contentScale<1) ? `scale(${contentScale})` : 'none',
             }}>
             {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
