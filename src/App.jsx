@@ -12264,22 +12264,25 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>法人名</label>
                 <input value={storeForm.org_name} onChange={e=>setStoreForm(f=>({...f,org_name:e.target.value}))} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:8,marginBottom:12}}>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>郵便番号</label>
-                  <div style={{display:'flex',gap:4}}>
-                    <input type="tel" inputMode="numeric" value={formatJpZip(storeForm.zip)} onChange={e=>setStoreForm(f=>({...f,zip:e.target.value.replace(/[^0-9]/g,'').slice(0,7)}))} placeholder="1350011" style={{flex:1,padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                    <button type="button" onClick={async ()=>{
-                      const result = await lookupZipAddress(storeForm.zip);
-                      if (result?.full) setStoreForm(f=>({...f, address: result.full}));
-                      else alert('住所が見つかりませんでした。');
-                    }} style={{padding:'8px 10px',background:'#3b82f6',color:'white',border:'none',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>📍検索</button>
-                  </div>
+              {/* ★ 郵便番号 → 住所 → 建物名 を 3 段の独立した行に分割 (検索ボタンと被らないように) */}
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>郵便番号</label>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <input type="tel" inputMode="numeric" value={formatJpZip(storeForm.zip)} onChange={e=>setStoreForm(f=>({...f,zip:e.target.value.replace(/[^0-9]/g,'').slice(0,7)}))} placeholder="1350011" style={{width:160,padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                  <button type="button" onClick={async ()=>{
+                    const result = await lookupZipAddress(storeForm.zip);
+                    if (result?.full) setStoreForm(f=>({...f, address: result.full}));
+                    else alert('住所が見つかりませんでした。');
+                  }} style={{padding:'10px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>📍 住所を検索</button>
                 </div>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>住所</label>
-                  <input value={storeForm.address} onChange={e=>setStoreForm(f=>({...f,address:e.target.value}))} placeholder="東京都江東区扇橋..." style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                </div>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>住所</label>
+                <input value={storeForm.address} onChange={e=>setStoreForm(f=>({...f,address:e.target.value}))} placeholder="東京都江東区扇橋..." style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>建物名・部屋番号 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
+                <input value={storeForm.addressBuilding || ''} onChange={e=>setStoreForm(f=>({...f,addressBuilding:e.target.value}))} placeholder="例: メイゾン白子 101" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
                 <div>
@@ -17062,12 +17065,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 {tabs}
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 記録一覧</div>
-                  {validRecs.filter(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー').slice(0,20).map((r,i)=>(
+                  {validRecs.filter(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー').slice(0,20).map((r,i)=>{
+                    const rawV = r.exercises[selEx.id];
+                    const vStr = String(rawV ?? '');
+                    // unitLabel は上で selEx.defaultUnit から計算済
+                    const disp = (vStr && unitLabel && !vStr.endsWith(unitLabel)) ? `${vStr}${unitLabel}` : vStr;
+                    return (
                     <div key={i} style={{display:'flex',gap:12,padding:'6px 0',borderBottom:'1px solid #f8fafc',fontSize:14}}>
                       <span style={{color:'#334155',minWidth:56,fontWeight:'bold'}}>{r.date}</span>
-                      <span style={{color:'#475569'}}>{r.exercises[selEx.id]}</span>
+                      <span style={{color:'#475569'}}>{disp}</span>
                     </div>
-                  ))}
+                    );
+                  })}
                   {!validRecs.some(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー')&&<div style={{color:'#000',textAlign:'center',padding:24}}>記録なし</div>}
                 </div>
               </div>
@@ -17453,11 +17462,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <td style={{padding:'8px 10px',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>
                         {r.bpUpEn?`${r.bpUpEn}/${r.bpDnEn}`:'-'}{r.plEn&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plEn})</span>}
                       </td>
-                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>(
-                        <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:r.exercises?.[ex.id]&&r.exercises[ex.id]!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
-                          {r.exercises?.[ex.id]||'-'}
+                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
+                        const rawV = r.exercises?.[ex.id];
+                        // ★ defaultUnit を付与して表示 (appData が空なら appSettings から fallback)
+                        const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => it.name === ex.name)?.defaultUnit || '';
+                        const vStr = String(rawV ?? '');
+                        const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
+                        return (
+                        <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:rawV&&rawV!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
+                          {disp||'-'}
                         </td>
-                      ))}
+                        );
+                      })}
                       <td style={{padding:'8px 10px',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
                       <td style={{padding:'8px 10px',color:'#1e293b',fontSize:14,minWidth:120}}>{r.tokki||'-'}</td>
                     </tr>
@@ -21490,7 +21506,29 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
             {activeDetailTab === 'basic' && (<>
               {/* ① 状態・利用開始日・利用終了日 */}
-              <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => updateLP('endDate', e.target.value)} /></div>
+              {/* ★ LabelInput を inline 展開 (再レンダー毎の新規 component 化を回避)
+                  → カレンダーが一瞬で閉じる問題の解消 (input の再マウントを防ぐ) */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>
+                  {isResigned ? (
+                    <div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>
+                  ) : (
+                    <select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                      <option value="利用中">利用中</option>
+                      <option value="休止">休止</option>
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">利用開始日</label>
+                  <input type="date" disabled={isOff} value={localPatient.startDate || ""} onChange={e => updateLP('startDate', e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">利用終了日</label>
+                  <input type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate || ""} onChange={e => updateLP('endDate', e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"/>
+                </div>
+              </div>
 
               {/* ② 氏名・ふりがな・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
               {(() => {
@@ -22543,9 +22581,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           setNewPatientLast(''); setNewPatientFirst('');
           setNewPatientKanaLast(''); setNewPatientKanaFirst('');
         };
-        // ★ 縦並びレイアウトで入力しやすく (Web フォームの一般的なパターン)
-        return (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        // ★ 縦並びレイアウトで入力しやすく + Portal で body 直下 + flex items-start で画面上部に固定表示
+        return ReactDOM.createPortal(
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-10">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-5 text-center">新規利用者の追加</h3>
             <div className="space-y-3 mb-5">
@@ -22579,8 +22617,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <button disabled={!canSubmit} onClick={submit} className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">追加する</button>
             </div>
           </div>
-        </div>
-        );
+        </div>,
+        document.body);
       })()}
       {/* 利用者切替時の未保存確認モーダル (保存/破棄/キャンセル) */}
       {switchPatientConfirm && (
