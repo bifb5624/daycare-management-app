@@ -23961,41 +23961,66 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                         <button type="button" disabled={!newCred.id||!newCred.pass} onClick={()=>{const creds=[{storeName:facilityInfo.name||'事業所',id:newCred.id,pass:newCred.pass}];onSave({...appData,systemSettings:{...appData.systemSettings,loginCredentials:creds}});setNewCred({storeName:'',id:'',pass:''});}} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm disabled:opacity-40">登録</button>
                       </div>
                     )}
-                    {cred && (
+                    {/* ★ Supabase が有効ならローカル cred の有無に関わらず常に PW 変更フォームを表示 */}
+                    {(cred || isSupabaseEnabled) && (
                       <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl">
                         <div className="text-sm font-bold text-blue-800 mb-3">🔐 パスワード変更</div>
                         <div className="space-y-2">
-                          <input type="password" value={pwChange.old} onChange={e=>setPwChange({...pwChange,old:e.target.value})} placeholder="現在のパスワード" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
-                          <input type="password" value={pwChange.new1} onChange={e=>setPwChange({...pwChange,new1:e.target.value})} placeholder="新しいパスワード" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
-                          <input type="password" value={pwChange.new2} onChange={e=>setPwChange({...pwChange,new2:e.target.value})} placeholder="新しいパスワード（確認）" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
-                          {pwChange.error && <div className="text-xs font-bold text-red-600">{pwChange.error}</div>}
+                          {/* 現在のパスワード (目アイコン付き) */}
+                          <div className="relative">
+                            <input type={pwChange.showOld ? 'text' : 'password'} value={pwChange.old} onChange={e=>setPwChange({...pwChange,old:e.target.value,error:''})} placeholder="現在のパスワード" className="w-full px-3 py-2 pr-14 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
+                            <button type="button" onClick={()=>setPwChange(p=>({...p,showOld:!p.showOld}))} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 px-2 py-1">{pwChange.showOld?'隠す':'表示'}</button>
+                          </div>
+                          {/* 新パスワード (目アイコン付き) */}
+                          <div className="relative">
+                            <input type={pwChange.showNew ? 'text' : 'password'} value={pwChange.new1} onChange={e=>setPwChange({...pwChange,new1:e.target.value,error:''})} placeholder="新しいパスワード" className="w-full px-3 py-2 pr-14 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
+                            <button type="button" onClick={()=>setPwChange(p=>({...p,showNew:!p.showNew}))} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 px-2 py-1">{pwChange.showNew?'隠す':'表示'}</button>
+                          </div>
+                          {/* 新パスワード確認 (目アイコン付き) */}
+                          <div className="relative">
+                            <input type={pwChange.showNew2 ? 'text' : 'password'} value={pwChange.new2} onChange={e=>setPwChange({...pwChange,new2:e.target.value,error:''})} placeholder="新しいパスワード（確認）" className="w-full px-3 py-2 pr-14 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
+                            <button type="button" onClick={()=>setPwChange(p=>({...p,showNew2:!p.showNew2}))} className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-500 px-2 py-1">{pwChange.showNew2?'隠す':'表示'}</button>
+                          </div>
+                          {pwChange.error && <div className="text-xs font-bold text-red-600 whitespace-pre-wrap">{pwChange.error}</div>}
                           <div className="text-[11px] text-slate-500 leading-relaxed">パスワード要件: <b>8文字以上</b>、<b>英字</b>と<b>数字</b>を両方含む</div>
-                          <button type="button" onClick={async ()=>{
+                          <button type="button" disabled={pwChange.loading} onClick={async ()=>{
                             if(!pwChange.old || !pwChange.new1 || !pwChange.new2){ setPwChange(p=>({...p,error:'全ての項目を入力してください'})); return; }
-                            if(pwChange.old !== cred.pass){ setPwChange(p=>({...p,error:'現在のパスワードが正しくありません'})); return; }
                             if(pwChange.new1 !== pwChange.new2){ setPwChange(p=>({...p,error:'新しいパスワードが一致しません'})); return; }
                             if(pwChange.new1.length < 8){ setPwChange(p=>({...p,error:'新しいパスワードは8文字以上にしてください'})); return; }
                             if(!/[A-Za-z]/.test(pwChange.new1) || !/[0-9]/.test(pwChange.new1)){ setPwChange(p=>({...p,error:'新しいパスワードは英字と数字を両方含めてください'})); return; }
-                            // ★ Supabase staff テーブルのパスワードも更新 (実際のログイン認証先)
-                            //    これを忘れると「ログインできない」状態になる
+                            setPwChange(p=>({...p,loading:true,error:'',ok:''}));
+                            // ★ Supabase staff テーブルで現パスワード照合 → 新 PW 更新 (ローカル loginCredentials は当てにしない)
                             if (isSupabaseEnabled) {
-                              try {
-                                const session = JSON.parse(sessionStorage.getItem('tsumugiStaffSession') || 'null');
-                                if (!session?.staffId) {
-                                  setPwChange(p=>({...p,error:'ログインセッションが見つかりません。再ログイン後に再度お試しください'}));
-                                  return;
-                                }
-                                await supabaseStaffChangePassword(session.staffId, pwChange.new1);
-                              } catch (e) {
-                                setPwChange(p=>({...p,error:'Supabase 更新失敗: ' + (e?.message||'unknown') + ' (画面には保存されましたが、ログインには反映されません)'}));
+                              const session = JSON.parse(sessionStorage.getItem('tsumugiStaffSession') || 'null');
+                              if (!session?.staffId || !session?.username) {
+                                setPwChange(p=>({...p,loading:false,error:'ログインセッションが見つかりません。再ログイン後に再度お試しください'}));
                                 return;
                               }
+                              // 1. 現パスワード照合 (Supabase で再認証)
+                              try {
+                                await supabaseStaffLogin({ username: session.username, password: pwChange.old });
+                              } catch (e) {
+                                setPwChange(p=>({...p,loading:false,error:'現在のパスワードが正しくありません'}));
+                                return;
+                              }
+                              // 2. 新パスワード更新
+                              try {
+                                await supabaseStaffChangePassword(session.staffId, pwChange.new1);
+                              } catch (e) {
+                                setPwChange(p=>({...p,loading:false,error:'更新失敗: ' + (e?.message||'unknown')}));
+                                return;
+                              }
+                            } else {
+                              // Supabase 未接続: ローカル loginCredentials で照合
+                              if(pwChange.old !== cred?.pass){ setPwChange(p=>({...p,loading:false,error:'現在のパスワードが正しくありません'})); return; }
                             }
                             // ローカル設定にも保存 (UI 表示用)
-                            const newCreds = [...allCreds]; newCreds[0] = {...cred, pass: pwChange.new1};
-                            onSave({...appData, systemSettings:{...appData.systemSettings, loginCredentials: newCreds}});
-                            setPwChange({old:'',new1:'',new2:'',error:'',ok:'パスワードを変更しました (次回ログインから新パスワードが有効になります)'});
-                          }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95">パスワードを変更する</button>
+                            if (cred) {
+                              const newCreds = [...allCreds]; newCreds[0] = {...cred, pass: pwChange.new1};
+                              onSave({...appData, systemSettings:{...appData.systemSettings, loginCredentials: newCreds}});
+                            }
+                            setPwChange({old:'',new1:'',new2:'',error:'',ok:'パスワードを変更しました (次回ログインから新パスワードが有効になります)',loading:false});
+                          }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 disabled:opacity-50">{pwChange.loading?'変更中...':'パスワードを変更する'}</button>
                           {pwChange.ok && <div className="text-xs font-bold text-emerald-600">✓ {pwChange.ok}</div>}
                         </div>
                       </div>
