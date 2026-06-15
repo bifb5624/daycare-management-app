@@ -562,12 +562,29 @@ export async function supabaseCreateStaff({ store_id, username, password, role, 
   // 重複チェック
   const { data: exists } = await supabase.from('staff').select('id').eq('username', username).maybeSingle();
   if (exists) throw new Error('このログインIDは既に使用されています');
+  // ★ is_active: true を明示的にセット (デフォルトが false だとログイン認証で弾かれるため)
   const { data, error } = await supabase
     .from('staff')
-    .insert({ store_id, username, password_hash, role, last_name, first_name, email, phone })
+    .insert({ store_id, username, password_hash, role, last_name, first_name, email, phone, is_active: true })
     .select()
     .single();
   if (error) throw error;
+  return data;
+}
+
+// ★ 本部管理者向け: 任意スタッフのパスワードを username 指定でリセット
+//   (店舗 ID と PW を忘れた場合に SQL を叩かずに復旧できるよう)
+export async function supabaseStaffResetPasswordByUsername(username, newPassword) {
+  if (!supabase) throw new Error('Supabase 未接続');
+  const password_hash = await hashPassword(newPassword);
+  const { data, error } = await supabase
+    .from('staff')
+    .update({ password_hash, is_active: true, deleted_at: null })
+    .eq('username', username)
+    .select()
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error(`ログインID「${username}」のスタッフが見つかりません`);
   return data;
 }
 

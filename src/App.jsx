@@ -34,6 +34,7 @@ import {
   supabaseDeleteSystemNotice,
   supabaseCreateStaff,
   supabaseListStaff,
+  supabaseStaffResetPasswordByUsername,
 } from './lib/supabase.js';
 
 // === システム設定 ===
@@ -12187,12 +12188,29 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                                 <span style={{color:'#64748b',marginLeft:6}}>({st.role === 'manager' ? '店舗管理者' : st.role})</span>
                                 {st.email && <span style={{color:'#5e8030',marginLeft:6,fontSize:10}}>📧 {st.email}</span>}
                               </div>
-                              <button onClick={()=>{navigator.clipboard?.writeText(st.username); alert(`ログインID「${st.username}」をコピーしました`);}} style={{padding:'3px 8px',background:'#e2e8f0',color:'#475569',border:'none',borderRadius:4,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>ID コピー</button>
+                              <div style={{display:'flex',gap:4}}>
+                                <button onClick={()=>{navigator.clipboard?.writeText(st.username); alert(`ログインID「${st.username}」をコピーしました`);}} style={{padding:'3px 8px',background:'#e2e8f0',color:'#475569',border:'none',borderRadius:4,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>ID コピー</button>
+                                {/* ★ パスワード リセットボタン (本部管理者が任意のスタッフ PW をリセット) */}
+                                <button onClick={async ()=>{
+                                  const newPw = window.prompt(`「${st.username}」の新しいパスワードを入力してください (8文字以上、英字+数字)`);
+                                  if (!newPw) return;
+                                  if (newPw.length < 8 || !/[A-Za-z]/.test(newPw) || !/[0-9]/.test(newPw)) {
+                                    alert('パスワードは 8 文字以上で英字と数字を含めてください');
+                                    return;
+                                  }
+                                  try {
+                                    await supabaseStaffResetPasswordByUsername(st.username, newPw);
+                                    alert(`✅ 「${st.username}」のパスワードをリセットしました\n新PW: ${newPw}\n\nこの情報を本人に伝えてください。`);
+                                  } catch (e) {
+                                    alert('リセット失敗: ' + (e?.message || 'unknown'));
+                                  }
+                                }} style={{padding:'3px 8px',background:'#fee2e2',color:'#b91c1c',border:'none',borderRadius:4,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>🔑 PW リセット</button>
+                              </div>
                             </div>
                           ))}
                           <div style={{fontSize:10,color:'#64748b',marginTop:4,padding:'6px 10px',background:'#fffbeb',border:'1px dashed #fcd34d',borderRadius:6}}>
-                            ⚠ パスワードは Supabase で暗号化されているため表示できません。<br/>
-                            お忘れの場合は「+ 店舗管理者を追加」から同じ ID で新規発行 (= 上書き) してください。
+                            🔑 PW リセット = その場で新パスワードを発行 (本人通知用) <br/>
+                            パスワード本体は Supabase で暗号化保存されているため表示はできません。
                           </div>
                         </div>
                       )}
