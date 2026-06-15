@@ -10378,23 +10378,25 @@ function FamilyView() {
           console.warn('[family-preview] staff login failed:', staffErr?.message);
         }
         if (staff) {
-          // ★ 本部管理者のみ許可 (事業所スタッフ/manager 等は通さない)
-          if (staff.role !== 'super_admin') {
-            setLoginForm(f=>({...f, error:'本部管理者のみログイン可能です (role: '+staff.role+')'}));
-            return;
-          }
-          // 本部管理者: 全店舗を取得し、利用者が登録されている最初の店舗を選ぶ
-          // (stores[0] が空店舗の場合があるため、patient が見つかる店舗まで探索)
+          // ★ 全 role (super_admin / manager / staff) で家族画面プレビューを許可
+          //   事業所スタッフ (manager) の場合は staff.store_id の店舗を直接使う
+          //   本部管理者 (super_admin) は全店舗から利用者がいる店舗を探索
           let stores = [];
-          try {
-            stores = await supabaseListStores();
-            if (!stores || stores.length === 0) {
-              setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
+          if (staff.store_id) {
+            // 事業所スタッフ: 自店舗のみを候補に
+            const own = { id: staff.store_id, name: staff.stores?.name || '' };
+            stores = [own];
+          } else {
+            try {
+              stores = await supabaseListStores();
+              if (!stores || stores.length === 0) {
+                setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
+                return;
+              }
+            } catch (e) {
+              setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
               return;
             }
-          } catch (e) {
-            setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
-            return;
           }
           // 利用者がいる店舗を優先、なければ最初に state 取得できた店舗にダミー利用者を挿入
           let sbState = null;
@@ -11014,9 +11016,9 @@ function FamilyView() {
             <p style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
-            {/* ★ 本部管理者 ID/PW でも入れる (UI 確認用プレビューモード) */}
+            {/* ★ 本部管理者 / 事業所スタッフ ID/PW でも入れる (UI 確認用プレビューモード) */}
             <p style={{fontSize:10,color:'#cbd5e1',textAlign:'center',marginTop:6,lineHeight:1.5,fontStyle:'italic'}}>
-              ※ 本部管理者 ID でもログイン可 (家族画面プレビュー)
+              ※ 管理者・事業所スタッフ ID でもログイン可 (家族画面プレビュー)
             </p>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
@@ -13369,10 +13371,12 @@ export default function App() {
           {globalTip.text}
         </div>
       )}
-      {showToast && (
-        <div className="fixed top-6 right-8 z-50 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center animate-bounce">
+      {/* ★ Portal で body 直下にレンダリング → 全画面表示時 (Portal の RecordContent) でも見える */}
+      {showToast && ReactDOM.createPortal(
+        <div style={{position:'fixed',top:24,right:32,zIndex:99999}} className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center animate-bounce">
           <CheckCircle2 className="text-emerald-400 mr-2" />{toastMsg}
-        </div>
+        </div>,
+        document.body
       )}
 
 
@@ -14800,7 +14804,9 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const isActive = activeCell === cellKey;
                     // ★ 単位自動付与: 各種設定の defaultUnit を値の後ろに表示する
                     //    入力時は単位を取り除いて数値のみ保存 (DB 値はクリーン)
-                    const unit = item.defaultUnit || '';
+                    //    item.defaultUnit が無ければ、 appSettings の同名項目から fallback で補完
+                    //    (各種設定で運動メニューを編集して単位がクリアされた場合の救済)
+                    const unit = item.defaultUnit || appSettings.exerciseItems.find(it => it.name === item.name)?.defaultUnit || '';
                     const valStr = String(val ?? '');
                     const displayVal = (valStr !== '' && unit && !valStr.endsWith(unit)) ? `${valStr}${unit}` : valStr;
                     return (
@@ -24436,7 +24442,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if (pendingStaff) {
       next.diarySettings = { ..._baseDs, staff: pendingStaff };
     }
-    onSave(next);
+    // ★ manual:true でトースト表示
+    onSave(next, { manual: true, message: '✓ 日誌を保存しました' });
     if (pendingStaff) setPendingStaff(null);
     markClean();
   };
