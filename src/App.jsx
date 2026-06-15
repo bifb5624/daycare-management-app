@@ -17243,20 +17243,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <td style={{padding:'8px 10px',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>
                         {r.bpUpEn?`${r.bpUpEn}/${r.bpDnEn}`:'-'}{r.plEn&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plEn})</span>}
                       </td>
-                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>(
-                        {(() => {
-                          const rawV = r.exercises?.[ex.id];
-                          // ★ 単位を後ろに自動補完 (内部値が数値だけでも「3分」と表示)
-                          const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => it.name === ex.name)?.defaultUnit || '';
-                          const vStr = String(rawV ?? '');
-                          const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
-                          return (
-                          <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:rawV&&rawV!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
-                            {disp||'-'}
-                          </td>
-                          );
-                        })()}
-                      ))}
+                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
+                        const rawV = r.exercises?.[ex.id];
+                        // ★ 単位を後ろに自動補完 (内部値が数値だけでも「3分」と表示)
+                        const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => it.name === ex.name)?.defaultUnit || '';
+                        const vStr = String(rawV ?? '');
+                        const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
+                        return (
+                        <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:rawV&&rawV!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
+                          {disp||'-'}
+                        </td>
+                        );
+                      })}
                       <td style={{padding:'8px 10px',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
                       <td style={{padding:'8px 10px',color:'#1e293b',fontSize:14,minWidth:120}}>{r.tokki||'-'}</td>
                     </tr>
