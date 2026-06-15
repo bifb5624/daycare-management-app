@@ -13659,9 +13659,8 @@ export default function App() {
             )}
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
-            {/* ★ contentRef を overflow:hidden に → main 側で wheel イベントを受けてスクロール
-                 (両方 overflow:auto だと PC でホイールが内側で消費されて動かないケースを解消) */}
-            <div ref={contentRef} style={{flex:1,overflow:'hidden',padding:0}}>
+            {/* contentRef: overflow:auto → スクロールバー表示で確実に動かす */}
+            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
 
             {/* ★ レイアウト方針:
                 - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
