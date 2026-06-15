@@ -10378,25 +10378,22 @@ function FamilyView() {
           console.warn('[family-preview] staff login failed:', staffErr?.message);
         }
         if (staff) {
-          // ★ 全 role (super_admin / manager / staff) で家族画面プレビューを許可
-          //   事業所スタッフ (manager) の場合は staff.store_id の店舗を直接使う
-          //   本部管理者 (super_admin) は全店舗から利用者がいる店舗を探索
+          // ★ アプリ管理者 (super_admin) のみ家族画面プレビューを許可
+          //   事業所スタッフ (manager 等) は通常の事業所アプリでログインするため、家族画面では弾く
+          if (staff.role !== 'super_admin') {
+            setLoginForm(f=>({...f, error:'家族画面プレビューはアプリ管理者のみログイン可能です'}));
+            return;
+          }
           let stores = [];
-          if (staff.store_id) {
-            // 事業所スタッフ: 自店舗のみを候補に
-            const own = { id: staff.store_id, name: staff.stores?.name || '' };
-            stores = [own];
-          } else {
-            try {
-              stores = await supabaseListStores();
-              if (!stores || stores.length === 0) {
-                setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
-                return;
-              }
-            } catch (e) {
-              setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
+          try {
+            stores = await supabaseListStores();
+            if (!stores || stores.length === 0) {
+              setLoginForm(f=>({...f, error:'店舗が 1 件も登録されていません'}));
               return;
             }
+          } catch (e) {
+            setLoginForm(f=>({...f, error:'店舗一覧の取得に失敗: '+(e?.message||'unknown')}));
+            return;
           }
           // 利用者がいる店舗を優先、なければ最初に state 取得できた店舗にダミー利用者を挿入
           let sbState = null;
@@ -11016,9 +11013,9 @@ function FamilyView() {
             <p style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
-            {/* ★ 本部管理者 / 事業所スタッフ ID/PW でも入れる (UI 確認用プレビューモード) */}
+            {/* ★ アプリ管理者 ID/PW で家族画面プレビュー可能 */}
             <p style={{fontSize:10,color:'#cbd5e1',textAlign:'center',marginTop:6,lineHeight:1.5,fontStyle:'italic'}}>
-              ※ 管理者・事業所スタッフ ID でもログイン可 (家族画面プレビュー)
+              ※ アプリ管理者 ID でもログイン可 (家族画面プレビュー)
             </p>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
@@ -12036,7 +12033,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [showAddStore, setShowAddStore] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
-  const [storeForm, setStoreForm] = useState({ id:'', name:'', short_name:'', org_name:'', zip:'', address:'', phone:'', fax:'', login_id:'', login_pw:'', login_email:'', login_phone:'', error:'', loading:false });
+  const [storeForm, setStoreForm] = useState({ id:'', name:'', short_name:'', org_name:'', zip:'', address:'', addressBuilding:'', phone:'', fax:'', login_id:'', login_pw:'', login_email:'', login_phone:'', error:'', loading:false });
   const [staffForm, setStaffForm] = useState({ store_id:'', username:'', password:'', role:'manager', last_name:'', first_name:'', email:'', error:'', loading:false });
 
   const [storeStaff, setStoreStaff] = useState({}); // {storeId: [staff...]}
@@ -14289,8 +14286,18 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
       return;
     }
     setKeypad(prev => ({ ...prev, value: formatted, isFirstInput: false }));
-    if ((appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(i => i.id === keypad.field)) updateExercise(keypad.recordId, keypad.field, formatted);
-    else updateRecord(keypad.recordId, keypad.field, formatted);
+    // ★ 運動メニュー項目: keypad で「10」を入力 → 内部値も「10分」として保存 (単位を本体に含める)
+    //    既存値で末尾が既に単位なら二重付与しない。 空のときは付けない。
+    const exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
+    const exItm = exItems.find(i => i.id === keypad.field);
+    if (exItm) {
+      const unit = exItm.defaultUnit || appSettings.exerciseItems.find(it => it.name === exItm.name)?.defaultUnit || '';
+      let toSave = formatted;
+      if (toSave && unit && !String(toSave).endsWith(unit)) toSave = `${toSave}${unit}`;
+      updateExercise(keypad.recordId, keypad.field, toSave);
+    } else {
+      updateRecord(keypad.recordId, keypad.field, formatted);
+    }
   };
 
   const handleTab = () => {
@@ -14805,10 +14812,11 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const placeholderText = isEditMode ? (plannedEx[item.id] || "") : "";
                     const cellKey = `${p.id}-${item.id}`;
                     const isActive = activeCell === cellKey;
-                    // ★ 単位自動付与: 各種設定の defaultUnit を値の後ろに表示する
-                    //    入力時は単位を取り除いて数値のみ保存 (DB 値はクリーン)
-                    //    item.defaultUnit が無ければ、 appSettings の同名項目から fallback で補完
-                    //    (各種設定で運動メニューを編集して単位がクリアされた場合の救済)
+                    // ★ 単位自動付与 (新方式: 内部値にも単位を含めて保存)
+                    //    - keypad: handleKeypadInput で formatted+unit を更新
+                    //    - 手動入力: onChange でユーザーが「分」を打たなくても末尾に補完
+                    //    - 表示は valStr そのまま (内部値が "10分" ならそのまま表示、 "10" だけなら補完)
+                    //    item.defaultUnit が無ければ appSettings の同名項目から fallback
                     const unit = item.defaultUnit || appSettings.exerciseItems.find(it => it.name === item.name)?.defaultUnit || '';
                     const valStr = String(val ?? '');
                     const displayVal = (valStr !== '' && unit && !valStr.endsWith(unit)) ? `${valStr}${unit}` : valStr;
@@ -14828,9 +14836,10 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                           onClick={() => { if(item.useKeypad) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
                           onChange={(e) => {
                             if (item.useKeypad) return;
-                            let v = e.target.value;
-                            // ★ 末尾の単位を取り除いて保存 (内部値は数値のみ)
-                            if (unit && v.endsWith(unit)) v = v.slice(0, -unit.length);
+                            let v = e.target.value.trim();
+                            // ★ 内部値に単位を含めて保存。 末尾が既に unit ならそのまま、 数値だけなら末尾に unit を補完
+                            //    (両方の入力パターンで内部値が「10分」に統一)
+                            if (v && unit && !v.endsWith(unit)) v = `${v}${unit}`;
                             updateExercise(p.id, item.id, v);
                           }}
                           style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14, fontWeight:'bold'}}
