@@ -8807,31 +8807,36 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
     return { date: "未定", time: "　時　分" };
 };
 
+// ★ 厚労省バイタルサイン基準値に合わせた色判定 (正常値は黒)
+// 血圧: 上下のどちらかが異常なら最大重症度に揃える
+//   正常 100~129/60~84 / I度 130~139/85~89 / II度 140~159/90~99 / III度 160+/100+ / 低血圧 上<90
 const getBpColorClass = (upStr, dnStr) => {
   const up = Number(upStr); const dn = Number(dnStr);
-  if (!upStr && !dnStr) return "text-slate-800";
-  if (up >= 180 || dn >= 110) return "text-red-600 font-extrabold"; 
-  if (up >= 140 || dn >= 90) return "text-orange-600 font-bold";
-  if ((up > 0 && up < 100) || (dn > 0 && dn < 60)) return "text-blue-600 font-bold"; 
-  return "text-slate-800 font-bold"; 
+  if (!upStr && !dnStr) return "text-black";
+  if (up >= 160 || dn >= 100) return "text-red-700 font-extrabold";  // III度
+  if (up >= 140 || dn >= 90) return "text-red-600 font-bold";        // II度
+  if (up >= 130 || dn >= 85) return "text-amber-600 font-bold";      // I度
+  if ((up > 0 && up < 90)) return "text-blue-600 font-bold";          // 低血圧
+  return "text-black font-bold";                                       // 正常 (黒)
 };
 
-const getPulseColorClass = (pulseStr, isRecordView = false) => {
-  const p = Number(pulseStr);
-  const defaultColor = isRecordView ? "text-emerald-700" : "text-slate-700";
-  if (!pulseStr) return defaultColor;
-  if (p >= 100) return "text-orange-600 font-bold"; 
-  if (p > 0 && p < 60) return "text-blue-600 font-bold"; 
-  return `${defaultColor} font-bold`; 
+// 脈拍: 正常 60~100 / 頻脈 101+ / 徐脈 ≤59
+const getPulseColorClass = (pulseStr, _isRecordView = false) => {
+  const n = Number(pulseStr);
+  if (!pulseStr || isNaN(n)) return "text-black font-bold";
+  if (n >= 101) return "text-red-600 font-bold";   // 頻脈
+  if (n <= 59) return "text-blue-600 font-bold";   // 徐脈
+  return "text-black font-bold";                    // 正常 (黒)
 };
 
+// 体温: 正常 36.0~37.0 / 微熱 37.1~38.0 / 高熱 38.1+ / 低体温 ≤35.9
 const getTempColorClass = (tempStr) => {
   const t = Number(tempStr);
-  if (!tempStr || isNaN(t)) return "text-slate-800 font-bold";
-  if (t >= 37.5) return "text-red-600 font-extrabold";
-  if (t >= 37.0) return "text-orange-600 font-bold";
-  if (t > 0 && t < 36.0) return "text-blue-600 font-bold";
-  return "text-slate-800 font-bold";
+  if (!tempStr || isNaN(t)) return "text-black font-bold";
+  if (t >= 38.1) return "text-red-600 font-extrabold";   // 高熱
+  if (t >= 37.1) return "text-amber-600 font-bold";      // 微熱
+  if (t > 0 && t <= 35.9) return "text-blue-600 font-bold"; // 低体温
+  return "text-black font-bold";                          // 正常 (黒)
 };
 
 const isPatientResigned = (p) => {
@@ -14523,7 +14528,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           <div className="flex items-start gap-1.5 min-w-[180px]">
             <span className="font-bold text-slate-600 whitespace-nowrap shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">体温</span>
             <div className="space-y-0 leading-tight">
-              <div><span className="text-emerald-700 font-bold">正常 36.0〜37.0℃</span></div>
+              <div><span className="text-black font-bold">正常 36.0〜37.0℃</span></div>
               <div><span className="text-amber-600 font-bold">微熱 37.1〜38.0℃</span>　<span className="text-red-600 font-bold">高熱 38.1℃以上</span></div>
               <div><span className="text-blue-600 font-bold">低体温 35.9℃以下</span><span className="text-slate-400 ml-1">（注意）</span></div>
             </div>
@@ -14532,7 +14537,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           <div className="flex items-start gap-1.5 min-w-[280px]">
             <span className="font-bold text-slate-600 whitespace-nowrap shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">血圧</span>
             <div className="space-y-0 leading-tight">
-              <div><span className="text-emerald-700 font-bold">正常 収縮期 100〜129 / 拡張期 60〜84 mmHg</span></div>
+              <div><span className="text-black font-bold">正常 収縮期 100〜129 / 拡張期 60〜84 mmHg</span></div>
               <div><span className="text-amber-600 font-bold">高血圧Ⅰ度 130〜139/85〜89</span>　<span className="text-red-600 font-bold">Ⅱ度 140〜159/90〜99</span>　<span className="text-red-700 font-bold">Ⅲ度 160以上/100以上</span></div>
               <div><span className="text-blue-600 font-bold">低血圧 収縮期 90未満</span><span className="text-slate-400 ml-1">（起立性低血圧に注意）</span></div>
             </div>
@@ -14541,7 +14546,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           <div className="flex items-start gap-1.5 min-w-[180px]">
             <span className="font-bold text-slate-600 whitespace-nowrap shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">脈拍</span>
             <div className="space-y-0 leading-tight">
-              <div><span className="text-emerald-700 font-bold">正常 60〜100 回/分</span></div>
+              <div><span className="text-black font-bold">正常 60〜100 回/分</span></div>
               <div><span className="text-red-600 font-bold">頻脈 101回以上</span>　<span className="text-blue-600 font-bold">徐脈 59回以下</span></div>
               <div className="text-slate-400">高齢者の目安 60〜80回/分。不整脈に注意。</div>
             </div>
@@ -19852,10 +19857,27 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const rows = [];
   for (let i = 0; i < items.length; i += 2) rows.push([items[i], items[i + 1]]);
 
+  // ★ 提供記録連動先の exerciseItem を id で引けるよう Map 化
+  //   defaultUnit (分/回/往復 等) を値に自動付与する
+  const allExerciseItems = appData?.systemSettings?.exerciseItems || [];
+  const exerciseItemMap = React.useMemo(() => {
+    const m = {};
+    allExerciseItems.forEach(it => { m[it.id] = it; });
+    return m;
+  }, [allExerciseItems]);
+
   // 利用者ごと項目のオーバーライド値（patient.contactBookValues[itemId]）
   const patientValues = patient?.contactBookValues || {};
   const renderItemValue = (item) => {
-    if (item.type === 'linked') return dispEx(ex[item.linkedField]);
+    if (item.type === 'linked') {
+      const raw = dispEx(ex[item.linkedField]);
+      if (!raw) return '';
+      // ★ 連動先の defaultUnit を後ろに付与 (例: "3" → "3分")
+      const linked = exerciseItemMap[item.linkedField];
+      const unit = linked?.defaultUnit || '';
+      const rawStr = String(raw);
+      return (unit && !rawStr.endsWith(unit)) ? `${rawStr}${unit}` : rawStr;
+    }
     // fixed: 利用者ごと設定があれば優先、なければ全体の値
     if (item.perPatient && Object.prototype.hasOwnProperty.call(patientValues, item.id)) return patientValues[item.id];
     return item.value;
