@@ -13630,10 +13630,9 @@ export default function App() {
             )}
           </header>
 
-          {/* ★ main の overflow:auto → overflow:hidden に変更
-              (内側の contentRef div だけスクロール領域にすることで、 マウスホイールが
-               意図せず main 側で消費される問題を回避) */}
-          <main className="flex-1 overflow-hidden relative min-w-0 flex flex-col" style={{padding:0}}>
+          {/* main を overflow:auto に戻す → 各種連絡など普通にスクロール可能なビューと同じ条件に
+              (前回 overflow:hidden にしたことで wheel イベントが内側で消費されないビューが発生していた) */}
+          <main className="flex-1 overflow-auto relative min-w-0 flex flex-col" style={{padding:0}}>
             {/* ★ システムお知らせバナー (本部からのメンテナンス通知等) */}
             {visibleNotices.length > 0 && (
               <div className="flex-shrink-0">
@@ -24563,11 +24562,16 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if (ampm === '1日') return true;
     return s.ampm === ampm;
   };
-  const managers  = ds.staff.filter(s=>s.role==='管理者' && _staffOk(s));
-  const seikatsu  = ds.staff.filter(s=>s.role==='生活相談員' && _staffOk(s));
-  const kinou     = ds.staff.filter(s=>s.role==='機能訓練指導員' && _staffOk(s));
-  const kaigo     = ds.staff.filter(s=>s.role==='介護職員' && _staffOk(s));
-  const kangoFu   = ds.staff.filter(s=>s.role==='看護師' && _staffOk(s));
+  // ★ 同じ役職 + 同じ氏名 の重複を排除 (各種設定 staff 登録 とスタッフ切替 登録 が同じ氏名で 2 つ入る問題対応)
+  const _dedupByName = (arr) => arr.filter((s, i, a) => {
+    const key = `${(s.name||'').trim()}|${(s.lastName||'').trim()}|${(s.firstName||'').trim()}`;
+    return a.findIndex(o => `${(o.name||'').trim()}|${(o.lastName||'').trim()}|${(o.firstName||'').trim()}` === key) === i;
+  });
+  const managers  = _dedupByName(ds.staff.filter(s=>s.role==='管理者' && _staffOk(s)));
+  const seikatsu  = _dedupByName(ds.staff.filter(s=>s.role==='生活相談員' && _staffOk(s)));
+  const kinou     = _dedupByName(ds.staff.filter(s=>s.role==='機能訓練指導員' && _staffOk(s)));
+  const kaigo     = _dedupByName(ds.staff.filter(s=>s.role==='介護職員' && _staffOk(s)));
+  const kangoFu   = _dedupByName(ds.staff.filter(s=>s.role==='看護師' && _staffOk(s)));
 
   // Time keypad helpers
   const openTimeKeypad = (carId, field, curVal) => { setTimeKeypad({carId,field}); setTimeInput(curVal||''); };
