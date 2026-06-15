@@ -23951,7 +23951,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                             <div className="font-bold text-base text-slate-800 px-3 py-2 bg-white border border-slate-200 rounded-lg tracking-widest">{'•'.repeat(Math.min(12, cred.pass?.length || 0))}</div>
                           </div>
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-3">※ ログインID の変更は別途実装予定（再発行はメール経由）</p>
+                        <p className="text-[11px] text-slate-400 mt-3">※ ログインID は変更できません。忘れた場合は本部までご連絡ください。</p>
                       </div>
                     ) : (
                       <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
@@ -23970,15 +23970,31 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                           <input type="password" value={pwChange.new2} onChange={e=>setPwChange({...pwChange,new2:e.target.value})} placeholder="新しいパスワード（確認）" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
                           {pwChange.error && <div className="text-xs font-bold text-red-600">{pwChange.error}</div>}
                           <div className="text-[11px] text-slate-500 leading-relaxed">パスワード要件: <b>8文字以上</b>、<b>英字</b>と<b>数字</b>を両方含む</div>
-                          <button type="button" onClick={()=>{
+                          <button type="button" onClick={async ()=>{
                             if(!pwChange.old || !pwChange.new1 || !pwChange.new2){ setPwChange(p=>({...p,error:'全ての項目を入力してください'})); return; }
                             if(pwChange.old !== cred.pass){ setPwChange(p=>({...p,error:'現在のパスワードが正しくありません'})); return; }
                             if(pwChange.new1 !== pwChange.new2){ setPwChange(p=>({...p,error:'新しいパスワードが一致しません'})); return; }
                             if(pwChange.new1.length < 8){ setPwChange(p=>({...p,error:'新しいパスワードは8文字以上にしてください'})); return; }
                             if(!/[A-Za-z]/.test(pwChange.new1) || !/[0-9]/.test(pwChange.new1)){ setPwChange(p=>({...p,error:'新しいパスワードは英字と数字を両方含めてください'})); return; }
+                            // ★ Supabase staff テーブルのパスワードも更新 (実際のログイン認証先)
+                            //    これを忘れると「ログインできない」状態になる
+                            if (isSupabaseEnabled) {
+                              try {
+                                const session = JSON.parse(sessionStorage.getItem('tsumugiStaffSession') || 'null');
+                                if (!session?.staffId) {
+                                  setPwChange(p=>({...p,error:'ログインセッションが見つかりません。再ログイン後に再度お試しください'}));
+                                  return;
+                                }
+                                await supabaseStaffChangePassword(session.staffId, pwChange.new1);
+                              } catch (e) {
+                                setPwChange(p=>({...p,error:'Supabase 更新失敗: ' + (e?.message||'unknown') + ' (画面には保存されましたが、ログインには反映されません)'}));
+                                return;
+                              }
+                            }
+                            // ローカル設定にも保存 (UI 表示用)
                             const newCreds = [...allCreds]; newCreds[0] = {...cred, pass: pwChange.new1};
                             onSave({...appData, systemSettings:{...appData.systemSettings, loginCredentials: newCreds}});
-                            setPwChange({old:'',new1:'',new2:'',error:'',ok:'パスワードを変更しました'});
+                            setPwChange({old:'',new1:'',new2:'',error:'',ok:'パスワードを変更しました (次回ログインから新パスワードが有効になります)'});
                           }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95">パスワードを変更する</button>
                           {pwChange.ok && <div className="text-xs font-bold text-emerald-600">✓ {pwChange.ok}</div>}
                         </div>
