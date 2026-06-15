@@ -14780,22 +14780,33 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const placeholderText = isEditMode ? (plannedEx[item.id] || "") : "";
                     const cellKey = `${p.id}-${item.id}`;
                     const isActive = activeCell === cellKey;
+                    // ★ 単位自動付与: 各種設定の defaultUnit を値の後ろに表示する
+                    //    入力時は単位を取り除いて数値のみ保存 (DB 値はクリーン)
+                    const unit = item.defaultUnit || '';
+                    const valStr = String(val ?? '');
+                    const displayVal = (valStr !== '' && unit && !valStr.endsWith(unit)) ? `${valStr}${unit}` : valStr;
                     return (
                     <td key={item.id} className={`px-0.5 py-2 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
-                        <button disabled={isAbsent || isReadOnly || isPause} onClick={() => toggleMark(p.id, item.id, val, isAbsent)} 
+                        <button disabled={isAbsent || isReadOnly || isPause} onClick={() => toggleMark(p.id, item.id, val, isAbsent)}
                           className={`w-8 h-8 rounded-full font-bold text-base flex items-center justify-center mx-auto transition-all disabled:opacity-60 border
-                            ${val === '○' ? 'bg-blue-500 text-white border-blue-500 shadow-md' : 
-                              val === '×' ? 'bg-red-500 text-white border-red-500 shadow-md' : 
-                              val === 'ー' ? 'bg-slate-200 text-slate-500 border-slate-300' : 
+                            ${val === '○' ? 'bg-blue-500 text-white border-blue-500 shadow-md' :
+                              val === '×' ? 'bg-red-500 text-white border-red-500 shadow-md' :
+                              val === 'ー' ? 'bg-slate-200 text-slate-500 border-slate-300' :
                               isReadOnly ? 'bg-transparent border-slate-300' : 'bg-white text-slate-400 hover:bg-slate-100 border-slate-300 shadow-sm'}`}>
                           {val}
                         </button>
                       ) : (
-                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad} value={val || ""}
+                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad} value={displayVal}
                           onClick={() => { if(item.useKeypad) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
-                          onChange={(e) => { if(!item.useKeypad) updateExercise(p.id, item.id, e.target.value); }}
-                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: (val||'').length > 7 ? 9 : (val||'').length > 5 ? 10 : (val||'').length > 3 ? 12 : 14, fontWeight:'bold'}}
+                          onChange={(e) => {
+                            if (item.useKeypad) return;
+                            let v = e.target.value;
+                            // ★ 末尾の単位を取り除いて保存 (内部値は数値のみ)
+                            if (unit && v.endsWith(unit)) v = v.slice(0, -unit.length);
+                            updateExercise(p.id, item.id, v);
+                          }}
+                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14, fontWeight:'bold'}}
                           className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
@@ -19930,13 +19941,15 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
                   // 行が多いほどフォント縮小: 行数 6 までは大、それ以降は段階的に縮小
                   const labelFs = rows.length <= 6 ? 16 : rows.length <= 9 ? 14 : rows.length <= 12 ? 12 : 10;
                   const valueFs = rows.length <= 6 ? 24 : rows.length <= 9 ? 22 : rows.length <= 12 ? 20 : 18;
+                  // ★ 全行を均等の高さに統一 (空セルがあると小さく見える問題を解消)
+                  const rowHeightPct = `${100/rows.length}%`;
                   return (
-                  <tr key={idx} className={idx !== rows.length - 1 ? "border-b border-black" : ""}>
-                    <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row[0].label}</th>
-                    <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden'}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
+                  <tr key={idx} className={idx !== rows.length - 1 ? "border-b border-black" : ""} style={{height: rowHeightPct}}>
+                    <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[0].label}</th>
+                    <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
                     {row[1]
-                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden'}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
-                      : (<><th className="border-r border-black w-[30%] bg-white"></th><td className="w-[20%]"></td></>)}
+                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
+                      : (<><th className="border-r border-black w-[30%] bg-white" style={{height: rowHeightPct}}></th><td className="w-[20%]" style={{height: rowHeightPct}}></td></>)}
                   </tr>
                   );
                 })}
@@ -24247,7 +24260,29 @@ function DiarySettingsPanel({ appData, dsRef, markDirty }) {
                 <option value="看護師">看護師</option>
                 <option value="介護職員">介護職員</option>
               </select>
-              <input defaultValue={s.name} onBlur={e=>onBlurStaff(i,'name',e.target.value)} placeholder="氏名" className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+              {/* ★ 姓・名 を分割入力。 onBlur で結合した name フィールドも更新 (既存表示と互換) */}
+              <input defaultValue={s.lastName ?? ((s.name||'').split(/[ 　]+/)[0]||'')}
+                onBlur={e=>{
+                  const last = e.target.value.trim();
+                  const cur = dsRef.current.staff[i] || {};
+                  const first = cur.firstName ?? ((cur.name||'').split(/[ 　]+/).slice(1).join(' ')||'');
+                  const combined = [last, first].filter(Boolean).join(' ');
+                  onBlurStaff(i, 'lastName', last);
+                  // name も同時更新 (1 イベントで完結させるため dsRef を直接更新後にもう一度反映)
+                  const a=[...dsRef.current.staff]; a[i]={...a[i], lastName: last, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
+                }}
+                placeholder="姓"
+                className="w-[110px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+              <input defaultValue={s.firstName ?? ((s.name||'').split(/[ 　]+/).slice(1).join(' ')||'')}
+                onBlur={e=>{
+                  const first = e.target.value.trim();
+                  const cur = dsRef.current.staff[i] || {};
+                  const last = cur.lastName ?? ((cur.name||'').split(/[ 　]+/)[0]||'');
+                  const combined = [last, first].filter(Boolean).join(' ');
+                  const a=[...dsRef.current.staff]; a[i]={...a[i], firstName: first, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
+                }}
+                placeholder="名"
+                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
               <button onClick={()=>mutate({...dsRef.current,staff:dsRef.current.staff.filter((_,j)=>j!==i)})} className="text-red-400 hover:text-red-600"><X size={16}/></button>
             </div>
           ))}
