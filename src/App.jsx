@@ -12582,11 +12582,7 @@ export default function App() {
     let stopped = false;
     const load = async () => {
       const list = await supabaseListSystemNotices(staffSession.storeId);
-      // ★ prev === next 比較で同じなら setState スキップ (再レンダー抑制)
-      if (!stopped) setSystemNotices(prev => {
-        if (prev.length === list.length && JSON.stringify(prev) === JSON.stringify(list)) return prev;
-        return list;
-      });
+      if (!stopped) setSystemNotices(list);
     };
     load();
     const t = setInterval(load, 60000); // 1分ごと更新
@@ -13668,17 +13664,17 @@ export default function App() {
                  → wheel は内側で消費されるが、 動く方を優先 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
 
-            {/* ★ レイアウト方針 (transform → zoom に変更):
-                - iPhone (< 768px): minWidth=1100 維持 + zoom=1 → PC デザイン崩さず、横スクロールで全部見える
-                - iPad (768-1099px): zoom で縮小表示 (transform より wheel イベントとの相性が良い)
-                - PC (>= 1100px): zoom=1 → 通常表示
-                ★ transform:scale は wheel イベントを阻害するため CSS zoom を採用
-                ★ height は常に 'auto' */}
+            {/* ★ レイアウト方針:
+                - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
+                - iPad (768-1099px): scale で縮小表示
+                - PC (>= 1100px): scale なし
+                ★ height は常に 'auto' → 過剰縦スクロール解消 (scale 適用時の height:100/scale% バグを除去) */}
             <div style={{
               minWidth: DESIGN_WIDTH,
-              width: '100%',
+              width: (!isMobileScreen && contentScale<1) ? `${100/contentScale}%` : '100%',
               height: 'auto',
-              zoom: (!isMobileScreen && contentScale < 1) ? contentScale : 1,
+              transformOrigin: 'top left',
+              transform: (!isMobileScreen && contentScale<1) ? `scale(${contentScale})` : 'none',
             }}>
             {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
@@ -13821,12 +13817,9 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
   const _syncingRef = useRef(false);
   useEffect(() => {
-    // ★ measure: prev === next なら setState を呼ばないガード (重要な性能修正)
-    //   以前は 600ms 毎に setState → 全 RecordView 再レンダー → 50利用者 × 多項目で重く
-    //   ブラウザがクラッシュ (Aw, snap! / エラー5) する原因の 1 つ
     const measure = () => {
       const el = tableScrollRef.current;
-      if (el) setTableScrollWidth(prev => prev === el.scrollWidth ? prev : el.scrollWidth);
+      if (el) setTableScrollWidth(el.scrollWidth);
     };
     measure();
     let ro;
@@ -13837,8 +13830,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
       if (tbl) ro.observe(tbl);
     }
     window.addEventListener('resize', measure);
-    // ★ setInterval は撤去 (ResizeObserver で十分。 ポーリングは CPU 負荷の原因)
-    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); };
+    const t = setInterval(measure, 600); // フィルタや列の増減で幅が変わるため軽くポーリング
+    return () => { if (ro) ro.disconnect(); window.removeEventListener('resize', measure); clearInterval(t); };
   }, []);
   const _syncFromTop = (e) => {
     if (_syncingRef.current) { _syncingRef.current = false; return; }
