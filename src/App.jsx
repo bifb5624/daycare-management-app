@@ -12882,14 +12882,15 @@ export default function App() {
   // ★ iPhone (768px 未満) かどうか — true のときは scale 機構を完全に無効化して素直にレスポンシブ表示
   const [isMobileScreen, setIsMobileScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   useEffect(()=>{
+    // ★ 計算結果が同じなら setState スキップ → ResizeObserver 経由の不要な再レンダーを防止 (フリーズ対策)
     const calc = ()=>{
       const mobile = window.innerWidth < 768;
-      setIsMobileScreen(mobile);
+      setIsMobileScreen(prev => prev === mobile ? prev : mobile);
       if(!contentRef.current) return;
-      // ★ iPhone は scale=1 に固定 (PC 用デザインを縮小すると過剰スクロールが発生するため)
-      if (mobile) { setContentScale(1); return; }
+      if (mobile) { setContentScale(prev => prev === 1 ? prev : 1); return; }
       const avail = contentRef.current.parentElement?.clientWidth || window.innerWidth;
-      setContentScale(Math.min(1, avail / DESIGN_WIDTH));
+      const next = Math.min(1, avail / DESIGN_WIDTH);
+      setContentScale(prev => Math.abs(prev - next) < 0.001 ? prev : next);
     };
     calc();
     window.addEventListener('resize', calc);
@@ -13659,14 +13660,9 @@ export default function App() {
             )}
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
-            {/* ★ transform:scale 適用時のみ onWheel で手動 scroll を補完
-                 (scale=1 のときは native 通り → 二重スクロール防止) */}
-            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}
-              onWheel={contentScale < 1 ? (e) => {
-                const el = contentRef.current; if (!el) return;
-                if (Math.abs(e.deltaY) > 0) el.scrollTop += e.deltaY;
-                if (Math.abs(e.deltaX) > 0) el.scrollLeft += e.deltaX;
-              } : undefined}>
+            {/* ★ onWheel: scale 比に依存しない固定ハンドラ → contentScale 変化で再レンダーされない
+                 (前回は contentScale<1 で switch していたが、 これが頻繁な再レンダー原因の懸念) */}
+            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
 
             {/* ★ レイアウト方針:
                 - iPhone (< 768px): minWidth=1100 維持 + scale なし → PC デザイン崩さず、横スクロールで全部見える
