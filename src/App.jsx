@@ -14366,7 +14366,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           }
         }
       });
-      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts });
+      // ★ manual:true → トースト表示で「保存されました」フィードバック (押下感覚を明示)
+      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts }, { manual: true, message: '✓ 保存しました' });
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
       if (dirtyRef) dirtyRef.current = false;
@@ -19747,8 +19748,9 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         {/* 利用者ごと項目の編集ダイアログ */}
         {patientValueModal && (() => {
           const pat = (appData.patients||[]).find(p => p.id === patientValueModal.patientId);
-          return (
-          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={()=>setPatientValueModal(null)}>
+          // ★ Portal で document.body 直下にレンダリング → 親 div の scale transform に影響されず画面中央に固定表示
+          return ReactDOM.createPortal(
+          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-start justify-center p-4 pt-20" onClick={()=>setPatientValueModal(null)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e=>e.stopPropagation()}>
               <div className="font-bold text-slate-800 text-base mb-1">利用者ごとの値を設定</div>
               <div className="text-xs text-slate-500 mb-4">
@@ -19769,8 +19771,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 <button onClick={savePatientValue} className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold text-sm shadow">保存</button>
               </div>
             </div>
-          </div>
-          );
+          </div>,
+          document.body);
         })()}
 
         {/* 印刷用の隠しカード群 — 利用者ID単位で id を付与し、選択された利用者の DOM を doPrint で取得する */}
@@ -20060,8 +20062,9 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
   const deleteItem = (id) => setLocalConfig(prev => ({ ...prev, items: prev.items.filter(item => item.id !== id) }));
   const addItem = () => setLocalConfig(prev => ({ ...prev, items: [...prev.items, { id: `cb${Date.now()}`, label: "新しい項目", type: "fixed", value: "〇", linkedField: "" }] }));
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-2">
+  // ★ Portal で document.body にレンダリング → 親の scale transform に影響されず画面中央/上部に固定
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-2 pt-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden" style={{maxHeight:'95vh', height:'95vh'}}>
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-shrink-0">
           <h2 className="text-lg font-bold text-slate-800 flex items-center"><Settings size={20} className="mr-2 text-blue-600"/> 連絡帳フォーマット設定</h2>
@@ -20116,8 +20119,8 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
           <button onClick={() => onSave(localConfig)} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-lg transition-all active:scale-95">保存</button>
         </div>
       </div>
-    </div>
-  );
+    </div>,
+    document.body);
 }
 
 
@@ -20916,7 +20919,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
-    onSave({ ...appData, patients: appData.patients.map(p => p.id === pat.id ? pat : p) });
+    // ★ manual:true → トースト表示
+    onSave({ ...appData, patients: appData.patients.map(p => p.id === pat.id ? pat : p) }, { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
 
   const handleStatusChange = (val) => {
@@ -23277,7 +23281,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
               {/* ★ 縦並びレイアウトに変更 (項目ごとに行を分けて見やすく) */}
               <div className="space-y-4">
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label><input type="text" value={facilityInfo.name} onChange={e => setFacilityInfo({...facilityInfo, name: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名</label><input type="text" value={facilityInfo.manager || ""} onChange={e => setFacilityInfo({...facilityInfo, manager: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                {/* ★ 管理者名: 姓・名 を分割入力 (内部的に manager フィールドにも結合形式で保存して既存表示と互換) */}
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={facilityInfo.managerLast || ""}
+                      onChange={e => { const last = e.target.value; const first = facilityInfo.managerFirst || ""; setFacilityInfo({...facilityInfo, managerLast: last, manager: `${last} ${first}`.trim()}); }}
+                      placeholder="姓 (例: 佐藤)"
+                      className="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                    <input type="text" value={facilityInfo.managerFirst || ""}
+                      onChange={e => { const first = e.target.value; const last = facilityInfo.managerLast || ""; setFacilityInfo({...facilityInfo, managerFirst: first, manager: `${last} ${first}`.trim()}); }}
+                      placeholder="名 (例: 健一)"
+                      className="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">郵便番号</label>
                   <div className="flex gap-2 items-center">
@@ -23311,7 +23328,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                     <div><label className="block text-sm font-bold text-slate-600 mb-1.5">定員（1〜18名）</label><div className="flex items-center gap-2"><input type="number" min={0} max={18} value={facilityInfo.capacity||''} placeholder="0" onChange={e=>{const v=Math.min(18,Math.max(0,parseInt(e.target.value)||0));setFacilityInfo({...facilityInfo,capacity:v});}} className="w-24 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none focus:border-blue-400 text-center"/><span className="text-sm font-bold text-slate-500">名</span></div></div>
                   </div>
                 </div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">サービス提供責任者</label><input type="text" value={facilityInfo.serviceResponsible || ""} onChange={e => setFacilityInfo({...facilityInfo, serviceResponsible: e.target.value})} placeholder="例: 佐藤 健一" className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                {/* ★ サービス提供責任者: 姓・名 分割入力 */}
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">サービス提供責任者</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={facilityInfo.serviceResponsibleLast || ""}
+                      onChange={e => { const last = e.target.value; const first = facilityInfo.serviceResponsibleFirst || ""; setFacilityInfo({...facilityInfo, serviceResponsibleLast: last, serviceResponsible: `${last} ${first}`.trim()}); }}
+                      placeholder="姓 (例: 佐藤)"
+                      className="px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                    <input type="text" value={facilityInfo.serviceResponsibleFirst || ""}
+                      onChange={e => { const first = e.target.value; const last = facilityInfo.serviceResponsibleLast || ""; setFacilityInfo({...facilityInfo, serviceResponsibleFirst: first, serviceResponsible: `${last} ${first}`.trim()}); }}
+                      placeholder="名 (例: 健一)"
+                      className="px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                  </div>
+                </div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">年度設定</h4>
                   <div><label className="block text-xs font-bold text-slate-500 mb-2">年度開始月</label>
                     <div className="flex flex-wrap gap-2">
