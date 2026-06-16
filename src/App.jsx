@@ -14736,8 +14736,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                       </select>
                     )}
                   </td>
-                  <td className={`px-0.5 py-0 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`} style={{minHeight:64,overflow:'visible',padding:'1px'}}>
-                    <div style={{display:'flex',flexDirection:'row',minHeight:62,gap:1}}>
+                  <td className={`px-0.5 py-0 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`} style={{height:32,maxHeight:32,overflow:'hidden',padding:'1px'}}>
+                    <div style={{display:'flex',flexDirection:'row',height:'100%',gap:1}}>
                     {(['arrival','departure']).map((timing, ti) => {
                       const moodKey = timing === 'arrival' ? 'kibunArrival' : 'kibunDeparture';
                       const moodVal = p[moodKey] || '';
@@ -14745,22 +14745,24 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                       const reasonVal = timing === 'arrival' ? (p.kibunArrivalReason || '') : (p.kibunDepartureReason || '');
                       const tooltipText = moodObj ? `${moodObj.label}${reasonVal ? ' : '+reasonVal : ''}` : '';
                       return (
-                        <div key={timing} style={{flex:1,position:'relative'}}>
+                        <div key={timing} style={{flex:1,position:'relative',minWidth:0}}>
                           <button disabled={isAbsent || isReadOnly || isPause} onClick={() => openKibunModal(p.id, timing)}
                             onPointerEnter={(e)=>{if(tooltipText&&showTip)showTip(tooltipText,e);}}
                             onPointerLeave={()=>{if(hideTip)hideTip();}}
                             className={`rounded transition-all disabled:opacity-40 ${moodObj ? moodObj.color + ' font-bold' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-                            style={{width:'100%',height:'100%',minHeight:62,padding:'2px 1px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',gap:1,lineHeight:1}}>
-                            <span style={{fontSize:9,color:'#111827',fontWeight:'bold',lineHeight:1}}>{timing==='arrival'?'通所':'帰宅'}</span>
-                            <span style={{fontSize:18,lineHeight:1,marginTop:1}}>{moodObj ? moodObj.emoji : '+'}</span>
-                            {/* ★ 理由テキストを 2 行で表示 (...で切らず全部見せる、 はみ出すなら省略) */}
+                            style={{width:'100%',height:'100%',padding:'0px 1px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:reasonVal?'flex-start':'center',gap:0,lineHeight:1,overflow:'hidden'}}>
+                            {/* ★ 上段: 通/帰 + 絵文字 を横並びでコンパクトに */}
+                            <div style={{display:'flex',alignItems:'center',gap:2,lineHeight:1,flexShrink:0}}>
+                              <span style={{fontSize:9,color:'#111827',fontWeight:'bold',lineHeight:1}}>{timing==='arrival'?'通':'帰'}</span>
+                              <span style={{fontSize:14,lineHeight:1}}>{moodObj ? moodObj.emoji : '+'}</span>
+                            </div>
+                            {/* ★ 下段: 理由テキストを 2 行ぶん表示 */}
                             {reasonVal && (
                               <span style={{
                                 fontSize:8,
                                 color:'#111827',
                                 fontWeight:'bold',
-                                lineHeight:1.2,
-                                marginTop:1,
+                                lineHeight:1.1,
                                 display:'-webkit-box',
                                 WebkitLineClamp:2,
                                 WebkitBoxOrient:'vertical',
@@ -14768,7 +14770,9 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                                 whiteSpace:'normal',
                                 wordBreak:'break-all',
                                 textAlign:'center',
+                                width:'100%',
                                 padding:'0 1px',
+                                marginTop:1,
                               }}>{reasonVal}</span>
                             )}
                           </button>
@@ -20025,43 +20029,53 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const patientValues = patient?.contactBookValues || {};
   const renderItemValue = (item) => {
     if (item.type === 'linked') {
-      // 1. linkedField の id で値を引く
+      // 1. linkedField の id で値を引く (直接 id 一致)
       let rawVal = ex[item.linkedField];
-      // 2-4. ★ 段階的 fallback (同名の項目を複数 id にまたがって探索)
-      //    各種設定で運動メニューを編集・再追加して id がズレた場合や、
-      //    「①バイク」を複数登録している場合に値を確実に拾う
+      // 2-5. ★ 段階的 fallback: id が変わっても「同じ名前」の値を拾う
+      //   各種設定で項目を 削除→再作成 すると id が変わる (例: u1 → ex_1734567890)
+      //   過去記録は古い id で保存されているため、 名前マッチで横断する
       if (!rawVal && rawVal !== 0) {
-        // linkedField を name に変換 (id でなければ linkedField 自体を name として扱う)
+        // ★ 名前候補を 複数 用意 (どれかでマッチすれば OK)
+        //    a) exerciseItemMap[linkedField]?.name (linkedField が現存する id のとき)
+        //    b) item.label (連絡帳側の項目ラベル - ユーザーが手で付けた名前)
+        //    c) item.linkedField 自体 (linkedField が文字列で名前らしいケース)
         const linkedItem = exerciseItemMap[item.linkedField];
-        const linkedName = linkedItem?.name || item.linkedField;
-        const linkedNameKey = _normalizeName(linkedName);
-        // 2. appData の同名項目の全 id を試す
-        const candidates = linkedNameKey ? (exerciseIdsByName[linkedNameKey] || []) : [];
-        for (const cid of candidates) {
-          const v = ex[cid];
-          if (v !== '' && v != null) { rawVal = v; break; }
+        const nameCandidates = [
+          linkedItem?.name,
+          item.label,
+          item.linkedField,
+        ].filter(Boolean).map(_normalizeName);
+        // 2. appData の同名項目の全 id (現在の exerciseItems) を試す
+        for (const nk of nameCandidates) {
+          const cands = exerciseIdsByName[nk] || [];
+          for (const cid of cands) {
+            const v = ex[cid];
+            if (v !== '' && v != null) { rawVal = v; break; }
+          }
+          if (rawVal !== null && rawVal !== undefined && rawVal !== '') break;
         }
-        // 3. それでも空なら、 提供記録 ex の全キーをスキャンして同名項目から値を探す
-        //    (各種設定で項目を削除・追加したため exerciseIdsByName に載っていない id でも拾える)
+        // 3. ex の全キーをスキャンして名前マッチ (古い id で保存された値も拾う)
         if (!rawVal) {
           for (const key of Object.keys(ex)) {
             const v = ex[key];
             if (!v && v !== 0) continue;
             const exItem = exerciseItemMap[key];
-            if (exItem && _normalizeName(exItem.name) === linkedNameKey) {
-              rawVal = v;
-              break;
-            }
+            if (!exItem) continue;
+            const exName = _normalizeName(exItem.name);
+            if (nameCandidates.includes(exName)) { rawVal = v; break; }
           }
         }
-        // 4. appSettings の同名から fallback (最終手段)
+        // 4. appSettings の同名から fallback (デフォルト項目)
         if (!rawVal) {
-          const altName = appSettings.exerciseItems.find(it => _normalizeName(it.name) === linkedNameKey)?.name;
-          if (altName) {
-            const altCandidates = exerciseIdsByName[_normalizeName(altName)] || [];
-            for (const cid of altCandidates) {
-              const v = ex[cid];
-              if (v !== '' && v != null) { rawVal = v; break; }
+          for (const nk of nameCandidates) {
+            const altName = appSettings.exerciseItems.find(it => _normalizeName(it.name) === nk)?.name;
+            if (altName) {
+              const altCandidates = exerciseIdsByName[_normalizeName(altName)] || [];
+              for (const cid of altCandidates) {
+                const v = ex[cid];
+                if (v !== '' && v != null) { rawVal = v; break; }
+              }
+              if (rawVal) break;
             }
           }
         }
@@ -20069,9 +20083,15 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
       const raw = dispEx(rawVal);
       if (!raw) return '';
       // ★ defaultUnit を後ろに付与 (内部値が数値だけでも「3分」と表示)
-      const linkedItem = exerciseItemMap[item.linkedField];
+      //   linkedField の id で取れなければ、 名前マッチで現在の項目から単位を引く
+      let linkedItem = exerciseItemMap[item.linkedField];
+      if (!linkedItem && item.label) {
+        const labelKey = _normalizeName(item.label);
+        linkedItem = _exItems.find(it => _normalizeName(it.name) === labelKey);
+      }
       const unit = linkedItem?.defaultUnit
         || appSettings.exerciseItems.find(it => it.name === linkedItem?.name)?.defaultUnit
+        || appSettings.exerciseItems.find(it => _normalizeName(it.name) === _normalizeName(item.label||''))?.defaultUnit
         || '';
       const rawStr = String(raw);
       return (unit && !rawStr.endsWith(unit)) ? `${rawStr}${unit}` : rawStr;
