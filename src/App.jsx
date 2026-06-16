@@ -10135,8 +10135,16 @@ function FamilyView() {
   const [authPid, setAuthPid] = useState(()=> sessionStorage.getItem('familyAuthPid') || null);
   const [authAccId, setAuthAccId] = useState(()=> sessionStorage.getItem('familyAuthAccId') || null);
   // ★ 家族側の店舗 ID (ログイン後に判明) → 店舗ごとの app_state を pull するため
+  //   最優先は sessionStorage の familyAuthStoreId (ログイン時に必ず保存される)
+  //   data.familyAccounts は遅れて反映されるので、 これだけだと「データ取得中」ループになる
   const familyStoreId = (() => {
     if (!authAccId) return null;
+    // 1. sessionStorage から (ログイン直後の確実なソース)
+    try {
+      const sessId = sessionStorage.getItem('familyAuthStoreId');
+      if (sessId) return sessId;
+    } catch {}
+    // 2. data.familyAccounts から (キャッシュ反映後)
     const acc = (data.familyAccounts || []).find(a => String(a.id) === String(authAccId));
     return acc?.storeId || acc?.store_id || null;
   })();
@@ -10249,6 +10257,9 @@ function FamilyView() {
       }));
       sessionStorage.setItem('familyAuthPid', String(la.patientId || la.patient_id));
       sessionStorage.setItem('familyAuthAccId', String(la.id));
+      // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
+      const _sid = la.storeId || la.store_id;
+      if (_sid) sessionStorage.setItem('familyAuthStoreId', String(_sid));
       sessionStorage.removeItem('familyLinkedAccounts');
       setAuthPid(String(la.patientId || la.patient_id));
       setAuthAccId(String(la.id));
@@ -10329,6 +10340,9 @@ function FamilyView() {
           } else {
             sessionStorage.setItem('familyAuthPid', String(sbAcc.patient_id));
             sessionStorage.setItem('familyAuthAccId', String(sbAcc.id));
+            // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
+            //   (data.familyAccounts に未反映でも、 subscribe を開始できるようにするため)
+            if (sbAcc.store_id) sessionStorage.setItem('familyAuthStoreId', String(sbAcc.store_id));
             setAuthPid(String(sbAcc.patient_id));
             setAuthAccId(String(sbAcc.id));
           }
@@ -10919,6 +10933,7 @@ function FamilyView() {
   const handleLogout = () => {
     sessionStorage.removeItem('familyAuthPid');
     sessionStorage.removeItem('familyAuthAccId');
+    sessionStorage.removeItem('familyAuthStoreId'); // ★ store_id も削除
     setAuthPid(null);
     setAuthAccId(null);
     setLoginForm({ username:'', password:'', error:'', showPw:false });
