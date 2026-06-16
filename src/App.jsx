@@ -15255,8 +15255,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [customFrom, setCustomFrom] = useState(() => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [customTo, setCustomTo]   = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   // セクション選択（プレビュー用） [id, label, size]
+  // ★ ご家族向け (familyMode) は項目を大幅に簡略化:
+  //   - 月別通所状況 / 日々の記録 / 運動トレンド / 基本情報 を非表示
+  //   - 残すもの: 今回の記録 / 基本指標 / 気分 / バイタルトレンド / 体力測定 / モニタリング
+  //   - ケアマネ閲覧時 (=familyMode=false) は事業所側と同じフルセット
   const ALL_SECTIONS = familyMode
-    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-tokki','日々の記録','中'],['sec-monitoring','モニタリング','中']]
+    ? [['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
@@ -15492,15 +15496,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
       <div style={{background: familyMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: familyMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
-        <div style={{display:'flex',alignItems:'center',gap:12}}>
-          <div style={{width:36,height:36,background:'rgba(255,255,255,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <BarChart3 size={20}/>
+        {/* familyMode 時は親 (FamilyPatientView) のヘッダに利用者名が出るので重複表示を防ぐ */}
+        {!familyMode && (
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <div style={{width:36,height:36,background:'rgba(255,255,255,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <BarChart3 size={20}/>
+            </div>
+            <div>
+              <div style={{fontSize:11,opacity:0.7,fontWeight:'bold'}}>分析・個人</div>
+              <div style={{fontSize:18,fontWeight:'bold'}}>{selectedPatient.name} 様</div>
+            </div>
           </div>
-          <div>
-            <div style={{fontSize:11,opacity:0.7,fontWeight:'bold'}}>分析・個人</div>
-            <div style={{fontSize:18,fontWeight:'bold'}}>{selectedPatient.name} 様</div>
-          </div>
-        </div>
+        )}
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           {/* 一覧に戻るボタン (familyMode 以外) */}
           {!familyMode && !hidePatientSelector && (
@@ -15970,7 +15977,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
       )}
 
-      {/* ページ内ナビゲーション (ALL_SECTIONS と連動。familyMode では非表示セクションを自動除外) */}
+      {/* ページ内ナビゲーション (ALL_SECTIONS と連動。 ご家族画面では項目が少ないので非表示) */}
+      {!familyMode && (
       <div style={{background:'white',borderBottom:'1px solid #e2e8f0',padding:'8px 24px',display:'flex',gap:4,overflowX:'auto',flexWrap:'nowrap'}}>
         {ALL_SECTIONS.map(([id,label])=>(
           <button key={id} onClick={()=>{const el=document.getElementById(id);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});}}
@@ -15981,12 +15989,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </button>
         ))}
       </div>
+      )}
       </div>{/* end sticky wrapper */}
       <div id="print-content-analysis" style={{padding:'20px 24px',maxWidth:1280,margin:'0 auto'}}>
 
         {/* === 基本指標 === */}
-        {/* === 基本情報 === */}
-        <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
+        {/* === 基本情報 === (familyMode で非表示。 利用者情報モーダルに集約) */}
+        {!familyMode && <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>基本情報</div>
           {selectedPatient && (()=>{
             const age = calcAge(selectedPatient.birthDate);
@@ -16050,7 +16059,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               </div>
             );
           })()}
-        </div>
+        </div>}
 
         {/* 今回の記録 (最新の通所記録のサマリー) - 家族・事業所共通 */}
         {(() => {
@@ -16380,7 +16389,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </div>
         </div>
 
-        <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16}}>
+        {!familyMode && <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16}}>
 
 
 
@@ -16476,7 +16485,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     );
                   })()}
                 </div>
-        </div>
+        </div>}
         <div id="sec-kibun" data-sec="sec-kibun" style={{scrollMarginTop:120}}>
           <div style={{background:'white',borderRadius:12,border:'1px solid #fde68a',padding:'16px',marginTop:12}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#92400e',marginBottom:10}}>気分トレンド（通所時/帰宅時）</div>
@@ -16972,7 +16981,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
 
         })()}
-        <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16}}>
+        {!familyMode && <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16}}>
 <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>運動トレンド</div>
           {(() => {
             const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
@@ -17182,7 +17191,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               </div>
             );
           })()}
-        </div>
+        </div>}
 
         <div id="sec-fitness" style={{scrollMarginTop:120,marginBottom:16}}>
 <div onClick={()=>toggleSec('sec-fitness')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>体力測定</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-fitness')?'▶':'▼'}</span></div>
@@ -17335,44 +17344,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           )}
         </div>}
 
-        {familyMode && (()=>{
-          // 家族向け: 特記コメントだけを独立セクションとして表示 (familyTokkiOverrides で制御)
-          // モニタリングの前に配置 (ジャンプナビ順と一致)
-          const overrides = ((appData.familyTokkiOverrides||{})[selectedPatientId]) || {};
-          const tokkiList = allRecords
-            .filter(r => r.tokki && r.tokki.trim() && r.status !== '欠席' && r.status !== '休業')
-            .filter(r => (overrides[r.id]||{}).visible !== false)
-            .map(r => {
-              const ov = overrides[r.id] || {};
-              return { ...r, displayText: ov.text || r.tokki };
-            });
-          return (
-            <>
-              <div id="sec-tokki" style={{scrollMarginTop:120,marginBottom:0}}>
-                <div onClick={()=>toggleSec('sec-tokki')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}>
-                  <span>📝 日々の記録（事業所スタッフからのコメント）</span>
-                  <span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-tokki')?'▶':'▼'}</span>
-                </div>
-              </div>
-              {!isCol('sec-tokki') && (
-                <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #fde68a',overflow:'hidden',marginBottom:16}}>
-                  {tokkiList.length === 0 ? (
-                    <div style={{padding:'24px',textAlign:'center',color:'#94a3b8',fontSize:13}}>特記事項はありません</div>
-                  ) : (
-                    <div style={{maxHeight:400,overflowY:'auto'}}>
-                      {tokkiList.slice(0,50).map((r,i)=>(
-                        <div key={r.id} style={{display:'flex',gap:12,padding:'10px 16px',borderBottom:i<Math.min(tokkiList.length,50)-1?'1px solid #fef3c7':'none',backgroundColor:i%2===0?'#fffbeb':'white'}}>
-                          <div style={{fontWeight:'bold',color:'#92400e',whiteSpace:'nowrap',minWidth:60,fontSize:13}}>{r.date}</div>
-                          <div style={{fontSize:13,color:'#1e293b',lineHeight:1.7,whiteSpace:'pre-wrap',flex:1}}>{r.displayText}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          );
-        })()}
+        {/* 家族向けの「日々の記録」セクションは削除 (特記は「今回の記録」に最新分が表示される) */}
         <div id="sec-monitoring" data-sec="sec-monitoring" style={{scrollMarginTop:120}}/>{/* === モニタリング === */}
         <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #d1fae5',overflow:'hidden',marginBottom:16}}>
           <div style={{padding:'12px 20px',borderBottom:'1px solid #d1fae5',background:'#f0fdf4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
