@@ -24506,21 +24506,20 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const StaffBox = ({label, list, flexWeight}) => (
     <div style={{border:'1px solid #888',borderRadius:3,padding:0,flex:flexWeight||'1 1 0',minWidth:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
       <div style={{backgroundColor:'#dde',fontSize:7.5,color:'#000',fontWeight:'bold',padding:'1px 4px',textAlign:'left',borderBottom:'1px solid #aab',whiteSpace:'nowrap'}}>{label}</div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:'2px 6px',justifyContent:'flex-start',alignItems:'flex-start',padding:'2px 4px',minWidth:0,minHeight:30,maxHeight:30,overflow:'hidden'}}>
-        {list.filter(s=>s.name).map((s,si,arr)=>(<>
-          <span key={s.id} style={{display:'inline-flex',flexDirection:'column',alignItems:'center',gap:0}}>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'2px 10px',justifyContent:'flex-start',alignItems:'flex-start',padding:'2px 4px',minWidth:0,minHeight:30,maxHeight:30,overflow:'hidden'}}>
+        {list.filter(s=>s.name).map((s)=>(
+          <span key={s.id} style={{display:'inline-flex',flexDirection:'column',alignItems:'flex-start',gap:0}}>
             <span style={{display:'inline-flex',alignItems:'center',gap:2}}>
               <CB checked={!!(log.staff||{})[s.id]} onChange={()=>{ toggle('staff',s.id); if(!(log.staff||{})[s.id]) setTempModal({staffId:s.id,staffName:s.name,value:(log.staffTemp||{})[s.id]||''}); }} sz={11}/>
               <span style={{fontSize:11}}>{s.name}</span>
             </span>
             {(log.staffTemp||{})[s.id] && (
-              <span style={{fontSize:8,fontWeight:'bold',lineHeight:1.2,textAlign:'center',color:'#1d4ed8',display:'block'}}>
+              <span style={{fontSize:8,fontWeight:'bold',lineHeight:1.2,textAlign:'left',color:'#1d4ed8',display:'block',paddingLeft:13}}>
                 {(log.staffTemp||{})[s.id]}℃
               </span>
             )}
           </span>
-          {si < arr.length-1 && <span style={{fontSize:9}}>　</span>}
-        </>))}
+        ))}
       </div>
     </div>
   );
@@ -24529,15 +24528,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     // 送迎者リストも担当時間帯(ampm)で絞り込み
     const list = ds.staff.filter(s=>s.name && _staffOk(s));
     return (
-      <div style={{display:'flex',flexWrap:'wrap',gap:'0px 0',alignItems:'flex-start',lineHeight:'13px'}}>
-        {list.map((s,si,arr)=>(
-          <React.Fragment key={s.id}>
-            <span style={{display:'inline-flex',alignItems:'center',gap:1}}>
-              <CB checked={!!(log.driver||{})[prefix+s.id]} onChange={()=>toggle('driver',prefix+s.id)} sz={10}/>
-              <span style={{fontSize:11}}>{s.name}</span>
-            </span>
-            {si < arr.length-1 && <span style={{fontSize:11}}>　</span>}
-          </React.Fragment>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'2px 12px',alignItems:'flex-start',justifyContent:'flex-start',lineHeight:'13px'}}>
+        {list.map((s)=>(
+          <span key={s.id} style={{display:'inline-flex',alignItems:'center',gap:1}}>
+            <CB checked={!!(log.driver||{})[prefix+s.id]} onChange={()=>toggle('driver',prefix+s.id)} sz={10}/>
+            <span style={{fontSize:11}}>{s.name}</span>
+          </span>
         ))}
       </div>
     );
