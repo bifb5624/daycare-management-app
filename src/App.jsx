@@ -893,6 +893,11 @@ const GlobalStyle = () => React.createElement('style', null, GLOBAL_STYLE);
 // === 年齢計算ヘルパー ===
 const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(birthDate); const n=new Date(); let age=n.getFullYear()-b.getFullYear(); if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate())) age--; return age; };
 
+// === 名前の正規化ヘルパー (NFKC で半角/全角カナを統一) ===
+//    例: 「①ﾊﾞｲｸ」 = 「①バイク」 として比較できるよう
+//    運動メニューや項目名の同一性判定に使用
+const normalizeName = (s) => (s || '').normalize('NFKC');
+
 // 全角→半角変換（ID/PW 入力用）
 const toHalfWidth = (s) => (s||'')
   .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
@@ -14099,7 +14104,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
     const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
     const _exItm = _exItems.find(i => i.id === keypad.field);
     if (_exItm) {
-      const _unit = _exItm.defaultUnit || appSettings.exerciseItems.find(it => it.name === _exItm.name)?.defaultUnit || '';
+      const _unit = _exItm.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(_exItm.name))?.defaultUnit || '';
       let toSave = formatted;
       if (toSave && _unit && !String(toSave).endsWith(_unit)) toSave = `${toSave}${_unit}`;
       updateExercise(keypad.recordId, keypad.field, toSave);
@@ -14623,7 +14628,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const isActive = activeCell === cellKey;
                     // ★ 単位自動付与: defaultUnit を後ろに表示 (appData → 無ければ appSettings から fallback)
                     //   内部値は数値のみのまま、 表示時のみ単位付加 (連動先で値が空にならない安全な実装)
-                    const _unit = item.defaultUnit || appSettings.exerciseItems.find(it => it.name === item.name)?.defaultUnit || '';
+                    const _unit = item.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(item.name))?.defaultUnit || '';
                     const _vstr = String(val ?? '');
                     const displayVal = (_vstr !== '' && _unit && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
                     return (
@@ -16811,7 +16816,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               return '';
             };
             const unitLabel = selEx.defaultUnit
-              || appSettings.exerciseItems.find(it => it.name === selEx.name)?.defaultUnit
+              || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(selEx.name))?.defaultUnit
               || _extractUnitFromValues(allVals)
               || (unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'');
 
@@ -17262,7 +17267,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
                         const rawV = r.exercises?.[ex.id];
                         // ★ 単位を後ろに自動補完 (内部値が数値だけでも「3分」と表示)
-                        const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => it.name === ex.name)?.defaultUnit || '';
+                        const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(ex.name))?.defaultUnit || '';
                         const vStr = String(rawV ?? '');
                         const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
                         return (
@@ -19668,7 +19673,9 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
   // ★ 提供記録連動 + 単位表示の準備
   //    exerciseItemMap: id → item を引ける map (appData) と name fallback 用 index
+  //    ★ name は normalize('NFKC') で半角/全角カナを統一して比較 (「①ﾊﾞｲｸ」=「①バイク」)
   const _exItems = appData?.systemSettings?.exerciseItems || appSettings.exerciseItems;
+  const _normalizeName = (s) => (s || '').normalize('NFKC');
   const exerciseItemMap = React.useMemo(() => {
     const m = {};
     _exItems.forEach(it => { m[it.id] = it; });
@@ -19676,7 +19683,11 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   }, [_exItems]);
   const exerciseIdsByName = React.useMemo(() => {
     const m = {};
-    _exItems.forEach(it => { if (!m[it.name]) m[it.name] = []; m[it.name].push(it.id); });
+    _exItems.forEach(it => {
+      const nkey = _normalizeName(it.name);
+      if (!m[nkey]) m[nkey] = [];
+      m[nkey].push(it.id);
+    });
     return m;
   }, [_exItems]);
 
@@ -19691,16 +19702,17 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
       if (!rawVal && rawVal !== 0) {
         const linkedItem = exerciseItemMap[item.linkedField];
         const linkedName = linkedItem?.name;
-        const candidates = linkedName ? (exerciseIdsByName[linkedName] || []) : [];
+        const linkedNameKey = _normalizeName(linkedName);
+        const candidates = linkedNameKey ? (exerciseIdsByName[linkedNameKey] || []) : [];
         for (const cid of candidates) {
           const v = ex[cid];
           if (v !== '' && v != null) { rawVal = v; break; }
         }
-        // 3. それでも空なら appSettings の同名から fallback
+        // 3. それでも空なら appSettings の同名から fallback (こちらも normalize で比較)
         if (!rawVal) {
-          const altName = appSettings.exerciseItems.find(it => it.name === linkedName)?.name;
+          const altName = appSettings.exerciseItems.find(it => _normalizeName(it.name) === linkedNameKey)?.name;
           if (altName) {
-            const altCandidates = exerciseIdsByName[altName] || [];
+            const altCandidates = exerciseIdsByName[_normalizeName(altName)] || [];
             for (const cid of altCandidates) {
               const v = ex[cid];
               if (v !== '' && v != null) { rawVal = v; break; }
