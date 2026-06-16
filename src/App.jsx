@@ -8778,31 +8778,35 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
     return { date: "未定", time: "　時　分" };
 };
 
+// ★ 厚労省バイタルサイン基準値に合わせた色判定 (正常値は黒)
+// 血圧: 正常 100~129/60~84 / I度 130~139/85~89 / II度 140~159/90~99 / III度 160+/100+ / 低血圧 <90
 const getBpColorClass = (upStr, dnStr) => {
   const up = Number(upStr); const dn = Number(dnStr);
-  if (!upStr && !dnStr) return "text-slate-800";
-  if (up >= 180 || dn >= 110) return "text-red-600 font-extrabold"; 
-  if (up >= 140 || dn >= 90) return "text-orange-600 font-bold";
-  if ((up > 0 && up < 100) || (dn > 0 && dn < 60)) return "text-blue-600 font-bold"; 
-  return "text-slate-800 font-bold"; 
+  if (!upStr && !dnStr) return "text-black";
+  if (up >= 160 || dn >= 100) return "text-red-700 font-extrabold";  // III度
+  if (up >= 140 || dn >= 90) return "text-red-600 font-bold";        // II度
+  if (up >= 130 || dn >= 85) return "text-amber-600 font-bold";      // I度
+  if (up > 0 && up < 90) return "text-blue-600 font-bold";           // 低血圧
+  return "text-black font-bold";                                       // 正常 (黒)
 };
 
-const getPulseColorClass = (pulseStr, isRecordView = false) => {
+// 脈拍: 正常 60~100 / 頻脈 101+ / 徐脈 ≤59
+const getPulseColorClass = (pulseStr, _isRecordView = false) => {
   const p = Number(pulseStr);
-  const defaultColor = isRecordView ? "text-emerald-700" : "text-slate-700";
-  if (!pulseStr) return defaultColor;
-  if (p >= 100) return "text-orange-600 font-bold"; 
-  if (p > 0 && p < 60) return "text-blue-600 font-bold"; 
-  return `${defaultColor} font-bold`; 
+  if (!pulseStr || isNaN(p)) return "text-black font-bold";
+  if (p >= 101) return "text-red-600 font-bold";   // 頻脈
+  if (p <= 59) return "text-blue-600 font-bold";   // 徐脈
+  return "text-black font-bold";                    // 正常 (黒)
 };
 
+// 体温: 正常 36.0~37.0 / 微熱 37.1~38.0 / 高熱 38.1+ / 低体温 ≤35.9
 const getTempColorClass = (tempStr) => {
   const t = Number(tempStr);
-  if (!tempStr || isNaN(t)) return "text-slate-800 font-bold";
-  if (t >= 37.5) return "text-red-600 font-extrabold";
-  if (t >= 37.0) return "text-orange-600 font-bold";
-  if (t > 0 && t < 36.0) return "text-blue-600 font-bold";
-  return "text-slate-800 font-bold";
+  if (!tempStr || isNaN(t)) return "text-black font-bold";
+  if (t >= 38.1) return "text-red-600 font-extrabold";   // 高熱
+  if (t >= 37.1) return "text-amber-600 font-bold";      // 微熱
+  if (t > 0 && t <= 35.9) return "text-blue-600 font-bold"; // 低体温
+  return "text-black font-bold";                          // 正常 (黒)
 };
 
 const isPatientResigned = (p) => {
@@ -11897,7 +11901,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [showAddStore, setShowAddStore] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
-  const [storeForm, setStoreForm] = useState({ id:'', name:'', short_name:'', org_name:'', zip:'', address:'', phone:'', fax:'', login_id:'', login_pw:'', login_email:'', login_phone:'', error:'', loading:false });
+  const [storeForm, setStoreForm] = useState({ id:'', name:'', short_name:'', org_name:'', zip:'', address:'', addressBuilding:'', phone:'', fax:'', login_id:'', login_pw:'', login_email:'', login_phone:'', error:'', loading:false });
   const [staffForm, setStaffForm] = useState({ store_id:'', username:'', password:'', role:'manager', last_name:'', first_name:'', email:'', error:'', loading:false });
 
   const [storeStaff, setStoreStaff] = useState({}); // {storeId: [staff...]}
@@ -12108,22 +12112,25 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>法人名</label>
                 <input value={storeForm.org_name} onChange={e=>setStoreForm(f=>({...f,org_name:e.target.value}))} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'180px 1fr',gap:8,marginBottom:12}}>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>郵便番号</label>
-                  <div style={{display:'flex',gap:4}}>
-                    <input type="tel" inputMode="numeric" value={formatJpZip(storeForm.zip)} onChange={e=>setStoreForm(f=>({...f,zip:e.target.value.replace(/[^0-9]/g,'').slice(0,7)}))} placeholder="1350011" style={{flex:1,padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                    <button type="button" onClick={async ()=>{
-                      const result = await lookupZipAddress(storeForm.zip);
-                      if (result?.full) setStoreForm(f=>({...f, address: result.full}));
-                      else alert('住所が見つかりませんでした。');
-                    }} style={{padding:'8px 10px',background:'#3b82f6',color:'white',border:'none',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>📍検索</button>
-                  </div>
+              {/* ★ 郵便番号 → 住所 → 建物名 を 3 段の独立した行に分割 (検索ボタンと被らないように) */}
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>郵便番号</label>
+                <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                  <input type="tel" inputMode="numeric" value={formatJpZip(storeForm.zip)} onChange={e=>setStoreForm(f=>({...f,zip:e.target.value.replace(/[^0-9]/g,'').slice(0,7)}))} placeholder="1350011" style={{width:160,padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                  <button type="button" onClick={async ()=>{
+                    const result = await lookupZipAddress(storeForm.zip);
+                    if (result?.full) setStoreForm(f=>({...f, address: result.full}));
+                    else alert('住所が見つかりませんでした。');
+                  }} style={{padding:'10px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>📍 住所を検索</button>
                 </div>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>住所</label>
-                  <input value={storeForm.address} onChange={e=>setStoreForm(f=>({...f,address:e.target.value}))} placeholder="東京都江東区扇橋..." style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                </div>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>住所</label>
+                <input value={storeForm.address} onChange={e=>setStoreForm(f=>({...f,address:e.target.value}))} placeholder="東京都江東区扇橋..." style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              </div>
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>建物名・部屋番号 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
+                <input value={storeForm.addressBuilding || ''} onChange={e=>setStoreForm(f=>({...f,addressBuilding:e.target.value}))} placeholder="例: メイゾン白子 101" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
                 <div>
@@ -14369,7 +14376,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           <div className="flex items-start gap-1.5 min-w-[180px]">
             <span className="font-bold text-slate-600 whitespace-nowrap shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">体温</span>
             <div className="space-y-0 leading-tight">
-              <div><span className="text-emerald-700 font-bold">正常 36.0〜37.0℃</span></div>
+              <div><span className="text-black font-bold">正常 36.0〜37.0℃</span></div>
               <div><span className="text-amber-600 font-bold">微熱 37.1〜38.0℃</span>　<span className="text-red-600 font-bold">高熱 38.1℃以上</span></div>
               <div><span className="text-blue-600 font-bold">低体温 35.9℃以下</span><span className="text-slate-400 ml-1">（注意）</span></div>
             </div>
@@ -14378,7 +14385,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           <div className="flex items-start gap-1.5 min-w-[280px]">
             <span className="font-bold text-slate-600 whitespace-nowrap shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">血圧</span>
             <div className="space-y-0 leading-tight">
-              <div><span className="text-emerald-700 font-bold">正常 収縮期 100〜129 / 拡張期 60〜84 mmHg</span></div>
+              <div><span className="text-black font-bold">正常 収縮期 100〜129 / 拡張期 60〜84 mmHg</span></div>
               <div><span className="text-amber-600 font-bold">高血圧Ⅰ度 130〜139/85〜89</span>　<span className="text-red-600 font-bold">Ⅱ度 140〜159/90〜99</span>　<span className="text-red-700 font-bold">Ⅲ度 160以上/100以上</span></div>
               <div><span className="text-blue-600 font-bold">低血圧 収縮期 90未満</span><span className="text-slate-400 ml-1">（起立性低血圧に注意）</span></div>
             </div>
@@ -14387,7 +14394,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           <div className="flex items-start gap-1.5 min-w-[180px]">
             <span className="font-bold text-slate-600 whitespace-nowrap shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">脈拍</span>
             <div className="space-y-0 leading-tight">
-              <div><span className="text-emerald-700 font-bold">正常 60〜100 回/分</span></div>
+              <div><span className="text-black font-bold">正常 60〜100 回/分</span></div>
               <div><span className="text-red-600 font-bold">頻脈 101回以上</span>　<span className="text-blue-600 font-bold">徐脈 59回以下</span></div>
               <div className="text-slate-400">高齢者の目安 60〜80回/分。不整脈に注意。</div>
             </div>
@@ -16545,10 +16552,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
             return (
               <div style={{display:'flex',alignItems:'stretch'}}>
-                {/* Y軸ラベル列（固定） */}
-                <div style={{flexShrink:0,width:32,position:'relative',height:H+14}}>
+                {/* Y軸ラベル列（固定） — ★ 体温は小数 1 桁で表示 (38.0 / 36.5 等) */}
+                <div style={{flexShrink:0,width: field==='temp'?38:32,position:'relative',height:H+14}}>
                   {yTicks.map(v=>(
-                    <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:13,color:'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{v}</div>
+                    <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:13,color:'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{field==='temp' ? Number(v).toFixed(1) : v}</div>
                   ))}
                 </div>
                 {/* グラフ本体（横スクロール） */}
@@ -23187,7 +23194,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
               {/* ★ 縦並びレイアウトに変更 (項目ごとに行を分けて見やすく) */}
               <div className="space-y-4">
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label><input type="text" value={facilityInfo.name} onChange={e => setFacilityInfo({...facilityInfo, name: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名</label><input type="text" value={facilityInfo.manager || ""} onChange={e => setFacilityInfo({...facilityInfo, manager: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                {/* ★ 管理者名: 姓・名 を分割入力 (内部の manager フィールドにも結合形式で保存して既存表示と互換) */}
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={facilityInfo.managerLast || ""}
+                      onChange={e => { const last = e.target.value; const first = facilityInfo.managerFirst || ""; setFacilityInfo({...facilityInfo, managerLast: last, manager: `${last} ${first}`.trim()}); }}
+                      placeholder="姓 (例: 佐藤)"
+                      className="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                    <input type="text" value={facilityInfo.managerFirst || ""}
+                      onChange={e => { const first = e.target.value; const last = facilityInfo.managerLast || ""; setFacilityInfo({...facilityInfo, managerFirst: first, manager: `${last} ${first}`.trim()}); }}
+                      placeholder="名 (例: 健一)"
+                      className="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                  </div>
+                </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">郵便番号</label>
                   <div className="flex gap-2 items-center">
@@ -23221,7 +23241,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                     <div><label className="block text-sm font-bold text-slate-600 mb-1.5">定員（1〜18名）</label><div className="flex items-center gap-2"><input type="number" min={0} max={18} value={facilityInfo.capacity||''} placeholder="0" onChange={e=>{const v=Math.min(18,Math.max(0,parseInt(e.target.value)||0));setFacilityInfo({...facilityInfo,capacity:v});}} className="w-24 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none focus:border-blue-400 text-center"/><span className="text-sm font-bold text-slate-500">名</span></div></div>
                   </div>
                 </div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">サービス提供責任者</label><input type="text" value={facilityInfo.serviceResponsible || ""} onChange={e => setFacilityInfo({...facilityInfo, serviceResponsible: e.target.value})} placeholder="例: 佐藤 健一" className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                {/* ★ サービス提供責任者: 姓・名 分割入力 */}
+                <div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">サービス提供責任者</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={facilityInfo.serviceResponsibleLast || ""}
+                      onChange={e => { const last = e.target.value; const first = facilityInfo.serviceResponsibleFirst || ""; setFacilityInfo({...facilityInfo, serviceResponsibleLast: last, serviceResponsible: `${last} ${first}`.trim()}); }}
+                      placeholder="姓 (例: 佐藤)"
+                      className="px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                    <input type="text" value={facilityInfo.serviceResponsibleFirst || ""}
+                      onChange={e => { const first = e.target.value; const last = facilityInfo.serviceResponsibleLast || ""; setFacilityInfo({...facilityInfo, serviceResponsibleFirst: first, serviceResponsible: `${last} ${first}`.trim()}); }}
+                      placeholder="名 (例: 健一)"
+                      className="px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                  </div>
+                </div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">年度設定</h4>
                   <div><label className="block text-xs font-bold text-slate-500 mb-2">年度開始月</label>
                     <div className="flex flex-wrap gap-2">
