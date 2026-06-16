@@ -10148,6 +10148,37 @@ function FamilyView() {
     const acc = (data.familyAccounts || []).find(a => String(a.id) === String(authAccId));
     return acc?.storeId || acc?.store_id || null;
   })();
+  // ★ familyStoreId が null のとき、 全店舗を探索して patient_id がいる店舗を sessionStorage に保存
+  //   (招待コードに store_id が無いケースの fallback。 「データ取得中」ループから脱出)
+  useEffect(() => {
+    if (!isSupabaseEnabled || familyStoreId || !authPid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stores = await supabaseListStores();
+        const pidNum = parseInt(authPid, 10);
+        for (const s of (stores || [])) {
+          if (cancelled) return;
+          try {
+            const st = await supabaseLoadStateForStore(s.id);
+            const found = (st?.patients || []).find(p => p.id === pidNum || p.id === authPid || String(p.id) === String(authPid));
+            if (found) {
+              try { sessionStorage.setItem('familyAuthStoreId', String(s.id)); } catch {}
+              // 強制的に再レンダー (familyStoreId を再計算)
+              setAuthAccId(prev => prev); // no-op だが React state を「触る」ことで再評価
+              window.location.reload();
+              return;
+            }
+          } catch { /* skip */ }
+        }
+        console.warn('[family] auto-store fallback: patient not found in any store');
+      } catch (e) {
+        console.warn('[family] auto-store fallback failed:', e?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [familyStoreId, authPid]);
+
   // ★ Supabase 同期 (家族画面): 起動時 + 15秒ごとに最新 state を pull (店舗 ID 指定)
   useEffect(() => {
     if (!isSupabaseEnabled || !familyStoreId) return;
@@ -11051,7 +11082,19 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
             ・1分以上お待ちいただいても出ない場合は事業所までお問い合わせください
           </div>
           <button onClick={()=>window.location.reload()} style={{padding:'10px 20px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer',marginRight:8}}>🔄 再読み込み</button>
-          <button onClick={()=>{sessionStorage.removeItem('familyAuthPid');sessionStorage.removeItem('familyAuthAccId');window.location.reload();}} style={{padding:'10px 16px',background:'transparent',color:'#64748b',border:'1px solid #cbd5e1',borderRadius:10,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>ログアウト</button>
+          <button onClick={()=>{
+            // ★ ログアウト時: session + URL の ?invite/?t を削除して必ずログイン画面に戻る
+            sessionStorage.removeItem('familyAuthPid');
+            sessionStorage.removeItem('familyAuthAccId');
+            sessionStorage.removeItem('familyAuthStoreId');
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('invite');
+              url.searchParams.delete('t');
+              window.history.replaceState({}, '', url.toString());
+            } catch {}
+            window.location.reload();
+          }} style={{padding:'10px 16px',background:'transparent',color:'#64748b',border:'1px solid #cbd5e1',borderRadius:10,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>ログアウト</button>
         </div>
       </div>
     );
