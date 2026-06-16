@@ -880,7 +880,10 @@ const GLOBAL_STYLE = `
   /* ボタン */
   button { font-family: inherit; }
   input, select, textarea { font-family: inherit; font-size: 15px; }
-  
+  /* ★ iOS Safari/iPad で select の表示が左寄せになる問題対応 → 中央揃え */
+  select { text-align: center; text-align-last: center; }
+  select option { text-align: center; }
+
   /* テーブル長押しドラッグ防止 */
   #record-table { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   #record-table * { -webkit-user-drag: none; -webkit-touch-callout: none; }
@@ -1146,10 +1149,8 @@ function createBlankAppData(storeRecord, staffSession) {
       ],
       individualExerciseItems: [],
       massageStaff: [],
-      // ★ サービス提供内容の項目管理: 介護整体だけ (温浴時電療は除外)
-      serviceItems: [
-        { id: 'massage', label: '介護整体', options: '通常、横向き、仰向け、うつ伏せ、座位、無し', showInPopup: true }
-      ],
+      // ★ サービス提供内容の項目管理: 初期は空 (介護整体含めユーザーが事業所単位で追加)
+      serviceItems: [],
       massageTypes: ['通常','横向き','仰向け','うつ伏せ','座位','無し'],
       onyokuTypes: [],
       // ★ 体力測定 初期項目: 身長・体重のみ (全利用者で測る基本項目)
@@ -21948,27 +21949,44 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             const existing = [...(appData.patients||[])];
             const existingIds = new Set(existing.map(p => p.id));
             let maxId = Math.max(0, ...existing.map(p => p.id));
-            let added = 0, updated = 0;
+            // ★ 重複検出キー: (氏名 + 被保険者番号) で既存とマッチング
+            //   → 同じ人を CSV で再投入したときに ID 重複なく既存レコードを更新
+            const dupKey = (name, insNo) => `${(name||'').trim()}|${(insNo||'').trim()}`;
+            const existingByDup = new Map();
+            existing.forEach(p => { const k = dupKey(p.name, p.insuranceNo); if (k !== '|') existingByDup.set(k, p.id); });
+            let added = 0, updated = 0, dupMerged = 0;
             for (let r = 1; r < rows.length; r++) {
               const row = rows[r]; if (!row.some(c => (c||'').trim())) continue;
               const rec = {};
               FIELDS.forEach((f, i) => { rec[f] = (row[colIdx[i]] || '').trim(); });
               const idNum = parseInt(rec.id);
+              // 1. ID 指定あり & 既存 → 更新
               if (!isNaN(idNum) && existingIds.has(idNum)) {
                 const idx = existing.findIndex(p => p.id === idNum);
                 existing[idx] = {...existing[idx], ...rec, id: idNum};
                 updated++;
-              } else {
-                maxId += 1;
-                const newPat = {kiou:'', ryui:'', scheduleAmPm:['','','','','','',''], pickupType:'fixed', pickupTimes:['','','','','','',''], autoDeleteAfter5Years:false, massageNeed:'通常', onyokuDenryo:'無し', pauseHistory:[], plannedExercises:{}, ...rec, id:maxId};
-                if (!newPat.status) newPat.status = '利用中';
-                existing.push(newPat);
-                added++;
+                continue;
               }
+              // 2. ID 指定なし but (氏名 + 被保険者番号) で既存と一致 → 既存に統合
+              const dupId = existingByDup.get(dupKey(rec.name, rec.insuranceNo));
+              if (dupId) {
+                const idx = existing.findIndex(p => p.id === dupId);
+                existing[idx] = {...existing[idx], ...rec, id: dupId};
+                dupMerged++;
+                continue;
+              }
+              // 3. 新規追加
+              maxId += 1;
+              const newPat = {kiou:'', ryui:'', scheduleAmPm:['','','','','','',''], pickupType:'fixed', pickupTimes:['','','','','','',''], autoDeleteAfter5Years:false, massageNeed:'通常', onyokuDenryo:'無し', pauseHistory:[], plannedExercises:{}, ...rec, id:maxId};
+              if (!newPat.status) newPat.status = '利用中';
+              existing.push(newPat);
+              const k = dupKey(newPat.name, newPat.insuranceNo);
+              if (k !== '|') existingByDup.set(k, maxId);
+              added++;
             }
             onSave({...appData, patients: existing});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
-            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件`);
+            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${dupMerged>0?` / 重複統合 ${dupMerged} 件 (氏名+被保険者番号が一致)`:''}`);
           } catch (e) {
             setCsvModal({...csvModal, error: e.message || String(e)});
           }
@@ -23021,10 +23039,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
   const [anthropicApiKey, setAnthropicApiKey] = useState(appData.systemSettings?.anthropicApiKey || '');
   const [massageStaffInput, setMassageStaffInput] = useState((appData.systemSettings?.massageStaff || appSettings.massageStaff).join('、'));
   const [onyokuInput, setOnyokuInput] = useState((appData.systemSettings?.onyokuTypes || []).join('、'));
-  const [serviceItems, setServiceItems] = useState(appData.systemSettings?.serviceItems || [
-    { id:'massage', label:'介護整体', options:(appData.systemSettings?.massageTypes||['通常','横向き','仰向け','うつ伏せ','座位','無し']).join('、'), showInPopup:true },
-    { id:'onyoku', label:'温浴時電療', options:(appData.systemSettings?.onyokuTypes||['腰','肩','無し']).join('、'), showInPopup:true },
-  ]);
+  // ★ 初期値は空 (介護整体含めユーザーが事業所単位で追加)
+  const [serviceItems, setServiceItems] = useState(appData.systemSettings?.serviceItems || []);
   const [newServiceItem, setNewServiceItem] = useState({label:'', options:''});
   const [editServiceItemIdx, setEditServiceItemIdx] = useState(null);
   const [newCred, setNewCred] = useState({storeName:'',id:'',pass:''});
@@ -23185,8 +23201,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                 </div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={facilityInfo.address || ""} onChange={e => setFacilityInfo({...facilityInfo, address: e.target.value})} placeholder="郵便番号から検索すると自動入力されます" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">建物名・部屋番号</label><input type="text" value={facilityInfo.addressBuilding || ""} onChange={e => setFacilityInfo({...facilityInfo, addressBuilding: e.target.value})} placeholder="例: メイゾン白子101" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" value={facilityInfo.phone || ""} onChange={e => setFacilityInfo({...facilityInfo, phone: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" value={facilityInfo.fax || ""} onChange={e => setFacilityInfo({...facilityInfo, fax: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                {/* ★ 電話/FAX: ハイフン自動付与 (数字のみ入力 → formatJpPhone で表示) */}
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.phone || "")} onChange={e => setFacilityInfo({...facilityInfo, phone: e.target.value.replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345678" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.fax || "")} onChange={e => setFacilityInfo({...facilityInfo, fax: e.target.value.replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345679" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">サービス提供時間</h4>
                   <div className="grid grid-cols-3 gap-4">
                     <div><label className="block text-sm font-bold text-slate-600 mb-1.5">1単位目</label>
