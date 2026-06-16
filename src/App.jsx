@@ -19697,18 +19697,34 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
     if (item.type === 'linked') {
       // 1. linkedField の id で値を引く
       let rawVal = ex[item.linkedField];
-      // 2. ★ fallback: 値が空なら、 同じ name の別 id から値を探す
-      //    (各種設定で運動メニューを編集・再追加して id がズレた場合の救済 = ①バイク対策)
+      // 2-4. ★ 段階的 fallback (同名の項目を複数 id にまたがって探索)
+      //    各種設定で運動メニューを編集・再追加して id がズレた場合や、
+      //    「①バイク」を複数登録している場合に値を確実に拾う
       if (!rawVal && rawVal !== 0) {
+        // linkedField を name に変換 (id でなければ linkedField 自体を name として扱う)
         const linkedItem = exerciseItemMap[item.linkedField];
-        const linkedName = linkedItem?.name;
+        const linkedName = linkedItem?.name || item.linkedField;
         const linkedNameKey = _normalizeName(linkedName);
+        // 2. appData の同名項目の全 id を試す
         const candidates = linkedNameKey ? (exerciseIdsByName[linkedNameKey] || []) : [];
         for (const cid of candidates) {
           const v = ex[cid];
           if (v !== '' && v != null) { rawVal = v; break; }
         }
-        // 3. それでも空なら appSettings の同名から fallback (こちらも normalize で比較)
+        // 3. それでも空なら、 提供記録 ex の全キーをスキャンして同名項目から値を探す
+        //    (各種設定で項目を削除・追加したため exerciseIdsByName に載っていない id でも拾える)
+        if (!rawVal) {
+          for (const key of Object.keys(ex)) {
+            const v = ex[key];
+            if (!v && v !== 0) continue;
+            const exItem = exerciseItemMap[key];
+            if (exItem && _normalizeName(exItem.name) === linkedNameKey) {
+              rawVal = v;
+              break;
+            }
+          }
+        }
+        // 4. appSettings の同名から fallback (最終手段)
         if (!rawVal) {
           const altName = appSettings.exerciseItems.find(it => _normalizeName(it.name) === linkedNameKey)?.name;
           if (altName) {
@@ -23329,6 +23345,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                 <input type="text" value={newExItem.defaultUnit||''} onChange={e=>setNewExItem({...newExItem,defaultUnit:e.target.value})} placeholder="単位" list="unit-suggestions" className="w-24 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
                 <button type="button" onClick={()=>{
                   if(!newExItem.name.trim()) return;
+                  // ★ 同名重複チェック (normalize で半角/全角を統一して比較)
+                  const newNameKey = normalizeName(newExItem.name.trim());
+                  if (exerciseItems.some(it => normalizeName(it.name) === newNameKey)) {
+                    alert(`「${newExItem.name.trim()}」 という項目はすでに存在します。\n別の名前にするか、 既存項目の単位を編集してください。`);
+                    return;
+                  }
                   setExerciseItemsHistory(prev => {
                     const newH = [...prev];
                     if (!newH.some(h => h.effectiveTo && h.effectiveTo >= exerciseApplyFrom)) {
