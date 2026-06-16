@@ -24165,7 +24165,27 @@ function DiarySettingsPanel({ appData, dsRef, markDirty }) {
                 <option value="看護師">看護師</option>
                 <option value="介護職員">介護職員</option>
               </select>
-              <input defaultValue={s.name} onBlur={e=>onBlurStaff(i,'name',e.target.value)} placeholder="氏名" className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+              {/* ★ 姓・名を分割入力。 onBlur で結合した name フィールドも同時に更新 (既存表示と互換) */}
+              <input defaultValue={s.lastName ?? ((s.name||'').split(/[ 　]+/)[0]||'')}
+                onBlur={e=>{
+                  const last = e.target.value.trim();
+                  const cur = dsRef.current.staff[i] || {};
+                  const first = cur.firstName ?? ((cur.name||'').split(/[ 　]+/).slice(1).join(' ')||'');
+                  const combined = [last, first].filter(Boolean).join(' ');
+                  const a=[...dsRef.current.staff]; a[i]={...a[i], lastName: last, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
+                }}
+                placeholder="姓"
+                className="w-[110px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+              <input defaultValue={s.firstName ?? ((s.name||'').split(/[ 　]+/).slice(1).join(' ')||'')}
+                onBlur={e=>{
+                  const first = e.target.value.trim();
+                  const cur = dsRef.current.staff[i] || {};
+                  const last = cur.lastName ?? ((cur.name||'').split(/[ 　]+/)[0]||'');
+                  const combined = [last, first].filter(Boolean).join(' ');
+                  const a=[...dsRef.current.staff]; a[i]={...a[i], firstName: first, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
+                }}
+                placeholder="名"
+                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
               <button onClick={()=>mutate({...dsRef.current,staff:dsRef.current.staff.filter((_,j)=>j!==i)})} className="text-red-400 hover:text-red-600"><X size={16}/></button>
             </div>
           ))}
@@ -24366,11 +24386,18 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if (ampm === '1日') return true;
     return s.ampm === ampm;
   };
-  const managers  = ds.staff.filter(s=>s.role==='管理者' && _staffOk(s));
-  const seikatsu  = ds.staff.filter(s=>s.role==='生活相談員' && _staffOk(s));
-  const kinou     = ds.staff.filter(s=>s.role==='機能訓練指導員' && _staffOk(s));
-  const kaigo     = ds.staff.filter(s=>s.role==='介護職員' && _staffOk(s));
-  const kangoFu   = ds.staff.filter(s=>s.role==='看護師' && _staffOk(s));
+  // ★ 同じ役職 + 同じ氏名 の重複を排除
+  //   (各種設定の日誌タブで登録した職員と、 サイドバーのスタッフ切替で登録した職員が同じ氏名で重複するケースに対応)
+  //   役職が違うだけなら別人として残す (1 人で複数役職を兼ねるパターン)
+  const _dedupByName = (arr) => arr.filter((s, i, a) => {
+    const key = `${(s.role||'').trim()}|${(s.name||'').trim()}|${(s.lastName||'').trim()}|${(s.firstName||'').trim()}`;
+    return a.findIndex(o => `${(o.role||'').trim()}|${(o.name||'').trim()}|${(o.lastName||'').trim()}|${(o.firstName||'').trim()}` === key) === i;
+  });
+  const managers  = _dedupByName(ds.staff.filter(s=>s.role==='管理者' && _staffOk(s)));
+  const seikatsu  = _dedupByName(ds.staff.filter(s=>s.role==='生活相談員' && _staffOk(s)));
+  const kinou     = _dedupByName(ds.staff.filter(s=>s.role==='機能訓練指導員' && _staffOk(s)));
+  const kaigo     = _dedupByName(ds.staff.filter(s=>s.role==='介護職員' && _staffOk(s)));
+  const kangoFu   = _dedupByName(ds.staff.filter(s=>s.role==='看護師' && _staffOk(s)));
 
   // Time keypad helpers
   const openTimeKeypad = (carId, field, curVal) => { setTimeKeypad({carId,field}); setTimeInput(curVal||''); };
