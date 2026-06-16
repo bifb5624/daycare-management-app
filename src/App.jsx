@@ -10986,11 +10986,11 @@ function FamilyView() {
     setAuthPid(null);
     setAuthAccId(null);
   } : null;
-  return <FamilyPatientView data={data} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} />;
+  return <FamilyPatientView data={data} setData={setData} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} />;
 }
 
 // === 家族画面 - 利用者ごとのコンテンツ ===
-function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatient }) {
+function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient }) {
   const [tab, setTab] = useState('news');
   const pid = parseInt(patientId, 10);
   const patient = (data.patients||[]).find(p => p.id === pid || p.id === patientId);
@@ -15468,11 +15468,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </div>
           {period!=='custom'&&
             <input type="date" value={`${baseMonth}-01`} onChange={e=>setBaseMonth(e.target.value.substring(0,7))}
-              style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>}
+              style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>}
           {period==='custom'&&<>
-            <input type="date" value={`${customFrom}-01`} onChange={e=>setCustomFrom(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
-            <span style={{color:'white',fontWeight:'bold'}}>〜</span>
-            <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+            <input type="date" value={`${customFrom}-01`} onChange={e=>setCustomFrom(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+            <span style={{color:'#1e293b',fontWeight:'bold'}}>〜</span>
+            <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
           </>}
           <span style={{background:'white',color:familyMode?'#3d5021':'#1e40af',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:'bold',whiteSpace:'nowrap'}}>{rangeLabel}</span>
           {/* 3ヶ月超の場合、月平均/毎日表示の切替 */}
@@ -18370,7 +18370,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           {period!=='custom'&&(
             <div style={{display:'flex',alignItems:'center',gap:6}}>
               <input type="date" value={`${baseMonth}-01`} onChange={e=>{setBaseMonth(e.target.value.substring(0,7));setOpenDow(null);}}
-                style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+                style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
               <span style={{background:'white',color:'#ea580c',borderRadius:8,padding:'6px 12px',fontSize:13,fontWeight:'bold',whiteSpace:'nowrap'}}>
                 {(()=>{
                   if(period==='1') return `${tY}年${tM}月`;
@@ -18382,10 +18382,10 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           {period==='custom'&&(
             <div style={{display:'flex',alignItems:'center',gap:6}}>
               <input type="date" value={`${customFrom}-01`} onChange={e=>setCustomFrom(e.target.value.substring(0,7))}
-                style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
-              <span style={{color:'white',fontSize:12,fontWeight:'bold'}}>〜</span>
+                style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+              <span style={{color:'#1e293b',fontSize:12,fontWeight:'bold'}}>〜</span>
               <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))}
-                style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+                style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
               <span style={{background:'white',color:'#ea580c',borderRadius:8,padding:'6px 12px',fontSize:13,fontWeight:'bold',whiteSpace:'nowrap'}}>
                 {(()=>{const [fy,fm]=customFrom.split('-');const [ty,tm]=customTo.split('-');return `${fy}年${parseInt(fm)}月〜${ty}年${parseInt(tm)}月`;})()}
               </span>
@@ -24505,8 +24505,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
   const StaffBox = ({label, list, flexWeight}) => (
     <div style={{border:'1px solid #888',borderRadius:3,padding:0,flex:flexWeight||'1 1 0',minWidth:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
-      <div style={{backgroundColor:'#dde',fontSize:7.5,color:'#000',fontWeight:'bold',padding:'1px 4px',textAlign:'center',borderBottom:'1px solid #aab',whiteSpace:'nowrap'}}>{label}</div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:'2px 0',justifyContent:'flex-start',alignItems:'flex-start',padding:'2px 4px',minWidth:0,minHeight:30,maxHeight:30,overflow:'hidden'}}>
+      <div style={{backgroundColor:'#dde',fontSize:7.5,color:'#000',fontWeight:'bold',padding:'1px 4px',textAlign:'left',borderBottom:'1px solid #aab',whiteSpace:'nowrap'}}>{label}</div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'2px 6px',justifyContent:'flex-start',alignItems:'flex-start',padding:'2px 4px',minWidth:0,minHeight:30,maxHeight:30,overflow:'hidden'}}>
         {list.filter(s=>s.name).map((s,si,arr)=>(<>
           <span key={s.id} style={{display:'inline-flex',flexDirection:'column',alignItems:'center',gap:0}}>
             <span style={{display:'inline-flex',alignItems:'center',gap:2}}>
