@@ -14736,8 +14736,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                       </select>
                     )}
                   </td>
-                  <td className={`px-0.5 py-0 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`} style={{height:32,maxHeight:32,overflow:'visible',padding:'1px'}}>
-                    <div style={{display:'flex',flexDirection:'row',height:'100%',gap:1}}>
+                  <td className={`px-0.5 py-0 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`} style={{minHeight:64,overflow:'visible',padding:'1px'}}>
+                    <div style={{display:'flex',flexDirection:'row',minHeight:62,gap:1}}>
                     {(['arrival','departure']).map((timing, ti) => {
                       const moodKey = timing === 'arrival' ? 'kibunArrival' : 'kibunDeparture';
                       const moodVal = p[moodKey] || '';
@@ -14750,9 +14750,27 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                             onPointerEnter={(e)=>{if(tooltipText&&showTip)showTip(tooltipText,e);}}
                             onPointerLeave={()=>{if(hideTip)hideTip();}}
                             className={`rounded transition-all disabled:opacity-40 ${moodObj ? moodObj.color + ' font-bold' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-                            style={{width:'100%',height:'100%',padding:'0px 1px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,lineHeight:1}}>
+                            style={{width:'100%',height:'100%',minHeight:62,padding:'2px 1px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',gap:1,lineHeight:1}}>
                             <span style={{fontSize:9,color:'#111827',fontWeight:'bold',lineHeight:1}}>{timing==='arrival'?'通所':'帰宅'}</span>
-                            <span style={{fontSize:22,lineHeight:1}}>{moodObj ? moodObj.emoji : '+'}</span>
+                            <span style={{fontSize:18,lineHeight:1,marginTop:1}}>{moodObj ? moodObj.emoji : '+'}</span>
+                            {/* ★ 理由テキストを 2 行で表示 (...で切らず全部見せる、 はみ出すなら省略) */}
+                            {reasonVal && (
+                              <span style={{
+                                fontSize:8,
+                                color:'#111827',
+                                fontWeight:'bold',
+                                lineHeight:1.2,
+                                marginTop:1,
+                                display:'-webkit-box',
+                                WebkitLineClamp:2,
+                                WebkitBoxOrient:'vertical',
+                                overflow:'hidden',
+                                whiteSpace:'normal',
+                                wordBreak:'break-all',
+                                textAlign:'center',
+                                padding:'0 1px',
+                              }}>{reasonVal}</span>
+                            )}
                           </button>
                         </div>
                       );
@@ -16140,12 +16158,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const _patient = (appData.patients||[]).find(p => p.id === selectedPatientId);
           const isOnPause = _patient && _patient.status === '休止';
           const lastPause = isOnPause ? [...(_patient.pauseHistory||[])].pop() : null;
-          // 体力測定: 同じ日 (MM-DD) に測定があれば取得
+          // 体力測定: 測定したら表示 (本日に限らず最新の測定記録を表示)
           const fitnessOnDay = (() => {
-            if (!latestFullDate) return null;
-            const md = `${String(latestFullDate.getMonth()+1).padStart(2,'0')}-${String(latestFullDate.getDate()).padStart(2,'0')}`;
-            const fitnessAll = (appData.fitnessRecords||[]).filter(r => r.patientId === selectedPatientId);
-            return fitnessAll.find(r => (r.date||'').slice(5) === md);
+            const fitnessAll = (appData.fitnessRecords||[])
+              .filter(r => r.patientId === selectedPatientId)
+              .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+            return fitnessAll[0] || null;
           })();
           const fitnessItems = appData.systemSettings?.fitnessItems || appSettings.fitnessItems;
           const isAbsent = latest.status === '欠席';
@@ -16225,10 +16243,60 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         </div>
                       </div>
                     </div>
-                    {/* 体力測定 (同じ日に測定があれば) */}
+                    {/* ★ 今回の運動メニュー (latest.exercises) + 前回比 */}
+                    {(() => {
+                      const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+                      const exVals = latest.exercises || {};
+                      // 値が入っている項目だけ
+                      const doneEx = exItems.filter(it => {
+                        const v = exVals[it.id];
+                        return v && v !== 'ー' && v !== '×' && v !== '○' && String(v).trim() !== '';
+                      });
+                      if (doneEx.length === 0) return null;
+                      // 前回値: 最新を除いた直近の出席記録から同 id の値を引く
+                      const prevRec = withDates.slice(1).find(x => (x.r?.exercises||{}) && Object.keys(x.r?.exercises||{}).length > 0);
+                      const prevExVals = prevRec?.r?.exercises || {};
+                      const prevDate = prevRec?.r?.date || '';
+                      return (
+                        <div style={{marginTop:10,paddingTop:10,borderTop:`1px dashed ${headerBorder}`}}>
+                          <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>🏋️ 今回の運動メニュー</span>
+                          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'6px 14px',marginTop:6}}>
+                            {doneEx.map(it => {
+                              const v = exVals[it.id];
+                              const pv = prevExVals[it.id];
+                              const unit = it.defaultUnit || '';
+                              const vStr = String(v ?? '');
+                              const disp = (unit && !vStr.endsWith(unit) && !/[×x✕*]/.test(vStr)) ? `${vStr}${unit}` : vStr;
+                              // 前回比 (主数値で比較)
+                              const cur = parseExerciseDuo(v)?.primary;
+                              const prev = pv ? parseExerciseDuo(pv)?.primary : null;
+                              const diff = (cur != null && prev != null) ? (cur - prev) : null;
+                              return (
+                                <div key={it.id}>
+                                  <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>{it.name}</span>
+                                  <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,lineHeight:1.3,marginTop:2,display:'flex',alignItems:'baseline',gap:6,flexWrap:'wrap'}}>
+                                    <span>{disp}</span>
+                                    {diff != null && diff !== 0 && (
+                                      <span style={{fontSize:10,fontWeight:'bold',color:diff>0?'#16a34a':'#dc2626'}}>
+                                        {diff>0?'▲':'▼'}{Math.abs(diff)}{unit}
+                                      </span>
+                                    )}
+                                    {diff === 0 && (
+                                      <span style={{fontSize:10,color:'#94a3b8',fontWeight:'bold'}}>→ 前回比 同</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {prevDate && <div style={{fontSize:9,color:'#94a3b8',marginTop:4}}>※ 前回比較: {prevDate}</div>}
+                        </div>
+                      );
+                    })()}
+                    {/* 体力測定 (測定したら表示 — 最新測定記録) */}
                     {fitnessOnDay && (
                       <div style={{marginTop:10,paddingTop:10,borderTop:`1px dashed ${headerBorder}`}}>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>🏃 体力測定 (本日測定)</span>
+                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>🏃 体力測定 ({fitnessOnDay.date})</span>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))',gap:'6px 14px',marginTop:6,fontSize:13}}>
                           {fitnessItems.map(it => {
                             const v = fitnessOnDay.values?.[it.id];
