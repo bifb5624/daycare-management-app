@@ -10998,8 +10998,25 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   // ログイン中のアカウントが ケアマネ かどうか
   const loggedAcc = (data.familyAccounts||[]).find(a => String(a.id) === String(accountId));
   const isCmAccount = loggedAcc && (loggedAcc.kind === 'caremanager' || loggedAcc.relation === 'ケアマネージャー');
-  // 親アカウント招待用 (parent が他家族を招待する)
+  // ★ 親判定 (実行時計算): 同じ利用者 + 同じ kind の中で createdAt 最古の 1 人だけが「親」
+  //   (= 招待可能。 過去データで全員 role='parent' になっていても、 ここで正しく 1 人に絞る)
+  //   家族系 = kind='family' (デフォルト), 関係者系 = kind='caremanager' を独立に扱う
+  const myPeers = React.useMemo(() => {
+    if (!loggedAcc || !patient) return [];
+    const kind = loggedAcc.kind || 'family';
+    return (data.familyAccounts||[]).filter(a =>
+      a.patientId === patient.id && (a.kind || 'family') === kind
+    );
+  }, [data.familyAccounts, loggedAcc, patient]);
+  const isPrimaryAcc = React.useMemo(() => {
+    if (!loggedAcc || myPeers.length === 0) return false;
+    const sorted = [...myPeers].sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
+    return sorted[0]?.id === loggedAcc.id;
+  }, [myPeers, loggedAcc]);
+  // 親アカウント招待用 (親のみ他メンバーを招待できる)
   const [inviteFamilyOpen, setInviteFamilyOpen] = useState(false);
+  // 一覧モーダル内のモード ('list' = 一覧表示 / 'new' = 新規登録フォーム)
+  const [inviteMode, setInviteMode] = useState('list');
   // ★ 登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [myInfoForm, setMyInfoForm] = useState({ name: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
@@ -11154,10 +11171,10 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 14px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
                 👤 登録者情報
               </button>
-              {loggedAcc?.role === 'parent' && (
-                <button onClick={()=>setInviteFamilyOpen(true)}
+              {isPrimaryAcc && (
+                <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}}
                   style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
-                  👨‍👩‍👧 家族を追加
+                  {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
                 </button>
               )}
               {onLogout && (
@@ -11453,20 +11470,40 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           </div>
         </div>
       )}
-      {/* 親アカウントによる家族追加招待モーダル */}
+      {/* 親アカウントによる家族/関係者 一覧 + 招待モーダル */}
       {inviteFamilyOpen && (() => {
-        // 子アカウント一覧 (親自身を除く、kind=family のみ)
+        // ★ ログイン中の親の kind に応じて 家族 / 関係者 を出し分け
+        const myKind = (loggedAcc?.kind) || 'family';
+        const isCmList = myKind === 'caremanager';
+        const listTitleIcon = isCmList ? '🤝' : '👨‍👩‍👧';
+        const listTitleLabel = isCmList ? '関係者一覧' : '家族一覧';
+        const memberLabel = isCmList ? '関係者' : 'ご家族';
+        // 子アカウント一覧 (親自身を除く、 同じ kind のみ)
         const childAccs = (data.familyAccounts || []).filter(a =>
-          a.patientId === patient?.id && (a.kind || 'family') === 'family' && String(a.id) !== String(loggedAcc?.id)
+          a.patientId === patient?.id && (a.kind || 'family') === myKind && String(a.id) !== String(loggedAcc?.id)
         );
-        // 未使用の家族招待
+        // 未使用の招待 (同じ親が発行した分)
         const pendingInvites = (data.familyInvites || []).filter(i =>
           i.patientId === patient?.id && !i.usedBy && i.createdByAccountId === loggedAcc?.id
         );
+        // ★ 親本人も「メンバー一覧」に含めて表示 (親代表として一目で分かるように)
+        const allMembers = [loggedAcc, ...childAccs].filter(Boolean);
         const totalChildren = childAccs.length + pendingInvites.length;
         const MAX_CHILDREN = 2;
         const remaining = Math.max(0, MAX_CHILDREN - totalChildren);
         const canAddMore = remaining > 0;
+        // ★ 利用者の emergencyContacts から phone を引き当てる (登録者情報の電話番号表示用)
+        const phoneByAcc = (acc) => {
+          if (!acc || !patient) return '';
+          if (acc.role === 'parent' || (acc.kind === 'family' && allMembers[0]?.id === acc.id)) {
+            return patient.familyPhoneMobile || patient.familyPhone || '';
+          }
+          const ec = (patient.emergencyContacts || []).find(c =>
+            (c.addedByFamilyAccountId === acc.id) ||
+            ((c.email||'').trim() === (acc.email||'').trim() && (acc.email||'').trim() !== '')
+          );
+          return ec?.phoneMobile || ec?.phone || '';
+        };
         const handleDeleteChild = async (accId) => {
           if (!window.confirm('この子アカウントを削除します。よろしいですか?\n削除すると、また新しい子を1人追加できるようになります。')) return;
           if (isSupabaseEnabled) {
@@ -11504,43 +11541,71 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         const titleIcon = isCmRelation ? '🤝' : '👨‍👩‍👧';
         return (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div style={{background:'white',borderRadius:18,maxWidth:420,width:'100%',padding:'20px 18px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:6,display:'flex',alignItems:'center',gap:6}}>{titleIcon} {relLabel}を追加で招待</div>
-            <div style={{background: remaining===0?'#fef2f2':remaining===1?'#fef3c7':'#f0fdf4',border:`1px solid ${remaining===0?'#fecaca':remaining===1?'#fcd34d':'#86efac'}`,borderRadius:10,padding:'8px 12px',marginBottom:12}}>
-              <div style={{fontSize:13,fontWeight:'bold',color:remaining===0?'#991b1b':remaining===1?'#92400e':'#166534'}}>
-                残り {remaining} 人 招待できます (子アカウント最大 {MAX_CHILDREN} 人まで)
-              </div>
-              <div style={{fontSize:10,color:remaining===0?'#7f1d1d':remaining===1?'#78350f':'#14532d',marginTop:2}}>
-                現在の登録: {childAccs.length} 名 / 未使用招待: {pendingInvites.length} 件
-              </div>
+          <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'20px 18px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+            {/* タイトル: モードに応じて 一覧 / 新規登録 を切替 */}
+            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
+              {inviteMode === 'new' ? `${titleIcon} ${relLabel}を新規登録` : `${listTitleIcon} ${listTitleLabel}`}
             </div>
-            {(childAccs.length > 0 || pendingInvites.length > 0) && (
-              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px',marginBottom:12}}>
-                <div style={{fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:8}}>👥 既存の子アカウント・招待</div>
-                {childAccs.map(c => (
-                  <div key={c.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #e2e8f0'}}>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:'bold',color:'#1e293b'}}>{c.displayName || c.username || '(名前未設定)'}</div>
-                      <div style={{fontSize:10,color:'#64748b'}}>{c.relation || '続柄未設定'} / {c.email || 'メール未登録'}</div>
+            {/* ===== 一覧モード ===== */}
+            {inviteMode === 'list' && (
+              <div>
+                <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px',marginBottom:12}}>
+                  <div style={{fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:8}}>登録メンバー ({allMembers.length} 名 / 招待中 {pendingInvites.length} 件)</div>
+                  {allMembers.map((m, idx) => {
+                    const isMe = String(m.id) === String(loggedAcc?.id);
+                    const isPrim = idx === 0;
+                    return (
+                      <div key={m.id} style={{padding:'8px 0',borderBottom:'1px solid #e2e8f0'}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',display:'flex',alignItems:'center',gap:4,flexWrap:'wrap'}}>
+                              {isPrim && <span title="代表 (親アカウント)" style={{fontSize:13}}>🍀</span>}
+                              <span>{m.displayName || m.username || '(名前未設定)'}</span>
+                              {isMe && <span style={{fontSize:9,background:'#dbeafe',color:'#1e40af',padding:'1px 6px',borderRadius:4,fontWeight:'bold'}}>あなた</span>}
+                              {m.relation && <span style={{fontSize:10,background:isCmList?'#ccfbf1':'#ede9fe',color:isCmList?'#0f766e':'#6d28d9',padding:'1px 6px',borderRadius:4,fontWeight:'bold'}}>{m.relation}</span>}
+                            </div>
+                            <div style={{fontSize:10,color:'#64748b',marginTop:2}}>
+                              📧 {m.email || 'メール未登録'}
+                            </div>
+                            {phoneByAcc(m) && (
+                              <div style={{fontSize:10,color:'#64748b',marginTop:1}}>📞 {phoneByAcc(m)}</div>
+                            )}
+                          </div>
+                          {!isMe && (
+                            <button onClick={()=>handleDeleteChild(m.id)} style={{padding:'4px 10px',background:'#fef2f2',color:'#dc2626',border:'1px solid #fecaca',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>削除</button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {pendingInvites.map(i => (
+                    <div key={i.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid #e2e8f0',gap:8}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:'bold',color:'#92400e'}}>📧 招待中: {i.email || '(メール未指定)'}</div>
+                        <div style={{fontSize:10,color:'#78350f',marginTop:1}}>{i.relation || '続柄未設定'} / コード: {i.code}</div>
+                      </div>
+                      <button onClick={()=>handleDeleteInvite(i.id)} style={{padding:'4px 10px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>取消</button>
                     </div>
-                    <button onClick={()=>handleDeleteChild(c.id)} style={{padding:'4px 10px',background:'#fef2f2',color:'#dc2626',border:'1px solid #fecaca',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>削除</button>
-                  </div>
-                ))}
-                {pendingInvites.map(i => (
-                  <div key={i.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'6px 0',borderBottom:'1px solid #e2e8f0'}}>
-                    <div>
-                      <div style={{fontSize:12,fontWeight:'bold',color:'#92400e'}}>📧 招待中: {i.email || '(メール未指定)'}</div>
-                      <div style={{fontSize:10,color:'#78350f'}}>{i.relation || '続柄未設定'} / コード: {i.code}</div>
-                    </div>
-                    <button onClick={()=>handleDeleteInvite(i.id)} style={{padding:'4px 10px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>取消</button>
-                  </div>
-                ))}
+                  ))}
+                </div>
+                <div style={{background: remaining===0?'#fef2f2':remaining===1?'#fef3c7':'#f0fdf4',border:`1px solid ${remaining===0?'#fecaca':remaining===1?'#fcd34d':'#86efac'}`,borderRadius:10,padding:'8px 12px',marginBottom:12,fontSize:12,fontWeight:'bold',color:remaining===0?'#991b1b':remaining===1?'#92400e':'#166534'}}>
+                  残り {remaining} 人 招待できます ({memberLabel} 最大 {MAX_CHILDREN} 人まで)
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  <button onClick={()=>{setInviteFamilyOpen(false); setInviteFamForm({email:'',relation:'',createdUrl:'',sentAuto:false,sending:false,sendError:''});}}
+                    style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+                  {canAddMore && (
+                    <button onClick={()=>{setInviteMode('new'); setInviteFamForm({email:'',relation:isCmList?'ケアマネージャー':'',createdUrl:'',sentAuto:false,sending:false,sendError:''});}}
+                      style={{flex:1,padding:'11px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>＋ 新規登録</button>
+                  )}
+                </div>
               </div>
             )}
+            {/* ===== 新規登録モード (= 旧 招待フォーム) ===== */}
+            {inviteMode === 'new' && (<>
             {!canAddMore && !inviteFamForm.createdUrl && (
               <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:10,padding:'10px 12px',marginBottom:12,fontSize:12,color:'#991b1b'}}>
-                ⚠️ これ以上の子アカウントは追加できません。<br/>
-                追加するには上の一覧から不要なアカウント/招待を削除してください。
+                ⚠️ これ以上の {memberLabel} は追加できません。
               </div>
             )}
             {canAddMore && (() => {
@@ -11585,11 +11650,11 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 </div>
                 <div style={{display:'flex',gap:8,marginTop:8}}>
                   {remaining > 0 && (
-                    <button onClick={()=>setInviteFamForm({email:'',relation:'',createdUrl:'',sentAuto:false,sending:false,sendError:''})}
+                    <button onClick={()=>setInviteFamForm({email:'',relation:isCmList?'ケアマネージャー':'',createdUrl:'',sentAuto:false,sending:false,sendError:''})}
                       style={{flex:1,padding:'10px',background:'#3b82f6',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>＋ もう一人招待</button>
                   )}
-                  <button onClick={()=>{setInviteFamilyOpen(false); setInviteFamForm({email:'',relation:'',createdUrl:'',sentAuto:false,sending:false,sendError:''});}}
-                    style={{flex:1,padding:'10px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+                  <button onClick={()=>{setInviteMode('list'); setInviteFamForm({email:'',relation:'',createdUrl:'',sentAuto:false,sending:false,sendError:''});}}
+                    style={{flex:1,padding:'10px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>← 一覧に戻る</button>
                 </div>
               </div>
             ) : (
@@ -11613,8 +11678,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   </select>
                 </div>
                 <div style={{display:'flex',gap:8}}>
-                  <button onClick={()=>{setInviteFamilyOpen(false); setInviteFamForm({email:'',relation:'',createdUrl:''});}}
-                    style={{flex:1,padding:'10px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+                  <button onClick={()=>{setInviteMode('list'); setInviteFamForm({email:'',relation:'',createdUrl:''});}}
+                    style={{flex:1,padding:'10px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>← 一覧に戻る</button>
                   <button onClick={async ()=>{
                     const em = (inviteFamForm.email||'').trim();
                     if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { alert('正しいメールアドレスを入力してください'); return; }
@@ -11718,6 +11783,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 </div>
               </div>
             )}
+            </>)}
           </div>
         </div>
         );
