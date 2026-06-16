@@ -903,12 +903,13 @@ const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(bi
 //    運動メニューや項目名の同一性判定に使用
 const normalizeName = (s) => (s || '').normalize('NFKC');
 
-// === 運動値のパース ===
+// === 運動値の主副分解パース ===
+// (既存 parseExerciseValue (8925行) は単一数値抽出用 / こちらは 棒+折れ線 グラフ用に主・副に分解)
 // "10kg×10回" → { primary: 10, unit1: 'kg', secondary: 10, unit2: '回', hasMulti: true }
 // "10×10回"   → { primary: 10, unit1: '',  secondary: 10, unit2: '回', hasMulti: true }
 // "10分"      → { primary: 10, unit1: '分', secondary: null, unit2: '', hasMulti: false }
 // "10"        → { primary: 10, unit1: '', secondary: null, unit2: '', hasMulti: false }
-const parseExerciseValue = (val) => {
+const parseExerciseDuo = (val) => {
   if (val == null || val === '') return null;
   const s = String(val).normalize('NFKC').trim();
   // 区切り: × x ✕ * (前後の空白許可)
@@ -17067,7 +17068,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const graphType = resolveGraphType(selEx, allVals);
             const dailyEx = validRecs.map(r=>{
               const raw = r.exercises?.[selEx.id];
-              const parsed = parseExerciseValue(raw);
+              const parsed = parseExerciseDuo(raw);
               return {
                 date:r.date, label:r.date.replace(/(\d+)月(\d+)日/,'$1/$2'),
                 val:toNum(raw), den:toDen(raw),
