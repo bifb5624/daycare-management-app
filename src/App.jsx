@@ -8789,6 +8789,25 @@ const getBpColorClass = (upStr, dnStr) => {
   if (up > 0 && up < 90) return "text-blue-600 font-bold";           // 低血圧
   return "text-black font-bold";                                       // 正常 (黒)
 };
+// ★ 血圧 収縮期 (上) 単独の色判定: 100~129=正常 / 130~139=I度 / 140~159=II度 / 160+=III度 / <90=低血圧
+const getBpUpColorClass = (upStr) => {
+  const v = Number(upStr);
+  if (!upStr || isNaN(v)) return "text-black font-bold";
+  if (v >= 160) return "text-red-700 font-extrabold";
+  if (v >= 140) return "text-red-600 font-bold";
+  if (v >= 130) return "text-amber-600 font-bold";
+  if (v < 90) return "text-blue-600 font-bold";
+  return "text-black font-bold";
+};
+// ★ 血圧 拡張期 (下) 単独の色判定: 60~84=正常 / 85~89=I度 / 90~99=II度 / 100+=III度
+const getBpDnColorClass = (dnStr) => {
+  const v = Number(dnStr);
+  if (!dnStr || isNaN(v)) return "text-black font-bold";
+  if (v >= 100) return "text-red-700 font-extrabold";
+  if (v >= 90) return "text-red-600 font-bold";
+  if (v >= 85) return "text-amber-600 font-bold";
+  return "text-black font-bold";
+};
 
 // 脈拍: 正常 60~100 / 頻脈 101+ / 徐脈 ≤59
 const getPulseColorClass = (pulseStr, _isRecordView = false) => {
@@ -14568,10 +14587,21 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const display = isEditingThis ? (keypad.value||'') : (vBu && vBd ? `${vBu}/${vBd}` : (vBu || vBd || ''));
                     return (
                     <div className="flex items-center justify-center gap-1">
-                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
-                        onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                        style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold'}}
-                        className={`border rounded-lg cursor-pointer outline-none ${getBpColorClass(vBu, vBd)} shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
+                      {/* ★ 編集中は input で文字列を出し、 通常時は div + span × 2 で 上/下 を個別色付け */}
+                      {isEditingThis ? (
+                        <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
+                          onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold'}}
+                          className={`border rounded-lg cursor-pointer outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
+                      ) : (
+                        <div onClick={() => { if (isAbsent || isReadOnly || isPause) return; openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1}}
+                          className={`border rounded-lg cursor-pointer outline-none shadow-inner ${(isAbsent||isReadOnly||isPause)?'opacity-50':''} ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
+                          {vBu && vBd ? (
+                            <><span className={getBpUpColorClass(vBu)}>{vBu}</span><span className="text-slate-400">/</span><span className={getBpDnColorClass(vBd)}>{vBd}</span></>
+                          ) : (vBu ? <span className={getBpUpColorClass(vBu)}>{vBu}</span> : <span className="text-slate-300">　　　</span>)}
+                        </div>
+                      )}
                       <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'3px 1px',width:55}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
                     </div>
                     );})()}
@@ -14583,10 +14613,20 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                     const display = isEditingThis ? (keypad.value||'') : (vBu && vBd ? `${vBu}/${vBd}` : (vBu || vBd || ''));
                     return (
                     <div className="flex items-center justify-center gap-1">
-                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
-                        onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                        style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold'}}
-                        className={`border rounded-lg cursor-pointer outline-none ${getBpColorClass(vBu, vBd)} shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
+                      {isEditingThis ? (
+                        <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
+                          onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold'}}
+                          className={`border rounded-lg cursor-pointer outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
+                      ) : (
+                        <div onClick={() => { if (isAbsent || isReadOnly || isPause) return; openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1}}
+                          className={`border rounded-lg cursor-pointer outline-none shadow-inner ${(isAbsent||isReadOnly||isPause)?'opacity-50':''} ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
+                          {vBu && vBd ? (
+                            <><span className={getBpUpColorClass(vBu)}>{vBu}</span><span className="text-slate-400">/</span><span className={getBpDnColorClass(vBd)}>{vBd}</span></>
+                          ) : (vBu ? <span className={getBpUpColorClass(vBu)}>{vBu}</span> : <span className="text-slate-300">　　　</span>)}
+                        </div>
+                      )}
                       <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'3px 1px',width:55}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
                     </div>
                     );})()}
