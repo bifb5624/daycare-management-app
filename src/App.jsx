@@ -16597,8 +16597,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </div>
           </div>
 
-        {/* === 気分割合（通所時/帰宅時） === */}
-        {(()=>{
+        {/* === 気分割合 (削除済 — 気分トレンドに集約) === */}
+        {false && (()=>{
           const MOODS = [
             { key:'excellent', label:'とても良い', emoji:'🤩', color:'#facc15', bg:'#fefce8' },
             { key:'good',      label:'良い',       emoji:'😊', color:'#4ade80', bg:'#f0fdf4' },
@@ -22473,6 +22473,34 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {/* 📋 登録済アカウント (家族 + ケアマネ を統合表示) */}
                 {(() => {
                   const allAccs = allAccountsForPat;
+                  // ★ 親判定 (実行時計算): 同じ利用者 + 同じ kind の中で createdAt 最古を 1 人だけ親に
+                  //   (過去データで複数 parent でもここで 1 人に絞る)
+                  const primaryAccIds = (() => {
+                    const groups = {};
+                    allAccs.forEach(a => {
+                      const k = `${a.patientId}_${a.kind || 'family'}`;
+                      if (!groups[k]) groups[k] = [];
+                      groups[k].push(a);
+                    });
+                    const set = new Set();
+                    Object.values(groups).forEach(arr => {
+                      const sorted = [...arr].sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
+                      if (sorted[0]) set.add(sorted[0].id);
+                    });
+                    return set;
+                  })();
+                  // ★ 電話番号: 親なら patient.familyPhone(Mobile), 子なら emergencyContacts から引当
+                  const phoneByAcc = (acc) => {
+                    if (!acc) return '';
+                    if (primaryAccIds.has(acc.id) && acc.kind !== 'caremanager') {
+                      return pat.familyPhoneMobile || pat.familyPhone || '';
+                    }
+                    const ec = (pat.emergencyContacts||[]).find(c =>
+                      (c.addedByFamilyAccountId === acc.id) ||
+                      ((c.email||'').trim() === (acc.email||'').trim() && (acc.email||'').trim() !== '')
+                    );
+                    return ec?.phoneMobile || ec?.phone || '';
+                  };
                   return (
                     <div>
                       <div className="text-sm font-bold text-slate-700 mb-2">📋 登録済アカウント ({allAccs.length}件)</div>
@@ -22486,6 +22514,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                           {allAccs.map(acc => {
                             const isEditing = accountEditId === acc.id;
                             const isCm = (acc.kind === 'caremanager') || (acc.relation === 'ケアマネージャー');
+                            const isPrim = primaryAccIds.has(acc.id);
+                            const accPhone = phoneByAcc(acc);
                             const accentBorder = isCm ? 'border-teal-200 bg-teal-50/30' : 'border-slate-200 bg-white';
                             const printBg = isCm ? 'bg-teal-100 hover:bg-teal-200 text-teal-700' : 'bg-violet-100 hover:bg-violet-200 text-violet-700';
                             return (
@@ -22494,8 +22524,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                   <div className="col-span-4">
                                     <div className="text-[10px] font-bold text-slate-400">名前・続柄</div>
                                     <div className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 truncate">
-                                      {acc.role === 'parent' && (
-                                        <span className="text-[14px] mr-1" title="親アカウント">🍀</span>
+                                      {isPrim && (
+                                        <span className="text-[14px] mr-1" title={isCm ? '関係者の代表' : '家族の代表 (親アカウント)'}>🍀</span>
                                       )}
                                       <span className="font-bold">{acc.displayName || '—'}</span>
                                       {acc.relation && (
@@ -22503,6 +22533,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                       )}
                                     </div>
                                     {acc.email && <div className="text-[10px] text-slate-500 mt-0.5 truncate">📧 {acc.email}</div>}
+                                    {accPhone && <div className="text-[10px] text-slate-500 truncate">📞 {accPhone}</div>}
                                   </div>
                                   <div className="col-span-4">
                                     <div className="text-[10px] font-bold text-slate-400">ログインID</div>
