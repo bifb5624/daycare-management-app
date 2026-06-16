@@ -528,14 +528,42 @@ export async function supabaseDeletePatientFamily(storeId, patientId) {
 export async function supabaseDeleteFamilyAccount(accountId) {
   if (!supabase) return false;
   try {
-    // 関連 invite の used_by を解除 (used_at を残しつつ参照は外す)
-    await supabase.from('family_invites').update({ used_by: null }).eq('used_by', accountId);
+    // ★ 関連 invite を物理削除 (used_by の解除ではなく、 招待自体を削除して
+    //    同じメールアドレス/コードでの再使用を阻害しないようにする)
+    await supabase.from('family_invites').delete().eq('used_by', accountId);
     // アカウント自体を物理削除
     const { error } = await supabase.from('family_accounts').delete().eq('id', accountId);
     if (error) throw error;
     return true;
   } catch (e) {
     console.warn('[supabase] deleteFamilyAccount failed', e);
+    return false;
+  }
+}
+
+// ★ 未使用招待の単独削除 (id 指定)
+//   家族画面で「取消」を押したとき、 ローカルだけでなく Supabase 側も削除
+export async function supabaseDeleteInvite(inviteId) {
+  if (!supabase || !inviteId) return false;
+  try {
+    const { error } = await supabase.from('family_invites').delete().eq('id', inviteId);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn('[supabase] deleteInvite failed', e);
+    return false;
+  }
+}
+
+// ★ 招待コード指定の削除 (code 指定) — local の招待 id しかない場合の fallback
+export async function supabaseDeleteInviteByCode(code) {
+  if (!supabase || !code) return false;
+  try {
+    const { error } = await supabase.from('family_invites').delete().eq('code', code);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.warn('[supabase] deleteInviteByCode failed', e);
     return false;
   }
 }

@@ -25,6 +25,8 @@ import {
   supabaseCreateStore,
   supabaseDeleteStore,
   supabaseDeleteFamilyAccount,
+  supabaseDeleteInvite,
+  supabaseDeleteInviteByCode,
   supabaseListInvitesAndAccountsForPatient,
   supabaseMergePatientFromFamily,
   supabaseDeletePatientFamily,
@@ -11478,8 +11480,16 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
           try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
           setData(updated);
         };
-        const handleDeleteInvite = (inviteId) => {
+        const handleDeleteInvite = async (inviteId) => {
           if (!window.confirm('この未使用の招待を取り消します。よろしいですか?')) return;
+          // ★ ローカルから削除する前に、 Supabase の家族招待コードも物理削除
+          //   (削除しないと、 同じメールアドレスで再招待できなくなったり、 古い招待コードが残る)
+          const inv = (data.familyInvites || []).find(i => i.id === inviteId);
+          if (isSupabaseEnabled && inv) {
+            try {
+              if (inv.code) await supabaseDeleteInviteByCode(inv.code);
+            } catch (e) { console.warn('[family] supabase invite delete failed', e); }
+          }
           const updated = {
             ...data,
             familyInvites: (data.familyInvites || []).filter(i => i.id !== inviteId),
@@ -11487,10 +11497,15 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
           try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
           setData(updated);
         };
+        // ★ 続柄に応じて「家族」/「関係者」を切替 (ケアマネ等は関係者として表現)
+        const isCmRelation = inviteFamForm.relation === 'ケアマネージャー' || inviteFamForm.relation === 'ケアマネ';
+        const relLabel = isCmRelation ? '関係者' : 'ご家族';
+        const relLabelShort = isCmRelation ? '関係者' : '家族';
+        const titleIcon = isCmRelation ? '🤝' : '👨‍👩‍👧';
         return (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
           <div style={{background:'white',borderRadius:18,maxWidth:420,width:'100%',padding:'20px 18px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:6,display:'flex',alignItems:'center',gap:6}}>👨‍👩‍👧 ご家族を追加で招待</div>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:6,display:'flex',alignItems:'center',gap:6}}>{titleIcon} {relLabel}を追加で招待</div>
             <div style={{background: remaining===0?'#fef2f2':remaining===1?'#fef3c7':'#f0fdf4',border:`1px solid ${remaining===0?'#fecaca':remaining===1?'#fcd34d':'#86efac'}`,borderRadius:10,padding:'8px 12px',marginBottom:12}}>
               <div style={{fontSize:13,fontWeight:'bold',color:remaining===0?'#991b1b':remaining===1?'#92400e':'#166534'}}>
                 残り {remaining} 人 招待できます (子アカウント最大 {MAX_CHILDREN} 人まで)
@@ -11534,7 +11549,7 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
               const remainingMail = Math.max(0, 3 - sentToday);
               return (
                 <div style={{fontSize:11,color:'#64748b',marginBottom:14,lineHeight:1.6}}>
-                  他のご家族のメールアドレスを入力してください。<br/>
+                  他の{relLabel}のメールアドレスを入力してください。<br/>
                   ボタンをタップすると <b>自動的に招待メールが届きます</b> (有効期限 14日)。<br/>
                   <span style={{color:remainingMail===0?'#dc2626':'#64748b',fontWeight:'bold'}}>📧 本日のメール送信残り: {remainingMail} / 3 通</span>
                 </div>
@@ -11580,7 +11595,7 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
             ) : (
               <div>
                 <div style={{marginBottom:10}}>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ご家族のメールアドレス <span style={{color:'#dc2626'}}>*</span></label>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>{relLabel}のメールアドレス <span style={{color:'#dc2626'}}>*</span></label>
                   <input type="email" value={inviteFamForm.email} onChange={e=>setInviteFamForm(f=>({...f,email:e.target.value}))}
                     placeholder="brother@example.com"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
@@ -11650,6 +11665,7 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
                     let sent = false;
                     let sendError = '';
                     try {
+                      console.log('[family-invite] POST /api/send-invite to:', em);
                       const resp = await fetch('/api/send-invite', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -11662,6 +11678,7 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
                           expiresAtJp: '14日後',
                         }),
                       });
+                      console.log('[family-invite] response status:', resp.status, resp.ok);
                       if (resp.ok) {
                         sent = true;
                         try { localStorage.setItem(todayKey, String(todayCount + 1)); } catch {}
@@ -11671,12 +11688,18 @@ function FamilyPatientView({ data, patientId, accountId, onLogout, onSwitchPatie
                           const errJson = await resp.json();
                           sendError = errJson.brevoMessage || errJson.error || `送信エラー (HTTP ${resp.status})`;
                           if (errJson.hint) sendError += `\n💡 ${errJson.hint}`;
+                          console.warn('[family-invite] send failed:', errJson);
                         } catch {
                           sendError = `送信エラー (HTTP ${resp.status})`;
                         }
                       }
                     } catch (e) {
+                      console.error('[family-invite] fetch error:', e);
                       sendError = `通信エラー: ${String(e).slice(0,200)}`;
+                    }
+                    // ★ 失敗時は alert で確実に通知 (UI 内のエラー表示が見落とされるケースがあるため)
+                    if (!sent && sendError) {
+                      alert(`❌ 招待メールの送信に失敗しました\n\n${sendError}\n\n→ 招待URLは発行されているので、 下のコピーボタンで取得してご家族に直接お伝えください。`);
                     }
                     // ★ 送信ボタンを押した後は成功/失敗どちらでも email/relation を空白に
                     //   (失敗時は sendError で原因を表示しつつ、createdUrl はそのまま残してコピー可能に)
@@ -15437,9 +15460,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               </select>
             </>
           )}
-          <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
+          {/* ★ 期間ボタン: 全部黒文字に統一 (白文字で見づらいため) */}
+          <div style={{display:'flex',background:'rgba(255,255,255,0.4)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.5)'}}>
             {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'],['custom','期間指定']].map(([v,l])=>(
-              <button key={v} onClick={()=>setPeriod(v)} style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',color:period===v?(familyMode?'#3d5021':'#1e40af'):'white',background:period===v?'white':'transparent',border:'none',cursor:'pointer',borderRight:'1px solid rgba(255,255,255,0.2)',transition:'all 0.15s'}}>{l}</button>
+              <button key={v} onClick={()=>setPeriod(v)} style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',color:period===v?'#1e293b':'#334155',background:period===v?'white':'transparent',border:'none',cursor:'pointer',borderRight:'1px solid rgba(255,255,255,0.4)',transition:'all 0.15s'}}>{l}</button>
             ))}
           </div>
           {period!=='custom'&&
@@ -22322,8 +22346,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     navigator.clipboard?.writeText(url);
                     setShowToast(true);
                   };
-                  const deleteInvite = (invId) => {
+                  const deleteInvite = async (invId) => {
                     if (!window.confirm('この招待を削除しますか？\n未使用の場合は使用できなくなります。')) return;
+                    // ★ Supabase の招待コードも物理削除 (削除残り防止)
+                    const inv = (appData.familyInvites||[]).find(i => i.id === invId);
+                    if (isSupabaseEnabled && inv?.code) {
+                      try { await supabaseDeleteInviteByCode(inv.code); } catch (e) { console.warn('[invite] supabase delete failed', e); }
+                    }
                     onSave({...appData, familyInvites: (appData.familyInvites||[]).filter(i => i.id !== invId)});
                   };
                   return (
