@@ -903,6 +903,44 @@ const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(bi
 //    運動メニューや項目名の同一性判定に使用
 const normalizeName = (s) => (s || '').normalize('NFKC');
 
+// === 運動値のパース ===
+// "10kg×10回" → { primary: 10, unit1: 'kg', secondary: 10, unit2: '回', hasMulti: true }
+// "10×10回"   → { primary: 10, unit1: '',  secondary: 10, unit2: '回', hasMulti: true }
+// "10分"      → { primary: 10, unit1: '分', secondary: null, unit2: '', hasMulti: false }
+// "10"        → { primary: 10, unit1: '', secondary: null, unit2: '', hasMulti: false }
+const parseExerciseValue = (val) => {
+  if (val == null || val === '') return null;
+  const s = String(val).normalize('NFKC').trim();
+  // 区切り: × x ✕ * (前後の空白許可)
+  const m = s.match(/^([\d.]+)\s*([^\d×x✕*\s]*)\s*[×x✕*]\s*([\d.]+)\s*([^\s]*)\s*$/);
+  if (m) {
+    const p = parseFloat(m[1]);
+    const sec = parseFloat(m[3]);
+    if (isFinite(p) && isFinite(sec)) {
+      return { primary: p, unit1: m[2] || '', secondary: sec, unit2: (m[4] || '').trim(), hasMulti: true };
+    }
+  }
+  const m2 = s.match(/^([\d.]+)\s*(.*)$/);
+  if (m2) {
+    const p = parseFloat(m2[1]);
+    if (isFinite(p)) {
+      return { primary: p, unit1: (m2[2] || '').trim(), secondary: null, unit2: '', hasMulti: false };
+    }
+  }
+  return null;
+};
+
+// === グラフタイプの解決 ===
+// item.graphType が 'auto' or 未設定 のときはサンプル値から推測
+//   - サンプル値に × が含まれる → 'weight_reps' (棒+折れ線)
+//   - それ以外                     → 'single' (折れ線のみ)
+const resolveGraphType = (item, sampleValues) => {
+  const gt = item?.graphType || 'auto';
+  if (gt === 'single' || gt === 'weight_reps') return gt;
+  const hasMulti = (sampleValues || []).some(v => /[×x✕*]/.test(String(v||'')));
+  return hasMulti ? 'weight_reps' : 'single';
+};
+
 // 全角→半角変換（ID/PW 入力用）
 const toHalfWidth = (s) => (s||'')
   .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
@@ -17025,10 +17063,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               || _extractUnitFromValues(allVals)
               || (unit==='minutes'?'分':unit==='count'||unit==='fraction'?'回':'');
 
-            const dailyEx = validRecs.map(r=>({
-              date:r.date, label:r.date.replace(/(\d+)月(\d+)日/,'$1/$2'),
-              val:toNum(r.exercises?.[selEx.id]), den:toDen(r.exercises?.[selEx.id]),
-            })).filter(d=>d.val!==null);
+            // ★ グラフタイプ解決: 'single' (折れ線のみ) または 'weight_reps' (棒+折れ線)
+            const graphType = resolveGraphType(selEx, allVals);
+            const dailyEx = validRecs.map(r=>{
+              const raw = r.exercises?.[selEx.id];
+              const parsed = parseExerciseValue(raw);
+              return {
+                date:r.date, label:r.date.replace(/(\d+)月(\d+)日/,'$1/$2'),
+                val:toNum(raw), den:toDen(raw),
+                primary: parsed?.primary ?? null,
+                secondary: parsed?.secondary ?? null,
+              };
+            }).filter(d=>d.val!==null);
 
             const monthlyEx = monthlyData.map(d=>{
               const recs=validRecs.filter(r=>{const mm=r.date.match(/(\d+)月/);return mm&&+mm[1]===d.month;});
@@ -17108,14 +17154,30 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const maxAvg=Math.max(...monthlyEx.filter(x=>x.hasData).map(x=>x.avg),1);
             const minAvg=0;
 
+            // ★ 複合 (weight_reps) 用の secondary 軸の最大値
+            const secondaryVals = exData.map(d => d.secondary).filter(v => v != null);
+            const maxSec = secondaryVals.length ? Math.max(...secondaryVals) : 0;
+            const yMaxSec = maxSec <= 0 ? 1 : Math.ceil(maxSec * 1.1);
+            const yPSec = (v) => H2-8-((v)/yMaxSec)*(H2-24);
+            const yTicksSec = (() => {
+              const step = yMaxSec<=5?1:yMaxSec<=20?2:yMaxSec<=60?5:yMaxSec<=120?10:20;
+              const t = [];
+              for (let v=0; v<=yMaxSec; v+=step) t.push(v);
+              return t;
+            })();
             return (
               <div>
                 {tabs}
-                <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10}}>
+                <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:10,flexWrap:'wrap'}}>
                   <span style={{fontSize:13,color:'#1e293b'}}>単位:</span>
                   <span style={{fontSize:13,fontWeight:'bold',padding:'2px 10px',borderRadius:20,background:'#ede9fe',color:'#6d28d9'}}>
                     {unit==='minutes'?'分（時間）':unit==='count'?'回（回数）':unit==='fraction'?'回':'数値'}
                   </span>
+                  {graphType === 'weight_reps' && (
+                    <span style={{fontSize:11,fontWeight:'bold',padding:'2px 10px',borderRadius:20,background:'#dbeafe',color:'#1e40af'}}>
+                      📊 棒(数値) + 📈 折れ線(回数) 複合グラフ
+                    </span>
+                  )}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:12}}>
                   <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
@@ -17126,7 +17188,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     <div style={{display:'flex',alignItems:'stretch'}}>
                       <div style={{flexShrink:0,width:44,position:'relative',height:H2+20,paddingTop:4}}>
                         {yTicks2.map(v=>(
-                          <div key={v} style={{position:'absolute',right:4,top:yP2(v)-5,fontSize:8,color:'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{v}{unitLabel}</div>
+                          <div key={v} style={{position:'absolute',right:4,top:yP2(v)-5,fontSize:8,color:graphType==='weight_reps'?'#1e40af':'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{v}{unitLabel}</div>
                         ))}
                       </div>
                       <div style={{flex:1,minWidth:0,overflowX:'auto'}}>
@@ -17138,9 +17200,38 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       ))}
                       <line x1={PAD_L2} y1={16} x2={PAD_L2} y2={H2-8} stroke="#e2e8f0" strokeWidth={1}/>
                       {maxD&&<line x1={PAD_L2} y1={yP2(maxD)} x2={W2} y2={yP2(maxD)} stroke="#a5b4fc" strokeWidth={1} strokeDasharray="5,3"/>}
-                      
-                      <polyline points={exData.map((d,i)=>`${xP2(i)},${yP2(d.val||d.avg||0)}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+
+                      {/* ★ weight_reps: 右側に副軸 (回数) の目盛りを表示 */}
+                      {graphType === 'weight_reps' && yTicksSec.map(v=>(
+                        <text key={`rt${v}`} x={W2+4} y={yPSec(v)+3} fontSize={8} fill="#ea580c" fontWeight="bold" textAnchor="start">{v}回</text>
+                      ))}
+
+                      {/* ★ weight_reps: 棒 (主軸=primary/重さ・数値) を先に描く */}
+                      {graphType === 'weight_reps' && exData.map((d,i)=>{
+                        const dv = d.primary ?? d.val ?? 0;
+                        const x = xP2(i);
+                        const y = yP2(dv);
+                        const barW = Math.max(6, _STEP2*0.45);
+                        return <rect key={`b${i}`} x={x-barW/2} y={y} width={barW} height={Math.max(0, H2-8-y)} fill="#3b82f6" opacity={0.65} rx={2}/>;
+                      })}
+
+                      {/* ★ single: 主軸の折れ線。 weight_reps: 副軸 (secondary/回数) を折れ線で描く */}
+                      {graphType === 'single' && (
+                        <polyline points={exData.map((d,i)=>`${xP2(i)},${yP2(d.val||d.avg||0)}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+                      )}
+                      {graphType === 'weight_reps' && secondaryVals.length > 0 && (
+                        <polyline points={exData.filter(d=>d.secondary!=null).map((d,i,arr)=>{
+                          const origIdx = exData.indexOf(d);
+                          return `${xP2(origIdx)},${yPSec(d.secondary)}`;
+                        }).join(' ')} fill="none" stroke="#f97316" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+                      )}
+                      {/* 点の描画 */}
                       {exData.map((d,i)=>{
+                        if (graphType === 'weight_reps') {
+                          if (d.secondary == null) return null;
+                          return <circle key={`s${i}`} cx={xP2(i)} cy={yPSec(d.secondary)} r={3.5} fill="#f97316" stroke="white" strokeWidth={1.5}
+                            onMouseEnter={()=>setExTooltip({i,x:xP2(i),y:yPSec(d.secondary),d})} onMouseLeave={()=>setExTooltip(null)}/>;
+                        }
                         const dv=d.val||d.avg||0; const isMax=dv===maxV,isMin=dv===minV;
                         return <circle key={i} cx={xP2(i)} cy={yP2(dv)} r={isMax||isMin?5:3.5} fill={isMax?'#ef4444':isMin?'#3b82f6':'#6366f1'} stroke="white" strokeWidth={1.5}
                           onMouseEnter={()=>setExTooltip({i,x:xP2(i),y:yP2(dv),d})} onMouseLeave={()=>setExTooltip(null)}/>;
@@ -17148,9 +17239,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       {exTooltip&&(()=>{
                         const tx=Math.min(exTooltip.x+8,W2-80),ty=Math.max(exTooltip.y-52,4);
                         const d=exTooltip.d;
-                        const lines2=[d.date||d.month+'月',`${d.val||d.avg?.toFixed(1)||'-'}${unitLabel}`];
+                        const lines2 = graphType === 'weight_reps'
+                          ? [d.date||d.month+'月', `${d.primary ?? '-'}${unitLabel} × ${d.secondary ?? '-'}回`]
+                          : [d.date||d.month+'月',`${d.val||d.avg?.toFixed(1)||'-'}${unitLabel}`];
                         return (<g>
-                          <rect x={tx} y={ty} width={130} height={lines2.length*16+10} rx={5} fill="#1e293b" opacity={0.92}/>
+                          <rect x={tx} y={ty} width={150} height={lines2.length*16+10} rx={5} fill="#1e293b" opacity={0.92}/>
                           {lines2.map((l,li)=><text key={li} x={tx+8} y={ty+16+li*16} fontSize={10} fill="white" fontWeight="bold">{l}</text>)}
                         </g>);
                       })()}
@@ -23560,6 +23653,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                         const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setExerciseItems(arr);
                       }} placeholder="単位" list="unit-suggestions" className="w-20 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400"/>
                     )}
+                    {/* ★ グラフタイプ: 運動トレンドでの描画方式を選択 (auto=自動推測) */}
+                    <select value={item.graphType || 'auto'} onChange={e=>{
+                      const arr=[...exerciseItems]; arr[i]={...arr[i],graphType:e.target.value}; setExerciseItems(arr);
+                    }} className="w-24 px-1 py-1 bg-white border border-slate-200 rounded text-[10px] font-bold outline-none focus:border-blue-400 cursor-pointer" title="運動トレンドのグラフ種別">
+                      <option value="auto">自動判定</option>
+                      <option value="single">折れ線のみ</option>
+                      <option value="weight_reps">棒+折れ線</option>
+                    </select>
                     <button type="button" onClick={() => {
                       if (!window.confirm(`「${item.name}」を ${exerciseApplyFrom} 以降の項目から削除します。よろしいですか？\n(過去の記録は元の項目のまま残ります)`)) return;
                       setExerciseItemsHistory(prev => {
