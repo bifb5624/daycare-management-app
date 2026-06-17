@@ -11029,6 +11029,8 @@ function FamilyView() {
 // === 家族画面 - 利用者ごとのコンテンツ ===
 function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient }) {
   const [tab, setTab] = useState('news');
+  // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
+  const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','custom'
   const pid = parseInt(patientId, 10);
   const patient = (data.patients||[]).find(p => p.id === pid || p.id === patientId);
   const facility = data.systemSettings?.facilityInfo || {};
@@ -11103,6 +11105,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         phone: myEc?.phone || '',
         phoneMobile: myEc?.phoneMobile || '',
         email: myEc?.email || loggedAcc?.email || '',
+        cmOffice: myEc?.cmOffice || loggedAcc?.cmOffice || '',
+        relationship: myEc?.relationship || loggedAcc?.relationship || '',
         saving: false, savedMsg: '',
       });
     }
@@ -11246,6 +11250,18 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
                 </button>
               )}
+              {/* ★ 期間選択: お知らせと通所記録の両方を絞り込み */}
+              <div style={{display:'flex',alignItems:'center',gap:6,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'4px 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+                <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>📅 期間</span>
+                <select value={familyPeriod} onChange={e=>setFamilyPeriod(e.target.value)}
+                  style={{padding:'4px 6px',border:'1px solid #c4dba0',borderRadius:6,fontSize:12,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
+                  <option value="1">1ヶ月</option>
+                  <option value="3">3ヶ月</option>
+                  <option value="6">半年</option>
+                  <option value="12">1年</option>
+                  <option value="all">全期間</option>
+                </select>
+              </div>
               {onLogout && (
                 <button onClick={onLogout}
                   style={{background:'rgba(255,255,255,0.7)',color:'#3d5021',border:'1px solid rgba(125,170,61,0.5)',borderRadius:10,padding:'10px 14px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
@@ -11264,6 +11280,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             targetPatientId={pid}
             familyMode={!isCmAccount}
             cmViewerMode={isCmAccount}
+            externalPeriod={familyPeriod}
             hidePatientSelector={true}
             navigateTo={()=>{}}
             onShowPrintPreview={()=>{}}
@@ -11582,8 +11599,25 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   <option value="三男">三男</option><option value="長女">長女</option><option value="次女">次女</option>
                   <option value="三女">三女</option><option value="兄">兄</option><option value="弟">弟</option>
                   <option value="姉">姉</option><option value="妹">妹</option>
+                  <option value="ケアマネージャー">ケアマネージャー</option>
+                  <option value="その他関係者">その他関係者</option>
                 </select>
               </div>
+              {/* ★ ケアマネ閲覧時 (isCmAccount) は 事業所名 / 関係性 (どのような関係か) を入力 */}
+              {isCmAccount && (<>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>所属事業所名 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(ケアマネ事業所など)</span></label>
+                  <input value={myInfoForm.cmOffice||''} onChange={e=>setMyInfoForm(f=>({...f,cmOffice:e.target.value,savedMsg:''}))}
+                    placeholder="例: ○○居宅介護支援事業所"
+                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>関係性 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(どのような関係か)</span></label>
+                  <input value={myInfoForm.relationship||''} onChange={e=>setMyInfoForm(f=>({...f,relationship:e.target.value,savedMsg:''}))}
+                    placeholder="例: 担当ケアマネージャー / 訪問看護 等"
+                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                </div>
+              </>)}
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 (固定)</label>
                 <input value={myInfoForm.phone} onChange={e=>setMyInfoForm(f=>({...f,phone:e.target.value.replace(/[^0-9-]/g,''),savedMsg:''}))}
@@ -11634,6 +11668,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     phone: myInfoForm.phone,
                     phoneMobile: myInfoForm.phoneMobile,
                     email: myInfoForm.email,
+                    // ★ ケアマネ用: 所属事業所 / 関係性
+                    cmOffice: myInfoForm.cmOffice || '',
+                    relationship: myInfoForm.relationship || '',
                   };
                   let newContacts;
                   if (idx >= 0) {
@@ -15539,7 +15576,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
 }
 
 // === PersonalDashboardView (簡易版) ===
-function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, hidePatientSelector = false, stickyTopOffset = null }) {
+function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null }) {
   // ★ ケアマネ閲覧モード = 事業所と同じフルセット内容を読取専用で表示。 縦型 (スマホ) でも見やすく縦並びに
   const compactMode = familyMode || cmViewerMode; // 基本指標を縦並びにする判定
   // familyMode 時の sticky top 既定値: stickyTopOffset 未指定なら 56 (FamilyView 内)
@@ -15567,7 +15604,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   });
   // 家族画面・事業所側ともデフォルト「1ヶ月」
-  const [period, setPeriod] = useState('1');
+  const [period, setPeriod] = useState(externalPeriod || '1');
+  // ★ 親 (FamilyPatientView) から externalPeriod が来たら同期
+  React.useEffect(() => {
+    if (externalPeriod && externalPeriod !== period) setPeriod(externalPeriod);
+  }, [externalPeriod]);
   const [customFrom, setCustomFrom] = useState(() => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [customTo, setCustomTo]   = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   // セクション選択（プレビュー用） [id, label, size]
@@ -15576,7 +15617,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   //   - 残すもの: 今回の記録 / 基本指標 / 気分 / バイタルトレンド / 体力測定 / モニタリング
   //   - ケアマネ閲覧時 (=familyMode=false) は事業所側と同じフルセット
   const ALL_SECTIONS = familyMode
-    ? [['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
+    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
@@ -15849,7 +15890,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               </select>
             </>
           )}
-          {/* ★ 期間ボタン: 全部黒文字に統一 (白文字で見づらいため) */}
+          {/* ★ 期間ボタン: 全部黒文字に統一 (compactMode = 家族/ケアマネ では親ヘッダの期間セレクタを使うので非表示) */}
+          {!compactMode && (<>
           <div style={{display:'flex',background:'rgba(255,255,255,0.4)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.5)'}}>
             {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'],['custom','期間指定']].map(([v,l])=>(
               <button key={v} onClick={()=>setPeriod(v)} style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',color:period===v?'#1e293b':'#334155',background:period===v?'white':'transparent',border:'none',cursor:'pointer',borderRight:'1px solid rgba(255,255,255,0.4)',transition:'all 0.15s'}}>{l}</button>
@@ -15863,6 +15905,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             <span style={{color:'#1e293b',fontWeight:'bold'}}>〜</span>
             <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
           </>}
+          </>)}
           <span style={{background:'white',color:familyMode?'#3d5021':'#1e40af',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:'bold',whiteSpace:'nowrap'}}>{rangeLabel}</span>
           {/* 3ヶ月超の場合、月平均/毎日表示の切替 */}
           {(period==='all' || parseInt(period,10)>=6) && (
@@ -16311,11 +16354,20 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       <div id="print-content-analysis" style={{padding:'20px 24px',maxWidth:1280,margin:'0 auto'}}>
 
         {/* === 基本指標 === */}
-        {/* === 基本情報 === (familyMode で非表示。 利用者情報モーダルに集約) */}
-        {!familyMode && <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
+        {/* === 基本情報 === 簡素化版 */}
+        {/*   事業所モード: 利用者名 / 年齢 (生年月日+(n歳)) / 利用開始日 / 経過日数 / 既往歴 / 留意点 */}
+        {/*   ご家族/ケアマネ: 利用者名なし / 生年月日 / 利用開始日 / 経過日数 / 既往歴 / 留意点 */}
+        <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>基本情報</div>
           {selectedPatient && (()=>{
             const age = calcAge(selectedPatient.birthDate);
+            const birthDispBase = selectedPatient.birthDate
+              ? new Date(selectedPatient.birthDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'})
+              : '—';
+            // 生年月日 + (n歳) を 1 つの値に
+            const birthWithAge = selectedPatient.birthDate
+              ? (age!==null ? `${birthDispBase} (${age}歳)` : birthDispBase)
+              : '—';
             // 利用開始日からの経過日数を計算
             let elapsedLabel = '—';
             let startLabel = '—';
@@ -16329,7 +16381,6 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 const years = Math.floor(days / 365);
                 const remDays = days - years*365;
                 const months = Math.floor(remDays / 30);
-                // 「2年3ヶ月」を上、「(837日)」は改行して下に表示
                 const main = years > 0 ? `${years}年${months>0?`${months}ヶ月`:''}` : months > 0 ? `${months}ヶ月` : '';
                 if (main) {
                   elapsedLabel = (<span style={{display:'flex',flexDirection:'column',lineHeight:1.2}}>
@@ -16341,42 +16392,51 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 }
               }
             }
+            // ★ モード別の項目セット
+            //   - 事業所モード: 利用者名 + 年齢 (生年月日 + (n歳)) + 利用開始日 + 経過日数
+            //   - ご家族/ケアマネ: 利用者名なし。 生年月日 (改行で(n歳)) + 利用開始日 + 経過日数
+            const items = compactMode
+              ? [
+                  {label:'生年月日', value: birthWithAge},
+                  {label:'利用開始日', value: startLabel},
+                  {label:'経過日数', value: elapsedLabel},
+                ]
+              : [
+                  {label:'利用者名', value:(<>
+                    <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
+                      {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
+                    </span>
+                  </>)},
+                  {label:'年齢', value: birthWithAge},
+                  {label:'利用開始日', value: startLabel},
+                  {label:'経過日数', value: elapsedLabel},
+                ];
             return (
               <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
-                  {[
-                    {label:'利用者名',value:(<>
-                      <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
-                        {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
-                      </span>
-                    </>)},
-                    {label:'生年月日',value:selectedPatient.birthDate?new Date(selectedPatient.birthDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}):'—'},
-                    {label:'年齢',value:age!==null?`${age}歳`:'—'},
-                    {label:'身長',value:selectedPatient.height?`${selectedPatient.height}cm`:'—'},
-                    {label:'体重',value:selectedPatient.weight?`${selectedPatient.weight}kg`:'—'},
-                    {label:'利用開始日',value:startLabel},
-                    {label:'経過日数',value:elapsedLabel},
-                  ].map(({label,value})=>(
+                {/* ★ ご家族/ケアマネはスマホ縦型対応で 1 列縦並び、 事業所は auto-fit grid */}
+                <div style={{display:'grid',gridTemplateColumns: compactMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
+                  {items.map(({label,value})=>(
                     <div key={label} style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #e2e8f0'}}>
                       <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>{label}</div>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{value}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                {/* 既往歴・留意点 (compactMode は 1 列、 事業所は 2 列) */}
+                <div style={{display:'grid',gridTemplateColumns: compactMode ? '1fr' : '1fr 1fr',gap:10}}>
                   <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
                     <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
-                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.kiou||'—'}</div>
+                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{selectedPatient.kiou||'—'}</div>
                   </div>
                   <div style={{background:'#fef2f2',borderRadius:10,padding:'8px 12px',border:'1px solid #fecaca'}}>
                     <div style={{fontSize:11,fontWeight:'bold',color:'#991b1b',marginBottom:3}}>留意点</div>
-                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5}}>{selectedPatient.ryui||'—'}</div>
+                    <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{selectedPatient.ryui||'—'}</div>
                   </div>
                 </div>
               </div>
             );
           })()}
-        </div>}
+        </div>
 
         {/* 今回の記録 (最新の通所記録のサマリー) - 家族・事業所共通 */}
         {(() => {
