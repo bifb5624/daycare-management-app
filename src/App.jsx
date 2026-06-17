@@ -15659,9 +15659,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   //   - 月別通所状況 / 日々の記録 / 運動トレンド / 基本情報 を非表示
   //   - 残すもの: 今回の記録 / 基本指標 / 気分 / バイタルトレンド / 体力測定 / モニタリング
   //   - ケアマネ閲覧時 (=familyMode=false) は事業所側と同じフルセット
+  // ★ 基本指標 (sec-kpi) は通所率が月別通所状況と重複するため、 事業所では削除。 家族には簡易通所率として残す
   const ALL_SECTIONS = familyMode
     ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
-    : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
+    : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
   const [selExId, setSelExId] = useState(null);
@@ -16704,7 +16705,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
         })()}
 
-        <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120}}>
+        {/* ★ 基本指標 (sec-kpi): 事業所では非表示 (月別通所状況と重複)。 家族では簡易表示として残す */}
+        {familyMode && <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span>基本指標</span>
             <span style={{fontSize:13,color:'#334155',fontWeight:'bold',display:'flex',gap:14}}>
@@ -16855,7 +16857,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             })()}
             {/* 平均体温・血圧・脈拍の数値カードは削除 (バイタルトレンドのサマリーと重複していたため) */}
           </div>
-        </div>
+        </div>}
 
         {!familyMode && <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16}}>
 
@@ -17802,30 +17804,37 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })()}
         </div>
         {!familyMode && <><div id="sec-absence" style={{scrollMarginTop:120,marginBottom:0}}><div onClick={()=>toggleSec('sec-absence')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>欠席・休業一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-absence')?'▶':'▼'}</span></div></div></>}{/* === 欠席一覧 === */}
-        {!familyMode && !isCol('sec-absence') && records.filter(r=>r.status==='欠席'||r.status==='休業').length > 0 && (
-          <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #fecaca',overflow:'hidden',marginBottom:16}}>
-            <div style={{padding:'12px 20px',borderBottom:'1px solid #fef2f2',background:'#fef2f2',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626',display:'flex',alignItems:'center',gap:6}}>
-                <span style={{width:8,height:8,background:'#ef4444',borderRadius:'50%',display:'inline-block'}}/>
-                欠席・休業 一覧
-              </div>
-              <span style={{fontSize:14,color:'#ef4444',fontWeight:'bold',background:'#fee2e2',padding:'2px 8px',borderRadius:6}}>
-                {records.filter(r=>r.status==='欠席'||r.status==='休業').length}件
-              </span>
-            </div>
-            <div style={{padding:'8px 0'}}>
-              {records.filter(r=>r.status==='欠席'||r.status==='休業').map((r,i)=>(
-                <div key={r.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'8px 20px',borderBottom:'1px solid #fef2f2',backgroundColor:i%2===0?'white':'#fffbfb'}}>
-                  <div style={{fontWeight:'bold',color:'#475569',whiteSpace:'nowrap',minWidth:60,fontSize:14}}>{r.date}</div>
-                  <span style={{fontSize:14,fontWeight:'bold',padding:'2px 8px',borderRadius:6,backgroundColor:r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='欠席'?'#dc2626':'#64748b',whiteSpace:'nowrap',flexShrink:0}}>{r.status}</span>
-                  <div style={{fontSize:14,color:r.tokki?'#475569':'#cbd5e1',flex:1}}>
-                    {r.tokki||<span style={{fontStyle:'italic',color:'#000'}}>理由の記載なし</span>}
-                  </div>
+        {!familyMode && !isCol('sec-absence') && (() => {
+          const absList = records.filter(r=>r.status==='欠席'||r.status==='休業');
+          return (
+            <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #fecaca',overflow:'hidden',marginBottom:16}}>
+              <div style={{padding:'12px 20px',borderBottom:'1px solid #fef2f2',background:'#fef2f2',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626',display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{width:8,height:8,background:'#ef4444',borderRadius:'50%',display:'inline-block'}}/>
+                  欠席・休業 一覧
                 </div>
-              ))}
+                <span style={{fontSize:14,color:'#ef4444',fontWeight:'bold',background:'#fee2e2',padding:'2px 8px',borderRadius:6}}>
+                  {absList.length}件
+                </span>
+              </div>
+              {absList.length > 0 ? (
+                <div style={{padding:'8px 0'}}>
+                  {absList.map((r,i)=>(
+                    <div key={r.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'8px 20px',borderBottom:'1px solid #fef2f2',backgroundColor:i%2===0?'white':'#fffbfb'}}>
+                      <div style={{fontWeight:'bold',color:'#475569',whiteSpace:'nowrap',minWidth:60,fontSize:14}}>{r.date}</div>
+                      <span style={{fontSize:14,fontWeight:'bold',padding:'2px 8px',borderRadius:6,backgroundColor:r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='欠席'?'#dc2626':'#64748b',whiteSpace:'nowrap',flexShrink:0}}>{r.status}</span>
+                      <div style={{fontSize:14,color:r.tokki?'#475569':'#cbd5e1',flex:1}}>
+                        {r.tokki||<span style={{fontStyle:'italic',color:'#000'}}>理由の記載なし</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{padding:'24px',textAlign:'center',color:'#000',fontSize:14,fontWeight:'bold'}}>欠席・休業の記録はありません</div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {!familyMode && <><div id="sec-kyushi" style={{scrollMarginTop:120,marginBottom:0}}><div onClick={()=>toggleSec('sec-kyushi')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>休止一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-kyushi')?'▶':'▼'}</span></div></div></>}{/* === 休止一覧 === */}
         {!familyMode && !isCol('sec-kyushi') && <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #fed7aa',overflow:'hidden',marginBottom:16}}>
@@ -17913,8 +17922,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             <table style={{minWidth:900,borderCollapse:'collapse',fontSize:13}}>
               <thead>
                 <tr style={{backgroundColor:'#f8fafc',borderBottom:'1px solid #e2e8f0'}}>
+                  {/* ★ 項目名を中央配置 (左寄せ → center) */}
                   {['日付','状態','気分(通)','気分(帰)','体温','開始 血圧/脈','終了 血圧/脈',...(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(e=>e.name),'介護整体','特記'].map(h=>(
-                    <th key={h} style={{padding:'8px 10px',textAlign:'left',fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap',fontSize:14}}>{h}</th>
+                    <th key={h} style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap',fontSize:14}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -17925,28 +17935,28 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   const tempW=tempN&&tempN>=37.1; const bpW=bpN&&bpN>=140;
                   return (
                     <tr key={r.id} style={{borderBottom:'1px solid #f8fafc',backgroundColor:ri%2===0?'white':'#fafbfc'}}>
-                      <td style={{padding:'8px 10px',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>{r.date}</td>
-                      <td style={{padding:'8px 10px'}}>
+                      {/* ★ データセルも中央配置で項目名と揃える */}
+                      <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>{r.date}</td>
+                      <td style={{padding:'8px 10px',textAlign:'center'}}>
                         <span style={{fontSize:14,fontWeight:'bold',padding:'2px 6px',borderRadius:5,whiteSpace:'nowrap',display:'inline-block',backgroundColor:r.status==='出席'?'#dbeafe':r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='出席'?'#1d4ed8':r.status==='欠席'?'#dc2626':'#64748b'}}>{r.status}</span>
                       </td>
-                      <td style={{padding:'8px 10px',fontSize:13,whiteSpace:'nowrap'}}>
+                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,whiteSpace:'nowrap'}}>
                         {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunArrival]||'-';})()} {r.kibunArrivalReason&&<span style={{fontSize:13,color:'#334155'}}>({r.kibunArrivalReason})</span>}
                       </td>
-                      <td style={{padding:'8px 10px',fontSize:13,whiteSpace:'nowrap'}}>
+                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,whiteSpace:'nowrap'}}>
                         {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunDeparture]||'-';})()} {r.kibunDepartureReason&&<span style={{fontSize:13,color:'#334155'}}>({r.kibunDepartureReason})</span>}
                       </td>
-                      <td style={{padding:'8px 10px',fontWeight:'bold',color:tempW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
+                      <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:tempW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
                         {r.temp?`${r.temp}℃`:'-'}{tempW&&'⚠'}
                       </td>
-                      <td style={{padding:'8px 10px',fontWeight:'bold',color:bpW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
+                      <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:bpW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
                         {r.bpUpSt?`${r.bpUpSt}/${r.bpDnSt}`:'-'}{r.plSt&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plSt})</span>}{bpW&&'⚠'}
                       </td>
-                      <td style={{padding:'8px 10px',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>
+                      <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>
                         {r.bpUpEn?`${r.bpUpEn}/${r.bpDnEn}`:'-'}{r.plEn&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plEn})</span>}
                       </td>
                       {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
                         const rawV = r.exercises?.[ex.id];
-                        // ★ 単位を後ろに自動補完 (内部値が数値だけでも「3分」と表示)
                         const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(ex.name))?.defaultUnit || '';
                         const vStr = String(rawV ?? '');
                         const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
@@ -17956,8 +17966,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         </td>
                         );
                       })}
-                      <td style={{padding:'8px 10px',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
-                      <td style={{padding:'8px 10px',color:'#1e293b',fontSize:14,minWidth:120}}>{r.tokki||'-'}</td>
+                      <td style={{padding:'8px 10px',textAlign:'center',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
+                      <td style={{padding:'8px 10px',textAlign:'center',color:'#1e293b',fontSize:14,minWidth:120}}>{r.tokki||'-'}</td>
                     </tr>
                   );
                 })}
