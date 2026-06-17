@@ -15811,7 +15811,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     <div className="w-full" style={{backgroundColor:'#f0f4f9',minHeight:'100%'}}>
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
-      <div style={{background: familyMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: familyMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+      <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: compactMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
         {/* familyMode 時は親 (FamilyPatientView) のヘッダに利用者名が出るので重複表示を防ぐ */}
         {!familyMode && (
           <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -15875,7 +15875,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           )}
           {/* 「詳細記録も印刷」チェックボックスはポップアップ側に移動済 */}
           {/* 表示用ボタン: クリックでポップアップを開く（期間/月を選択させる） */}
-          {!familyMode && (
+          {/* ★ 事業所モードのみ表示 (家族・ケアマネ閲覧モードは非表示) */}
+          {!compactMode && (
           <button type="button" onClick={()=>setShowPrintOptionsPopup(true)}
               style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
             <Printer size={14}/>プレビュー
@@ -16803,7 +16804,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>}
         <div id="sec-kibun" data-sec="sec-kibun" style={{scrollMarginTop:120}}>
           <div style={{background:'white',borderRadius:12,border:'1px solid #fde68a',padding:'16px',marginTop:12}}>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#92400e',marginBottom:10}}>気分トレンド（通所時/帰宅時）</div>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#92400e',marginBottom:6}}>気分トレンド（通所時/帰宅時）</div>
+            {/* ★ 凡例をグラフ直上に表示 (旧グラフ下から移動) */}
+            <div style={{display:'flex',gap:16,marginBottom:8,paddingTop:6,paddingBottom:6,borderTop:'1px solid #fde68a',borderBottom:'1px solid #fde68a',fontSize:12,color:'#475569'}}>
+              <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{display:'inline-block',width:20,height:2,background:'#3b82f6',borderRadius:2}}/>通所時</span>
+              <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{display:'inline-block',width:20,height:2,background:'#f97316',borderRadius:2}}/>帰宅時</span>
+            </div>
             {(()=>{
               const MOOD_DEF=[
                 {key:'excellent',emoji:'🤩',v:4,label:'とても良い'},
@@ -16906,10 +16912,6 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
               );
             })()}
-            <div style={{display:'flex',gap:16,marginTop:6,fontSize:14,color:'#1e293b'}}>
-              <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{display:'inline-block',width:20,height:2,background:'#3b82f6',borderRadius:2}}/>通所時</span>
-              <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{display:'inline-block',width:20,height:2,background:'#f97316',borderRadius:2}}/>帰宅時</span>
-            </div>
           </div>
 
         {/* === 気分割合 (削除済 — 気分トレンドに集約) === */}
@@ -17044,7 +17046,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const pts2=color2?dailyData.map((d,i)=>({v:d.bpDn,i,d})).filter(p=>p.v!==null):[];
             if(!pts1.length) return <div style={{height:H+30,display:'flex',alignItems:'center',justifyContent:'center',color:'#e2e8f0',fontSize:13}}>データなし</div>;
             const mn=yMin, mx=yMax, rng=mx-mn;
-            const xPV=(i)=>PAD_X+i*_STEP;
+            // ★ Y 軸の真上に重ならないよう半ステップ右にずらして開始 (運動トレンドと統一)
+            const xPV=(i)=>PAD_X + _STEP/2 + i*_STEP;
             const yP=(v)=>8+((mx-v)/rng)*(H-16);
             const yTicks=[];
             const step=field==='bpUp'?20:(field==='temp'?0.5:20);
@@ -17173,14 +17176,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
               <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:12}}>
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${tempWarn?'#fecaca':'#f1f5f9'}`}}>
-                  <div style={{display:'flex',justifyContent:'flex-start',alignItems:'flex-end',marginBottom:20,flexWrap:'wrap',gap:16}}>
-                    <div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>体温（日別）</div>
-                      <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:12,height:2,background:tempWarn?'#ef4444':'#f97316',display:'inline-block',borderRadius:1}}/>体温（℃）</span>
-                      </div>
-                    </div>
-                    {/* ★ 統一サイズ: ラベル 12px / 数値 22px / 単位 11px / 日付 10px */}
+                  {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例は下のグラフ直上へ移動) */}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:10}}>
+                    <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>体温（日別）</div>
+                    {/* ★ 統一サイズ: ラベル 12px / 数値 16px / 単位 11px / 日付 10px */}
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                       {avgTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:80}}>
                         <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>平均</div>
@@ -17199,6 +17198,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </div>}
                     </div>
                   </div>
+                  {/* ★ 凡例をグラフ直上に移動 */}
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
+                    <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:tempWarn?'#ef4444':'#f97316',display:'inline-block',borderRadius:1}}/>体温（℃）</span>
+                  </div>
                   <VitalChart field="temp" color1={tempWarn?'#ef4444':'#f97316'} yMin={35.5} yMax={38.5}
                     refLines={[{v:37.1,label:'微熱 37.1℃',color:'#fb923c',warn:true},{v:38.0,label:'高熱 38.0℃',color:'#ef4444',warn:true}]}
                     title="体温" legend1="体温（℃）" unit="℃"/>
@@ -17207,21 +17210,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
               {/* 血圧詳細カード */}
               <div style={{background:'white',borderRadius:14,padding:'20px 22px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${bpWarn?'#fecaca':'#f1f5f9'}`,marginBottom:12}}>
-                <div style={{display:'flex',justifyContent:'flex-start',alignItems:'flex-end',marginBottom:20,flexWrap:'wrap',gap:16}}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>血圧（日別）</div>
-                    <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                      <div style={{display:'flex',gap:8}}>
-                        <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期</span>
-                        <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:10,height:8,background:'#bfdbfe',opacity:0.7,display:'inline-block',borderRadius:2}}/>収縮期 正常（100-129）</span>
-                      </div>
-                      <div style={{display:'flex',gap:8}}>
-                        <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期</span>
-                        <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:10,height:8,background:'#fbcfe8',opacity:0.7,display:'inline-block',borderRadius:2}}/>拡張期 正常（60-84）</span>
-                      </div>
-                    </div>
-                  </div>
-                  {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ (ラベル 12 / 数値 22 / 単位 11 / 日付 10) */}
+                {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ移動) */}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:10}}>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>血圧（日別）</div>
+                  {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ */}
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>収縮期 平均</div>
@@ -17255,6 +17247,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                   </div>
                 </div>
+                {/* ★ 凡例をグラフ直上に移動 */}
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#bfdbfe',opacity:0.7,display:'inline-block',borderRadius:2}}/>収縮期 正常 (100-129)</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#fbcfe8',opacity:0.7,display:'inline-block',borderRadius:2}}/>拡張期 正常 (60-84)</span>
+                </div>
                 <VitalChart field="bpUp" color1={bpWarn?'#ef4444':'#3b82f6'} color2={'#f87171'} yMin={40} yMax={180}
                   refLines={[
                     {v:130,label:'高血圧Ⅰ度 130',color:'#fbbf24',warn:false},
@@ -17266,13 +17265,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               </div>
 
               <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${pulseWarn?'#fecaca':'#f1f5f9'}`}}>
-                <div style={{display:'flex',justifyContent:'flex-start',alignItems:'flex-end',marginBottom:20,flexWrap:'wrap',gap:16}}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>脈拍（日別）</div>
-                    <div style={{display:'flex',gap:8}}>
-                      <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（回/分）</span>
-                    </div>
-                  </div>
+                {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ) */}
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:10}}>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>脈拍（日別）</div>
                   {/* ★ 脈拍サマリー: 体温・血圧と統一サイズ */}
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {avgPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:90}}>
@@ -17291,6 +17286,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minPulseDate||'—'}</div>
                     </div>}
                   </div>
+                </div>
+                {/* ★ 凡例をグラフ直上に移動 */}
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（回/分）</span>
                 </div>
                 <VitalChart field="pulse" color1={pulseWarn?'#ef4444':'#22c55e'} yMin={40} yMax={130}
                   refLines={[
@@ -17422,7 +17421,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const maxD=unit==='fraction'&&exData.some(d=>d.den||d.denAvg)?Math.max(...exData.filter(d=>d.den||d.denAvg).map(d=>d.den||d.denAvg)):null;
             const hasDataMonths=monthlyEx.filter(d=>d.hasData); const trend=hasDataMonths.length>=2?hasDataMonths[hasDataMonths.length-1].avg-hasDataMonths[0].avg:0;
             const PAD_L2=PAD_EX;
-            const xP2=(i)=>PAD_L2+i*_STEP2;
+            // ★ Y 軸の真上に重ならないよう半ステップ右にずらして開始 (バイタルトレンドと統一)
+            const xP2=(i)=>PAD_L2 + _STEP2/2 + i*_STEP2;
             // Y軸: 0基底、最大値に応じて目盛り自動調整
             const yMax2=maxV<=0?1:Math.ceil(maxV*1.1);
             const yRange=yMax2||1;
@@ -17457,11 +17457,16 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   <span style={{fontSize:13,fontWeight:'bold',padding:'2px 10px',borderRadius:20,background:'#ede9fe',color:'#6d28d9'}}>
                     {unit==='minutes'?'分（時間）':unit==='count'?'回（回数）':unit==='fraction'?'回':'数値'}
                   </span>
-                  {graphType === 'weight_reps' && (
-                    <span style={{fontSize:11,fontWeight:'bold',padding:'2px 10px',borderRadius:20,background:'#dbeafe',color:'#1e40af'}}>
-                      📊 棒(数値) + 📈 折れ線(回数) 複合グラフ
+                  {graphType === 'weight_reps' && (<>
+                    <span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:11,color:'#475569'}}>
+                      <span style={{width:10,height:10,background:'#3b82f6',opacity:0.65,borderRadius:2,display:'inline-block'}}/>
+                      重さ・数値
                     </span>
-                  )}
+                    <span style={{display:'inline-flex',alignItems:'center',gap:3,fontSize:11,color:'#475569'}}>
+                      <span style={{width:14,height:2,background:'#f97316',borderRadius:1,display:'inline-block'}}/>
+                      回数
+                    </span>
+                  </>)}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:12}}>
                   <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
@@ -17728,7 +17733,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             <div style={{padding:'32px 24px',textAlign:'center'}}>
               <div style={{fontSize:28,marginBottom:10}}>📋</div>
               <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>モニタリング記録はまだありません</div>
-              {!familyMode && (
+              {/* ★ 事業所モードのみ「モニタリングへ」遷移ボタン。 家族・ケアマネ閲覧モードは読み取り専用 */}
+              {!compactMode && (
                 <button onClick={()=>navigateTo('monitoring')}
                   style={{marginTop:14,padding:'8px 20px',background:'#10b981',color:'white',border:'none',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:'pointer'}}>
                   モニタリングへ
