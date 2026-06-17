@@ -11054,8 +11054,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [inviteFamilyOpen, setInviteFamilyOpen] = useState(false);
   // 一覧モーダル内のモード ('list' = 一覧表示 / 'new' = 新規登録フォーム)
   const [inviteMode, setInviteMode] = useState('list');
-  // ★ 登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
+  // ★ 利用者・登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
+  const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // モーダルを開いたタイミングで loggedAcc + patient から現在の情報を読み込み
   React.useEffect(() => {
@@ -11206,7 +11207,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               )}
               <button onClick={()=>setMyInfoOpen(true)}
                 style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 14px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
-                👤 登録者情報
+                👤 利用者・登録者情報
               </button>
               {isPrimaryAcc && (
                 <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}}
@@ -11375,11 +11376,73 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           )}
         </div>
       )}
-      {/* 登録者情報モーダル */}
+      {/* 利用者・登録者情報モーダル (タブ式) */}
       {myInfoOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div style={{background:'white',borderRadius:18,maxWidth:420,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
-            <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>👤 登録者情報</div>
+          <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
+            <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>👤 利用者・登録者情報</div>
+            {/* ★ タブ切替 */}
+            <div style={{display:'flex',gap:6,marginBottom:14,borderBottom:'2px solid #e2e8f0'}}>
+              {[
+                {k:'patient', label:'利用者基本情報'},
+                {k:'registrant', label:'登録者基本情報'},
+              ].map(t => (
+                <button key={t.k} onClick={()=>setMyInfoTab(t.k)}
+                  style={{
+                    flex:1, padding:'8px 12px', fontSize:12, fontWeight:'bold',
+                    background: myInfoTab===t.k ? '#7daa3d' : 'transparent',
+                    color: myInfoTab===t.k ? 'white' : '#475569',
+                    border:'none', borderRadius:'8px 8px 0 0', cursor:'pointer',
+                  }}>{t.label}</button>
+              ))}
+            </div>
+            {/* ===== 利用者基本情報タブ (読み取り専用) ===== */}
+            {myInfoTab === 'patient' && (
+              <div style={{display:'grid',gap:8}}>
+                <div style={{fontSize:11,color:'#64748b',marginBottom:4,lineHeight:1.5}}>
+                  ご利用者ご本人の基本情報です (事業所で管理)。
+                </div>
+                {(() => {
+                  const careLevelDisp = patient?.careLevel || '';
+                  const birthDisp = (() => {
+                    if (!patient?.birthDate) return '';
+                    const d = new Date(patient.birthDate);
+                    if (isNaN(d.getTime())) return patient.birthDate;
+                    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
+                  })();
+                  const items = [
+                    {label:'お名前', value: patient?.name || ''},
+                    {label:'ふりがな', value: patient?.kana || ''},
+                    {label:'生年月日', value: birthDisp},
+                    {label:'性別', value: patient?.gender || ''},
+                    {label:'介護度', value: careLevelDisp},
+                    {label:'被保険者番号', value: patient?.hihokenNum || ''},
+                    {label:'電話番号', value: patient?.phone || ''},
+                    {label:'住所', value: patient?.address || ''},
+                    {label:'既往歴', value: patient?.kiou || '', multi:true},
+                    {label:'留意点', value: patient?.ryui || '', multi:true},
+                  ];
+                  return items.map((it, i) => (
+                    <div key={i}>
+                      <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{it.label}</label>
+                      <div style={{
+                        width:'100%', padding:'9px 12px',
+                        background:'#f8fafc', border:'1px solid #e2e8f0',
+                        borderRadius:10, fontSize:13, color:'#1e293b',
+                        whiteSpace: it.multi ? 'pre-wrap' : 'normal',
+                        minHeight: it.multi ? 36 : 'auto',
+                      }}>{it.value || <span style={{color:'#cbd5e1'}}>—</span>}</div>
+                    </div>
+                  ));
+                })()}
+                <div style={{display:'flex',gap:8,marginTop:14}}>
+                  <button onClick={()=>setMyInfoOpen(false)}
+                    style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+                </div>
+              </div>
+            )}
+            {/* ===== 登録者基本情報タブ (旧フォーム) ===== */}
+            {myInfoTab === 'registrant' && (<>
             <div style={{fontSize:11,color:'#64748b',marginBottom:14,lineHeight:1.6}}>
               ご家族の連絡先情報です。<br/>
               <b>変更すると事業所側の利用者マスタにも自動反映</b>されます。
@@ -11504,6 +11567,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 {myInfoForm.saving ? '⏳ 保存中...' : '💾 保存'}
               </button>
             </div>
+            </>)}
           </div>
         </div>
       )}
@@ -21010,6 +21074,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [pendingTickets, setPendingTickets] = useState(null);
   const effShifts = pendingShifts ?? (appData.monthlyShifts || {});
   const effTickets = pendingTickets ?? (appData.ticketRecords || []);
+  // ★ MasterView 内で markDirty 未定義のため applySchedChange / 各種変更で
+  //   dirtyRef を立てられず、 サイドバーから他画面へ遷移する際の未保存ポップアップが出なかった不具合を修正
+  const markDirty = React.useCallback(() => { if (dirtyRef) dirtyRef.current = true; }, [dirtyRef]);
   React.useEffect(() => {
     // 利用者を切り替えたら保留変更は破棄せず（同一appDataなので継続）。
     // 月を切り替えたら保留はクリアして混乱を避ける。
