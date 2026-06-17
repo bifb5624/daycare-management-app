@@ -11041,12 +11041,27 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const myPeers = React.useMemo(() => {
     if (!loggedAcc || !patient) return [];
     const kind = loggedAcc.kind || 'family';
+    // ★ patientId は型不一致 (number vs string) が起きうるので String 比較
     return (data.familyAccounts||[]).filter(a =>
-      a.patientId === patient.id && (a.kind || 'family') === kind
+      String(a.patientId) === String(patient.id) && (a.kind || 'family') === kind
     );
   }, [data.familyAccounts, loggedAcc, patient]);
   const isPrimaryAcc = React.useMemo(() => {
-    if (!loggedAcc || myPeers.length === 0) return false;
+    if (!loggedAcc) return false;
+    // ★ 1) 明示的に isPrimary=true が設定されている (代表者変更後)
+    if (loggedAcc.isPrimary === true) return true;
+    // ★ 2) role が 'parent' (登録時に親として作られた)
+    if (loggedAcc.role === 'parent') {
+      // 同じ kind に他の isPrimary=true がいなければ自分が代表
+      const overrideHolder = myPeers.find(p => p.isPrimary === true);
+      if (!overrideHolder) return true;
+      return overrideHolder.id === loggedAcc.id;
+    }
+    // ★ 3) peers の中で isPrimary=true がいればそれが代表
+    const overrideHolder = myPeers.find(p => p.isPrimary === true);
+    if (overrideHolder) return overrideHolder.id === loggedAcc.id;
+    // ★ 4) 最後の fallback: createdAt 最古を代表 (過去データ用)
+    if (myPeers.length === 0) return false;
     const sorted = [...myPeers].sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
     return sorted[0]?.id === loggedAcc.id;
   }, [myPeers, loggedAcc]);
@@ -11397,15 +11412,16 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
           <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
             <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>👤 利用者・登録者情報</div>
-            {/* ★ タブ切替 */}
+            {/* ★ タブ切替 (家族一覧 / 関係者一覧 を 3 タブ目に追加) */}
             <div style={{display:'flex',gap:6,marginBottom:14,borderBottom:'2px solid #e2e8f0'}}>
               {[
                 {k:'patient', label:'利用者基本情報'},
                 {k:'registrant', label:'登録者基本情報'},
+                {k:'list', label: isCmAccount ? '関係者一覧' : '家族一覧'},
               ].map(t => (
                 <button key={t.k} onClick={()=>setMyInfoTab(t.k)}
                   style={{
-                    flex:1, padding:'8px 12px', fontSize:12, fontWeight:'bold',
+                    flex:1, padding:'8px 8px', fontSize:11, fontWeight:'bold',
                     background: myInfoTab===t.k ? '#7daa3d' : 'transparent',
                     color: myInfoTab===t.k ? 'white' : '#475569',
                     border:'none', borderRadius:'8px 8px 0 0', cursor:'pointer',
@@ -11651,6 +11667,110 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               </button>
             </div>
             </>)}
+            {/* ===== 家族一覧 / 関係者一覧 タブ ===== */}
+            {myInfoTab === 'list' && (() => {
+              const listTitle = isCmAccount ? '関係者一覧' : '家族一覧';
+              // ★ 代表者にする処理
+              const handleMakePrimary = async (targetId) => {
+                if (!isPrimaryAcc) return;
+                if (!window.confirm('この方を代表者に変更します。 よろしいでしょうか?\n(変更後はこの方が招待・代表者変更を行えるようになります)')) return;
+                const updatedAccs = (data.familyAccounts||[]).map(a => {
+                  if (myPeers.some(p => p.id === a.id)) {
+                    return { ...a, isPrimary: a.id === targetId };
+                  }
+                  return a;
+                });
+                const updated = { ...data, familyAccounts: updatedAccs };
+                try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                setData(updated);
+                if (isSupabaseEnabled) {
+                  try {
+                    // Supabase の各 family_account を更新 (isPrimary)
+                    for (const a of updatedAccs.filter(x => myPeers.some(p => p.id === x.id))) {
+                      await supabaseUpdateFamilyAccount?.(a.id, { isPrimary: a.isPrimary });
+                    }
+                  } catch (e) { console.warn('[supabase] primary change sync failed', e); }
+                }
+                alert('代表者を変更しました。');
+              };
+              return (
+                <div style={{display:'grid',gap:8}}>
+                  <div style={{fontSize:11,color:'#64748b',marginBottom:4,lineHeight:1.5}}>
+                    {isCmAccount ? 'ご利用者の関係者 (ケアマネ) 一覧です。' : 'ご家族の登録メンバー一覧です。'}<br/>
+                    {isPrimaryAcc && (
+                      <b style={{color:'#92400e'}}>※ 代表者のみ「+ 招待」「代表者を変更」ができます。</b>
+                    )}
+                  </div>
+                  {/* メンバーカード */}
+                  {myPeers.length === 0 ? (
+                    <div style={{textAlign:'center',color:'#94a3b8',fontSize:12,padding:'24px 0'}}>登録メンバーなし</div>
+                  ) : (
+                    [...myPeers]
+                      .sort((x,y) => {
+                        // 代表者を先頭に
+                        const xPrim = x.isPrimary || (x.id === loggedAcc?.id && isPrimaryAcc) ? 1 : 0;
+                        const yPrim = y.isPrimary || (y.id === loggedAcc?.id && isPrimaryAcc) ? 1 : 0;
+                        if (xPrim !== yPrim) return yPrim - xPrim;
+                        return (x.createdAt||'').localeCompare(y.createdAt||'');
+                      })
+                      .map(m => {
+                        const isMe = String(m.id) === String(loggedAcc?.id);
+                        // 代表者判定: m.isPrimary が明示か、 isPrimary=true がいなければ createdAt 最古
+                        const overrideExists = myPeers.some(p => p.isPrimary === true);
+                        let isMemberPrimary;
+                        if (overrideExists) isMemberPrimary = m.isPrimary === true;
+                        else {
+                          const sorted = [...myPeers].sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
+                          isMemberPrimary = sorted[0]?.id === m.id;
+                        }
+                        // 電話番号引き当て
+                        const phone = (() => {
+                          if (isMemberPrimary && !isCmAccount) return patient?.familyPhoneMobile || patient?.familyPhone || '';
+                          const ec = (patient?.emergencyContacts || []).find(c =>
+                            (c.addedByFamilyAccountId === m.id) ||
+                            ((c.email||'').trim() === (m.email||'').trim() && (m.email||'').trim() !== '')
+                          );
+                          return ec?.phoneMobile || ec?.phone || '';
+                        })();
+                        return (
+                          <div key={m.id} style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:4}}>
+                              {isMemberPrimary && <span title="代表者" style={{fontSize:14}}>🍀</span>}
+                              <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{m.displayName || m.username || '(名前未設定)'}</span>
+                              {isMe && <span style={{fontSize:9,background:'#dbeafe',color:'#1e40af',padding:'1px 6px',borderRadius:4,fontWeight:'bold'}}>あなた</span>}
+                              {m.relation && <span style={{fontSize:10,background:isCmAccount?'#ccfbf1':'#ede9fe',color:isCmAccount?'#0f766e':'#6d28d9',padding:'1px 6px',borderRadius:4,fontWeight:'bold'}}>{m.relation}</span>}
+                              {isMemberPrimary && <span style={{fontSize:10,background:'#fef3c7',color:'#92400e',padding:'1px 6px',borderRadius:4,fontWeight:'bold'}}>代表者</span>}
+                            </div>
+                            <div style={{fontSize:11,color:'#64748b',marginBottom:2}}>📧 {m.email || 'メール未登録'}</div>
+                            {phone && <div style={{fontSize:11,color:'#64748b'}}>📞 {phone}</div>}
+                            {isPrimaryAcc && !isMemberPrimary && !isMe && (
+                              <button onClick={()=>handleMakePrimary(m.id)}
+                                style={{marginTop:6,padding:'5px 10px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>
+                                🍀 代表者にする
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })
+                  )}
+                  {/* 招待ボタン (代表者のみ) */}
+                  <div style={{display:'flex',gap:8,marginTop:12}}>
+                    <button onClick={()=>setMyInfoOpen(false)}
+                      style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+                    {isPrimaryAcc && (
+                      <button onClick={()=>{
+                        setMyInfoOpen(false);
+                        setInviteMode('list');
+                        setInviteFamilyOpen(true);
+                      }}
+                        style={{flex:1,padding:'11px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>
+                        ＋ {isCmAccount?'関係者を招待':'家族を招待'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -16933,9 +17053,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             return (
               <div style={{display:'flex',alignItems:'stretch'}}>
                 {/* Y軸ラベル列（固定） — ★ 体温は小数 1 桁で表示 (38.0 / 36.5 等) */}
+                {/* ★ 太字 → 細字 (normal) で圧迫感を軽減 */}
                 <div style={{flexShrink:0,width: field==='temp'?38:32,position:'relative',height:H+14}}>
                   {yTicks.map(v=>(
-                    <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:13,color:'#475569',fontWeight:'bold',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{field==='temp' ? Number(v).toFixed(1) : v}</div>
+                    <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:12,color:'#64748b',fontWeight:'normal',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{field==='temp' ? Number(v).toFixed(1) : v}</div>
                   ))}
                 </div>
                 {/* グラフ本体（横スクロール） */}
@@ -17051,17 +17172,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                       {avgTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:80}}>
                         <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>平均</div>
-                        <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgTemp.toFixed(1)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
+                        <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgTemp.toFixed(1)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
                         <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                       </div>}
                       {maxTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:80}}>
                         <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>最高</div>
-                        <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
+                        <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
                         <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxTempDate||'—'}</div>
                       </div>}
                       {minTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:80}}>
                         <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>最低</div>
-                        <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
+                        <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
                         <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minTempDate||'—'}</div>
                       </div>}
                     </div>
@@ -17092,32 +17213,32 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>収縮期 平均</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpUp?Math.round(avgBpUp):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpUp?Math.round(avgBpUp):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>収縮期 最高</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxBpDate||'—'}</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>収縮期 最低</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minBpDate||'—'}</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>拡張期 平均</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpDn?Math.round(avgBpDn):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpDn?Math.round(avgBpDn):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>拡張期 最高</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxBpDnDate||'—'}</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center',minWidth:90}}>
                       <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>拡張期 最低</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minBpDnDate||'—'}</div>
                     </div>
                   </div>
@@ -17144,17 +17265,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {avgPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:90}}>
                       <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>平均</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{Math.round(avgPulse)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{Math.round(avgPulse)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
                       <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>}
                     {maxPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:90}}>
                       <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>最高</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxPulseDate||'—'}</div>
                     </div>}
                     {minPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:90}}>
                       <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>最低</div>
-                      <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minPulseDate||'—'}</div>
                     </div>}
                   </div>
