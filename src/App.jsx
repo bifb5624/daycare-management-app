@@ -15812,8 +15812,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
       <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: compactMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
-        {/* familyMode 時は親 (FamilyPatientView) のヘッダに利用者名が出るので重複表示を防ぐ */}
-        {!familyMode && (
+        {/* ★ ご家族 / ケアマネ閲覧時 (compactMode) は親ヘッダに利用者名があるため非表示で重複を防ぐ */}
+        {!compactMode && (
           <div style={{display:'flex',alignItems:'center',gap:12}}>
             <div style={{width:36,height:36,background:'rgba(255,255,255,0.2)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}>
               <BarChart3 size={20}/>
@@ -16467,33 +16467,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                   </div>
                 ) : (
-                  /* 出席/振替: 1行に 体温 | 血圧+脈(開始) | 血圧+脈(終了) | 気分 */
+                  /* ★ 出席/振替: 2x2 配置 [気分][体温] / [血圧開始][血圧終了] */
                   <>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'10px 16px',fontSize:13}}>
-                      {/* 体温 */}
-                      <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>体温</span>
-                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2}}>
-                          {latest.temp ? <>{latest.temp}<span style={{fontSize:11,color:'#94a3b8',marginLeft:2}}>℃</span></> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
-                        </div>
-                      </div>
-                      {/* 血圧+脈 開始 (横並び) */}
-                      <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (開始)</span>
-                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
-                          {latest.bpUpSt ? <span>{latest.bpUpSt}/{latest.bpDnSt}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
-                          {latest.plSt && <span>{latest.plSt}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
-                        </div>
-                      </div>
-                      {/* 血圧+脈 終了 (横並び) */}
-                      <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (終了)</span>
-                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
-                          {latest.bpUpEn ? <span>{latest.bpUpEn}/{latest.bpDnEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
-                          {latest.plEn && <span>{latest.plEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
-                        </div>
-                      </div>
-                      {/* 気分 */}
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px 16px',fontSize:13}}>
+                      {/* 気分 (左上) */}
                       <div>
                         <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>気分</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,marginTop:4,lineHeight:1.5}}>
@@ -16502,6 +16479,40 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                           {!latest.kibunArrival && !latest.kibunDeparture && <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
                         </div>
                       </div>
+                      {/* 体温 (右上) */}
+                      <div>
+                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>体温</span>
+                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2}}>
+                          {latest.temp ? <>{latest.temp}<span style={{fontSize:11,color:'#94a3b8',marginLeft:2}}>℃</span></> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                        </div>
+                      </div>
+                      {/* 血圧+脈 開始 (左下) */}
+                      <div>
+                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (開始)</span>
+                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
+                          {latest.bpUpSt ? <span>{latest.bpUpSt}/{latest.bpDnSt}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                          {latest.plSt && <span>{latest.plSt}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
+                        </div>
+                      </div>
+                      {/* 血圧+脈 終了 (右下) */}
+                      <div>
+                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (終了)</span>
+                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
+                          {latest.bpUpEn ? <span>{latest.bpUpEn}/{latest.bpDnEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                          {latest.plEn && <span>{latest.plEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
+                        </div>
+                      </div>
+                      {/* 旧 気分位置 (削除済) */}
+                      {false && (
+                      <div>
+                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>気分</span>
+                        <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,marginTop:4,lineHeight:1.5}}>
+                          {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}</div>}
+                          {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}</div>}
+                          {!latest.kibunArrival && !latest.kibunDeparture && <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                        </div>
+                      </div>
+                      )}
                     </div>
                     {/* ★ 今回の運動メニュー (latest.exercises) + 前回比 */}
                     {(() => {
@@ -16644,7 +16655,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
               );
             })()}
-            {/* 気分 円グラフ */}
+            {/* 気分 円グラフ (通所時 / 帰宅時 で分割表示) */}
             {(()=>{
               const MOOD_DEF=[
                 {key:'excellent',emoji:'🤩',label:'とても良い',color:'#facc15'},
@@ -16653,50 +16664,85 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 {key:'bad',      emoji:'😞',label:'イマイチ',   color:'#fb923c'},
                 {key:'terrible', emoji:'😫',label:'とても悪い', color:'#f87171'},
               ];
-              const SCORE={excellent:5,good:4,normal:3,bad:2,terrible:1};
-              const allKibun=[
-                ...records.filter(r=>r.kibunArrival).map(r=>r.kibunArrival),
-                ...records.filter(r=>r.kibunDeparture).map(r=>r.kibunDeparture),
-              ].filter(v=>SCORE[v]);
-              const total=allKibun.length;
-              if(!total) return (
+              // 通所時 / 帰宅時 を別集計
+              const arrList = records.map(r=>r.kibunArrival).filter(v=>v && MOOD_DEF.some(m=>m.key===v));
+              const depList = records.map(r=>r.kibunDeparture).filter(v=>v && MOOD_DEF.some(m=>m.key===v));
+              if (arrList.length === 0 && depList.length === 0) return (
                 <div style={{background:'white',borderRadius:12,padding:'14px 16px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',display:'flex',flexDirection:'column',gap:8}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
                   <div style={{fontSize:13,color:'#94a3b8',textAlign:'center',padding:'20px 0'}}>記録なし</div>
                 </div>
               );
-              const counts={};MOOD_DEF.forEach(m=>counts[m.key]=0);
-              allKibun.forEach(k=>{if(counts[k]!==undefined)counts[k]++;});
-              const avgScore=allKibun.reduce((s,k)=>s+(SCORE[k]||3),0)/total;
-              const avgDef=MOOD_DEF[Math.max(0,Math.min(4,Math.round(5-avgScore)))];
-              const slices=MOOD_DEF.map(m=>({...m,count:counts[m.key],pct:counts[m.key]/total})).filter(s=>s.count>0);
-              const r2=34,cx=38,cy=38;
-              let angle=-Math.PI/2;
-              const paths=slices.map(s=>{
-                const a1=angle,a2=angle+s.pct*2*Math.PI;
-                const x1=cx+r2*Math.cos(a1),y1=cy+r2*Math.sin(a1);
-                const x2=cx+r2*Math.cos(a2),y2=cy+r2*Math.sin(a2);
-                const large=s.pct>0.5?1:0;
-                const d=`M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r2},${r2},0,${large},1,${x2.toFixed(1)},${y2.toFixed(1)} Z`;
-                angle=a2;
-                return {...s,d};
-              });
-              return (
-                <div style={{background:'white',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',display:'flex',flexDirection:'column',gap:6,flex:1,minWidth:160}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
-                  {/* ★ 円グラフ + 平均気分 + 各気分件数 を 1 行に横並び */}
-                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-                    <svg width={64} height={64} viewBox="0 0 76 76" style={{flexShrink:0}}>
-                      {paths.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth={1.5}/>)}
+              // 1 タイミング (arrival/departure) ぶんの円グラフを描画するヘルパー
+              const buildPie = (list) => {
+                const total = list.length;
+                if (total === 0) return null;
+                const counts={};MOOD_DEF.forEach(m=>counts[m.key]=0);
+                list.forEach(k=>{if(counts[k]!==undefined)counts[k]++;});
+                const slices=MOOD_DEF.map(m=>({...m,count:counts[m.key],pct:counts[m.key]/total})).filter(s=>s.count>0);
+                // 多かった気分 (= 最頻値)
+                const modeDef = MOOD_DEF.reduce((best,m) => (counts[m.key] > (best?counts[best.key]:-1) ? m : best), null);
+                const r2=30,cx=34,cy=34;
+                let angle=-Math.PI/2;
+                const paths = slices.length === 1
+                  ? null
+                  : slices.map(s=>{
+                      const a1=angle,a2=angle+s.pct*2*Math.PI;
+                      const x1=cx+r2*Math.cos(a1),y1=cy+r2*Math.sin(a1);
+                      const x2=cx+r2*Math.cos(a2),y2=cy+r2*Math.sin(a2);
+                      const large=s.pct>0.5?1:0;
+                      const d=`M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${r2},${r2},0,${large},1,${x2.toFixed(1)},${y2.toFixed(1)} Z`;
+                      angle=a2;
+                      return {...s,d};
+                    });
+                return { slices, paths, modeDef, total };
+              };
+              const arrPie = buildPie(arrList);
+              const depPie = buildPie(depList);
+              const PieView = ({pie, title}) => {
+                if (!pie) return (
+                  <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'8px 4px',background:'#f8fafc',borderRadius:10,border:'1px solid #e2e8f0'}}>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>{title}</div>
+                    <div style={{fontSize:12,color:'#94a3b8'}}>記録なし</div>
+                  </div>
+                );
+                const {slices, paths, modeDef, total} = pie;
+                return (
+                  <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'8px 4px',background:'#f8fafc',borderRadius:10,border:'1px solid #e2e8f0',minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>{title}</div>
+                    <svg width={68} height={68} viewBox="0 0 68 68" style={{flexShrink:0}}>
+                      {slices.length === 1
+                        ? <circle cx={34} cy={34} r={30} fill={slices[0].color}/>
+                        : paths.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth={1.2}/>)}
                     </svg>
-                    <div style={{background:avgDef.color+'22',borderRadius:10,padding:'4px 8px',border:`1.5px solid ${avgDef.color}55`,textAlign:'center',flexShrink:0}}>
-                      <div style={{fontSize:9,fontWeight:'bold',color:'#94a3b8',marginBottom:1}}>平均気分</div>
-                      <div style={{fontSize:24,lineHeight:1}}>{avgDef.emoji}</div>
-                      <div style={{fontSize:10,fontWeight:'bold',color:'#1e293b',marginTop:1}}>{avgDef.label}</div>
+                    <div style={{background:modeDef.color+'22',borderRadius:8,padding:'3px 8px',border:`1.5px solid ${modeDef.color}55`,textAlign:'center'}}>
+                      <div style={{fontSize:9,color:'#94a3b8',fontWeight:'bold'}}>多かった気分</div>
+                      <div style={{display:'flex',alignItems:'center',gap:3,justifyContent:'center'}}>
+                        <span style={{fontSize:18,lineHeight:1}}>{modeDef.emoji}</span>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#1e293b'}}>{modeDef.label}</span>
+                      </div>
                     </div>
-                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',flex:1,minWidth:0}}>
-                      {MOOD_DEF.map((m,i)=>{const cnt=counts[m.key]||0;return(<div key={i} style={{display:'flex',alignItems:'center',gap:3,fontSize:12,opacity:cnt>0?1:0.3,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:m.color,flexShrink:0,display:'inline-block'}}/><span style={{fontSize:13}}>{m.emoji}</span><span style={{color:'#475569'}}>{m.label}</span><span style={{fontWeight:'bold',color:'#1e293b'}}>{cnt}</span></div>);})}
-                    </div>
+                    <div style={{fontSize:9,color:'#94a3b8',fontWeight:'bold'}}>{total}件</div>
+                  </div>
+                );
+              };
+              return (
+                <div style={{background:'white',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',display:'flex',flexDirection:'column',gap:8,flex:1,minWidth:160}}>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
+                  {/* ★ 上: 横一列の凡例 */}
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'2px 8px'}}>
+                    {MOOD_DEF.map((m,i) => (
+                      <div key={i} style={{display:'flex',alignItems:'center',gap:2,fontSize:10,color:'#475569',whiteSpace:'nowrap'}}>
+                        <span style={{width:8,height:8,borderRadius:'50%',background:m.color,display:'inline-block',flexShrink:0}}/>
+                        <span style={{fontSize:11}}>{m.emoji}</span>
+                        <span>{m.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* ★ 下: 左=通所時、 右=帰宅時 */}
+                  <div style={{display:'flex',gap:8,marginTop:4}}>
+                    <PieView pie={arrPie} title="通所時"/>
+                    <PieView pie={depPie} title="帰宅時"/>
                   </div>
                 </div>
               );
