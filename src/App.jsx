@@ -11263,6 +11263,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             appData={data}
             targetPatientId={pid}
             familyMode={!isCmAccount}
+            cmViewerMode={isCmAccount}
             hidePatientSelector={true}
             navigateTo={()=>{}}
             onShowPrintPreview={()=>{}}
@@ -11412,16 +11413,15 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
           <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
             <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>👤 利用者・登録者情報</div>
-            {/* ★ タブ切替 (家族一覧 / 関係者一覧 を 3 タブ目に追加) */}
+            {/* ★ タブ切替 (家族一覧は右上の独立ボタンに集約したのでここでは 2 タブのみ) */}
             <div style={{display:'flex',gap:6,marginBottom:14,borderBottom:'2px solid #e2e8f0'}}>
               {[
                 {k:'patient', label:'利用者基本情報'},
                 {k:'registrant', label:'登録者基本情報'},
-                {k:'list', label: isCmAccount ? '関係者一覧' : '家族一覧'},
               ].map(t => (
                 <button key={t.k} onClick={()=>setMyInfoTab(t.k)}
                   style={{
-                    flex:1, padding:'8px 8px', fontSize:11, fontWeight:'bold',
+                    flex:1, padding:'8px 12px', fontSize:12, fontWeight:'bold',
                     background: myInfoTab===t.k ? '#7daa3d' : 'transparent',
                     color: myInfoTab===t.k ? 'white' : '#475569',
                     border:'none', borderRadius:'8px 8px 0 0', cursor:'pointer',
@@ -11444,45 +11444,54 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   </div>
                 )}
                 {(() => {
-                  const fields = [
-                    {key:'name',       label:'お名前',         type:'text', placeholder:'例: 山田 太郎'},
-                    {key:'kana',       label:'ふりがな',       type:'text', placeholder:'例: やまだ たろう'},
-                    {key:'birthDate',  label:'生年月日',       type:'date'},
-                    {key:'gender',     label:'性別',           type:'select', options:['','男性','女性']},
-                    {key:'careLevel',  label:'介護度',         type:'select', options:['','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5','自立']},
-                    {key:'hihokenNum', label:'被保険者番号',   type:'text'},
+                  // ★ 編集可能なフィールドのみ表示
+                  //   - 名前 / ふりがな は読み取り専用で表示 (事業所側で管理)
+                  //   - 生年月日 / 性別 / 介護度 / 被保険者番号 は表示しない (事業所側で管理)
+                  //   - 電話番号 / 住所 / 既往歴 / 留意点 は代表者なら編集可
+                  const readOnlyFields = [
+                    {key:'name',       label:'お名前'},
+                    {key:'kana',       label:'ふりがな'},
+                  ];
+                  const editableFields = [
                     {key:'phone',      label:'電話番号',       type:'text', placeholder:'03-XXXX-XXXX'},
                     {key:'address',    label:'住所',           type:'text'},
                     {key:'kiou',       label:'既往歴',         type:'textarea'},
                     {key:'ryui',       label:'留意点',         type:'textarea'},
                   ];
-                  return fields.map(f => (
-                    <div key={f.key}>
-                      <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label}</label>
-                      {!isPrimaryAcc ? (
+                  return (<>
+                    {readOnlyFields.map(f => (
+                      <div key={f.key}>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label} <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(事業所側で管理)</span></label>
                         <div style={{
                           width:'100%', padding:'9px 12px',
                           background:'#f8fafc', border:'1px solid #e2e8f0',
                           borderRadius:10, fontSize:13, color:'#1e293b',
-                          whiteSpace: f.type==='textarea' ? 'pre-wrap' : 'normal',
-                          minHeight: f.type==='textarea' ? 36 : 'auto',
                         }}>{patientForm[f.key] || <span style={{color:'#cbd5e1'}}>—</span>}</div>
-                      ) : f.type === 'textarea' ? (
-                        <textarea value={patientForm[f.key]} onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
-                          rows={2}
-                          style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
-                      ) : f.type === 'select' ? (
-                        <select value={patientForm[f.key]} onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
-                          style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
-                          {f.options.map(o => <option key={o} value={o}>{o || '— 選択 —'}</option>)}
-                        </select>
-                      ) : (
-                        <input type={f.type} value={patientForm[f.key]} placeholder={f.placeholder||''}
-                          onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
-                          style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                      )}
-                    </div>
-                  ));
+                      </div>
+                    ))}
+                    {editableFields.map(f => (
+                      <div key={f.key}>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label}</label>
+                        {!isPrimaryAcc ? (
+                          <div style={{
+                            width:'100%', padding:'9px 12px',
+                            background:'#f8fafc', border:'1px solid #e2e8f0',
+                            borderRadius:10, fontSize:13, color:'#1e293b',
+                            whiteSpace: f.type==='textarea' ? 'pre-wrap' : 'normal',
+                            minHeight: f.type==='textarea' ? 36 : 'auto',
+                          }}>{patientForm[f.key] || <span style={{color:'#cbd5e1'}}>—</span>}</div>
+                        ) : f.type === 'textarea' ? (
+                          <textarea value={patientForm[f.key]} onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
+                            rows={2}
+                            style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
+                        ) : (
+                          <input type={f.type} value={patientForm[f.key]} placeholder={f.placeholder||''}
+                            onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
+                            style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                        )}
+                      </div>
+                    ))}
+                  </>);
                 })()}
                 <div style={{display:'flex',gap:8,marginTop:14}}>
                   <button onClick={()=>setMyInfoOpen(false)} disabled={patientForm.saving}
@@ -12045,6 +12054,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                           patientName: patient.name || '',
                           facilityPhone: facility.phone || '',
                           expiresAtJp: '14日後',
+                          relation: inviteFamForm.relation || '',
                         }),
                       });
                       console.log('[family-invite] response status:', resp.status, resp.ok);
@@ -15529,7 +15539,9 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
 }
 
 // === PersonalDashboardView (簡易版) ===
-function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, hidePatientSelector = false, stickyTopOffset = null }) {
+function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, hidePatientSelector = false, stickyTopOffset = null }) {
+  // ★ ケアマネ閲覧モード = 事業所と同じフルセット内容を読取専用で表示。 縦型 (スマホ) でも見やすく縦並びに
+  const compactMode = familyMode || cmViewerMode; // 基本指標を縦並びにする判定
   // familyMode 時の sticky top 既定値: stickyTopOffset 未指定なら 56 (FamilyView 内)
   const stickyTop = familyMode ? (stickyTopOffset != null ? stickyTopOffset : 56) : 0;
   // familyMode: 利用者家族・ケアマネ向け表示。一部セクション (詳細記録/欠席/休止) を非表示にし、印刷ボタンも隠す
@@ -16585,8 +16597,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               {kyushi>0&&<span style={{color:'#f97316'}}>休止: <b>{kyushi}</b>件</span>}
             </span>
           </div>
-          {/* ★ ご家族画面 (familyMode) は通所率と気分を縦並びに (iPhone 等の縦型でも収まる) */}
-          <div style={{display:'flex',flexDirection: familyMode ? 'column' : 'row', gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
+          {/* ★ ご家族画面 / ケアマネ画面 (compactMode) は通所率と気分を縦並びに (iPhone 等の縦型でも収まる) */}
+          <div style={{display:'flex',flexDirection: compactMode ? 'column' : 'row', gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
             {/* 通所率 */}
             {(()=>{
               const furikaeCount=records.filter(r=>r.tokki&&r.tokki.includes('振替')).length;
@@ -17171,17 +17183,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     {/* ★ 統一サイズ: ラベル 12px / 数値 22px / 単位 11px / 日付 10px */}
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                       {avgTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:80}}>
-                        <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>平均</div>
+                        <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>平均</div>
                         <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgTemp.toFixed(1)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
                         <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                       </div>}
                       {maxTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:80}}>
-                        <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>最高</div>
+                        <div style={{fontSize:12,color:'#ef4444',fontWeight:'normal',marginBottom:2}}>最高</div>
                         <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
                         <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxTempDate||'—'}</div>
                       </div>}
                       {minTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:80}}>
-                        <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>最低</div>
+                        <div style={{fontSize:12,color:'#2563eb',fontWeight:'normal',marginBottom:2}}>最低</div>
                         <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
                         <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minTempDate||'—'}</div>
                       </div>}
@@ -17212,32 +17224,32 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ (ラベル 12 / 数値 22 / 単位 11 / 日付 10) */}
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>収縮期 平均</div>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>収縮期 平均</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpUp?Math.round(avgBpUp):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>収縮期 最高</div>
+                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'normal',marginBottom:2}}>収縮期 最高</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxBpDate||'—'}</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>収縮期 最低</div>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'normal',marginBottom:2}}>収縮期 最低</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minBpDate||'—'}</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>拡張期 平均</div>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>拡張期 平均</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpDn?Math.round(avgBpDn):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>拡張期 最高</div>
+                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'normal',marginBottom:2}}>拡張期 最高</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxBpDnDate||'—'}</div>
                     </div>
                     <div style={{padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>拡張期 最低</div>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'normal',marginBottom:2}}>拡張期 最低</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minBpDnDate||'—'}</div>
                     </div>
@@ -17264,17 +17276,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {/* ★ 脈拍サマリー: 体温・血圧と統一サイズ */}
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {avgPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>平均</div>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>平均</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{Math.round(avgPulse)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
                       <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>}
                     {maxPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>最高</div>
+                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'normal',marginBottom:2}}>最高</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxPulseDate||'—'}</div>
                     </div>}
                     {minPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:90}}>
-                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>最低</div>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'normal',marginBottom:2}}>最低</div>
                       <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
                       <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minPulseDate||'—'}</div>
                     </div>}
@@ -17528,29 +17540,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                     </div></div>
                   </div>
-                  {!familyMode && (
-                  <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
-                    <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 月別平均</div>
-                    <div style={{overflowX:'auto'}}>
-                      <div style={{minWidth:totalW}}>
-                        <div style={{border:'1px solid #f1f5f9',borderRadius:8,overflow:'hidden',marginTop:4}}>
-                          <table style={{width:'100%',minWidth:totalW,borderCollapse:'collapse',fontSize:14,tableLayout:'fixed'}}>
-                            <colgroup><col style={{width:LABEL_W_T}}/>{monthlyEx.map((_,i)=><col key={i} style={{width:COL_W}}/>)}</colgroup>
-                            <thead><tr style={{background:'#f8fafc'}}>
-                              <th style={{padding:'5px 8px',textAlign:'left',color:'#334155',fontWeight:'bold',fontSize:13}}>　</th>
-                              {monthlyEx.map(d=><th key={d.month} style={{padding:'5px 0',textAlign:'center',color:'#1e293b',fontWeight:'bold'}}>{d.month}月</th>)}
-                            </tr></thead>
-                            <tbody>
-
-                              <tr><td style={{padding:'4px 8px',fontWeight:'bold',color:'#6366f1'}}>平均</td>{monthlyEx.map(d=><td key={d.month} style={{padding:'4px 6px',textAlign:'center',fontWeight:'bold',color:'#6366f1'}}>{d.hasData?`${d.avg.toFixed(1)}${unitLabel}`:'-'}</td>)}</tr>
-                              <tr><td style={{padding:'4px 8px',fontWeight:'bold',color:'#ef4444'}}>最高</td>{monthlyEx.map(d=><td key={d.month} style={{padding:'4px 6px',textAlign:'center',fontWeight:'bold',color:'#ef4444'}}>{d.hasData?`${d.max}${unitLabel}`:'-'}</td>)}</tr>
-                              <tr><td style={{padding:'4px 8px',fontWeight:'bold',color:'#3b82f6'}}>最低</td>{monthlyEx.map(d=><td key={d.month} style={{padding:'4px 6px',textAlign:'center',fontWeight:'bold',color:'#3b82f6'}}>{d.hasData?`${d.min}${unitLabel}`:'-'}</td>)}</tr>
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  {/* ★ 分析個人 - 運動の「月別平均」テーブルは削除 (日別推移グラフで十分) */}
+                  {false && (
+                  <div>
                   )}
                 </div>
               </div>
@@ -22162,7 +22154,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   if (familyAccs.length === 0) return null;
                   return (
                     <div className="mb-4 p-3 bg-violet-50 border border-violet-200 rounded-xl">
-                      <div className="text-xs font-bold text-violet-700 mb-2 flex items-center gap-1.5">👨‍👩‍👧 登録済 家族閲覧アカウント ({familyAccs.length}件)</div>
+                      <div className="text-xs font-bold text-violet-700 mb-2 flex items-center gap-1.5">👨‍👩‍👧 登録済 家族・関係者閲覧アカウント ({familyAccs.length}件)</div>
                       <div className="space-y-1">
                         {familyAccs.map(a => (
                           <div key={a.id} className="text-xs text-violet-900 flex flex-wrap gap-x-3 gap-y-0.5">
@@ -22757,7 +22749,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setFamilyShareModal(null)}>
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto" onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
-                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2"><QrCode size={18} className="text-violet-600"/>家族アカウント発行・管理</h2>
+                <h2 className="text-base font-bold text-slate-800 flex items-center gap-2"><QrCode size={18} className="text-violet-600"/>家族・関係者アカウント発行・管理</h2>
                 <button onClick={()=>setFamilyShareModal(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
               <div className="p-6 space-y-5">
@@ -22830,6 +22822,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                           patientName: pat.name || '',
                           facilityPhone: facility.phone || '',
                           expiresAtJp: '14日後',
+                          relation: relation.trim() || '',
                         }),
                       });
                       if (resp.ok) {

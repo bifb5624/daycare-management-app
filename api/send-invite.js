@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   }
   body = body || {};
 
-  const { to, toName, inviteUrl, facilityName, patientName, facilityPhone, expiresAtJp } = body;
+  const { to, toName, inviteUrl, facilityName, patientName, facilityPhone, expiresAtJp, relation } = body;
 
   if (!to || !inviteUrl) {
     return res.status(400).json({ error: '送信先 (to) と招待URL (inviteUrl) は必須です' });
@@ -43,8 +43,12 @@ export default async function handler(req, res) {
   const safeFacility = facilityName || 'デイサービス';
   const safePatient = patientName || '';
   const safeExpires = expiresAtJp || '14日後';
+  // ★ 続柄が ケアマネージャー の場合は「ご関係者専用ページ」表記に切替
+  const isCaremanager = /ケアマネ/.test(relation || '');
+  const pageLabel = isCaremanager ? 'ご関係者専用ページ' : 'ご家族専用ページ';
+  const greetingLabel = isCaremanager ? 'ご関係者の皆さま' : 'ご家族の皆さま';
 
-  const subject = `【${safeFacility}】${safePatient ? `${safePatient} 様の` : ''}ご家族専用ページへのご招待`;
+  const subject = `【${safeFacility}】${safePatient ? `${safePatient} 様の` : ''}${pageLabel}へのご招待`;
 
   const htmlBody = `
 <!DOCTYPE html>
@@ -53,12 +57,12 @@ export default async function handler(req, res) {
   <div style="max-width:560px;margin:0 auto;background:white;border-radius:14px;padding:28px;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
     <div style="text-align:center;border-bottom:2px solid #94c456;padding-bottom:16px;margin-bottom:20px;">
       <div style="font-size:13px;color:#5e8030;font-weight:bold;letter-spacing:2px;">${safeFacility}</div>
-      <div style="font-size:20px;color:#3d5021;font-weight:bold;margin-top:6px;">ご家族専用ページへのご招待</div>
+      <div style="font-size:20px;color:#3d5021;font-weight:bold;margin-top:6px;">${pageLabel}へのご招待</div>
     </div>
     <p style="font-size:14px;line-height:1.8;margin:12px 0;">
-      ${safePatient ? `<strong>${safePatient} 様</strong>のご家族の皆さま<br/>` : ''}
+      ${safePatient ? `<strong>${safePatient} 様</strong>の${greetingLabel}<br/>` : ''}
       いつもお世話になっております。<br/>
-      ${safeFacility} より、ご家族専用ページのご招待をお送りいたします。
+      ${safeFacility} より、${pageLabel}のご招待をお送りいたします。
     </p>
     <p style="font-size:13px;line-height:1.8;margin:12px 0;color:#475569;">
       下記のボタンから登録ページを開き、ID・パスワード等を設定してください。
