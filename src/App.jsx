@@ -17047,20 +17047,22 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:12,height:2,background:tempWarn?'#ef4444':'#f97316',display:'inline-block',borderRadius:1}}/>体温（℃）</span>
                       </div>
                     </div>
+                    {/* ★ 統一サイズ: ラベル 12px / 数値 22px / 単位 11px / 日付 10px */}
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                      {avgTemp&&<div style={{textAlign:'center',padding:'4px 10px',background:'#f0fdf4',borderRadius:8,border:'1px solid #86efac'}}>
-                        <div style={{fontSize:14,color:'#16a34a',fontWeight:'bold'}}>平均</div>
-                        <div style={{fontSize:16,fontWeight:'bold',color:'#15803d'}}>{avgTemp.toFixed(1)}℃</div>
+                      {avgTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:80}}>
+                        <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>平均</div>
+                        <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgTemp.toFixed(1)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
+                        <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                       </div>}
-                      {maxTemp&&<div style={{textAlign:'center',padding:'4px 10px',background:'#fef2f2',borderRadius:8,border:'1px solid #fecaca'}}>
-                        <div style={{fontSize:14,color:'#ef4444',fontWeight:'bold'}}>最高</div>
-                        <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626'}}>{maxTemp}℃</div>
-                        <div style={{fontSize:8,color:'#334155'}}>{maxTempDate}</div>
+                      {maxTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:80}}>
+                        <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>最高</div>
+                        <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
+                        <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxTempDate||'—'}</div>
                       </div>}
-                      {minTemp&&<div style={{textAlign:'center',padding:'4px 10px',background:'#eff6ff',borderRadius:8,border:'1px solid #bfdbfe'}}>
-                        <div style={{fontSize:8,color:'#60a5fa',fontWeight:'bold'}}>最低</div>
-                        <div style={{fontSize:14,fontWeight:'bold',color:'#1d4ed8'}}>{minTemp}℃</div>
-                        <div style={{fontSize:8,color:'#334155'}}>{minTempDate}</div>
+                      {minTemp&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:80}}>
+                        <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>最低</div>
+                        <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minTemp}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>℃</span></div>
+                        <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minTempDate||'—'}</div>
                       </div>}
                     </div>
                   </div>
@@ -17086,35 +17088,37 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </div>
                     </div>
                   </div>
-                  {/* 血圧統計バッジ */}
+                  {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ (ラベル 12 / 数値 22 / 単位 11 / 日付 10) */}
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                    <div style={{padding:'6px 10px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center'}}>
-                      <div style={{fontSize:8,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>収縮期 平均</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#15803d'}}>{avgBpUp?Math.round(avgBpUp):'—'}<span style={{fontSize:13,color:'#16a34a',fontWeight:'normal'}}>mmHg</span></div>
+                    <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>収縮期 平均</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpUp?Math.round(avgBpUp):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>
-                    <div style={{padding:'6px 10px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center'}}>
-                      <div style={{fontSize:8,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>収縮期 最高</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626'}}>{maxBpUp??'—'}</div>
-                      <div style={{fontSize:13,color:'#334155'}}>{maxBpDate}</div>
+                    <div style={{padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>収縮期 最高</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxBpDate||'—'}</div>
                     </div>
-                    <div style={{padding:'6px 10px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center'}}>
-                      <div style={{fontSize:8,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>収縮期 最低</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#1d4ed8'}}>{minBpUp??'—'}</div>
-                      <div style={{fontSize:13,color:'#334155'}}>{minBpDate}</div>
+                    <div style={{padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>収縮期 最低</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpUp??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minBpDate||'—'}</div>
                     </div>
-                    <div style={{padding:'6px 10px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center'}}>
-                      <div style={{fontSize:8,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>拡張期 平均</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#15803d'}}>{avgBpDn?Math.round(avgBpDn):'—'}<span style={{fontSize:13,color:'#16a34a',fontWeight:'normal'}}>mmHg</span></div>
+                    <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>拡張期 平均</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgBpDn?Math.round(avgBpDn):'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>
-                    <div style={{padding:'6px 10px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center'}}>
-                      <div style={{fontSize:8,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>拡張期 最高</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626'}}>{maxBpDnVal??'—'}</div>
-                      <div style={{fontSize:13,color:'#334155'}}>{maxBpDnDate}</div>
+                    <div style={{padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',textAlign:'center',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>拡張期 最高</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxBpDnDate||'—'}</div>
                     </div>
-                    <div style={{padding:'6px 10px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center'}}>
-                      <div style={{fontSize:8,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>拡張期 最低</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#1d4ed8'}}>{minBpDnVal??'—'}</div>
-                      <div style={{fontSize:13,color:'#334155'}}>{minBpDnDate}</div>
+                    <div style={{padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',textAlign:'center',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>拡張期 最低</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minBpDnVal??'—'}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>mmHg</span></div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minBpDnDate||'—'}</div>
                     </div>
                   </div>
                 </div>
@@ -17136,20 +17140,22 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <span style={{display:'flex',alignItems:'center',gap:3,fontSize:13,color:'#1e293b'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（回/分）</span>
                     </div>
                   </div>
+                  {/* ★ 脈拍サマリー: 体温・血圧と統一サイズ */}
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                    {avgPulse&&<div style={{textAlign:'center',padding:'4px 10px',background:'#f0fdf4',borderRadius:8,border:'1px solid #86efac'}}>
-                      <div style={{fontSize:14,color:'#16a34a',fontWeight:'bold'}}>平均</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#15803d'}}>{Math.round(avgPulse)}<span style={{fontSize:13,fontWeight:'normal',color:'#16a34a'}}> 回/分</span></div>
+                    {avgPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#16a34a',fontWeight:'bold',marginBottom:2}}>平均</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{Math.round(avgPulse)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
+                      <div style={{fontSize:10,color:'transparent',marginTop:2}}>—</div>
                     </div>}
-                    {maxPulse&&<div style={{textAlign:'center',padding:'4px 10px',background:'#fef2f2',borderRadius:8,border:'1px solid #fecaca'}}>
-                      <div style={{fontSize:14,color:'#ef4444',fontWeight:'bold'}}>最高</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626'}}>{maxPulse}</div>
-                      <div style={{fontSize:8,color:'#334155'}}>{maxPulseDate}</div>
+                    {maxPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#ef4444',fontWeight:'bold',marginBottom:2}}>最高</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{maxPulseDate||'—'}</div>
                     </div>}
-                    {minPulse&&<div style={{textAlign:'center',padding:'4px 10px',background:'#eff6ff',borderRadius:8,border:'1px solid #bfdbfe'}}>
-                      <div style={{fontSize:8,color:'#2563eb',fontWeight:'bold'}}>最低</div>
-                      <div style={{fontSize:14,fontWeight:'bold',color:'#1d4ed8'}}>{minPulse}</div>
-                      <div style={{fontSize:8,color:'#334155'}}>{minPulseDate}</div>
+                    {minPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:90}}>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'bold',marginBottom:2}}>最低</div>
+                      <div style={{fontSize:22,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minPulse}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>回/分</span></div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{minPulseDate||'—'}</div>
                     </div>}
                   </div>
                 </div>
