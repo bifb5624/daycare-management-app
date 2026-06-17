@@ -15910,8 +15910,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     <div className="w-full" style={{backgroundColor:'#f0f4f9',minHeight:'100%'}}>
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
-      {/* ★ 分析個人ヘッダ: 淡い青グラデーション (#dbeafe → #93c5fd)、 文字は濃い青 */}
-      <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#dbeafe 0%,#93c5fd 100%)',color: compactMode ? '#3d5021' : '#1e3a8a',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+      {/* ★ 分析個人ヘッダ: 淡い青グラデーション、 文字は黒で読みやすく */}
+      <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#dbeafe 0%,#93c5fd 100%)',color: compactMode ? '#3d5021' : '#1e293b',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
         {/* ★ ご家族 / ケアマネ閲覧時 (compactMode) は親ヘッダに利用者名があるため非表示で重複を防ぐ */}
         {!compactMode && (
           <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -18929,8 +18929,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   try { return (
     <div style={{height:'100%',overflowY:'auto',background:'#f0f4f9'}}>
       <div style={{position:'sticky',top:0,zIndex:20,boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
-        {/* ★ 分析稼働ヘッダ: 淡いオレンジグラデーション (#fed7aa → #fdba74)、 文字は濃いオレンジ */}
-        <div style={{background:'linear-gradient(135deg,#fed7aa,#fdba74)',color:'#9a3412',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        {/* ★ 分析稼働ヘッダ: 淡いオレンジグラデーション、 文字は黒で読みやすく */}
+        <div style={{background:'linear-gradient(135deg,#fed7aa,#fdba74)',color:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><TrendingUp size={20}/><span style={{fontSize:17,fontWeight:'bold'}}>分析（稼働）</span></div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}>
           <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
@@ -25095,12 +25095,18 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     }
     const latest = (nextAppData.diaryLogs||{})[logKey] || {};
     const loaded = JSON.parse(JSON.stringify(latest));
-    // ★ 新規ログ (記録者未指定) のときは アクティブ記録者を自動チェック
-    if (!loaded.staff || Object.keys(loaded.staff).length === 0) {
-      const activeName = getActiveRecorderName();
-      if (activeName) {
-        const matched = (appData.diarySettings?.staff || []).find(s => s.name === activeName);
-        if (matched) loaded.staff = { ...(loaded.staff||{}), [matched.id]: true };
+    // ★ 新規ログ (担当職員 / 記録者未指定) のときは アクティブ記録者を両方に自動チェック
+    const activeName = getActiveRecorderName();
+    if (activeName) {
+      const matched = (appData.diarySettings?.staff || []).find(s => s.name === activeName);
+      if (matched) {
+        if (!loaded.staff || Object.keys(loaded.staff).length === 0) {
+          loaded.staff = { ...(loaded.staff||{}), [matched.id]: true };
+        }
+        // 記録者欄にも自動チェック (新規ログのとき)
+        if (!loaded.recorder || Object.keys(loaded.recorder).length === 0) {
+          loaded.recorder = { ...(loaded.recorder||{}), [matched.id]: true };
+        }
       }
     }
     setLocalLog(loaded);
@@ -25254,8 +25260,17 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   );
 
   const DriverRow = ({carId, prefix}) => {
-    // 送迎者リストも担当時間帯(ampm)で絞り込み
-    const list = ds.staff.filter(s=>s.name && _staffOk(s));
+    // ★ 送迎者リスト: 担当時間帯フィルタ + 同姓同名で重複排除 (役職が違うだけの同名スタッフがいるとき片方だけ表示)
+    const list = (() => {
+      const arr = ds.staff.filter(s=>s.name && _staffOk(s));
+      const seen = new Set();
+      return arr.filter(s => {
+        const key = normalizeName(s.name).trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    })();
     return (
       <div style={{display:'flex',flexWrap:'wrap',gap:'2px 12px',alignItems:'flex-start',justifyContent:'flex-start',lineHeight:'13px'}}>
         {list.map((s)=>(
@@ -25631,7 +25646,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         <div style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
           <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>記録者</div>
           <div style={{padding:'3px 8px',display:'flex',flexWrap:'wrap',gap:'1px 0',minHeight:40,alignContent:'center'}}>
-            {ds.staff.filter(s=>s.name && _staffOk(s)).map((s,si,arr)=>(
+            {/* ★ 同姓同名のスタッフは重複排除 (役職違いの同名スタッフがいるとき片方だけ表示) */}
+            {(() => {
+              const arr = ds.staff.filter(s=>s.name && _staffOk(s));
+              const seen = new Set();
+              const dedup = arr.filter(s => { const k = normalizeName(s.name).trim(); if (seen.has(k)) return false; seen.add(k); return true; });
+              return dedup;
+            })().map((s,si,arr)=>(
               <React.Fragment key={s.id}>
                 <span style={{display:'inline-flex',alignItems:'center',gap:2}}>
                   <CB checked={!!(_log.recorder||{})[s.id]} onChange={()=>_toggle('recorder',s.id)} sz={11}/>
@@ -26566,8 +26587,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   return (
     <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
       {/* ヘッダー固定（スクロール時も上部にとどまる） */}
-      {/* ★ モニタリングヘッダ: 淡い水色 (#bae6fd → #7dd3fc)、 文字は濃い水色 */}
-      <div className="no-print" style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#bae6fd,#7dd3fc)',color:'#075985',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
+      {/* ★ モニタリングヘッダ: 淡い水色、 文字は黒で読みやすく */}
+      <div className="no-print" style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#bae6fd,#7dd3fc)',color:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <ClipboardList size={20}/>
           <span style={{fontSize:17,fontWeight:'bold'}}>モニタリング作成</span>
@@ -27549,7 +27570,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.phone ? `TEL：${facility.phone}` : ''}</AutoFitLine>
                 <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.fax ? `FAX：${facility.fax}` : ''}</AutoFitLine>
                 <div style={{display:'flex',alignItems:'center',gap:4,width:'100%',justifyContent:'flex-start'}}>
-                  <span style={{whiteSpace:'nowrap'}}>担当：　</span>
+                  <span style={{whiteSpace:'nowrap',marginRight:8}}>担当：</span>
                   <select value={selectedManager} onChange={e=>setSelectedManager(e.target.value)}
                     style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:'0 2px',cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left'}}>
                     {staffList.length === 0 && <option value="">（従業員未登録）</option>}
