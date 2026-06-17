@@ -17541,9 +17541,6 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div></div>
                   </div>
                   {/* ★ 分析個人 - 運動の「月別平均」テーブルは削除 (日別推移グラフで十分) */}
-                  {false && (
-                  <div>
-                  )}
                 </div>
               </div>
             );
