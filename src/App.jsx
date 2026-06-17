@@ -11058,6 +11058,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
+  // ★ 利用者基本情報の編集用 (親のみ編集可能)
+  const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
   // モーダルを開いたタイミングで loggedAcc + patient から現在の情報を読み込み
   React.useEffect(() => {
     if (!myInfoOpen) return;
@@ -11089,6 +11091,20 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         saving: false, savedMsg: '',
       });
     }
+    // ★ 利用者基本情報を patient から初期化 (親のみ編集可能)
+    setPatientForm({
+      name: patient?.name || '',
+      kana: patient?.kana || '',
+      birthDate: patient?.birthDate || '',
+      gender: patient?.gender || '',
+      careLevel: patient?.careLevel || '',
+      hihokenNum: patient?.hihokenNum || '',
+      phone: patient?.phone || '',
+      address: patient?.address || '',
+      kiou: patient?.kiou || '',
+      ryui: patient?.ryui || '',
+      saving: false, savedMsg: '',
+    });
   }, [myInfoOpen, loggedAcc?.id, patient?.id]);
   const [inviteFamForm, setInviteFamForm] = useState({email:'', relation:'', createdUrl:''});
   const announcements = data.familyAnnouncements || [];
@@ -11396,48 +11412,115 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   }}>{t.label}</button>
               ))}
             </div>
-            {/* ===== 利用者基本情報タブ (読み取り専用) ===== */}
+            {/* ===== 利用者基本情報タブ (代表者のみ編集可) ===== */}
             {myInfoTab === 'patient' && (
               <div style={{display:'grid',gap:8}}>
                 <div style={{fontSize:11,color:'#64748b',marginBottom:4,lineHeight:1.5}}>
-                  ご利用者ご本人の基本情報です (事業所で管理)。
+                  ご利用者ご本人の基本情報です。<br/>
+                  {isPrimaryAcc
+                    ? <><b style={{color:'#92400e'}}>※ 代表者 (親アカウント) のみ編集できます。 変更内容は事業所側にも反映されます。</b></>
+                    : <><b>※ 編集はご家族の代表者 (親アカウント) のみ可能です。</b></>
+                  }
                 </div>
+                {patientForm.savedMsg && (
+                  <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:10,padding:'8px 12px',marginBottom:4,fontSize:12,color:'#166534',fontWeight:'bold'}}>
+                    ✓ {patientForm.savedMsg}
+                  </div>
+                )}
                 {(() => {
-                  const careLevelDisp = patient?.careLevel || '';
-                  const birthDisp = (() => {
-                    if (!patient?.birthDate) return '';
-                    const d = new Date(patient.birthDate);
-                    if (isNaN(d.getTime())) return patient.birthDate;
-                    return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;
-                  })();
-                  const items = [
-                    {label:'お名前', value: patient?.name || ''},
-                    {label:'ふりがな', value: patient?.kana || ''},
-                    {label:'生年月日', value: birthDisp},
-                    {label:'性別', value: patient?.gender || ''},
-                    {label:'介護度', value: careLevelDisp},
-                    {label:'被保険者番号', value: patient?.hihokenNum || ''},
-                    {label:'電話番号', value: patient?.phone || ''},
-                    {label:'住所', value: patient?.address || ''},
-                    {label:'既往歴', value: patient?.kiou || '', multi:true},
-                    {label:'留意点', value: patient?.ryui || '', multi:true},
+                  const fields = [
+                    {key:'name',       label:'お名前',         type:'text', placeholder:'例: 山田 太郎'},
+                    {key:'kana',       label:'ふりがな',       type:'text', placeholder:'例: やまだ たろう'},
+                    {key:'birthDate',  label:'生年月日',       type:'date'},
+                    {key:'gender',     label:'性別',           type:'select', options:['','男性','女性']},
+                    {key:'careLevel',  label:'介護度',         type:'select', options:['','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5','自立']},
+                    {key:'hihokenNum', label:'被保険者番号',   type:'text'},
+                    {key:'phone',      label:'電話番号',       type:'text', placeholder:'03-XXXX-XXXX'},
+                    {key:'address',    label:'住所',           type:'text'},
+                    {key:'kiou',       label:'既往歴',         type:'textarea'},
+                    {key:'ryui',       label:'留意点',         type:'textarea'},
                   ];
-                  return items.map((it, i) => (
-                    <div key={i}>
-                      <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{it.label}</label>
-                      <div style={{
-                        width:'100%', padding:'9px 12px',
-                        background:'#f8fafc', border:'1px solid #e2e8f0',
-                        borderRadius:10, fontSize:13, color:'#1e293b',
-                        whiteSpace: it.multi ? 'pre-wrap' : 'normal',
-                        minHeight: it.multi ? 36 : 'auto',
-                      }}>{it.value || <span style={{color:'#cbd5e1'}}>—</span>}</div>
+                  return fields.map(f => (
+                    <div key={f.key}>
+                      <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label}</label>
+                      {!isPrimaryAcc ? (
+                        <div style={{
+                          width:'100%', padding:'9px 12px',
+                          background:'#f8fafc', border:'1px solid #e2e8f0',
+                          borderRadius:10, fontSize:13, color:'#1e293b',
+                          whiteSpace: f.type==='textarea' ? 'pre-wrap' : 'normal',
+                          minHeight: f.type==='textarea' ? 36 : 'auto',
+                        }}>{patientForm[f.key] || <span style={{color:'#cbd5e1'}}>—</span>}</div>
+                      ) : f.type === 'textarea' ? (
+                        <textarea value={patientForm[f.key]} onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
+                          rows={2}
+                          style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}}/>
+                      ) : f.type === 'select' ? (
+                        <select value={patientForm[f.key]} onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
+                          style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
+                          {f.options.map(o => <option key={o} value={o}>{o || '— 選択 —'}</option>)}
+                        </select>
+                      ) : (
+                        <input type={f.type} value={patientForm[f.key]} placeholder={f.placeholder||''}
+                          onChange={e=>setPatientForm(p=>({...p,[f.key]:e.target.value,savedMsg:''}))}
+                          style={{width:'100%',padding:'9px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                      )}
                     </div>
                   ));
                 })()}
                 <div style={{display:'flex',gap:8,marginTop:14}}>
-                  <button onClick={()=>setMyInfoOpen(false)}
-                    style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+                  <button onClick={()=>setMyInfoOpen(false)} disabled={patientForm.saving}
+                    style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:patientForm.saving?'not-allowed':'pointer'}}>閉じる</button>
+                  {isPrimaryAcc && (
+                    <button onClick={async () => {
+                      // ★ 保存前に確認ダイアログ
+                      if (!window.confirm('この保存した内容は事業所側にも変更されてしまいます。 よろしいでしょうか?')) return;
+                      setPatientForm(p=>({...p, saving:true, savedMsg:''}));
+                      const updatedPatient = {
+                        ...patient,
+                        name: patientForm.name,
+                        kana: patientForm.kana,
+                        birthDate: patientForm.birthDate,
+                        gender: patientForm.gender,
+                        careLevel: patientForm.careLevel,
+                        hihokenNum: patientForm.hihokenNum,
+                        phone: patientForm.phone,
+                        address: patientForm.address,
+                        kiou: patientForm.kiou,
+                        ryui: patientForm.ryui,
+                      };
+                      const updated = {
+                        ...data,
+                        patients: (data.patients||[]).map(p => p.id === patient.id ? updatedPatient : p),
+                      };
+                      try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                      setData(updated);
+                      // Supabase 反映
+                      if (isSupabaseEnabled) {
+                        const _storeId = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
+                        if (_storeId) {
+                          try {
+                            await supabaseMergePatientFromFamily(_storeId, patient.id, {
+                              name: updatedPatient.name,
+                              kana: updatedPatient.kana,
+                              birthDate: updatedPatient.birthDate,
+                              gender: updatedPatient.gender,
+                              careLevel: updatedPatient.careLevel,
+                              hihokenNum: updatedPatient.hihokenNum,
+                              phone: updatedPatient.phone,
+                              address: updatedPatient.address,
+                              kiou: updatedPatient.kiou,
+                              ryui: updatedPatient.ryui,
+                            });
+                          } catch (e) { console.warn('[supabase] patient sync failed', e); }
+                        }
+                      }
+                      setPatientForm(p=>({...p, saving:false, savedMsg:'保存しました。事業所側に反映されました。'}));
+                    }} disabled={patientForm.saving}
+                      style={{flex:1,padding:'11px',background:patientForm.saving?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:patientForm.saving?'not-allowed':'pointer'}}>
+                      {patientForm.saving ? '⏳ 保存中...' : '💾 保存'}
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -16382,7 +16465,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               {kyushi>0&&<span style={{color:'#f97316'}}>休止: <b>{kyushi}</b>件</span>}
             </span>
           </div>
-          <div style={{display:'flex',gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
+          {/* ★ ご家族画面 (familyMode) は通所率と気分を縦並びに (iPhone 等の縦型でも収まる) */}
+          <div style={{display:'flex',flexDirection: familyMode ? 'column' : 'row', gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
             {/* 通所率 */}
             {(()=>{
               const furikaeCount=records.filter(r=>r.tokki&&r.tokki.includes('振替')).length;
