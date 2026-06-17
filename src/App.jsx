@@ -13933,7 +13933,7 @@ export default function App() {
                 {staffDropdownOpen && (() => {
                   const members = appData.storeMembers || [];
                   return (
-                    <div className="bg-emerald-900/30 border-t border-emerald-700/30 max-h-[250px] overflow-y-auto">
+                    <div className="bg-emerald-900/30 border-t border-emerald-700/30 max-h-[280px] overflow-y-auto">
                       {members.length === 0 ? (
                         <div className="px-4 py-3 text-[10px] text-emerald-300/70">登録メンバーがいません</div>
                       ) : (
@@ -13963,6 +13963,17 @@ export default function App() {
                           );
                         })
                       )}
+                      {/* ★ スタッフを追加: ドロップダウン内に追加ボタンを表示 */}
+                      <button onClick={() => {
+                        const name = window.prompt('追加するスタッフの氏名を入力してください\n(例: 山田 太郎)');
+                        if (!name || !name.trim()) return;
+                        const role = window.prompt('役職を入力してください (任意・空欄可)\n(例: 介護職員 / 看護師 / 生活相談員)', '') || '';
+                        const newMember = { id: `mem_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, name: name.trim(), roleLabel: role.trim(), addedAt: new Date().toISOString() };
+                        handleSaveToCloud({ ...appData, storeMembers: [...(appData.storeMembers || []), newMember] });
+                      }} className="w-full text-left px-4 py-2.5 text-[11px] font-bold flex items-center gap-1.5 bg-emerald-800/40 hover:bg-emerald-700/60 text-emerald-100 border-t border-emerald-700/40 transition-colors">
+                        <span className="text-[13px]">＋</span>
+                        <span>スタッフを追加</span>
+                      </button>
                     </div>
                   );
                 })()}
@@ -15931,7 +15942,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           {!familyMode && !hidePatientSelector && (
             <button onClick={()=>{ setSelectedPatientId(null); setPatientSearch(''); onPatientChange && onPatientChange(null); }}
               title="利用者一覧に戻る"
-              style={{background:'rgba(255,255,255,0.2)',border:'1px solid rgba(255,255,255,0.4)',color:'white',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
+              style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
               ← 一覧に戻る
             </button>
           )}
@@ -15940,9 +15951,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             <>
               <input type="text" placeholder="🔍 利用者を検索" value={patientSearch}
                 onChange={e=>setPatientSearch(e.target.value)}
-                style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',outline:'none',width:130,fontFamily:'inherit'}}/>
+                style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',outline:'none',width:130,fontFamily:'inherit'}}/>
               <select value={selectedPatientId||""} onChange={e=>{const id=Number(e.target.value);setSelectedPatientId(id);onPatientChange&&onPatientChange(id);}}
-                style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 12px',fontSize:13,fontWeight:'bold',outline:'none',cursor:'pointer'}}>
+                style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:13,fontWeight:'bold',outline:'none',cursor:'pointer'}}>
                 {groupPatientsByKanaRow(filteredPatientsForSelector).map(g => (
                   <optgroup key={g.label} label={g.label}>
                     {g.items.map(p => <option key={p.id} value={p.id} style={{color:'#1e293b'}}>{p.name}</option>)}
@@ -15985,7 +15996,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           {/* ★ 事業所モードのみ表示 (家族・ケアマネ閲覧モードは非表示) */}
           {!compactMode && (
           <button type="button" onClick={()=>setShowPrintOptionsPopup(true)}
-              style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
+              style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
             <Printer size={14}/>プレビュー
           </button>
           )}
@@ -18935,12 +18946,12 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div style={{background:'linear-gradient(135deg,#fed7aa,#fdba74)',color:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><TrendingUp size={20}/><span style={{fontSize:17,fontWeight:'bold'}}>分析（稼働）</span></div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}>
-          <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
+          <div style={{display:'flex',background:'rgba(255,255,255,0.5)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.7)'}}>
             {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'],['custom','期間指定']].map(([v,l])=>(
               <button key={v} onClick={()=>{setPeriod(v);setOpenDow(null);}}
-                style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',cursor:'pointer',border:'none',borderRight:'1px solid rgba(255,255,255,0.2)',
+                style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',cursor:'pointer',border:'none',borderRight:'1px solid rgba(255,255,255,0.4)',
                   background:period===v?'white':'transparent',
-                  color:period===v?'#ea580c':'white',transition:'all 0.15s'}}>
+                  color:period===v?'#9a3412':'#1e293b',transition:'all 0.15s'}}>
                 {l}
               </button>
             ))}
@@ -18972,7 +18983,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         </div>
         <div style={{display:'flex',gap:6,alignItems:'center'}}>
           <button type="button" onClick={()=>setPrintOptsModal(true)}
-            style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
+            style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
             <Printer size={14}/>プレビュー
           </button>
         </div>
@@ -21106,7 +21117,11 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-5 py-4 flex items-center justify-between flex-wrap gap-3">
               <div>
                 <div className="text-[10px] font-bold text-slate-400">体力測定</div>
-                <h2 className="text-xl font-bold text-slate-800">{selectedPat.name} <span className="text-base font-normal text-slate-500">様</span>{calcAge(selectedPat.birthDate)!==null && <span className="text-sm font-bold text-slate-400 ml-1.5">（{calcAge(selectedPat.birthDate)}歳）</span>}</h2>
+                <h2 className="text-xl font-bold text-slate-800 flex items-baseline gap-2 flex-wrap">
+                  <span>{selectedPat.name} <span className="text-base font-normal text-slate-500">様</span>{calcAge(selectedPat.birthDate)!==null && <span className="text-sm font-bold text-slate-400 ml-1.5">（{calcAge(selectedPat.birthDate)}歳）</span>}</span>
+                  {/* ★ 担当者: 今のアクティブ記録者を利用者名の右に */}
+                  {(() => { const _rec = getActiveRecorderName(); return _rec ? <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">担当: {_rec}</span> : null; })()}
+                </h2>
                 {selectedPat.careLevel && <span className="text-xs font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg ml-1">{selectedPat.careLevel}</span>}
               </div>
               <div className="flex items-center gap-3">
@@ -21186,7 +21201,11 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                     <tbody>
                       {patRecords.slice(0,10).map((r,ri) => (
                         <tr key={r.id} className={ri%2===0?'bg-white':'bg-slate-50'}>
-                          <td className="px-4 py-2 font-bold text-slate-600 whitespace-nowrap">{r.date}</td>
+                          {/* ★ 日付 + 担当者名 (record.recorder) を 1 セルにまとめて表示 */}
+                          <td className="px-4 py-2 font-bold text-slate-600 whitespace-nowrap">
+                            <div>{r.date}</div>
+                            {r.recorder && <div className="text-[10px] font-normal text-slate-500 mt-0.5">担当: {r.recorder}</div>}
+                          </td>
                           {fitnessItems.map(item => {
                             const cur = r.values?.[item.id] ?? '';
                             return (
@@ -26603,25 +26622,25 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <input type="date" value={`${targetMonth}-01`} onChange={e=>setTargetMonth(e.target.value.substring(0,7))}
-            style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
-          <div style={{display:'flex',alignItems:'center',background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',borderRadius:10,padding:'4px 10px',gap:6}}>
-            <Search size={14} style={{color:'white',flexShrink:0}}/>
+            style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+          <div style={{display:'flex',alignItems:'center',background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',borderRadius:10,padding:'4px 10px',gap:6}}>
+            <Search size={14} style={{color:'#1e293b',flexShrink:0}}/>
             <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="氏名で絞り込み"
               className="mon-search"
-              style={{background:'transparent',border:'none',outline:'none',color:'white',fontSize:12,fontWeight:'bold',width:100}}/>
-            {searchQuery && <button type="button" onClick={()=>setSearchQuery('')} style={{background:'none',border:'none',color:'white',cursor:'pointer',padding:0,lineHeight:1}}><X size={12}/></button>}
+              style={{background:'transparent',border:'none',outline:'none',color:'#1e293b',fontSize:12,fontWeight:'bold',width:100}}/>
+            {searchQuery && <button type="button" onClick={()=>setSearchQuery('')} style={{background:'none',border:'none',color:'#1e293b',cursor:'pointer',padding:0,lineHeight:1}}><X size={12}/></button>}
           </div>
           {/* ソートボタン */}
           <div style={{display:'flex',gap:4}}>
             {[['kana','名前'],['careLevel','介護度'],['cmOffice','事業所'],['schedule','曜日']].map(([k,l])=>(
               <button key={k} type="button" onClick={()=>setMonitorSort(k)}
-                style={{background:monitorSort===k?'white':'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:monitorSort===k?'#1e293b':'white',borderRadius:8,padding:'4px 8px',fontWeight:'bold',fontSize:11,cursor:'pointer'}}>
+                style={{background:monitorSort===k?'white':'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:8,padding:'4px 8px',fontWeight:'bold',fontSize:11,cursor:'pointer'}}>
                 {l}
               </button>
             ))}
           </div>
           <button type="button" onClick={handlePrint}
-            style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+            style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
             <Printer size={14}/> プレビュー
           </button>
           <button type="button" onClick={()=>{ if(saveFnRef?.current) saveFnRef.current(); else { markClean(); onSave({...appData}); } }}
