@@ -14124,10 +14124,10 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">役職</label>
+                <label className="block text-xs font-bold text-slate-600 mb-1">役職 <span className="text-red-500">*</span></label>
                 <select value={staffAddForm.role} onChange={e=>setStaffAddForm(f=>({...f,role:e.target.value}))}
                   className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-emerald-400 bg-white">
-                  <option value="">— 選択 (任意) —</option>
+                  <option value="">— 選択してください —</option>
                   <option value="管理者">管理者</option>
                   <option value="生活相談員">生活相談員</option>
                   <option value="機能訓練指導員">機能訓練指導員</option>
@@ -14143,6 +14143,7 @@ export default function App() {
                 const last = staffAddForm.lastName.trim();
                 const first = staffAddForm.firstName.trim();
                 if (!last || !first) { alert('姓と名は必須です'); return; }
+                if (!staffAddForm.role) { alert('役職を選択してください'); return; }
                 const fullName = `${last} ${first}`;
                 const newMember = {
                   id: `mem_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
@@ -19892,8 +19893,15 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: その日の記録者を日付の下に表示 (record.recorder があれば) */}
-                              {r.recorder && <div className="font-bold" style={{fontSize:10,color:'#475569',marginTop:2,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>担当: {r.recorder}</div>}
+                              {/* ★ 担当者: record.recorder → アクティブ記録者 → 管理者役 → 事業所責任者 の順にフォールバック */}
+                              {(() => {
+                                const rec = r.recorder
+                                  || getActiveRecorderName()
+                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+                                  || appData.systemSettings?.facilityInfo?.manager
+                                  || '';
+                                return rec ? <div className="font-bold" style={{fontSize:10,color:'#475569',marginTop:2,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>担当: {rec}</div> : null;
+                              })()}
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
@@ -27662,10 +27670,11 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.address||''}</AutoFitLine>
                 <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.phone ? `TEL：${facility.phone}` : ''}</AutoFitLine>
                 <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.fax ? `FAX：${facility.fax}` : ''}</AutoFitLine>
-                <div style={{display:'flex',alignItems:'center',gap:4,width:'100%',justifyContent:'flex-start'}}>
-                  <span style={{whiteSpace:'nowrap',marginRight:8}}>担当：</span>
+                {/* ★ 担当: 他の TEL/FAX 行と同じ display:block + textAlign:'left' で左詰め統一 */}
+                <div style={{display:'block',width:'100%',textAlign:'left',whiteSpace:'nowrap'}}>
+                  <span>担当：</span>
                   <select value={selectedManager} onChange={e=>setSelectedManager(e.target.value)}
-                    style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:'0 2px',cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left'}}>
+                    style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:0,margin:0,cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left',textAlignLast:'left'}}>
                     {staffList.length === 0 && <option value="">（従業員未登録）</option>}
                     {staffList.map((s, i) => (
                       <option key={s.id || i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
@@ -28178,11 +28187,12 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
               <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.address||''}</AutoFitLine>
               <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.phone ? `TEL：${facility.phone}` : ''}</AutoFitLine>
               <AutoFitLine style={{display:'block',width:'100%',textAlign:'left'}}>{facility.fax ? `FAX：${facility.fax}` : ''}</AutoFitLine>
-              <div style={{display:'flex',alignItems:'center',gap:4,width:'100%',justifyContent:'flex-start'}}>
-                <span style={{whiteSpace:'nowrap'}}>担当：　</span>
+              {/* ★ 担当: 他の TEL/FAX 行と同じ display:block + textAlign:'left' で左詰め統一 */}
+              <div style={{display:'block',width:'100%',textAlign:'left',whiteSpace:'nowrap'}}>
+                <span>担当：</span>
                 <select value={selectedManager} onChange={e=>setSelectedManager(e.target.value)}
                   className="fax-inline-input"
-                  style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:'0 2px',cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left'}}>
+                  style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:0,margin:0,cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left',textAlignLast:'left'}}>
                   {staffList.length === 0 && <option value="">（従業員未登録）</option>}
                   {staffList.map((s, i) => (
                     <option key={s.id || i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
