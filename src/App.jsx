@@ -1152,7 +1152,7 @@ const appSettings = {
 
 // === 真っさらな新規店舗のための初期 AppData ===
 // 店舗情報 (zip/address/phone/fax) を facilityInfo へ自動転記
-// 介護整体だけ exerciseItems に残す (ユーザー指定)
+// 運動メニューは初期空 (事業所ごとにユーザーが追加)
 function createBlankAppData(storeRecord, staffSession) {
   const facility = {
     name: storeRecord?.name || staffSession?.storeName || '',
@@ -1184,10 +1184,8 @@ function createBlankAppData(storeRecord, staffSession) {
     initialReports: [],
     systemSettings: {
       facilityInfo: facility,
-      // 運動メニュー: 介護整体だけ
-      exerciseItems: [
-        { id: 'kaiseitai', name: '介護整体', type: 'individual_kaiseitai', useKeypad: false }
-      ],
+      // 運動メニュー: 初期は空 (事業所ごとに追加してもらう)
+      exerciseItems: [],
       individualExerciseItems: [],
       massageStaff: [],
       // ★ サービス提供内容の項目管理: 初期は空 (介護整体含めユーザーが事業所単位で追加)
@@ -16444,59 +16442,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
               );
             })()}
-            {[
-              {
-                label:'平均体温', valueNum: avgTemp?avgTemp.toFixed(1):'—', unit:'℃',
-                maxVal: maxTemp?maxTemp.toFixed(1):null, minVal: minTemp?minTemp.toFixed(1):null,
-                data: monthlyData.map(d=>d.temps.length?d.temps.reduce((a,b)=>a+b,0)/d.temps.length:null).filter(Boolean),
-                color: tempWarn?'#ef4444':'#f97316', warn: tempWarn
-              },
-              {
-                label:'平均血圧（収縮期）', valueNum: avgBpUp?`${Math.round(avgBpUp)}`:'—', unit:'mmHg',
-                maxVal: maxBpUp, minVal: minBpUp,
-                data: monthlyData.map(d=>d.bpUps.length?d.bpUps.reduce((a,b)=>a+b,0)/d.bpUps.length:null).filter(Boolean),
-                color: bpWarn?'#ef4444':'#f43f5e', warn: bpWarn
-              },
-              {
-                label:'平均血圧（拡張期）', valueNum: avgBpDn?`${Math.round(avgBpDn)}`:'—', unit:'mmHg',
-                maxVal: maxBpDn, minVal: minBpDn,
-                data: monthlyData.map(d=>d.bpDns&&d.bpDns.length?d.bpDns.reduce((a,b)=>a+b,0)/d.bpDns.length:null).filter(Boolean),
-                color:'#a855f7', warn: false
-              },
-              {
-                label:'平均脈拍', valueNum: avgPulse?`${Math.round(avgPulse)}`:'—', unit:'回/分',
-                maxVal: maxPulse, minVal: minPulse,
-                data: monthlyData.map(d=>d.pulses.length?d.pulses.reduce((a,b)=>a+b,0)/d.pulses.length:null).filter(Boolean),
-                color: pulseWarn?'#ef4444':'#22c55e', warn: pulseWarn
-              },
-            ].map((kpi,ki)=>(
-              <div key={ki} style={{background:'white',borderRadius:12,padding:'14px 16px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${kpi.warn?'#fecaca':'#f1f5f9'}`,display:'flex',flexDirection:'column',gap:6,position:'relative',overflow:'hidden',flex:1,minWidth:110}}>
-                {kpi.warn&&<div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#ef4444',borderRadius:'14px 14px 0 0'}}/>}
-                <div>
-                  <div style={{fontSize:13,fontWeight:'bold',color:kpi.warn?'#ef4444':'#64748b',marginBottom:6}}>{kpi.label}</div>
-                  <div style={{fontSize:22,fontWeight:'bold',color:kpi.warn?'#dc2626':'#1e293b',letterSpacing:'-0.5px',lineHeight:1}}>
-                    {kpi.valueNum}<span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8',marginLeft:3}}>{kpi.unit}</span>
-                  </div>
-                  <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:1}}>
-                    <span style={{fontSize:13,fontWeight:'bold',color:'#ef4444'}}>最高 {kpi.maxVal!==null?<>{kpi.maxVal}<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8',marginLeft:2}}>{kpi.unit}</span></>:'—'}</span>
-                    <span style={{fontSize:13,fontWeight:'bold',color:'#1d4ed8'}}>最低 {kpi.minVal!==null?<>{kpi.minVal}<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8',marginLeft:2}}>{kpi.unit}</span></>:'—'}</span>
-                  </div>
-                  {kpi.warn&&<div style={{fontSize:14,color:'#ef4444',fontWeight:'bold',marginTop:4}}>⚠ 要注意</div>}
-                </div>
-                {kpi.data.length>=2&&(()=>{
-                  const first=kpi.data[0], last=kpi.data[kpi.data.length-1];
-                  const diff=last-first, pct=first?Math.round(diff/first*100):0;
-                  return (
-                    <div style={{display:'flex',alignItems:'center',gap:4}}>
-                      <span style={{fontSize:14,color:diff>0?'#3b82f6':diff<0?'#ef4444':'#22c55e',fontWeight:'bold'}}>{diff>0?'↑':diff<0?'↓':'→'}</span>
-                      <span style={{fontSize:14,fontWeight:'bold',color:diff>0?'#3b82f6':diff<0?'#ef4444':'#22c55e',background:diff>0?'#eff6ff':diff<0?'#fef2f2':'#f0fdf4',padding:'2px 5px',borderRadius:5}}>
-                        {diff>0?'+':''}{pct}%
-                      </span>
-                    </div>
-                  );
-                })()}
-              </div>
-            ))}
+            {/* 平均体温・血圧・脈拍の数値カードは削除 (バイタルトレンドのサマリーと重複していたため) */}
           </div>
         </div>
 
@@ -19833,11 +19779,42 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 <button onClick={() => setIsScheduleModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
-                <p className="text-xs text-slate-400 font-bold bg-slate-100 px-3 py-2 rounded-lg mb-4">日付は「3/5」、時間は「9:」と打つと自動変換されます</p>
+                <p className="text-xs text-slate-400 font-bold bg-slate-100 px-3 py-2 rounded-lg mb-4">月/日/時/分 を直接入力できます (例: 6月24日 12時30分)</p>
                 <div className="space-y-3">
                   {displayRecords.map(r => {
                     const localData = localOverrides[r.id] || { nextDateOverride: "", nextTimeOverride: "" };
                     const isOverridden = r.nextDateOverride !== undefined || r.nextTimeOverride !== undefined;
+                    // ★ 既存値を 月/日/時/分 に分解
+                    const dateMatch = (localData.nextDateOverride || '').match(/(\d+)月(\d+)日/);
+                    const curMonth = dateMatch?.[1] || '';
+                    const curDay = dateMatch?.[2] || '';
+                    const timeMatch = (localData.nextTimeOverride || '').match(/(\d+)\s*[:時]\s*(\d*)/);
+                    const curHour = timeMatch?.[1] || '';
+                    const curMin = timeMatch?.[2] || '';
+                    // ★ 月/日 を結合: 曜日も自動付与 (今年で計算、 過去なら来年扱い)
+                    const composeDate = (m, d) => {
+                      if (!m || !d) return '';
+                      const dow = ['日','月','火','水','木','金','土'];
+                      const y = new Date().getFullYear();
+                      const candidate = new Date(y, +m-1, +d);
+                      const today = new Date(); today.setHours(0,0,0,0);
+                      const target = (candidate < today) ? new Date(y+1, +m-1, +d) : candidate;
+                      return `${m}月${d}日（${dow[target.getDay()]}）`;
+                    };
+                    const composeTime = (h, mi) => {
+                      if (!h && !mi) return '';
+                      return `${h||''}時${mi||''}分`;
+                    };
+                    const updateOverride = (kind, m, d, h, mi) => {
+                      setLocalOverrides(prev => ({
+                        ...prev,
+                        [r.id]: {
+                          ...prev[r.id],
+                          nextDateOverride: composeDate(m, d),
+                          nextTimeOverride: composeTime(h, mi),
+                        }
+                      }));
+                    };
                     return (
                       <div key={r.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl">
                         <div className="w-24 font-bold text-slate-800 shrink-0 text-sm">
@@ -19846,15 +19823,32 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                         </div>
                         <div className="flex-1">
                           <div className="text-[10px] font-bold text-slate-400 mb-1">次回利用日</div>
-                          <input type="text" readOnly value={localData.nextDateOverride || ""}
-                            onClick={() => setKeypad({ isOpen: true, recordId: r.id, field: 'nextDateOverride', value: localData.nextDateOverride || "", isFirstInput: true, mode: 'date' })}
-                            className={`w-full p-2 border rounded-lg outline-none font-bold text-sm cursor-pointer ${r.nextDateOverride !== undefined ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white'}`} />
+                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${r.nextDateOverride !== undefined ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                            <input type="text" inputMode="numeric" value={curMonth} maxLength={2}
+                              onChange={e=>updateOverride('date', e.target.value.replace(/\D/g,''), curDay, curHour, curMin)}
+                              placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
+                            <span className="text-xs font-bold text-slate-500">月</span>
+                            <input type="text" inputMode="numeric" value={curDay} maxLength={2}
+                              onChange={e=>updateOverride('date', curMonth, e.target.value.replace(/\D/g,''), curHour, curMin)}
+                              placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
+                            <span className="text-xs font-bold text-slate-500">日</span>
+                            {localData.nextDateOverride && (
+                              <span className="text-[10px] text-slate-500 ml-1">{(localData.nextDateOverride.match(/（(.)）/)||[])[1] && `(${(localData.nextDateOverride.match(/（(.)）/)||[])[1]})`}</span>
+                            )}
+                          </div>
                         </div>
                         <div className="flex-1">
                           <div className="text-[10px] font-bold text-slate-400 mb-1">お迎え時間</div>
-                          <input type="text" readOnly value={localData.nextTimeOverride || ""}
-                            onClick={() => setKeypad({ isOpen: true, recordId: r.id, field: 'nextTimeOverride', value: localData.nextTimeOverride || "", isFirstInput: true, mode: 'time' })}
-                            className={`w-full p-2 border rounded-lg outline-none font-bold text-sm cursor-pointer ${r.nextTimeOverride !== undefined ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white'}`} />
+                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${r.nextTimeOverride !== undefined ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                            <input type="text" inputMode="numeric" value={curHour} maxLength={2}
+                              onChange={e=>updateOverride('time', curMonth, curDay, e.target.value.replace(/\D/g,''), curMin)}
+                              placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
+                            <span className="text-xs font-bold text-slate-500">時</span>
+                            <input type="text" inputMode="numeric" value={curMin} maxLength={2}
+                              onChange={e=>updateOverride('time', curMonth, curDay, curHour, e.target.value.replace(/\D/g,''))}
+                              placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
+                            <span className="text-xs font-bold text-slate-500">分</span>
+                          </div>
                         </div>
                       </div>
                     );
