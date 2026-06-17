@@ -14774,6 +14774,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
+                  // ★ 担当者: 既存の record.recorder を保持しつつ、 今回新規/更新時はアクティブ記録者を反映
+                  recorder: getActiveRecorderName() || existing?.recorder || '',
                   done: p.done || false
               };
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
@@ -19808,10 +19810,12 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       <Fragment key={r.id}>
                         {/* データ行 */}
                         <tr className={`data-row ${rc}`} style={{height:40}}>
-                          <td rowSpan={2} className={`border border-slate-400 px-1 text-center ${rc}`} style={{verticalAlign:'middle',overflow:'hidden',maxWidth:50,padding:0,height:76}}>
+                          <td rowSpan={2} className={`border border-slate-400 px-1 text-center ${rc}`} style={{verticalAlign:'middle',overflow:'hidden',maxWidth:60,padding:0,height:76}}>
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
+                              {/* ★ 担当者: その日の記録者を日付の下に表示 (record.recorder があれば) */}
+                              {r.recorder && <div className="font-bold" style={{fontSize:10,color:'#475569',marginTop:2,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>担当: {r.recorder}</div>}
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
@@ -20913,12 +20917,14 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
 
   const save = () => {
     if (!selectedPatientId) return;
+    // ★ 担当者名: スタッフ切替の現在のアクティブ記録者を保存
+    const recorderName = getActiveRecorderName();
     const existing = records.find(r => r.patientId === selectedPatientId && r.date === date);
     let newRecords;
     if (existing) {
-      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values } } : r);
+      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder } : r);
     } else {
-      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values }];
+      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName }];
     }
     markClean(); onSave({ ...appData, fitnessRecords: newRecords });
     setValues({});
@@ -20928,12 +20934,13 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   // 未保存ポップアップから呼ばれる用 (alert 抜き)
   const flushSave = () => {
     if (!selectedPatientId || Object.keys(values).length === 0) { markClean(); return; }
+    const recorderName = getActiveRecorderName();
     const existing = records.find(r => r.patientId === selectedPatientId && r.date === date);
     let newRecords;
     if (existing) {
-      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values } } : r);
+      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder } : r);
     } else {
-      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values }];
+      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName }];
     }
     markClean(); onSave({ ...appData, fitnessRecords: newRecords });
   };
