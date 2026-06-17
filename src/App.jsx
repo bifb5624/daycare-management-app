@@ -903,6 +903,20 @@ const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(bi
 //    運動メニューや項目名の同一性判定に使用
 const normalizeName = (s) => (s || '').normalize('NFKC');
 
+// === 現在の記録者 (アクティブスタッフ) の名前を sessionStorage から取得 ===
+//    全画面共通で「今このスタッフが操作している」の情報源
+//    体力測定の記録者 / 提供記録の担当者 / 日誌の記録者 / FAX 担当者 などの初期値に
+const getActiveRecorderName = () => {
+  try {
+    const saved = sessionStorage.getItem('tsumugiActiveRecorder');
+    if (saved) {
+      const r = JSON.parse(saved);
+      return r?.name || '';
+    }
+  } catch {}
+  return '';
+};
+
 // === 運動値の主副分解パース ===
 // (既存 parseExerciseValue (8925行) は単一数値抽出用 / こちらは 棒+折れ線 グラフ用に主・副に分解)
 // "10kg×10回" → { primary: 10, unit1: 'kg', secondary: 10, unit2: '回', hasMulti: true }
@@ -25080,7 +25094,16 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       onSave(nextAppData);
     }
     const latest = (nextAppData.diaryLogs||{})[logKey] || {};
-    setLocalLog(JSON.parse(JSON.stringify(latest)));
+    const loaded = JSON.parse(JSON.stringify(latest));
+    // ★ 新規ログ (記録者未指定) のときは アクティブ記録者を自動チェック
+    if (!loaded.staff || Object.keys(loaded.staff).length === 0) {
+      const activeName = getActiveRecorderName();
+      if (activeName) {
+        const matched = (appData.diarySettings?.staff || []).find(s => s.name === activeName);
+        if (matched) loaded.staff = { ...(loaded.staff||{}), [matched.id]: true };
+      }
+    }
+    setLocalLog(loaded);
     logKeyRef.current = logKey;
     if (dirtyRef) dirtyRef.current = false;
   }, [logKey]); // eslint-disable-line
@@ -27286,9 +27309,12 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [showFaxHist, setShowFaxHist] = React.useState(false);
   const absHistory = (appData.faxHistory||[]).filter(h => h.type === 'absence');
   const deleteAbsHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
-  // 担当者プルダウン: 各種設定の従業員から選択。デフォルトは管理者
+  // 担当者プルダウン: 各種設定の従業員から選択。
+  // ★ デフォルト優先順位: 1) 現在のアクティブ記録者 → 2) 管理者 → 3) リスト先頭
   const staffList = (appData.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
-  const defaultManagerName = (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
+  const activeRecName = getActiveRecorderName();
+  const activeInList = activeRecName && staffList.find(s => s.name === activeRecName);
+  const defaultManagerName = (activeInList?.name) || (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
   const [selectedManager, setSelectedManager] = React.useState(defaultManagerName);
 
   const facility = appData.systemSettings?.facilityInfo || {};
@@ -27751,7 +27777,10 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [recipientName, setRecipientName] = React.useState(draft.recipientName || '');
   const [customPatientName, setCustomPatientName] = React.useState(draft.customPatientName || '');
   const staffList = (appData.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
-  const defaultManagerName = (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
+  // ★ デフォルト優先順位: 1) draft 保存値 → 2) 現在のアクティブ記録者 → 3) 管理者 → 4) リスト先頭
+  const _activeRec = getActiveRecorderName();
+  const _activeInList = _activeRec && staffList.find(s => s.name === _activeRec);
+  const defaultManagerName = (_activeInList?.name) || (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
   const [selectedManager, setSelectedManager] = React.useState(draft.selectedManager || defaultManagerName);
 
   // 任意のフォーム値が変わったら dirty を立てる (初回 mount はスキップ)
