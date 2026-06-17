@@ -14734,7 +14734,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                       </select>
                     )}
                   </td>
-                  <td className={`px-0.5 py-0 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`} style={{height:32,maxHeight:32,overflow:'hidden',padding:'1px'}}>
+                  <td className={`px-0.5 py-0 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`} style={{height:32,maxHeight:32,overflow:'visible',padding:'1px'}}>
                     <div style={{display:'flex',flexDirection:'row',height:'100%',gap:1}}>
                     {(['arrival','departure']).map((timing, ti) => {
                       const moodKey = timing === 'arrival' ? 'kibunArrival' : 'kibunDeparture';
@@ -14743,36 +14743,14 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                       const reasonVal = timing === 'arrival' ? (p.kibunArrivalReason || '') : (p.kibunDepartureReason || '');
                       const tooltipText = moodObj ? `${moodObj.label}${reasonVal ? ' : '+reasonVal : ''}` : '';
                       return (
-                        <div key={timing} style={{flex:1,position:'relative',minWidth:0}}>
+                        <div key={timing} style={{flex:1,position:'relative'}}>
                           <button disabled={isAbsent || isReadOnly || isPause} onClick={() => openKibunModal(p.id, timing)}
                             onPointerEnter={(e)=>{if(tooltipText&&showTip)showTip(tooltipText,e);}}
                             onPointerLeave={()=>{if(hideTip)hideTip();}}
                             className={`rounded transition-all disabled:opacity-40 ${moodObj ? moodObj.color + ' font-bold' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
-                            style={{width:'100%',height:'100%',padding:'0px 1px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:reasonVal?'flex-start':'center',gap:0,lineHeight:1,overflow:'hidden'}}>
-                            {/* ★ 上段: 通/帰 + 絵文字 を横並びでコンパクトに */}
-                            <div style={{display:'flex',alignItems:'center',gap:2,lineHeight:1,flexShrink:0}}>
-                              <span style={{fontSize:9,color:'#111827',fontWeight:'bold',lineHeight:1}}>{timing==='arrival'?'通':'帰'}</span>
-                              <span style={{fontSize:14,lineHeight:1}}>{moodObj ? moodObj.emoji : '+'}</span>
-                            </div>
-                            {/* ★ 下段: 理由テキストを 2 行ぶん表示 */}
-                            {reasonVal && (
-                              <span style={{
-                                fontSize:8,
-                                color:'#111827',
-                                fontWeight:'bold',
-                                lineHeight:1.1,
-                                display:'-webkit-box',
-                                WebkitLineClamp:2,
-                                WebkitBoxOrient:'vertical',
-                                overflow:'hidden',
-                                whiteSpace:'normal',
-                                wordBreak:'break-all',
-                                textAlign:'center',
-                                width:'100%',
-                                padding:'0 1px',
-                                marginTop:1,
-                              }}>{reasonVal}</span>
-                            )}
+                            style={{width:'100%',height:'100%',padding:'0px 1px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,lineHeight:1}}>
+                            <span style={{fontSize:9,color:'#111827',fontWeight:'bold',lineHeight:1}}>{timing==='arrival'?'通所':'帰宅'}</span>
+                            <span style={{fontSize:22,lineHeight:1}}>{moodObj ? moodObj.emoji : '+'}</span>
                           </button>
                         </div>
                       );
@@ -16377,8 +16355,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <span style={{fontSize:'clamp(11px,1.6vw,15px)',marginLeft:1,color:'#94a3b8'}}>%</span>
                     </div>
                   </div>
-                  <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:2}}>
-                    {slices.map((s,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:5,fontSize:12}}><span style={{width:8,height:8,borderRadius:'50%',background:s.color,display:'inline-block',flexShrink:0}}/><span style={{fontWeight:'bold',color:'#475569'}}>{s.label}</span><span style={{color:'#1e293b',fontWeight:'bold'}}>{s.count}</span></div>))}
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',marginTop:4}}>
+                    {slices.map((s,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:s.color,display:'inline-block',flexShrink:0}}/><span style={{fontWeight:'bold',color:'#475569'}}>{s.label}</span><span style={{color:'#1e293b',fontWeight:'bold'}}>{s.count}</span></div>))}
                   </div>
                   {attendance<70&&<div style={{fontSize:13,color:'#ef4444',fontWeight:'bold'}}>⚠ 要注意</div>}
                 </div>
@@ -16435,9 +16413,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <div style={{fontSize:11,fontWeight:'bold',color:'#1e293b',marginTop:2}}>{avgDef.label}</div>
                     </div>
                   </div>
-                  {/* 下段: 各気分を縦1列 */}
-                  <div style={{display:'flex',flexDirection:'column',gap:3,marginTop:4}}>
-                    {MOOD_DEF.map((m,i)=>{const cnt=counts[m.key]||0;return(<div key={i} style={{display:'flex',alignItems:'center',gap:5,fontSize:12,opacity:cnt>0?1:0.3}}><span style={{width:8,height:8,borderRadius:'50%',background:m.color,flexShrink:0,display:'inline-block'}}/><span style={{fontSize:14}}>{m.emoji}</span><span style={{color:'#475569',flex:1}}>{m.label}</span><span style={{fontWeight:'bold',color:'#1e293b',minWidth:28,textAlign:'right'}}>{cnt}</span></div>);})}
+                  {/* 下段: 各気分を横並び (画面の横スペースを活用) */}
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',marginTop:4}}>
+                    {MOOD_DEF.map((m,i)=>{const cnt=counts[m.key]||0;return(<div key={i} style={{display:'flex',alignItems:'center',gap:3,fontSize:12,opacity:cnt>0?1:0.3,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:m.color,flexShrink:0,display:'inline-block'}}/><span style={{fontSize:13}}>{m.emoji}</span><span style={{color:'#475569'}}>{m.label}</span><span style={{fontWeight:'bold',color:'#1e293b'}}>{cnt}</span></div>);})}
                   </div>
                 </div>
               );
@@ -16715,7 +16693,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
 
         {/* === バイタルトレンド（日別） === */}
-        <div id="sec-vital" data-sec="sec-vital" style={{scrollMarginTop:120}}/>
+        <div id="sec-vital" data-sec="sec-vital" style={{scrollMarginTop:120,marginTop:16}}/>
         {validRecs.length > 0 && (()=>{
           // 全期間は月別平均、それ以外は日別
           const rawData = validRecs.map(r=>({
@@ -19389,7 +19367,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle'}}>
+                          <td className="border border-slate-400 px-0.5 text-center" style={{fontSize:9,verticalAlign:'middle',minWidth:90}}>
                             {(() => {
                               const MOODS = {'excellent':'🤩','good':'😊','normal':'😐','bad':'😞','terrible':'😫'};
                               const arr = v(r.kibunArrival);
@@ -19397,16 +19375,16 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                               const arrR = v(r.kibunArrivalReason);
                               const depR = v(r.kibunDepartureReason);
                               if(!arr && !dep) return '';
-                              return (<div style={{display:'flex',flexDirection:'column',gap:4,padding:'0 2px',height:41,overflow:'hidden',justifyContent:'center'}}>
-                                {arr && <div style={{display:'flex',alignItems:'center',gap:1,lineHeight:1}}>
-                                  <span style={{fontSize:6,color:'#334155',fontWeight:'bold',flexShrink:0}}>通</span>
-                                  <span style={{fontSize:10,lineHeight:1}}>{MOODS[arr]||arr}</span>
-                                  {arrR && <span style={{fontSize:6,color:'#1e293b',overflow:'hidden',whiteSpace:'nowrap',maxWidth:30,textOverflow:'ellipsis'}}>{arrR}</span>}
+                              return (<div style={{display:'flex',flexDirection:'column',gap:2,padding:'2px',justifyContent:'center'}}>
+                                {arr && <div style={{display:'flex',alignItems:'flex-start',gap:2,lineHeight:1.25}}>
+                                  <span style={{fontSize:8,color:'#334155',fontWeight:'bold',flexShrink:0,paddingTop:1}}>通</span>
+                                  <span style={{fontSize:11,lineHeight:1,flexShrink:0}}>{MOODS[arr]||arr}</span>
+                                  {arrR && <span style={{fontSize:8,color:'#1e293b',whiteSpace:'normal',wordBreak:'break-all',textAlign:'left',lineHeight:1.25}}>{arrR}</span>}
                                 </div>}
-                                {dep && <div style={{display:'flex',alignItems:'center',gap:1,lineHeight:1}}>
-                                  <span style={{fontSize:6,color:'#334155',fontWeight:'bold',flexShrink:0}}>帰</span>
-                                  <span style={{fontSize:10,lineHeight:1}}>{MOODS[dep]||dep}</span>
-                                  {depR && <span style={{fontSize:6,color:'#1e293b',overflow:'hidden',whiteSpace:'nowrap',maxWidth:30,textOverflow:'ellipsis'}}>{depR}</span>}
+                                {dep && <div style={{display:'flex',alignItems:'flex-start',gap:2,lineHeight:1.25}}>
+                                  <span style={{fontSize:8,color:'#334155',fontWeight:'bold',flexShrink:0,paddingTop:1}}>帰</span>
+                                  <span style={{fontSize:11,lineHeight:1,flexShrink:0}}>{MOODS[dep]||dep}</span>
+                                  {depR && <span style={{fontSize:8,color:'#1e293b',whiteSpace:'normal',wordBreak:'break-all',textAlign:'left',lineHeight:1.25}}>{depR}</span>}
                                 </div>}
                               </div>);
                             })()}
@@ -20025,6 +20003,13 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
     if (item.type === 'linked') {
       // 1. linkedField の id で値を引く (直接 id 一致)
       let rawVal = ex[item.linkedField];
+      // ★ linkedField が空のとき、 item.label と一致する現在の運動項目を当てる
+      //    (旧 config で linkedField が空 or 不明の項目を救済)
+      if ((rawVal == null || rawVal === '') && !item.linkedField && item.label) {
+        const labelKey = _normalizeName(item.label);
+        const matched = _exItems.find(it => _normalizeName(it.name) === labelKey);
+        if (matched) rawVal = ex[matched.id];
+      }
       // 2-5. ★ 段階的 fallback: id が変わっても「同じ名前」の値を拾う
       //   各種設定で項目を 削除→再作成 すると id が変わる (例: u1 → ex_1734567890)
       //   過去記録は古い id で保存されているため、 名前マッチで横断する
@@ -20301,7 +20286,19 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
 function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
   const [localConfig, setLocalConfig] = useState(JSON.parse(JSON.stringify(config)));
-  const handleItemChange = (id, field, value) => setLocalConfig(prev => ({ ...prev, items: prev.items.map(item => item.id === id ? { ...item, [field]: value } : item) }));
+  // ★ type を 'linked' に変えたとき、 linkedField が空なら先頭の運動項目を自動セット
+  //   (空のまま保存すると連絡帳に値が出ない不具合を防ぐ)
+  const handleItemChange = (id, field, value) => setLocalConfig(prev => ({
+    ...prev,
+    items: prev.items.map(item => {
+      if (item.id !== id) return item;
+      const next = { ...item, [field]: value };
+      if (field === 'type' && value === 'linked' && !next.linkedField) {
+        next.linkedField = exerciseItems[0]?.id || '';
+      }
+      return next;
+    })
+  }));
   const moveItem = (index, direction) => {
     if ((direction === -1 && index === 0) || (direction === 1 && index === localConfig.items.length - 1)) return;
     const newItems = [...localConfig.items]; const temp = newItems[index]; newItems[index] = newItems[index + direction]; newItems[index + direction] = temp;
