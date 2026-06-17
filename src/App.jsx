@@ -15896,7 +15896,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     <div className="w-full" style={{backgroundColor:'#f0f4f9',minHeight:'100%'}}>
       {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
-      <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#2563eb 0%,#1e40af 100%)',color: compactMode ? '#3d5021' : 'white',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+      {/* ★ 分析個人ヘッダ: 淡い青グラデーション (#dbeafe → #93c5fd)、 文字は濃い青 */}
+      <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#dbeafe 0%,#93c5fd 100%)',color: compactMode ? '#3d5021' : '#1e3a8a',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
         {/* ★ ご家族 / ケアマネ閲覧時 (compactMode) は親ヘッダに利用者名があるため非表示で重複を防ぐ */}
         {!compactMode && (
           <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -18914,7 +18915,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   try { return (
     <div style={{height:'100%',overflowY:'auto',background:'#f0f4f9'}}>
       <div style={{position:'sticky',top:0,zIndex:20,boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
-        <div style={{background:'linear-gradient(135deg,#f97316,#ea580c)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        {/* ★ 分析稼働ヘッダ: 淡いオレンジグラデーション (#fed7aa → #fdba74)、 文字は濃いオレンジ */}
+        <div style={{background:'linear-gradient(135deg,#fed7aa,#fdba74)',color:'#9a3412',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><TrendingUp size={20}/><span style={{fontSize:17,fontWeight:'bold'}}>分析（稼働）</span></div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}>
           <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
@@ -26541,7 +26543,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   return (
     <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
       {/* ヘッダー固定（スクロール時も上部にとどまる） */}
-      <div className="no-print" style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#0ea5e9,#0284c7)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
+      {/* ★ モニタリングヘッダ: 淡い水色 (#bae6fd → #7dd3fc)、 文字は濃い水色 */}
+      <div className="no-print" style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#bae6fd,#7dd3fc)',color:'#075985',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <ClipboardList size={20}/>
           <span style={{fontSize:17,fontWeight:'bold'}}>モニタリング作成</span>
