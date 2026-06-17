@@ -16404,7 +16404,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         {/* === 基本情報 === 簡素化版 */}
         {/*   事業所モード: 利用者名 / 年齢 (生年月日+(n歳)) / 利用開始日 / 経過日数 / 既往歴 / 留意点 */}
         {/*   ご家族/ケアマネ: 利用者名なし / 生年月日 / 利用開始日 / 経過日数 / 既往歴 / 留意点 */}
-        <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:120}}>
+        <div id="sec-basicinfo" style={{marginBottom:16,scrollMarginTop:170}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>基本情報</div>
           {selectedPatient && (()=>{
             const age = calcAge(selectedPatient.birthDate);
@@ -16541,7 +16541,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const statusBadgeBg = showFullData ? '#fef3c7' : isAbsent ? '#fee2e2' : '#ffedd5';
           const statusBadgeColor = showFullData ? '#92400e' : isAbsent ? '#b91c1c' : '#9a3412';
           return (
-            <div id="sec-latest" style={{marginBottom:16,scrollMarginTop:120}}>
+            <div id="sec-latest" style={{marginBottom:16,scrollMarginTop:170}}>
               <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                 <span>📋 今回の記録</span>
                 <span style={{fontSize:13,fontWeight:'bold',background:statusBadgeBg,color:statusBadgeColor,padding:'2px 10px',borderRadius:6}}>
@@ -16706,7 +16706,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         })()}
 
         {/* ★ 基本指標 (sec-kpi): 事業所では非表示 (月別通所状況と重複)。 家族では簡易表示として残す */}
-        {familyMode && <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:120}}>
+        {familyMode && <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:170}}>
           <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <span>基本指標</span>
             <span style={{fontSize:13,color:'#334155',fontWeight:'bold',display:'flex',gap:14}}>
@@ -16859,7 +16859,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </div>
         </div>}
 
-        {!familyMode && <div id="sec-trend" style={{scrollMarginTop:120,marginBottom:16}}>
+        {!familyMode && <div id="sec-trend" style={{scrollMarginTop:170,marginBottom:16}}>
 
 
 
@@ -16956,7 +16956,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   })()}
                 </div>
         </div>}
-        <div id="sec-kibun" data-sec="sec-kibun" style={{scrollMarginTop:120}}>
+        <div id="sec-kibun" data-sec="sec-kibun" style={{scrollMarginTop:170}}>
           <div style={{background:'white',borderRadius:12,border:'1px solid #fde68a',padding:'16px',marginTop:12}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#92400e',marginBottom:6}}>気分トレンド（通所時/帰宅時）</div>
             {/* ★ 凡例をグラフ直上に表示 (旧グラフ下から移動) */}
@@ -17129,7 +17129,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
 
         {/* === バイタルトレンド（日別） === */}
-        <div id="sec-vital" data-sec="sec-vital" style={{scrollMarginTop:120,marginTop:16}}/>
+        <div id="sec-vital" data-sec="sec-vital" style={{scrollMarginTop:170,marginTop:16}}/>
         {validRecs.length > 0 && (()=>{
           // 全期間は月別平均、それ以外は日別
           const rawData = validRecs.map(r=>({
@@ -17365,7 +17365,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               {/* 血圧詳細カード */}
               <div style={{background:'white',borderRadius:14,padding:'20px 22px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${bpWarn?'#fecaca':'#f1f5f9'}`,marginBottom:12}}>
                 {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ移動) */}
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:10}}>
+                <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>血圧（日別）</div>
                   {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ */}
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -17420,7 +17420,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
               <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${pulseWarn?'#fecaca':'#f1f5f9'}`}}>
                 {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ) */}
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:10}}>
+                <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>脈拍（日別）</div>
                   {/* ★ 脈拍サマリー: 体温・血圧と統一サイズ */}
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -17456,7 +17456,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
 
         })()}
-        {!familyMode && <div id="sec-exercise" style={{scrollMarginTop:120,marginBottom:16}}>
+        {!familyMode && <div id="sec-exercise" style={{scrollMarginTop:170,marginBottom:16}}>
 <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>運動トレンド</div>
           {(() => {
             const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
@@ -17706,7 +17706,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })()}
         </div>}
 
-        <div id="sec-fitness" style={{scrollMarginTop:120,marginBottom:16}}>
+        <div id="sec-fitness" style={{scrollMarginTop:170,marginBottom:16}}>
 <div onClick={()=>toggleSec('sec-fitness')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>体力測定</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-fitness')?'▶':'▼'}</span></div>
           {!isCol('sec-fitness') && (()=>{
             const fitnessItems = appData.systemSettings?.fitnessItems || appSettings.fitnessItems;
@@ -17803,7 +17803,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             );
           })()}
         </div>
-        {!familyMode && <><div id="sec-absence" style={{scrollMarginTop:120,marginBottom:0}}><div onClick={()=>toggleSec('sec-absence')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>欠席・休業一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-absence')?'▶':'▼'}</span></div></div></>}{/* === 欠席一覧 === */}
+        {!familyMode && <><div id="sec-absence" style={{scrollMarginTop:170,marginBottom:0}}><div onClick={()=>toggleSec('sec-absence')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>欠席・休業一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-absence')?'▶':'▼'}</span></div></div></>}{/* === 欠席一覧 === */}
         {!familyMode && !isCol('sec-absence') && (() => {
           const absList = records.filter(r=>r.status==='欠席'||r.status==='休業');
           return (
@@ -17836,7 +17836,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
         })()}
 
-        {!familyMode && <><div id="sec-kyushi" style={{scrollMarginTop:120,marginBottom:0}}><div onClick={()=>toggleSec('sec-kyushi')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>休止一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-kyushi')?'▶':'▼'}</span></div></div></>}{/* === 休止一覧 === */}
+        {!familyMode && <><div id="sec-kyushi" style={{scrollMarginTop:170,marginBottom:0}}><div onClick={()=>toggleSec('sec-kyushi')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>休止一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-kyushi')?'▶':'▼'}</span></div></div></>}{/* === 休止一覧 === */}
         {!familyMode && !isCol('sec-kyushi') && <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #fed7aa',overflow:'hidden',marginBottom:16}}>
           <div style={{padding:'12px 20px',borderBottom:'1px solid #fff7ed',background:'#fff7ed',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#c2410c',display:'flex',alignItems:'center',gap:6}}>
@@ -17865,7 +17865,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>}
 
         {/* 家族向けの「日々の記録」セクションは削除 (特記は「今回の記録」に最新分が表示される) */}
-        <div id="sec-monitoring" data-sec="sec-monitoring" style={{scrollMarginTop:120}}/>{/* === モニタリング === */}
+        <div id="sec-monitoring" data-sec="sec-monitoring" style={{scrollMarginTop:170}}/>{/* === モニタリング === */}
         <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #d1fae5',overflow:'hidden',marginBottom:16}}>
           <div style={{padding:'12px 20px',borderBottom:'1px solid #d1fae5',background:'#f0fdf4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#065f46',display:'flex',alignItems:'center',gap:6}}>
@@ -17904,7 +17904,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </div>
           )}
         </div>
-        {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:120}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
+        {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:170}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
         {!familyMode && !isCol('sec-detail') && (()=>{
           const detailMonths=[...new Set(records.map(r=>{const m=r.date.match(/(\d+)月/);return m?m[1]+'月':'—'}))];
           const detailRecs = detailMonth ? records.filter(r=>{const m=r.date.match(/(\d+)月/);return m&&m[1]+'月'===detailMonth;}) : records;
@@ -19015,7 +19015,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       <div id="print-content-operation" style={{padding:'16px 20px',maxWidth:960,margin:'0 auto'}}>
 
         {/* 1. 月全体稼働率 */}
-        <div id="ops-rate" data-sec="ops-rate" style={{scrollMarginTop:120}}/>
+        <div id="ops-rate" data-sec="ops-rate" style={{scrollMarginTop:170}}/>
         <Card title={period==='1'?`${tY}年${tM}月　稼働率`:period==='custom'?`${customFrom.replace('-','年').replace(/-(0?)(\d+)/,'$2月')}〜${customTo.replace('-','年').replace(/-(0?)(\d+)/,'$2月')}　稼働率`:(()=>{const n=parseInt(period,10);let sM=tM-n+1,sY=tY;while(sM<=0){sM+=12;sY--;}return `${sY}年${sM}月〜${tY}年${tM}月　稼働率`;})()} accent='#f97316'>
           <div data-print-id="rate-stats" style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
             <div style={{textAlign:'center',minWidth:80}}>
@@ -19048,7 +19048,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           </div>
           {/* 月別稼働率・売上 複合グラフ */}
           {(()=>{
-            return (<div id="ops-monthly" data-sec="ops-monthly" style={{scrollMarginTop:120}}/>);
+            return (<div id="ops-monthly" data-sec="ops-monthly" style={{scrollMarginTop:170}}/>);
           })()}
           {(()=>{
             const salesRecs = appData.salesRecords || [];
@@ -19309,7 +19309,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         />}
 
         {/* 2. 曜日別稼働率 — 曜日カード形式 (3日ずつ 2ページに分割) */}
-        <div id="ops-dow" data-sec="ops-dow" style={{scrollMarginTop:120}}/>
+        <div id="ops-dow" data-sec="ops-dow" style={{scrollMarginTop:170}}/>
         <Card title="曜日別稼働率（前半）" accent='#8b5cf6'>
           <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10}}>
             {dowStats.slice(0,3).map(d => {
@@ -19369,7 +19369,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
         {/* 2b. 曜日別稼働率 後半 (木金土) — 印刷時に別ページに配置 */}
         {dowStats.length > 3 && (<>
-          <div id="ops-dow-2" data-sec="ops-dow-2" style={{scrollMarginTop:120}}/>
+          <div id="ops-dow-2" data-sec="ops-dow-2" style={{scrollMarginTop:170}}/>
           <Card title="曜日別稼働率（後半）" accent='#8b5cf6'>
             <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10}}>
               {dowStats.slice(3,6).map(d => {
@@ -19425,11 +19425,11 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         </>)}
 
         {/* 7. 利用者属性分析 */}
-        <div id="ops-attr" data-sec="ops-attr" style={{scrollMarginTop:120}}/>
+        <div id="ops-attr" data-sec="ops-attr" style={{scrollMarginTop:170}}/>
         <AttrSection appData={appData} tY={tY} tM={tM} baseMonth={baseMonth} attrMonth={attrMonth} setAttrMonth={setAttrMonth} periodLabel={periodLabel}/>
 
         {/* 2.5 気分割合 */}
-        <div id="ops-mood" data-sec="ops-mood" style={{scrollMarginTop:120}}/>
+        <div id="ops-mood" data-sec="ops-mood" style={{scrollMarginTop:170}}/>
         <Card title={`気分割合　${periodLabel}（合計 ${moodStats.total}回）`} accent='#06b6d4'>
           {moodStats.total === 0 ? (
             <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>データなし</div>
@@ -19469,7 +19469,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         </Card>
 
         {/* 3. 皆勤賞 */}
-        <div id="ops-kaikin" data-sec="ops-kaikin" style={{scrollMarginTop:120}}/>
+        <div id="ops-kaikin" data-sec="ops-kaikin" style={{scrollMarginTop:170}}/>
         <Card title={`皆勤賞　${periodLabel}（${kaikin.length}名）`} accent='#f59e0b'>
           {kaikin.length === 0 ? (
             <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>該当者なし</div>
@@ -19478,7 +19478,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
 
         {/* 4. 出席率ランキング */}
-        <div id="ops-rank-att" data-sec="ops-rank-att" style={{scrollMarginTop:120}}/>
+        <div id="ops-rank-att" data-sec="ops-rank-att" style={{scrollMarginTop:170}}/>
         <Card title={`出席率ランキング　${periodLabel}（${attRank.length}名）`} accent='#3b82f6'>
             {attRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
               // 5列レイアウト: 1列目に 1〜N、2列目に N+1〜2N… と縦に順に流す。
@@ -19513,7 +19513,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         </Card>
 
         {/* 5. 欠席率ランキング */}
-        <div id="ops-rank-abs" data-sec="ops-rank-abs" style={{scrollMarginTop:120,marginTop:12}}/>
+        <div id="ops-rank-abs" data-sec="ops-rank-abs" style={{scrollMarginTop:170,marginTop:12}}/>
         <Card title={`欠席率ランキング　${periodLabel}（${absRank.length}名）`} accent='#ef4444'>
             {absRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
               const N_COLS = 6;
@@ -19546,7 +19546,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         </Card>
 
         {/* 6. 欠席理由ランキング */}
-        <div id="ops-reason" data-sec="ops-reason" style={{scrollMarginTop:120}}/>
+        <div id="ops-reason" data-sec="ops-reason" style={{scrollMarginTop:170}}/>
         <Card title={`欠席理由ランキング　${periodLabel}（${reasonRank.length}種）`} accent='#64748b'>
           {reasonRank.length===0 ? (
             <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>欠席理由の記録なし</div>
