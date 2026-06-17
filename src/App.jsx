@@ -20177,15 +20177,16 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
                   const cellCls = (item) => `text-black ${item && item.perPatient && item.type !== 'linked' && onEditPatientValue ? 'cursor-pointer hover:bg-violet-50 transition-colors' : ''}`;
                   // 行が多いほどフォント縮小: 行数 6 までは大、それ以降は段階的に縮小
                   const labelFs = rows.length <= 6 ? 16 : rows.length <= 9 ? 14 : rows.length <= 12 ? 12 : 10;
-                  const valueFs = rows.length <= 6 ? 24 : rows.length <= 9 ? 22 : rows.length <= 12 ? 20 : 18;
+                  // ★ 値は項目名と同じフォントサイズ・太さで表示
+                  const valueFs = labelFs;
                   // ★ 各行の高さを均等に分割 (空セル/値ありセルで揺れない)
                   const rowHeightPct = `${100/rows.length}%`;
                   return (
                   <tr key={idx} className={idx !== rows.length - 1 ? "border-b border-black" : ""} style={{height: rowHeightPct}}>
                     <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[0].label}</th>
-                    <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
+                    <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"normal",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
                     {row[1]
-                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"bold",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
+                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"normal",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
                       : (<><th className="border-r border-black w-[30%] bg-white" style={{height: rowHeightPct}}></th><td className="w-[20%]" style={{height: rowHeightPct}}></td></>)}
                   </tr>
                   );
