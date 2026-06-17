@@ -10488,7 +10488,7 @@ function FamilyView() {
               <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">家族と現場を結ぶ、デイサービス管理</text>
             </svg>
             <div style={{fontSize:12,fontWeight:'bold',color:'#5e8030',letterSpacing:1,marginTop:8}}>{facility.name||'デイケアサービス'}</div>
-            <div style={{fontSize:18,fontWeight:'bold',marginTop:2,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族専用ログイン</div>
+            <div style={{fontSize:18,fontWeight:'bold',marginTop:2,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
           </div>
           {mode === 'signup' ? (
             <div style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
@@ -11030,7 +11030,8 @@ function FamilyView() {
 function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient }) {
   const [tab, setTab] = useState('news');
   // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
-  const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','custom'
+  const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','all'
+  const [familyDisplayMode, setFamilyDisplayMode] = useState('auto'); // 'auto' (月平均) | 'daily' (日別)
   const pid = parseInt(patientId, 10);
   const patient = (data.patients||[]).find(p => p.id === pid || p.id === patientId);
   const facility = data.systemSettings?.facilityInfo || {};
@@ -11076,7 +11077,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
-  const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
+  const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', email:'', doctor:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
   // モーダルを開いたタイミングで loggedAcc + patient から現在の情報を読み込み
   React.useEffect(() => {
     if (!myInfoOpen) return;
@@ -11119,6 +11120,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       careLevel: patient?.careLevel || '',
       hihokenNum: patient?.hihokenNum || '',
       phone: patient?.phone || '',
+      email: patient?.email || '',
+      doctor: patient?.doctor || '',
       address: patient?.address || '',
       kiou: patient?.kiou || '',
       ryui: patient?.ryui || '',
@@ -11250,17 +11253,49 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
                 </button>
               )}
-              {/* ★ 期間選択: お知らせと通所記録の両方を絞り込み */}
-              <div style={{display:'flex',alignItems:'center',gap:6,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'4px 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+              {/* ★ 期間選択: お知らせと通所記録の両方を絞り込み。 半年/1年/全期間 は「日別/月別」も選べる */}
+              {/* ★ 「2026年6月〜」の期間レンジは セレクタ内に集約 (旧: 別の行で1行分占有していた) */}
+              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'4px 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>📅 期間</span>
-                <select value={familyPeriod} onChange={e=>setFamilyPeriod(e.target.value)}
+                <select value={familyPeriod} onChange={e=>{
+                  const v = e.target.value;
+                  setFamilyPeriod(v);
+                  // ★ 値に :daily / :auto が付いていれば displayMode も同期
+                  // 例: "6:daily" → period=6 + displayMode=daily
+                  const [p, mode] = v.split(':');
+                  setFamilyPeriod(p);
+                  if (mode) setFamilyDisplayMode(mode);
+                }}
                   style={{padding:'4px 6px',border:'1px solid #c4dba0',borderRadius:6,fontSize:12,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
-                  <option value="1">1ヶ月</option>
-                  <option value="3">3ヶ月</option>
-                  <option value="6">半年</option>
-                  <option value="12">1年</option>
-                  <option value="all">全期間</option>
+                  <option value="1">1ヶ月 (日別)</option>
+                  <option value="3">3ヶ月 (日別)</option>
+                  <option value="6">半年 (月平均)</option>
+                  <option value="6:daily">半年 (日別)</option>
+                  <option value="12">1年 (月平均)</option>
+                  <option value="12:daily">1年 (日別)</option>
+                  <option value="all">全期間 (月平均)</option>
+                  <option value="all:daily">全期間 (日別)</option>
                 </select>
+                </div>
+                {/* ★ 選択した期間の範囲を小さく表示 (上の行を取らないように圧縮) */}
+                {(() => {
+                  const now = new Date();
+                  const ty = now.getFullYear();
+                  const tm = now.getMonth() + 1;
+                  const fmt = (y,m) => `${y}年${m}月`;
+                  let label = '';
+                  if (familyPeriod === 'all') label = '全期間';
+                  else {
+                    const n = parseInt(familyPeriod, 10);
+                    if (isFinite(n) && n > 0) {
+                      let sm = tm - n + 1, sy = ty;
+                      while (sm <= 0) { sm += 12; sy--; }
+                      label = n === 1 ? fmt(ty, tm) : `${fmt(sy, sm)} 〜 ${fmt(ty, tm)}`;
+                    }
+                  }
+                  return label ? <span style={{fontSize:10,color:'#5e8030',fontWeight:'bold',whiteSpace:'nowrap'}}>{label}</span> : null;
+                })()}
               </div>
               {onLogout && (
                 <button onClick={onLogout}
@@ -11281,6 +11316,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             familyMode={!isCmAccount}
             cmViewerMode={isCmAccount}
             externalPeriod={familyPeriod}
+            externalDisplayMode={familyDisplayMode}
             hidePatientSelector={true}
             navigateTo={()=>{}}
             onShowPrintPreview={()=>{}}
@@ -11471,6 +11507,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   ];
                   const editableFields = [
                     {key:'phone',      label:'電話番号',       type:'text', placeholder:'03-XXXX-XXXX'},
+                    {key:'email',      label:'メールアドレス', type:'email', placeholder:'example@xxx.com'},
+                    {key:'doctor',     label:'かかりつけ医',   type:'text', placeholder:'例: ○○クリニック / 山田 太郎 医師'},
                     {key:'address',    label:'住所',           type:'text'},
                     {key:'kiou',       label:'既往歴',         type:'textarea'},
                     {key:'ryui',       label:'留意点',         type:'textarea'},
@@ -11527,6 +11565,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         careLevel: patientForm.careLevel,
                         hihokenNum: patientForm.hihokenNum,
                         phone: patientForm.phone,
+                        email: patientForm.email,
+                        doctor: patientForm.doctor,
                         address: patientForm.address,
                         kiou: patientForm.kiou,
                         ryui: patientForm.ryui,
@@ -15576,7 +15616,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
 }
 
 // === PersonalDashboardView (簡易版) ===
-function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null }) {
+function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null, externalDisplayMode = null }) {
   // ★ ケアマネ閲覧モード = 事業所と同じフルセット内容を読取専用で表示。 縦型 (スマホ) でも見やすく縦並びに
   const compactMode = familyMode || cmViewerMode; // 基本指標を縦並びにする判定
   // familyMode 時の sticky top 既定値: stickyTopOffset 未指定なら 56 (FamilyView 内)
@@ -15588,7 +15628,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [selectedPatientId, setSelectedPatientId] = useState(targetPatientId || (familyMode ? ((appData.patients||[])[0]?.id || null) : null));
   const [patientSearch, setPatientSearch] = useState('');
   // 3ヶ月超の場合の表示モード: 'auto'=自動(月平均)、'daily'=毎日表示
-  const [displayMode, setDisplayMode] = useState('auto');
+  const [displayMode, setDisplayMode] = useState(externalDisplayMode || 'auto');
+  React.useEffect(() => {
+    if (externalDisplayMode && externalDisplayMode !== displayMode) setDisplayMode(externalDisplayMode);
+  }, [externalDisplayMode]);
   const filteredPatientsForSelector = React.useMemo(() => {
     const q = patientSearch.trim().toLowerCase();
     if (!q) return appData.patients||[];
@@ -15906,7 +15949,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
           </>}
           </>)}
-          <span style={{background:'white',color:familyMode?'#3d5021':'#1e40af',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:'bold',whiteSpace:'nowrap'}}>{rangeLabel}</span>
+          {/* ★ 期間ラベル: compactMode (家族・ケアマネ) では親ヘッダで持つので非表示 */}
+          {!compactMode && (
+            <span style={{background:'white',color:familyMode?'#3d5021':'#1e40af',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:'bold',whiteSpace:'nowrap'}}>{rangeLabel}</span>
+          )}
           {/* 3ヶ月超の場合、月平均/毎日表示の切替 */}
           {(period==='all' || parseInt(period,10)>=6) && (
             <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
@@ -16715,8 +16761,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
               );
             })()}
-            {/* 気分 円グラフ (通所時 / 帰宅時 で分割表示) */}
-            {(()=>{
+            {/* 気分 円グラフ (通所時 / 帰宅時 で分割表示) — 気分トレンド (sec-kibun) で概況が見えるので削除 */}
+            {false && (()=>{
               const MOOD_DEF=[
                 {key:'excellent',emoji:'🤩',label:'とても良い',color:'#facc15'},
                 {key:'good',     emoji:'😊',label:'良い',       color:'#4ade80'},
@@ -17283,7 +17329,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:12}}>
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${tempWarn?'#fecaca':'#f1f5f9'}`}}>
                   {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例は下のグラフ直上へ移動) */}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:10}}>
+                  <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
                     <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>体温（日別）</div>
                     {/* ★ 統一サイズ: ラベル 12px / 数値 16px / 単位 11px / 日付 10px */}
                     <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
