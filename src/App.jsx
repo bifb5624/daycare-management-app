@@ -12982,6 +12982,9 @@ export default function App() {
   const [adminStoreDropdownOpen, setAdminStoreDropdownOpen] = React.useState(false);
   // ★ スタッフ切替ドロップダウン
   const [staffDropdownOpen, setStaffDropdownOpen] = React.useState(false);
+  // ★ サイドバーの「スタッフ追加」モーダル
+  const [staffAddModal, setStaffAddModal] = React.useState(false);
+  const [staffAddForm, setStaffAddForm] = React.useState({ lastName:'', firstName:'', role:'' });
   React.useEffect(() => {
     if (staffSession?.role !== 'super_admin' || !isSupabaseEnabled) return;
     let stopped = false;
@@ -13963,13 +13966,11 @@ export default function App() {
                           );
                         })
                       )}
-                      {/* ★ スタッフを追加: ドロップダウン内に追加ボタンを表示 */}
+                      {/* ★ スタッフを追加: モーダル形式で姓・名・役職を分けて入力 */}
                       <button onClick={() => {
-                        const name = window.prompt('追加するスタッフの氏名を入力してください\n(例: 山田 太郎)');
-                        if (!name || !name.trim()) return;
-                        const role = window.prompt('役職を入力してください (任意・空欄可)\n(例: 介護職員 / 看護師 / 生活相談員)', '') || '';
-                        const newMember = { id: `mem_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, name: name.trim(), roleLabel: role.trim(), addedAt: new Date().toISOString() };
-                        handleSaveToCloud({ ...appData, storeMembers: [...(appData.storeMembers || []), newMember] });
+                        setStaffDropdownOpen(false);
+                        setStaffAddForm({ lastName:'', firstName:'', role:'' });
+                        setStaffAddModal(true);
                       }} className="w-full text-left px-4 py-2.5 text-[11px] font-bold flex items-center gap-1.5 bg-emerald-800/40 hover:bg-emerald-700/60 text-emerald-100 border-t border-emerald-700/40 transition-colors">
                         <span className="text-[13px]">＋</span>
                         <span>スタッフを追加</span>
@@ -14098,6 +14099,67 @@ export default function App() {
              currentView === 'dash_operation' ? <OperationDashboardView appData={appData} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} setAppData={setAppData} /> :
              <div className="flex h-full items-center justify-center text-slate-400 font-bold">開発中</div>}
           </div></div></main>
+      {/* ★ サイドバーのスタッフ追加モーダル */}
+      {staffAddModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={()=>setStaffAddModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">👤</span>
+              <h3 className="text-lg font-bold text-slate-800">スタッフを追加</h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">姓・名・役職を分けて入力してください。</p>
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">姓 <span className="text-red-500">*</span></label>
+                  <input type="text" value={staffAddForm.lastName} onChange={e=>setStaffAddForm(f=>({...f,lastName:e.target.value}))}
+                    placeholder="例: 山田" autoFocus
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-emerald-400"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">名 <span className="text-red-500">*</span></label>
+                  <input type="text" value={staffAddForm.firstName} onChange={e=>setStaffAddForm(f=>({...f,firstName:e.target.value}))}
+                    placeholder="例: 太郎"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-emerald-400"/>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">役職</label>
+                <select value={staffAddForm.role} onChange={e=>setStaffAddForm(f=>({...f,role:e.target.value}))}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-emerald-400 bg-white">
+                  <option value="">— 選択 (任意) —</option>
+                  <option value="管理者">管理者</option>
+                  <option value="生活相談員">生活相談員</option>
+                  <option value="機能訓練指導員">機能訓練指導員</option>
+                  <option value="看護師">看護師</option>
+                  <option value="介護職員">介護職員</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button onClick={()=>setStaffAddModal(false)}
+                className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm">キャンセル</button>
+              <button onClick={()=>{
+                const last = staffAddForm.lastName.trim();
+                const first = staffAddForm.firstName.trim();
+                if (!last || !first) { alert('姓と名は必須です'); return; }
+                const fullName = `${last} ${first}`;
+                const newMember = {
+                  id: `mem_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+                  name: fullName,
+                  lastName: last,
+                  firstName: first,
+                  roleLabel: staffAddForm.role,
+                  addedAt: new Date().toISOString(),
+                };
+                handleSaveToCloud({ ...appData, storeMembers: [...(appData.storeMembers || []), newMember] });
+                setStaffAddModal(false);
+              }}
+                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">追加</button>
+            </div>
+          </div>
+        </div>
+      )}
       {navConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
@@ -14786,7 +14848,12 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
                   // ★ 担当者: 既存の record.recorder を保持しつつ、 今回新規/更新時はアクティブ記録者を反映
-                  recorder: getActiveRecorderName() || existing?.recorder || '',
+                  //   fallback: アクティブ記録者が未設定なら 事業所責任者 / diarySettings の管理者 / 既存値 を使う
+                  recorder: getActiveRecorderName()
+                    || existing?.recorder
+                    || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+                    || appData.systemSettings?.facilityInfo?.manager
+                    || '',
                   done: p.done || false
               };
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
