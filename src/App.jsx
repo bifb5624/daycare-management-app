@@ -16346,17 +16346,18 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 <div style={{background:'white',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${attendance<70?'#fecaca':'#f1f5f9'}`,display:'flex',flexDirection:'column',gap:6,position:'relative',flex:1,minWidth:160}}>
                   {attendance<70&&<div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'#ef4444',borderRadius:'12px 12px 0 0'}}/>}
                   <div style={{fontSize:14,fontWeight:'bold',color:attendance<70?'#ef4444':'#1e293b'}}>通所率</div>
-                  <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',minWidth:0}}>
-                    <svg width={64} height={64} viewBox="0 0 72 72" style={{flexShrink:0}}>
+                  {/* ★ 円 + 100% + 各種件数 を 1 行に横並び (画面の横スペースを活用) */}
+                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',minWidth:0}}>
+                    <svg width={56} height={56} viewBox="0 0 72 72" style={{flexShrink:0}}>
                       {slices.length===1?<circle cx={cx} cy={cy} r={r2} fill={slices[0].color}/>:paths.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth={1.5}/>)}
                     </svg>
-                    <div style={{fontWeight:'bold',color:attendance<70?'#dc2626':'#1e293b',lineHeight:1,whiteSpace:'nowrap',display:'inline-flex',alignItems:'baseline'}}>
-                      <span style={{fontSize:'clamp(20px,3.5vw,30px)'}}>{attendance}</span>
-                      <span style={{fontSize:'clamp(11px,1.6vw,15px)',marginLeft:1,color:'#94a3b8'}}>%</span>
+                    <div style={{fontWeight:'bold',color:attendance<70?'#dc2626':'#1e293b',lineHeight:1,whiteSpace:'nowrap',display:'inline-flex',alignItems:'baseline',flexShrink:0}}>
+                      <span style={{fontSize:28}}>{attendance}</span>
+                      <span style={{fontSize:13,marginLeft:1,color:'#94a3b8'}}>%</span>
                     </div>
-                  </div>
-                  <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',marginTop:4}}>
-                    {slices.map((s,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:s.color,display:'inline-block',flexShrink:0}}/><span style={{fontWeight:'bold',color:'#475569'}}>{s.label}</span><span style={{color:'#1e293b',fontWeight:'bold'}}>{s.count}</span></div>))}
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',flex:1,minWidth:0}}>
+                      {slices.map((s,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:s.color,display:'inline-block',flexShrink:0}}/><span style={{fontWeight:'bold',color:'#475569'}}>{s.label}</span><span style={{color:'#1e293b',fontWeight:'bold'}}>{s.count}</span></div>))}
+                    </div>
                   </div>
                   {attendance<70&&<div style={{fontSize:13,color:'#ef4444',fontWeight:'bold'}}>⚠ 要注意</div>}
                 </div>
@@ -16402,20 +16403,19 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               return (
                 <div style={{background:'white',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',display:'flex',flexDirection:'column',gap:6,flex:1,minWidth:160}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
-                  {/* 上段: 円グラフ＋平均気分 横並び */}
-                  <div style={{display:'flex',alignItems:'center',gap:8}}>
-                    <svg width={76} height={76} viewBox="0 0 76 76" style={{flexShrink:0}}>
+                  {/* ★ 円グラフ + 平均気分 + 各気分件数 を 1 行に横並び */}
+                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
+                    <svg width={64} height={64} viewBox="0 0 76 76" style={{flexShrink:0}}>
                       {paths.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth={1.5}/>)}
                     </svg>
-                    <div style={{background:avgDef.color+'22',borderRadius:10,padding:'5px 8px',border:`1.5px solid ${avgDef.color}55`,textAlign:'center',flexShrink:0}}>
-                      <div style={{fontSize:10,fontWeight:'bold',color:'#94a3b8',marginBottom:1}}>平均気分</div>
-                      <div style={{fontSize:32,lineHeight:1}}>{avgDef.emoji}</div>
-                      <div style={{fontSize:11,fontWeight:'bold',color:'#1e293b',marginTop:2}}>{avgDef.label}</div>
+                    <div style={{background:avgDef.color+'22',borderRadius:10,padding:'4px 8px',border:`1.5px solid ${avgDef.color}55`,textAlign:'center',flexShrink:0}}>
+                      <div style={{fontSize:9,fontWeight:'bold',color:'#94a3b8',marginBottom:1}}>平均気分</div>
+                      <div style={{fontSize:24,lineHeight:1}}>{avgDef.emoji}</div>
+                      <div style={{fontSize:10,fontWeight:'bold',color:'#1e293b',marginTop:1}}>{avgDef.label}</div>
                     </div>
-                  </div>
-                  {/* 下段: 各気分を横並び (画面の横スペースを活用) */}
-                  <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',marginTop:4}}>
-                    {MOOD_DEF.map((m,i)=>{const cnt=counts[m.key]||0;return(<div key={i} style={{display:'flex',alignItems:'center',gap:3,fontSize:12,opacity:cnt>0?1:0.3,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:m.color,flexShrink:0,display:'inline-block'}}/><span style={{fontSize:13}}>{m.emoji}</span><span style={{color:'#475569'}}>{m.label}</span><span style={{fontWeight:'bold',color:'#1e293b'}}>{cnt}</span></div>);})}
+                    <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',flex:1,minWidth:0}}>
+                      {MOOD_DEF.map((m,i)=>{const cnt=counts[m.key]||0;return(<div key={i} style={{display:'flex',alignItems:'center',gap:3,fontSize:12,opacity:cnt>0?1:0.3,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:m.color,flexShrink:0,display:'inline-block'}}/><span style={{fontSize:13}}>{m.emoji}</span><span style={{color:'#475569'}}>{m.label}</span><span style={{fontWeight:'bold',color:'#1e293b'}}>{cnt}</span></div>);})}
+                    </div>
                   </div>
                 </div>
               );
@@ -19367,7 +19367,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0.5 text-center" style={{fontSize:9,verticalAlign:'middle',minWidth:90}}>
+                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',height:41,maxHeight:41,minWidth:90}}>
                             {(() => {
                               const MOODS = {'excellent':'🤩','good':'😊','normal':'😐','bad':'😞','terrible':'😫'};
                               const arr = v(r.kibunArrival);
@@ -19375,17 +19375,34 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                               const arrR = v(r.kibunArrivalReason);
                               const depR = v(r.kibunDepartureReason);
                               if(!arr && !dep) return '';
-                              return (<div style={{display:'flex',flexDirection:'column',gap:2,padding:'2px',justifyContent:'center'}}>
-                                {arr && <div style={{display:'flex',alignItems:'flex-start',gap:2,lineHeight:1.25}}>
-                                  <span style={{fontSize:8,color:'#334155',fontWeight:'bold',flexShrink:0,paddingTop:1}}>通</span>
-                                  <span style={{fontSize:11,lineHeight:1,flexShrink:0}}>{MOODS[arr]||arr}</span>
-                                  {arrR && <span style={{fontSize:8,color:'#1e293b',whiteSpace:'normal',wordBreak:'break-all',textAlign:'left',lineHeight:1.25}}>{arrR}</span>}
-                                </div>}
-                                {dep && <div style={{display:'flex',alignItems:'flex-start',gap:2,lineHeight:1.25}}>
-                                  <span style={{fontSize:8,color:'#334155',fontWeight:'bold',flexShrink:0,paddingTop:1}}>帰</span>
-                                  <span style={{fontSize:11,lineHeight:1,flexShrink:0}}>{MOODS[dep]||dep}</span>
-                                  {depR && <span style={{fontSize:8,color:'#1e293b',whiteSpace:'normal',wordBreak:'break-all',textAlign:'left',lineHeight:1.25}}>{depR}</span>}
-                                </div>}
+                              // ★ 行高さは固定 (41px)。 文字数が多い場合は文字サイズを縮小して全部表示
+                              //    両方ある場合 縦 20px / 行、 片方なら 41px。
+                              const lineH = (arr && dep) ? 20 : 41;
+                              const totalReasonLen = (arrR||'').length + (depR||'').length;
+                              const reasonFs = totalReasonLen > 24 ? 6 : totalReasonLen > 12 ? 7 : 8;
+                              const renderLine = (label, mood, reason) => (
+                                <div style={{display:'flex',alignItems:'center',gap:2,height:lineH,overflow:'hidden',padding:'0 2px'}}>
+                                  <span style={{fontSize:7,color:'#334155',fontWeight:'bold',flexShrink:0}}>{label}</span>
+                                  <span style={{fontSize:10,lineHeight:1,flexShrink:0}}>{MOODS[mood]||mood}</span>
+                                  {reason && (
+                                    <span style={{
+                                      fontSize:reasonFs,
+                                      color:'#1e293b',
+                                      lineHeight:1.05,
+                                      flex:1,minWidth:0,textAlign:'left',
+                                      display:'-webkit-box',
+                                      WebkitLineClamp:2,
+                                      WebkitBoxOrient:'vertical',
+                                      overflow:'hidden',
+                                      whiteSpace:'normal',
+                                      wordBreak:'break-all',
+                                    }}>{reason}</span>
+                                  )}
+                                </div>
+                              );
+                              return (<div style={{display:'flex',flexDirection:'column',height:41,overflow:'hidden',justifyContent:'center'}}>
+                                {arr && renderLine('通', arr, arrR)}
+                                {dep && renderLine('帰', dep, depR)}
                               </div>);
                             })()}
                           </td>
