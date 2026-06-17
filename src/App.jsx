@@ -19889,18 +19889,22 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       <Fragment key={r.id}>
                         {/* データ行 */}
                         <tr className={`data-row ${rc}`} style={{height:40}}>
-                          <td rowSpan={2} className={`border border-slate-400 px-1 text-center ${rc}`} style={{verticalAlign:'middle',overflow:'hidden',maxWidth:60,padding:0,height:76}}>
+                          <td rowSpan={2} className={`border border-slate-400 px-1 text-center ${rc}`} style={{verticalAlign:'middle',overflow:'hidden',maxWidth:80,padding:0,height:76}}>
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: record.recorder → アクティブ記録者 → 管理者役 → 事業所責任者 の順にフォールバック */}
+                              {/* ★ 担当者: 実際にデータが入力されている (体温・血圧・気分・運動・介護整体のいずれか) ときだけ表示
+                                  fallback はせず r.recorder のみで判定 (保存時にアクティブ記録者が記録される)
+                                  予定日・未入力日は表示しない */}
                               {(() => {
-                                const rec = r.recorder
-                                  || getActiveRecorderName()
-                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
-                                  || appData.systemSettings?.facilityInfo?.manager
-                                  || '';
-                                return rec ? <div className="font-bold" style={{fontSize:10,color:'#475569',marginTop:2,lineHeight:1.2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>担当: {rec}</div> : null;
+                                const hasData = (
+                                  v(r.temp) || v(r.bpUpSt) || v(r.bpUpEn) ||
+                                  v(r.kibunArrival) || v(r.kibunDeparture) || v(r.massage) ||
+                                  (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
+                                );
+                                if (!hasData) return null;
+                                const rec = r.recorder || '';
+                                return rec ? <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div> : null;
                               })()}
                             </div>
                           </td>
