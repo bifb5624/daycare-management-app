@@ -19907,9 +19907,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 }
                 .tp table tbody tr.tokki-row td>div.cell-wrap {
                   height:32px; max-height:32px; overflow:hidden;
-                  display:flex; align-items:center; justify-content:center;
+                  display:flex; align-items:center; justify-content:flex-start;
                   line-height:1.25; white-space:pre-wrap; word-break:break-all;
-                  text-align:center;
+                  text-align:left; padding-left:4px;
                 }
               `}</style>
               <table className="w-full border-collapse" style={{tableLayout:'fixed',width:'100%'}}>
@@ -19949,9 +19949,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: r.recorder (その日に保存されたスタッフ) のみで表示
-                                  - 古い未保存記録 (recorder=空) は表示しない (アクティブ記録者で補完しない → 日付ごとに完全独立)
-                                  - 一度保存すれば その日に保存したスタッフが固定で表示される */}
+                              {/* ★ 担当者: r.recorder を優先、 無ければアクティブ記録者で補完
+                                  hasData が無い予定日は非表示 (r.recorder の設定有無に関わらず) */}
                               {(() => {
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
@@ -19962,8 +19961,10 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   (r.massage && String(r.massage).trim()) ||
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
-                                if (!hasData || !r.recorder) return null;
-                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {r.recorder}</div>;
+                                if (!hasData) return null;
+                                const rec = r.recorder || getActiveRecorderName();
+                                if (!rec) return null;
+                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
                               })()}
                             </div>
                           </td>
