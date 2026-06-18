@@ -19949,8 +19949,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: r.recorder (その日に保存されたスタッフ) を表示
-                                  古い記録で recorder=空 の日は アクティブ記録者で補完 (今後の保存で記録が上書きされる) */}
+                              {/* ★ 担当者: r.recorder (その日に保存されたスタッフ) のみで表示
+                                  - 古い未保存記録 (recorder=空) は表示しない (アクティブ記録者で補完しない → 日付ごとに完全独立)
+                                  - 一度保存すれば その日に保存したスタッフが固定で表示される */}
                               {(() => {
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
@@ -19961,10 +19962,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   (r.massage && String(r.massage).trim()) ||
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
-                                if (!hasData) return null;
-                                const rec = r.recorder || getActiveRecorderName();
-                                if (!rec) return null;
-                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
+                                if (!hasData || !r.recorder) return null;
+                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {r.recorder}</div>;
                               })()}
                             </div>
                           </td>
