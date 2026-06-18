@@ -19893,18 +19893,27 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: 実際にデータが入力されている (体温・血圧・気分・運動・介護整体のいずれか) ときだけ表示
-                                  fallback はせず r.recorder のみで判定 (保存時にアクティブ記録者が記録される)
-                                  予定日・未入力日は表示しない */}
+                              {/* ★ 担当者: 実データがある日のみ表示 (予定/未入力日は非表示)
+                                  値は r.recorder を優先、 古い記録で空の場合は アクティブ記録者 → 管理者 → 事業所責任者 へフォールバック */}
                               {(() => {
-                                const hasData = (
-                                  v(r.temp) || v(r.bpUpSt) || v(r.bpUpEn) ||
-                                  v(r.kibunArrival) || v(r.kibunDeparture) || v(r.massage) ||
+                                // 体温・血圧 (開始/終了)・気分・介護整体・運動メニュー のいずれかが入っているか
+                                const hasData = !!(
+                                  (r.temp && String(r.temp).trim()) ||
+                                  (r.bpUpSt && String(r.bpUpSt).trim()) ||
+                                  (r.bpUpEn && String(r.bpUpEn).trim()) ||
+                                  (r.kibunArrival && String(r.kibunArrival).trim()) ||
+                                  (r.kibunDeparture && String(r.kibunDeparture).trim()) ||
+                                  (r.massage && String(r.massage).trim()) ||
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
                                 if (!hasData) return null;
-                                const rec = r.recorder || '';
-                                return rec ? <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div> : null;
+                                const rec = r.recorder
+                                  || getActiveRecorderName()
+                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+                                  || appData.systemSettings?.facilityInfo?.manager
+                                  || '';
+                                if (!rec) return null;
+                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
                               })()}
                             </div>
                           </td>
