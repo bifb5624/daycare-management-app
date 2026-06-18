@@ -14927,6 +14927,20 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           }
         }
       });
+      // ★ 念のため最後に selectedDate の record にアクティブ記録者を強制セット
+      //   (途中のロジックで recorder が落ちる場合があっても、 ここで確実に上書きされる)
+      //   他の日付の record には触らない
+      const _activeRec = getActiveRecorderName();
+      if (_activeRec && filterMode === 'single') {
+        const _dObj = new Date(selectedDate);
+        const _targetDateStr = `${_dObj.getMonth() + 1}月${_dObj.getDate()}日`;
+        updatedTicketRecords = updatedTicketRecords.map(r => {
+          if (r.date === _targetDateStr) {
+            return { ...r, recorder: _activeRec };
+          }
+          return r;
+        });
+      }
       // ★ manual:true でトースト「✓ 保存しました」表示
       onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts }, { manual: true, message: '✓ 保存しました' });
       setPendingCancellations([]);
