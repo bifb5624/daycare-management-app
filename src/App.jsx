@@ -14793,6 +14793,21 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
   };
 
   const handleSaveClick = () => {
+      // ★ 個別機能訓練加算 取得時: 担当者が機能訓練指導員でなければ警告
+      if (appData.systemSettings?.facilityInfo?.kobetsuKinouAddon) {
+        const _activeRecName = getActiveRecorderName();
+        const _kinouNames = (appData.diarySettings?.staff || [])
+          .filter(s => s.role === '機能訓練指導員')
+          .map(s => s.name);
+        if (_activeRecName && _kinouNames.length > 0 && !_kinouNames.includes(_activeRecName)) {
+          const ok = window.confirm(
+            `⚠ 個別機能訓練加算 取得中ですが、 現在の担当者「${_activeRecName}」は機能訓練指導員ではありません。\n\n` +
+            `登録されている機能訓練指導員: ${_kinouNames.join('、 ')}\n\n` +
+            `このまま保存しますか？\n(キャンセルしてサイドバーの「スタッフ切替」から機能訓練指導員に切り替えることもできます)`
+          );
+          if (!ok) return;
+        }
+      }
       let updatedTicketRecords = [...(appData.ticketRecords || [])];
       let newShifts = JSON.parse(JSON.stringify(appData.monthlyShifts || {}));
       // 振替の取り消し（保留分）を先に反映
@@ -14861,7 +14876,23 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
               else updatedTicketRecords.push(newRecord);
           });
-      } else { updatedTicketRecords = localTicketRecords; }
+      } else {
+        // ★ multiple / month モード: 変更があった record にだけ recorder を反映 (他の日付の担当者は変えない)
+        const _activeRec = getActiveRecorderName()
+          || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+          || appData.systemSettings?.facilityInfo?.manager
+          || '';
+        const _originalById = new Map((appData.ticketRecords || []).map(r => [r.id, r]));
+        updatedTicketRecords = localTicketRecords.map(r => {
+          const original = _originalById.get(r.id);
+          // 変更検知: 元の record と JSON 文字列で差分があれば recorder 上書き
+          const changed = !original || JSON.stringify({...original, recorder:undefined}) !== JSON.stringify({...r, recorder:undefined});
+          if (changed && _activeRec) {
+            return { ...r, recorder: _activeRec };
+          }
+          return r;
+        });
+      }
       // 振替の新規シフト（保留分）をマージ
       pendingFurikaeShifts.forEach(({shifts}) => {
         for (const mk in shifts) {
@@ -24203,6 +24234,21 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                       placeholder="名 (例: 健一)"
                       className="px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
                   </div>
+                </div>
+                {/* ★ 個別機能訓練加算: 取得有無 (提供記録の担当判定用) */}
+                <div className="border-t border-slate-200 pt-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input type="checkbox" checked={!!facilityInfo.kobetsuKinouAddon}
+                      onChange={e => setFacilityInfo({...facilityInfo, kobetsuKinouAddon: e.target.checked})}
+                      className="w-5 h-5 mt-0.5 cursor-pointer accent-blue-600 flex-shrink-0"/>
+                    <div>
+                      <div className="text-sm font-bold text-slate-700">個別機能訓練加算を取得している</div>
+                      <div className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        チェックすると、 サービス提供記録の保存時に <b>担当者が機能訓練指導員でない場合に警告</b> を表示します。<br/>
+                        ヘルプ・別の指導員に切り替えるときは、 サイドバーの「スタッフ切替」から選んでください。
+                      </div>
+                    </div>
+                  </label>
                 </div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">年度設定</h4>
                   <div><label className="block text-xs font-bold text-slate-500 mb-2">年度開始月</label>
