@@ -13515,10 +13515,18 @@ export default function App() {
         // ★ 日誌の担当職員にも同時追加 (5つの役職に正規化)
         const validRoles = ['管理者','生活相談員','機能訓練指導員','看護師','介護職員'];
         const diaryRole = validRoles.includes(memberLike.roleLabel) ? memberLike.roleLabel : '介護職員';
+        // ★ 重複チェック: 既に同じ名前 + 役職のスタッフがあれば追加しない
+        const _normName = normalizeName(memberLike.name).trim();
+        const dupStoreMember = (appData.storeMembers || []).some(x => normalizeName(x.name).trim() === _normName && (x.roleLabel||'') === (memberLike.roleLabel||''));
+        const dupDiaryStaff = (appData.diarySettings?.staff || []).some(x => normalizeName(x.name).trim() === _normName && (x.role||'') === diaryRole);
+        if (dupStoreMember && dupDiaryStaff) {
+          alert(`「${memberLike.name} (${memberLike.roleLabel||''})」は既に登録されています`);
+          return;
+        }
         setAppData(prev => ({
           ...prev,
-          storeMembers: [...(prev.storeMembers || []), m],
-          diarySettings: {
+          storeMembers: dupStoreMember ? (prev.storeMembers||[]) : [...(prev.storeMembers || []), m],
+          diarySettings: dupDiaryStaff ? (prev.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}) : {
             ...(prev.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
             staff: [
               ...(prev.diarySettings?.staff || []),
@@ -14145,6 +14153,14 @@ export default function App() {
                 if (!last || !first) { alert('姓と名は必須です'); return; }
                 if (!staffAddForm.role) { alert('役職を選択してください'); return; }
                 const fullName = `${last} ${first}`;
+                const _normFull = normalizeName(fullName).trim();
+                // ★ 重複チェック: 既存スタッフ (店舗メンバー + 日誌スタッフ) に同名+同役職があれば登録しない
+                const dupStore = (appData.storeMembers || []).some(m => normalizeName(m.name).trim() === _normFull && (m.roleLabel||'') === staffAddForm.role);
+                const dupDiary = (appData.diarySettings?.staff || []).some(s => normalizeName(s.name).trim() === _normFull && (s.role||'') === staffAddForm.role);
+                if (dupStore || dupDiary) {
+                  alert(`「${fullName} (${staffAddForm.role})」は既に登録されています`);
+                  return;
+                }
                 const newMember = {
                   id: `mem_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
                   name: fullName,
@@ -14153,7 +14169,21 @@ export default function App() {
                   roleLabel: staffAddForm.role,
                   addedAt: new Date().toISOString(),
                 };
-                handleSaveToCloud({ ...appData, storeMembers: [...(appData.storeMembers || []), newMember] });
+                // ★ 日誌の担当職員にも同時追加 (重複がない場合のみ)
+                const newDiaryStaff = dupDiary
+                  ? (appData.diarySettings?.staff || [])
+                  : [
+                      ...(appData.diarySettings?.staff || []),
+                      { id: `ds_sync_${newMember.id}`, _syncedFromMemberId: newMember.id, role: staffAddForm.role, name: fullName, ampm: 'both' }
+                    ];
+                handleSaveToCloud({
+                  ...appData,
+                  storeMembers: [...(appData.storeMembers || []), newMember],
+                  diarySettings: {
+                    ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
+                    staff: newDiaryStaff,
+                  },
+                });
                 setStaffAddModal(false);
               }}
                 className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">追加</button>
@@ -14796,9 +14826,11 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
       // ★ 個別機能訓練加算 取得時: 担当者が機能訓練指導員でなければ警告
       if (appData.systemSettings?.facilityInfo?.kobetsuKinouAddon) {
         const _activeRecName = getActiveRecorderName();
-        const _kinouNames = (appData.diarySettings?.staff || [])
+        // 機能訓練指導員リスト + 同名重複排除
+        const _kinouNamesAll = (appData.diarySettings?.staff || [])
           .filter(s => s.role === '機能訓練指導員')
           .map(s => s.name);
+        const _kinouNames = Array.from(new Set(_kinouNamesAll.map(n => normalizeName(n).trim()))).filter(Boolean);
         if (_activeRecName && _kinouNames.length > 0 && !_kinouNames.includes(_activeRecName)) {
           const ok = window.confirm(
             `⚠ 個別機能訓練加算 取得中ですが、 現在の担当者「${_activeRecName}」は機能訓練指導員ではありません。\n\n` +
@@ -19928,9 +19960,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: その日の record.recorder のみで判定 (各日付ごとに保存時のスタッフを表示)
-                                  古い記録で recorder=空 の場合は表示しない (別日の担当者で誤表示しないため)
-                                  hasData (体温/血圧/気分/介護整体/運動メニューのいずれか) が無い予定日も非表示 */}
+                              {/* ★ 担当者: 実データのある日のみ表示
+                                  優先: r.recorder → 日誌設定の管理者 → 店舗メンバー先頭 → 事業所責任者
+                                  (アクティブ記録者は意図的に除外: 日付を跨いで表示が変わる現象を防ぐ) */}
                               {(() => {
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
@@ -19942,8 +19974,14 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
                                 if (!hasData) return null;
-                                if (!r.recorder) return null;
-                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {r.recorder}</div>;
+                                const rec = r.recorder
+                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+                                  || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
+                                  || (appData.storeMembers || [])[0]?.name
+                                  || appData.systemSettings?.facilityInfo?.manager
+                                  || '';
+                                if (!rec) return null;
+                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
                               })()}
                             </div>
                           </td>
@@ -25120,9 +25158,18 @@ function DiarySettingsPanel({ appData, dsRef, markDirty }) {
   return (
     <div className="space-y-6">
       <SC title="担当職員">
-        <p className="text-xs text-slate-500 mb-3">役職と名前を設定します。</p>
+        <p className="text-xs text-slate-500 mb-3">役職と名前を設定します。 (同名+同役職の重複は自動的に1件にまとめて表示)</p>
         <div className="space-y-2">
-          {ds.staff.map((s,i)=>(
+          {/* ★ 同じ姓名 + 役職の重複を表示時に排除 (既存データの重複も画面上は 1 件に) */}
+          {(() => {
+            const seen = new Set();
+            return ds.staff.filter((s, _i) => {
+              const key = `${(s.role||'')}__${normalizeName(s.name||'').trim()}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            }).map((s, _ri) => ({s, i: ds.staff.indexOf(s)}));
+          })().map(({s, i})=>(
             <div key={s.id} className="flex items-center gap-2">
               <select defaultValue={s.role} onChange={e=>onBlurStaff(i,'role',e.target.value)} className="w-[160px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400">
                 <option value="管理者">管理者</option>
