@@ -14848,10 +14848,10 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
-                  // ★ 担当者: 提供記録の運動指導は機能訓練指導員が担当 (法令的) なので、 機能訓練指導員役を最優先
-                  //   フォールバック: アクティブ記録者 → 既存値 → 管理者役 → 事業所責任者
-                  recorder: (appData.diarySettings?.staff || []).find(s => s.role === '機能訓練指導員')?.name
-                    || getActiveRecorderName()
+                  // ★ 担当者: 実際に操作したスタッフ (アクティブ記録者) を最優先で記録
+                  //   理由: 機能訓練指導員固定は 加算の有無 / 欠席時 / ヘルプ職員 で破綻するため、 操作者を素直に保存
+                  //   フォールバック (record 新規かつ アクティブ未設定の場合): 既存値 → 管理者 → 事業所責任者
+                  recorder: getActiveRecorderName()
                     || existing?.recorder
                     || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
                     || appData.systemSettings?.facilityInfo?.manager
