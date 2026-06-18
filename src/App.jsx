@@ -14895,15 +14895,9 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
-                  // ★ 担当者: 実際に操作したスタッフ (アクティブ記録者) を最優先で記録
-                  //   フォールバック: 既存値 → 日誌設定の管理者 → 店舗メンバーの管理者 → 店舗メンバー先頭 → 事業所責任者
-                  recorder: getActiveRecorderName()
-                    || existing?.recorder
-                    || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
-                    || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
-                    || (appData.storeMembers || [])[0]?.name
-                    || appData.systemSettings?.facilityInfo?.manager
-                    || '',
+                  // ★ 担当者: スタッフ切替で選んでいるアクティブ記録者を保存
+                  //   未選択の場合は 既存値を維持 (それ以外のフォールバックは使わない)
+                  recorder: getActiveRecorderName() || existing?.recorder || '',
                   done: p.done || false
               };
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
@@ -14911,12 +14905,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           });
       } else {
         // ★ multiple / month モード: 変更があった record にだけ recorder を反映 (他の日付の担当者は変えない)
-        const _activeRec = getActiveRecorderName()
-          || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
-          || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
-          || (appData.storeMembers || [])[0]?.name
-          || appData.systemSettings?.facilityInfo?.manager
-          || '';
+        const _activeRec = getActiveRecorderName();
         const _originalById = new Map((appData.ticketRecords || []).map(r => [r.id, r]));
         updatedTicketRecords = localTicketRecords.map(r => {
           const original = _originalById.get(r.id);
@@ -19960,9 +19949,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: 実データのある日のみ表示
-                                  優先: r.recorder (保存時のスタッフ) → アクティブ記録者 → 日誌管理者 → 店舗メンバー → 事業所責任者
-                                  ※ 日付ごとの整合性は保存時に r.recorder がセットされることに依存 */}
+                              {/* ★ 担当者: 実データがある日のみ表示
+                                  優先: r.recorder (保存時のスタッフ) → アクティブ記録者 (スタッフ切替で選択中)
+                                  ※ どちらも無ければ非表示 (旧設定の管理者・事業所責任者は使わない) */}
                               {(() => {
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
@@ -19974,13 +19963,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
                                 if (!hasData) return null;
-                                const rec = r.recorder
-                                  || getActiveRecorderName()
-                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
-                                  || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
-                                  || (appData.storeMembers || [])[0]?.name
-                                  || appData.systemSettings?.facilityInfo?.manager
-                                  || '';
+                                const rec = r.recorder || getActiveRecorderName();
                                 if (!rec) return null;
                                 return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
                               })()}
