@@ -19961,8 +19961,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
                               {/* ★ 担当者: 実データのある日のみ表示
-                                  優先: r.recorder → 日誌設定の管理者 → 店舗メンバー先頭 → 事業所責任者
-                                  (アクティブ記録者は意図的に除外: 日付を跨いで表示が変わる現象を防ぐ) */}
+                                  優先: r.recorder (保存時のスタッフ) → アクティブ記録者 → 日誌管理者 → 店舗メンバー → 事業所責任者
+                                  ※ 日付ごとの整合性は保存時に r.recorder がセットされることに依存 */}
                               {(() => {
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
@@ -19975,6 +19975,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                 );
                                 if (!hasData) return null;
                                 const rec = r.recorder
+                                  || getActiveRecorderName()
                                   || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
                                   || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
                                   || (appData.storeMembers || [])[0]?.name
