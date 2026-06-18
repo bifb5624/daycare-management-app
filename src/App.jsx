@@ -14092,7 +14092,7 @@ export default function App() {
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
             <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
-            {currentView === 'record' ? <RecordView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
+            {currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
              currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} /> :
@@ -14268,7 +14268,10 @@ export default function App() {
 }
 
 // === RecordView ===
-function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate, dirtyRef, saveFnRef, sharedAmpm, setSharedAmpm, showTip, hideTip, isSidebarOpen, setIsSidebarOpen }) {
+function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate, setSelectedDate, dirtyRef, saveFnRef, sharedAmpm, setSharedAmpm, showTip, hideTip, isSidebarOpen, setIsSidebarOpen }) {
+  // ★ 担当者名: props (activeRecorder) を最優先で取得、 fallback で sessionStorage (getActiveRecorderName)
+  //   props が確実に届くため、 「保存しても担当者が空」 の問題を解消
+  const getRecorderName = () => (activeRecorder?.name) || getActiveRecorderName() || '';
   const [localPatients, setLocalPatients] = useState([]);
   const [localTicketRecords, setLocalTicketRecords] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -14825,7 +14828,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
   const handleSaveClick = () => {
       // ★ 個別機能訓練加算 取得時: 担当者が機能訓練指導員でなければ警告
       if (appData.systemSettings?.facilityInfo?.kobetsuKinouAddon) {
-        const _activeRecName = getActiveRecorderName();
+        const _activeRecName = getRecorderName();
         // 機能訓練指導員リスト + 同名重複排除
         const _kinouNamesAll = (appData.diarySettings?.staff || [])
           .filter(s => s.role === '機能訓練指導員')
@@ -14897,7 +14900,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
                   // ★ 担当者: スタッフ切替で選んでいるアクティブ記録者を保存
                   //   未選択の場合は 既存値を維持 (それ以外のフォールバックは使わない)
-                  recorder: getActiveRecorderName() || existing?.recorder || '',
+                  recorder: getRecorderName() || existing?.recorder || '',
                   done: p.done || false
               };
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
@@ -14905,7 +14908,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
           });
       } else {
         // ★ multiple / month モード: 変更があった record にだけ recorder を反映 (他の日付の担当者は変えない)
-        const _activeRec = getActiveRecorderName();
+        const _activeRec = getRecorderName();
         const _originalById = new Map((appData.ticketRecords || []).map(r => [r.id, r]));
         updatedTicketRecords = localTicketRecords.map(r => {
           const original = _originalById.get(r.id);
@@ -14930,7 +14933,7 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
       // ★ 念のため最後に selectedDate の record にアクティブ記録者を強制セット
       //   (途中のロジックで recorder が落ちる場合があっても、 ここで確実に上書きされる)
       //   他の日付の record には触らない
-      const _activeRec = getActiveRecorderName();
+      const _activeRec = getRecorderName();
       if (_activeRec && filterMode === 'single') {
         const _dObj = new Date(selectedDate);
         const _targetDateStr = `${_dObj.getMonth() + 1}月${_dObj.getDate()}日`;
