@@ -14269,9 +14269,21 @@ export default function App() {
 
 // === RecordView ===
 function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate, setSelectedDate, dirtyRef, saveFnRef, sharedAmpm, setSharedAmpm, showTip, hideTip, isSidebarOpen, setIsSidebarOpen }) {
-  // ★ 担当者名: props (activeRecorder) を最優先で取得、 fallback で sessionStorage (getActiveRecorderName)
-  //   props が確実に届くため、 「保存しても担当者が空」 の問題を解消
-  const getRecorderName = () => (activeRecorder?.name) || getActiveRecorderName() || '';
+  // ★ 担当者名: 多段階フォールバック で保存時に必ず何か入る
+  //   1. props (activeRecorder.name) — スタッフ切替で選んでいる人
+  //   2. sessionStorage (getActiveRecorderName) — 保険
+  //   3. diarySettings.staff の管理者役
+  //   4. storeMembers の管理者役
+  //   5. storeMembers の先頭
+  //   6. facilityInfo.manager
+  const getRecorderName = () =>
+    (activeRecorder?.name)
+    || getActiveRecorderName()
+    || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+    || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
+    || (appData.storeMembers || [])[0]?.name
+    || appData.systemSettings?.facilityInfo?.manager
+    || '';
   const [localPatients, setLocalPatients] = useState([]);
   const [localTicketRecords, setLocalTicketRecords] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
