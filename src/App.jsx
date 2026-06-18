@@ -14848,9 +14848,10 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
-                  // ★ 担当者: 既存の record.recorder を保持しつつ、 今回新規/更新時はアクティブ記録者を反映
-                  //   fallback: アクティブ記録者が未設定なら 事業所責任者 / diarySettings の管理者 / 既存値 を使う
-                  recorder: getActiveRecorderName()
+                  // ★ 担当者: 提供記録の運動指導は機能訓練指導員が担当 (法令的) なので、 機能訓練指導員役を最優先
+                  //   フォールバック: アクティブ記録者 → 既存値 → 管理者役 → 事業所責任者
+                  recorder: (appData.diarySettings?.staff || []).find(s => s.role === '機能訓練指導員')?.name
+                    || getActiveRecorderName()
                     || existing?.recorder
                     || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
                     || appData.systemSettings?.facilityInfo?.manager
@@ -19893,10 +19894,10 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: 実データがある日のみ表示 (予定/未入力日は非表示)
-                                  値は r.recorder を優先、 古い記録で空の場合は アクティブ記録者 → 管理者 → 事業所責任者 へフォールバック */}
+                              {/* ★ 担当者: その日の record.recorder のみで判定 (各日付ごとに保存時のスタッフを表示)
+                                  古い記録で recorder=空 の場合は表示しない (別日の担当者で誤表示しないため)
+                                  hasData (体温/血圧/気分/介護整体/運動メニューのいずれか) が無い予定日も非表示 */}
                               {(() => {
-                                // 体温・血圧 (開始/終了)・気分・介護整体・運動メニュー のいずれかが入っているか
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
                                   (r.bpUpSt && String(r.bpUpSt).trim()) ||
@@ -19907,13 +19908,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
                                 if (!hasData) return null;
-                                const rec = r.recorder
-                                  || getActiveRecorderName()
-                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
-                                  || appData.systemSettings?.facilityInfo?.manager
-                                  || '';
-                                if (!rec) return null;
-                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
+                                if (!r.recorder) return null;
+                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {r.recorder}</div>;
                               })()}
                             </div>
                           </td>
