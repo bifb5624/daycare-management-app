@@ -19978,9 +19978,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
-                              {/* ★ 担当者: r.recorder (その日に保存されたスタッフ) のみで表示
-                                  アクティブ記録者の補完を完全に廃止 → 各日付は完全独立
-                                  r.recorder が空 / hasData なし の日は表示しない */}
+                              {/* ★ 担当者: hasData ある日のみ表示
+                                  r.recorder → 日誌管理者 → 店舗メンバー → 事業所責任者 でフォールバック
+                                  (アクティブ記録者は使わない: スタッフ切替で過去日に影響する問題を避ける) */}
                               {(() => {
                                 const hasData = !!(
                                   (r.temp && String(r.temp).trim()) ||
@@ -19991,8 +19991,15 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   (r.massage && String(r.massage).trim()) ||
                                   (r.exercises && Object.values(r.exercises).some(x => x && x !== 'ー' && x !== '×' && String(x).trim() !== ''))
                                 );
-                                if (!hasData || !r.recorder) return null;
-                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {r.recorder}</div>;
+                                if (!hasData) return null;
+                                const rec = r.recorder
+                                  || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+                                  || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
+                                  || (appData.storeMembers || [])[0]?.name
+                                  || appData.systemSettings?.facilityInfo?.manager
+                                  || '';
+                                if (!rec) return null;
+                                return <div className="font-bold" style={{fontSize:9,color:'#475569',marginTop:3,lineHeight:1.15,whiteSpace:'normal',wordBreak:'keep-all',textAlign:'center',padding:'0 1px',maxWidth:'100%'}}>担当: {rec}</div>;
                               })()}
                             </div>
                           </td>
