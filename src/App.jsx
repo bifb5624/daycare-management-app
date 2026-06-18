@@ -14864,11 +14864,12 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
                   // ★ 担当者: 実際に操作したスタッフ (アクティブ記録者) を最優先で記録
-                  //   理由: 機能訓練指導員固定は 加算の有無 / 欠席時 / ヘルプ職員 で破綻するため、 操作者を素直に保存
-                  //   フォールバック (record 新規かつ アクティブ未設定の場合): 既存値 → 管理者 → 事業所責任者
+                  //   フォールバック: 既存値 → 日誌設定の管理者 → 店舗メンバーの管理者 → 店舗メンバー先頭 → 事業所責任者
                   recorder: getActiveRecorderName()
                     || existing?.recorder
                     || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+                    || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
+                    || (appData.storeMembers || [])[0]?.name
                     || appData.systemSettings?.facilityInfo?.manager
                     || '',
                   done: p.done || false
@@ -14880,6 +14881,8 @@ function RecordView({ appData, onSave, navigateTo, selectedDate, setSelectedDate
         // ★ multiple / month モード: 変更があった record にだけ recorder を反映 (他の日付の担当者は変えない)
         const _activeRec = getActiveRecorderName()
           || (appData.diarySettings?.staff || []).find(s => s.role === '管理者')?.name
+          || (appData.storeMembers || []).find(m => m.roleLabel === '管理者')?.name
+          || (appData.storeMembers || [])[0]?.name
           || appData.systemSettings?.facilityInfo?.manager
           || '';
         const _originalById = new Map((appData.ticketRecords || []).map(r => [r.id, r]));
@@ -25237,6 +25240,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   // ローカルバッファ：保存ボタンを押すまでappDataに書かない
   const logKeyRef = React.useRef(logKey);
   const [localLog, setLocalLog] = useState({});
+  // ★ アクティブ記録者の id を記憶 (スタッフ切替で前のチェックを外すため)
+  const prevAutoCheckIdRef = React.useRef(null);
 
   // logKeyが変わったら（日付・ampm切替）バッファを最新のappDataから読み込む
   // 未保存の変更があれば、移動前の logKey に対して自動保存してから読み込む
@@ -25263,12 +25268,38 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         if (!loaded.recorder || Object.keys(loaded.recorder).length === 0) {
           loaded.recorder = { ...(loaded.recorder||{}), [matched.id]: true };
         }
+        prevAutoCheckIdRef.current = matched.id;
       }
     }
     setLocalLog(loaded);
     logKeyRef.current = logKey;
     if (dirtyRef) dirtyRef.current = false;
   }, [logKey]); // eslint-disable-line
+
+  // ★ スタッフ切替時の自動チェック切替: アクティブ記録者が変わったら、
+  //   担当職員 + 記録者 のチェックを 古いスタッフから新しいスタッフに付け替える
+  const _activeRecForDailyLog = getActiveRecorderName();
+  React.useEffect(() => {
+    if (!_activeRecForDailyLog) return;
+    const matched = (appData.diarySettings?.staff || []).find(s => s.name === _activeRecForDailyLog);
+    if (!matched) return;
+    const prevId = prevAutoCheckIdRef.current;
+    if (prevId === matched.id) return; // 変化なし
+    // 古いスタッフのチェックを外して新しいスタッフをチェック
+    setLocalLog(prev => {
+      const newStaff = { ...(prev.staff || {}) };
+      const newRec = { ...(prev.recorder || {}) };
+      if (prevId) {
+        delete newStaff[prevId];
+        delete newRec[prevId];
+      }
+      newStaff[matched.id] = true;
+      newRec[matched.id] = true;
+      return { ...prev, staff: newStaff, recorder: newRec };
+    });
+    prevAutoCheckIdRef.current = matched.id;
+    if (dirtyRef) dirtyRef.current = true;
+  }, [_activeRecForDailyLog]); // eslint-disable-line
 
   // 初回マウント時にも読み込む
   React.useEffect(() => {
