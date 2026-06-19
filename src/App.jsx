@@ -13250,9 +13250,16 @@ export default function App() {
     let changed = false;
     const updatedPatients = (appData.patients || []).map(p => {
       if (!patientsToSnap.some(x => x.id === p.id)) return p;
-      const records = (appData.ticketRecords || []).filter(t =>
-        t.patientId === p.id && t.date >= monthStart && t.date <= monthEnd
-      ).sort((a,b) => (a.date||'').localeCompare(b.date||''));
+      const _snapMonth = prevMonth.getMonth() + 1; // 前月 (1-12)
+      const records = (appData.ticketRecords || []).filter(t => {
+        if (t.patientId !== p.id) return false;
+        const mm = (t.date||'').match(/(\d+)月/); // 提供記録の date は "5月4日" 形式 (年なし)
+        return mm && parseInt(mm[1],10) === _snapMonth;
+      }).sort((a,b) => {
+        const da = parseInt((a.date||'').match(/(\d+)日/)?.[1]||'0',10);
+        const db = parseInt((b.date||'').match(/(\d+)日/)?.[1]||'0',10);
+        return da - db;
+      });
       if (records.length === 0) return p; // 対象月の記録がなければスナップショット作らない
       changed = true;
       const entry = {
@@ -28534,8 +28541,7 @@ const DEFAULT_PF_CATEGORIES = [
     note: 'アセスメントシート / 通所介護計画書 / モニタリング記録' },
   { id: 'cat_5', name: '5. サービス提供記録', emoji: '📊', isDefault: true,
     note: '日々の介護記録・経過記録 / サービス提供実績' },
-  { id: 'cat_6', name: '6. 健康・医療情報', emoji: '🏥', isDefault: true,
-    note: '主治医意見書 / 診療情報提供書 / 処方箋 / 健康記録' },
+  // ★ 「6. 健康・医療情報」はフェイスシートと内容が重複するため削除 (要望による)
 ];
 
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
@@ -28623,11 +28629,17 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   // 月次スナップショットを今すぐ作成
   const createMonthlySnapshot = (yyyymm) => {
     const [y, m] = yyyymm.split('-').map(Number);
-    const monthStart = `${yyyymm}-01`;
-    const monthEnd = `${yyyymm}-${String(new Date(y, m, 0).getDate()).padStart(2,'0')}`;
-    const records = (appData.ticketRecords || []).filter(t =>
-      t.patientId === patient.id && t.date >= monthStart && t.date <= monthEnd
-    ).sort((a,b) => (a.date||'').localeCompare(b.date||''));
+    // ★ 提供記録の date は "5月4日" 形式 (年なし)。 ISO ("2026-05-01") 比較では一致せず
+    //   「記録がありません」になっていたため、月番号で絞り込み・日番号で並べ替える。
+    const records = (appData.ticketRecords || []).filter(t => {
+      if (t.patientId !== patient.id) return false;
+      const mm = (t.date||'').match(/(\d+)月/);
+      return mm && parseInt(mm[1],10) === m;
+    }).sort((a,b) => {
+      const da = parseInt((a.date||'').match(/(\d+)日/)?.[1]||'0',10);
+      const db = parseInt((b.date||'').match(/(\d+)日/)?.[1]||'0',10);
+      return da - db;
+    });
     if (records.length === 0) {
       alert(`${y}年${m}月のサービス提供記録はありません`);
       return;
@@ -28662,7 +28674,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           {allCategories.map(c => (
             <button key={c.id} onClick={()=>setActiveCat(c.id)}
               className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all ${activeCat === c.id ? 'border-emerald-600 text-emerald-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-              <span className="mr-1">{c.emoji}</span>{c.name}
+              {c.name}
               {!c.isDefault && <button onClick={(e)=>{ e.stopPropagation(); handleDeleteCustomCategory(c.id); }} className="ml-1 text-slate-400 hover:text-red-500">×</button>}
             </button>
           ))}
@@ -29298,8 +29310,10 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     // ④ 介護保険・制度情報
     benefitLimit: initial?.benefitLimit || '',
     otherWelfare: initial?.otherWelfare || '',
-    // ⑤ 医療・健康情報
+    // ⑤ 医療・健康情報 (主治医/医療機関/連絡先 を3項目に分割。chronicDiseases は旧データ=主治医欄として継続使用)
     chronicDiseases: initial?.chronicDiseases || '',
+    medicalInstitution: initial?.medicalInstitution || '',
+    medicalContact: initial?.medicalContact || '',
     medication: initial?.medication || '',
     allergies: initial?.allergies || '',
     adlLevel: initial?.adlLevel || '',
@@ -29466,9 +29480,19 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
           {/* ⑤ 医療・健康情報 */}
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-3">⑤ 医療・健康情報</div>
-            <Field label="主治医・かかりつけ医療機関名・連絡先">
-              <textarea rows={2} value={fs.chronicDiseases} onChange={e=>update('chronicDiseases', e.target.value)}
-                placeholder="例: 〇〇病院 内科 △△医師 / 03-1234-5678" className={textareaCls}/>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Field label="主治医・かかりつけ医">
+                <input value={fs.chronicDiseases} onChange={e=>update('chronicDiseases', e.target.value)}
+                  placeholder="例: △△ 医師" className={inputCls}/>
+              </Field>
+              <Field label="医療機関">
+                <input value={fs.medicalInstitution} onChange={e=>update('medicalInstitution', e.target.value)}
+                  placeholder="例: 〇〇病院 内科" className={inputCls}/>
+              </Field>
+            </div>
+            <Field label="連絡先">
+              <input value={fs.medicalContact} onChange={e=>update('medicalContact', e.target.value)}
+                placeholder="例: 03-1234-5678" className={inputCls}/>
             </Field>
             <Field label="既往歴・現病歴">
               <textarea rows={3} value={patient.kiou || ''} disabled
@@ -29510,9 +29534,9 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
                 <div><b>連絡先：</b>{patient.cmPhone || '-'} / FAX: {patient.cmFax || '-'}</div>
               </div>
             </div>
-            <Field label="これまでの生活と現在の状況 (生活歴)">
+            <Field label="通所の経緯">
               <textarea rows={4} value={fs.lifeHistory} onChange={e=>update('lifeHistory', e.target.value)}
-                placeholder="ご利用者のこれまでの生活、職業、家族との関係など" className={textareaCls}/>
+                placeholder="通所に至った経緯・きっかけ、これまでの生活や家族との関係など" className={textareaCls}/>
             </Field>
             <Field label="現在の状況">
               <textarea rows={3} value={fs.currentSituation} onChange={e=>update('currentSituation', e.target.value)} className={textareaCls}/>
@@ -29652,7 +29676,9 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
             </div>
             <div style={{marginBottom:14}}>
               <div style={{fontSize:13,fontWeight:'bold',color:'#92400e',background:'#fef3c7',padding:'6px 10px',marginBottom:8}}>⑤ 医療・健康情報</div>
-              <Row label="主治医・医療機関" value={fs.chronicDiseases}/>
+              <Row label="主治医・かかりつけ医" value={fs.chronicDiseases}/>
+              <Row label="医療機関" value={fs.medicalInstitution}/>
+              <Row label="連絡先" value={fs.medicalContact}/>
               <Row label="既往歴・現病歴" value={patient.kiou}/>
               <Row label="服薬状況" value={fs.medication}/>
               <Row label="アレルギー・感染症" value={fs.allergies}/>
