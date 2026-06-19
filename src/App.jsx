@@ -28535,13 +28535,17 @@ const DEFAULT_PF_CATEGORIES = [
     note: 'フェイスシート / 介護保険被保険者証 / 負担割合証 など' },
   { id: 'cat_2', name: '2. 契約・同意関係', emoji: '📋', isDefault: true,
     note: '契約書 / 重要事項説明書 / 個人情報使用同意書' },
-  { id: 'cat_3', name: '3. ケアマネジメント関係', emoji: '🗂️', isDefault: true,
+  // ★ ケアプランと担当者会議録は一緒に参照することが多いので 1 つに (担当者会議は専用機能)
+  { id: 'cat_3', name: '3. ケアプラン・担当者会議', emoji: '🗂️', isDefault: true,
     note: '居宅サービス計画書 (ケアプラン) / サービス担当者会議の記録' },
-  { id: 'cat_4', name: '4. 計画・アセスメント関係', emoji: '📝', isDefault: true,
-    note: 'アセスメントシート / 通所介護計画書 / モニタリング記録' },
-  { id: 'cat_5', name: '5. サービス提供記録', emoji: '📊', isDefault: true,
+  // ★ アセスメントとモニタリングは定期的に増えるので独立カテゴリに
+  { id: 'cat_4', name: '4. アセスメント・モニタリング', emoji: '📝', isDefault: true,
+    note: 'アセスメントシート / モニタリング記録' },
+  { id: 'cat_5', name: '5. 通所介護計画書', emoji: '📝', isDefault: true,
+    note: '通所介護計画書 (個別機能訓練計画書 など)' },
+  // ★ サービス提供記録 (月次スナップショット機能) は cat_6 に移動 (isServiceTab も cat_6 を参照)
+  { id: 'cat_6', name: '6. サービス提供記録', emoji: '📊', isDefault: true,
     note: '日々の介護記録・経過記録 / サービス提供実績' },
-  // ★ 「6. 健康・医療情報」はフェイスシートと内容が重複するため削除 (要望による)
 ];
 
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
@@ -28620,11 +28624,16 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   const faceSheet = personalFile.faceSheet || {};
   const isBasicTab = activeCat === 'cat_1';
   const isCMTab = activeCat === 'cat_3';
-  const isServiceTab = activeCat === 'cat_5';
+  const isServiceTab = activeCat === 'cat_6'; // ★ サービス提供記録は cat_6 へ移動
   const activeCategory = allCategories.find(c => c.id === activeCat) || allCategories[0];
   const [pdfPreviewMonthly, setPdfPreviewMonthly] = useState(null);
   const [showFaceSheetForm, setShowFaceSheetForm] = useState(false);
   const [pdfPreviewFaceSheet, setPdfPreviewFaceSheet] = useState(false);
+  // ★ 任意の月を指定して提供記録を作成/ダウンロードするための選択月 (既定: 先月)
+  const [snapMonth, setSnapMonth] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  });
 
   // 月次スナップショットを今すぐ作成
   const createMonthlySnapshot = (yyyymm) => {
@@ -28643,6 +28652,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     if (records.length === 0) {
       alert(`${y}年${m}月のサービス提供記録はありません`);
       return;
+    }
+    // ★ 同じ年月が既にある場合は上書き確認
+    if (monthlyServiceRecords.some(s => s.month === yyyymm)) {
+      if (!window.confirm(`${y}年${m}月の記録は既に作成済みです。\n最新の提供記録の内容で上書きしますか?`)) return;
     }
     const entry = {
       id: `monthly_${yyyymm}_${Date.now()}`,
@@ -28792,8 +28805,17 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                   }
                 }} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold">先月分を今すぐ作成</button>
               </div>
+              {/* ★ 任意の月を指定して作成 (もっと前の月も作成・ダウンロードできる) */}
+              <div className="flex items-center gap-2 flex-wrap bg-white border border-emerald-200 rounded-lg p-2 mb-3">
+                <span className="text-[11px] font-bold text-emerald-800">月を指定して作成</span>
+                <input type="month" value={snapMonth} onChange={e=>setSnapMonth(e.target.value)}
+                  className="px-2 py-1 border border-slate-300 rounded text-xs font-bold outline-none"/>
+                <button onClick={()=>{ if (snapMonth) createMonthlySnapshot(snapMonth); }}
+                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold">この月を作成</button>
+              </div>
               <div className="text-[11px] text-emerald-700 mb-3 leading-relaxed">
                 毎月1日に <b>前月のサービス提供記録</b> が自動でこの一覧に追加されます。<br/>
+                上の「月を指定して作成」で<b>もっと前の月</b>も作成できます (既存の同月は上書き確認あり)。<br/>
                 各月の「⬇ PDF」ボタンからその月の記録一覧を PDF でダウンロードできます。
               </div>
               {monthlyServiceRecords.length === 0 ? (
