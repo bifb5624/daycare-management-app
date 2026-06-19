@@ -14150,12 +14150,8 @@ export default function App() {
             )}
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
-            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0,overscrollBehavior:'contain'}}>
-            {/* ★ PC設計幅(1100px)を画面に合わせて縮小。
-               transform:scale だとレイアウト箱は縮まず余白までスクロールできてしまうため、
-               実レイアウトごと縮む zoom を使用 → スクロール範囲が中身ぴったりになり、
-               グレー背景より外側へ余計にスクロールしない (スマホの過剰スクロール解消)。 */}
-            <div style={{minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : undefined}}>
+            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
+            <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
             {currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
