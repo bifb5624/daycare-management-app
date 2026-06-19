@@ -11277,13 +11277,14 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           .family-tab-bar { padding:2px!important; gap:1px!important; flex:1 1 100%!important; min-width:0!important; order:3!important; margin-top:6px!important; }
           .family-tab-btn { padding:8px 4px!important; font-size:11px!important; }
           .family-content-area { padding-left:8px!important; padding-right:8px!important; }
-          .family-header-actions { order:2!important; }
+          /* ★ 操作群 (期間/利用者情報/家族一覧) はスマホでは独立した1行に横並び (左寄せ・期間が左) */
+          .family-header-actions { order:2!important; flex:1 1 100%!important; justify-content:flex-start!important; margin-left:0!important; }
           .family-header-info { flex:1 1 auto!important; min-width:0!important; }
         }
         @media (max-width: 480px) {
           .family-header-name { font-size:16px!important; }
           .family-header-title { font-size:9px!important; }
-          .family-header-actions button, .family-header-actions a { padding:6px 8px!important; font-size:10px!important; }
+          .family-header-actions button { padding:0 10px!important; font-size:11px!important; }
         }
       `}</style>
       {/* 固定ヘッダー: 全要素を1行に統合 — 緑基調 (文字は濃緑でコントラスト確保) */}
@@ -11310,35 +11311,20 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 );
               })}
             </div>
-            {/* 右: 家族追加 + ログアウト — flex-wrap で 横幅が足りないときは折り返し */}
-            <div className="family-header-actions" style={{display:'flex',gap:8,marginLeft:'auto',flexShrink:1,flexWrap:'wrap',justifyContent:'flex-end',maxWidth:'100%'}}>
-              {onSwitchPatient && (
-                <button onClick={onSwitchPatient} style={hdrBtnStyle}>
-                  🔄 利用者切替
-                </button>
-              )}
-              <button onClick={()=>setMyInfoOpen(true)} style={hdrBtnStyle}>
-                👤 利用者・登録者情報
-              </button>
-              {/* ★ 代表者以外も一覧を閲覧できる (招待/取消などの操作はモーダル内で代表者のみ) */}
-              <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
-                {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
-              </button>
-              {/* ★ 期間選択: お知らせと通所記録の両方を絞り込み。 半年/1年/全期間 は「日別/月別」も選べる */}
-              {/* ★ 「2026年6月〜」の期間レンジは セレクタ内に集約 (旧: 別の行で1行分占有していた) */}
-              <div style={{height:38,boxSizing:'border-box',display:'flex',flexDirection:'row',alignItems:'center',gap:6,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'0 10px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
-                <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>📅 期間</span>
+            {/* 右: 操作群 (期間→利用者情報→家族一覧)。アイコンは付けない。スマホでは独立1行で左寄せ横並び */}
+            <div className="family-header-actions" style={{display:'flex',gap:8,marginLeft:'auto',flexShrink:1,flexWrap:'wrap',justifyContent:'flex-end',alignItems:'center',maxWidth:'100%'}}>
+              {/* ★ 期間 (左・コンパクト) */}
+              <div style={{height:38,boxSizing:'border-box',display:'flex',flexDirection:'row',alignItems:'center',gap:5,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'0 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+                <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>期間</span>
                 <select value={familyPeriod} onChange={e=>{
                   const v = e.target.value;
                   setFamilyPeriod(v);
-                  // ★ 値に :daily / :auto が付いていれば displayMode も同期
-                  // 例: "6:daily" → period=6 + displayMode=daily
+                  // 値に :daily / :auto が付いていれば displayMode も同期 (例: "6:daily" → period=6 + daily)
                   const [p, mode] = v.split(':');
                   setFamilyPeriod(p);
                   if (mode) setFamilyDisplayMode(mode);
                 }}
-                  style={{padding:'4px 6px',border:'1px solid #c4dba0',borderRadius:6,fontSize:12,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
+                  style={{padding:'3px 4px',border:'1px solid #c4dba0',borderRadius:6,fontSize:11,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
                   <option value="1">1ヶ月 (日別)</option>
                   <option value="3">3ヶ月 (日別)</option>
                   <option value="6">半年 (月平均)</option>
@@ -11348,27 +11334,16 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   <option value="all">全期間 (月平均)</option>
                   <option value="all:daily">全期間 (日別)</option>
                 </select>
-                </div>
-                {/* ★ 選択した期間の範囲を小さく表示 (上の行を取らないように圧縮) */}
-                {(() => {
-                  const now = new Date();
-                  const ty = now.getFullYear();
-                  const tm = now.getMonth() + 1;
-                  const fmt = (y,m) => `${y}年${m}月`;
-                  let label = '';
-                  if (familyPeriod === 'all') label = '全期間';
-                  else {
-                    const n = parseInt(familyPeriod, 10);
-                    if (isFinite(n) && n > 0) {
-                      let sm = tm - n + 1, sy = ty;
-                      while (sm <= 0) { sm += 12; sy--; }
-                      label = n === 1 ? fmt(ty, tm) : `${fmt(sy, sm)} 〜 ${fmt(ty, tm)}`;
-                    }
-                  }
-                  return label ? <span style={{fontSize:10,color:'#5e8030',fontWeight:'bold',whiteSpace:'nowrap'}}>{label}</span> : null;
-                })()}
               </div>
-              {/* ★ ログアウトはヘッダから外し、画面下部のフッターに移動 (ヘッダを横一列にすっきり) */}
+              {onSwitchPatient && (
+                <button onClick={onSwitchPatient} style={hdrBtnStyle}>利用者切替</button>
+              )}
+              <button onClick={()=>setMyInfoOpen(true)} style={hdrBtnStyle}>利用者・登録者情報</button>
+              {/* ★ 代表者以外も一覧を閲覧できる (招待/取消などの操作はモーダル内で代表者のみ) */}
+              <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
+                {isCmAccount ? '関係者一覧' : '家族一覧'}
+              </button>
+              {/* ★ ログアウトはヘッダから外し、画面下部のフッターに移動 */}
             </div>
           </div>
         </div>
@@ -14175,8 +14150,12 @@ export default function App() {
             )}
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
-            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
-            <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
+            <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0,overscrollBehavior:'contain'}}>
+            {/* ★ PC設計幅(1100px)を画面に合わせて縮小。
+               transform:scale だとレイアウト箱は縮まず余白までスクロールできてしまうため、
+               実レイアウトごと縮む zoom を使用 → スクロール範囲が中身ぴったりになり、
+               グレー背景より外側へ余計にスクロールしない (スマホの過剰スクロール解消)。 */}
+            <div style={{minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : undefined}}>
             {currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
@@ -15943,15 +15922,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [exTooltip, setExTooltip] = useState(null);
   const [barTip, setBarTip] = useState(null);
   const [selTrekkiMonth, setSelTrekkiMonth] = useState(null);
-  const [detailMonth, setDetailMonth] = useState(null);
-  // ★ 詳細記録の月選択を期間に連動させる:
-  //   期間が「1ヶ月」のときは基準月 (例: 6月) のみを初期選択にする (全月にしない)。
-  //   2ヶ月以上・全期間のときは「全月」(null) に戻して範囲全体を表示。
-  React.useEffect(() => {
-    const bMonthNum = parseInt((baseMonth.split('-')[1]) || '0', 10);
-    if (period === '1' && bMonthNum) setDetailMonth(`${bMonthNum}月`);
-    else setDetailMonth(null);
-  }, [period, baseMonth]);
+  const [detailMonth, setDetailMonth] = useState(null); // (旧: 詳細記録の月別サブ選択。現在は期間連動のため未使用)
   const [moodTooltip, setMoodTooltip] = useState(null); // {x,y,label,arr,arrR,dep,depR}
   // 印刷プレビューに「詳細記録（横ページ）」を含めるか。デフォルト false（ケアマネ向け配付では不要）。
   const [printIncludeDetail, setPrintIncludeDetail] = useState(false);
@@ -16765,7 +16736,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })()}
         </div>
 
-        {/* ★ 今日の様子 (家族画面のみ): 特記事項を一目でわかるように大きく表示 */}
+        {/* ★ 今回の様子 (家族画面のみ): 特記事項を一目でわかるように大きく表示 */}
         {familyMode && (() => {
           // 最新の通所記録の特記を取得
           const _today = new Date(); _today.setHours(0,0,0,0);
@@ -16796,7 +16767,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             <div style={{marginBottom:16,scrollMarginTop:170,background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',border:'1.5px solid #86efac',borderRadius:14,padding:'14px 18px',boxShadow:'0 2px 6px rgba(34,197,94,0.12)'}}>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
                 <span style={{fontSize:18}}>📝</span>
-                <span style={{fontSize:14,fontWeight:'bold',color:'#166534'}}>今日の様子</span>
+                <span style={{fontSize:14,fontWeight:'bold',color:'#166534'}}>今回の様子</span>
                 <span style={{fontSize:11,fontWeight:'bold',color:'#16a34a',background:'#dcfce7',padding:'2px 8px',borderRadius:6,marginLeft:'auto'}}>{_latest.date}</span>
               </div>
               <div style={{fontSize:15,color:'#1e293b',lineHeight:1.7,whiteSpace:'pre-wrap',fontWeight:'500',padding:'4px 0'}}>
@@ -18227,16 +18198,25 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
         {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:170}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
         {!familyMode && !isCol('sec-detail') && (()=>{
-          const detailMonths=[...new Set(records.map(r=>{const m=r.date.match(/(\d+)月/);return m?m[1]+'月':'—'}))];
-          const detailRecs = detailMonth ? records.filter(r=>{const m=r.date.match(/(\d+)月/);return m&&m[1]+'月'===detailMonth;}) : records;
+          // ★ 詳細記録は上の「期間」選択 (records) をそのまま表示する。
+          //   全月/月別のサブ選択は廃止 (期間=1ヶ月なら自動的にその月だけになる)。
+          const detailRecs = records;
+          // 期間ラベル (例: 2026年6月 / 全期間) を見出しに添える
+          const _periodLabel = (() => {
+            if (period === 'all') return '全期間';
+            const [bY3, bM3] = baseMonth.split('-').map(Number);
+            const n = parseInt(period, 10);
+            if (!n || n <= 1) return `${bY3}年${bM3}月`;
+            let sm = bM3 - n + 1, sy = bY3; while (sm <= 0) { sm += 12; sy--; }
+            return `${sy}年${sm}月 〜 ${bY3}年${bM3}月`;
+          })();
           return (
         <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',overflow:'hidden'}}>
           <div style={{padding:'12px 20px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
             <div style={{fontSize:13,fontWeight:'bold',color:'#475569',display:'flex',alignItems:'center',gap:6}}><ClipboardList size={15}/>日々の詳細記録</div>
-            <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-              <button onClick={()=>setDetailMonth(null)} style={{padding:'3px 12px',borderRadius:16,fontSize:13,fontWeight:'bold',border:'none',cursor:'pointer',background:detailMonth===null?'#475569':'#f1f5f9',color:detailMonth===null?'white':'#64748b'}}>全月</button>
-              {detailMonths.map(m=><button key={m} onClick={()=>setDetailMonth(m)} style={{padding:'3px 12px',borderRadius:16,fontSize:13,fontWeight:'bold',border:'none',cursor:'pointer',background:detailMonth===m?'#475569':'#f1f5f9',color:detailMonth===m?'white':'#64748b'}}>{m}</button>)}
-              <span style={{fontSize:13,color:'#334155',fontWeight:'bold',alignSelf:'center',marginLeft:4}}>{detailRecs.length}件</span>
+            <div style={{display:'flex',gap:8,alignItems:'center'}}>
+              <span style={{fontSize:12,color:'#64748b',fontWeight:'bold'}}>{_periodLabel}</span>
+              <span style={{fontSize:13,color:'#334155',fontWeight:'bold'}}>{detailRecs.length}件</span>
             </div>
           </div>
           <div style={{overflowX:'auto'}}>
