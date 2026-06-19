@@ -13569,6 +13569,26 @@ export default function App() {
       onSelect={(m) => {
         sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
         setActiveRecorder(m);
+        // ★ ログインで選んだ記録者を日誌の担当職員にも確実に登録しておく。
+        //   これが無いと日誌を開いても名前一致せず自動チェックされず、
+        //   「日誌でスタッフを切り替えないと反映されない」状態になっていた。
+        setAppData(prev => {
+          const validRoles = ['管理者','生活相談員','機能訓練指導員','看護師','介護職員'];
+          const diaryRole = validRoles.includes(m.roleLabel) ? m.roleLabel : '介護職員';
+          const _norm = normalizeName(m.name).trim();
+          const exists = (prev.diarySettings?.staff || []).some(s => normalizeName(s.name).trim() === _norm);
+          if (exists) return prev;
+          return {
+            ...prev,
+            diarySettings: {
+              ...(prev.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
+              staff: [
+                ...(prev.diarySettings?.staff || []),
+                { id: `ds_sync_${m.id}`, _syncedFromMemberId: m.id, role: diaryRole, name: m.name, ampm: 'both' }
+              ]
+            },
+          };
+        });
       }}
       onAddMember={(memberLike) => {
         const m = { id: `mem_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, name: memberLike.name, roleLabel: memberLike.roleLabel || '', addedAt: new Date().toISOString() };
@@ -22335,12 +22355,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   return (
     <div className="flex h-full w-full max-w-[1800px] mx-auto gap-4 relative">
       {/* 名簿 */}
-      <div className={`bg-white rounded-2xl shadow-md border border-slate-300 flex flex-col overflow-hidden flex-shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-[44px]' : 'w-[280px]'}`}>
+      <div className={`bg-white rounded-2xl shadow-md border border-slate-300 flex flex-col overflow-hidden flex-shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-[44px]' : 'w-[340px]'}`}>
         {isSidebarCollapsed ? (<button onClick={() => setIsSidebarCollapsed(false)} className="h-full flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50"><ChevronRight size={18} /><span className="text-[9px] font-bold mt-2" style={{ writingMode: 'vertical-rl' }}>名簿</span></button>) : (<>
           <div className="p-3 border-b border-slate-200 bg-slate-50 shrink-0">
             <div className="flex justify-between items-center mb-2">
               <div>
-                <h2 className="font-bold text-slate-800 text-base">利用者名簿</h2>
+                <h2 className="font-bold text-slate-800 text-lg">利用者名簿</h2>
                 <div className="flex items-center gap-2 flex-wrap mt-0.5">
                   <span className="text-[13px] font-bold text-slate-600">{dPats.length}名</span>
                   <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${bdayPats.length > 0 ? 'bg-yellow-50 text-yellow-700 border border-yellow-200' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>👑 {bdayPats.length}名</span>
@@ -22386,7 +22406,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               onPatientChange && onPatientChange(p.id);
             }} className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between border gap-3 transition-all ${editingPatientId === p.id ? 'bg-blue-50 border-blue-200 shadow-sm' : expiring ? 'border-red-200 bg-red-50' : bday ? 'border-yellow-200 bg-yellow-50' : 'border-transparent hover:bg-white'}`}>
               <div className="flex flex-col min-w-0 flex-1">
-                <span className="font-bold text-[13px] text-slate-800 truncate flex items-center gap-1">{p.name}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
+                <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
                 {p.careLevel && <span className="text-[11px] text-blue-600 font-bold">{p.careLevel}</span>}
                 {_sortExtra}
                 {expiring && p.careLevelTo && <span className="text-[10px] text-red-600 font-bold">⚠ 保険更新 {p.careLevelTo.replace(/-/g,'/')}迄</span>}
