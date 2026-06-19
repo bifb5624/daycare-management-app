@@ -10212,11 +10212,22 @@ function FamilyView() {
       try {
         const stores = await supabaseListStores();
         const pidNum = parseInt(authPid, 10);
+        // ★ 期待される利用者名 (ログイン/登録時に保存)。 利用者 ID は店舗ごとの連番で
+        //   一意でないため、 ID だけで店舗を確定すると別店舗の同番号の人に化ける。
+        //   氏名が判っている場合は ID + 氏名の両方が一致した店舗のみ採用する。
+        let _expectName = '';
+        try { _expectName = sessionStorage.getItem('familyAuthPatientName') || ''; } catch {}
         for (const s of (stores || [])) {
           if (cancelled) return;
           try {
             const st = await supabaseLoadStateForStore(s.id);
-            const found = (st?.patients || []).find(p => p.id === pidNum || p.id === authPid || String(p.id) === String(authPid));
+            const found = (st?.patients || []).find(p => {
+              const idMatch = (p.id === pidNum || p.id === authPid || String(p.id) === String(authPid));
+              if (!idMatch) return false;
+              // 氏名が判っていれば一致を必須化 (誤紐付け防止)
+              if (_expectName) return String(p.name||'').trim() === _expectName.trim();
+              return true;
+            });
             if (found) {
               try { sessionStorage.setItem('familyAuthStoreId', String(s.id)); } catch {}
               // 強制的に再レンダー (familyStoreId を再計算)
@@ -10282,6 +10293,7 @@ function FamilyView() {
           saved.familyInvites = [...(saved.familyInvites||[]), {
             id: `inv_${Date.now()}`,
             code: tok.c, patientId: tok.p,
+            storeId: tok.s || null,  // ★ 店舗 ID を継承 (別店舗の同番号利用者に化けるのを防ぐ)
             createdAt: new Date().toISOString(),
             usedBy: null, usedAt: null,
             email: tok.e || '', relation: tok.r || '',
@@ -10346,6 +10358,8 @@ function FamilyView() {
       // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
       const _sid = la.storeId || la.store_id;
       if (_sid) sessionStorage.setItem('familyAuthStoreId', String(_sid));
+      // ★ 期待利用者名 (フォールバック走査時の氏名一致ガード用)
+      if (la.patientName || la.patient_name) { try { sessionStorage.setItem('familyAuthPatientName', String(la.patientName || la.patient_name)); } catch {} }
       sessionStorage.removeItem('familyLinkedAccounts');
       setAuthPid(String(la.patientId || la.patient_id));
       setAuthAccId(String(la.id));
@@ -10429,6 +10443,8 @@ function FamilyView() {
             // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
             //   (data.familyAccounts に未反映でも、 subscribe を開始できるようにするため)
             if (sbAcc.store_id) sessionStorage.setItem('familyAuthStoreId', String(sbAcc.store_id));
+            // ★ 期待利用者名 (フォールバック走査時の氏名一致ガード用)
+            if (sbAcc.patient_name) { try { sessionStorage.setItem('familyAuthPatientName', String(sbAcc.patient_name)); } catch {} }
             setAuthPid(String(sbAcc.patient_id));
             setAuthAccId(String(sbAcc.id));
           }
@@ -10707,9 +10723,10 @@ function FamilyView() {
                   try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
                   setData(updated);
                   // ★ Supabase 同期 (端末越しログインを可能にする)
+                  let _sbStoreId = null;  // Supabase が返す確実な店舗 ID (自動ログインの store 確定に使う)
                   if (isSupabaseEnabled) {
                     try {
-                      await supabaseSignupFamily({
+                      const _sbResult = await supabaseSignupFamily({
                         inviteCode: code,
                         username: uname,
                         password: pw,
@@ -10720,8 +10737,9 @@ function FamilyView() {
                         role: accRole === 'parent' ? 'parent' : 'member',
                         facilityName: latest.facility?.name || '',
                         patientName: (latest.patients||[]).find(p=>p.id===invite.patientId)?.name || '',
-                        inviteFallback: { patientId: invite.patientId, expiresAt: invite.expiresAt },
+                        inviteFallback: { patientId: invite.patientId, storeId: invite.storeId || invite.store_id || null, expiresAt: invite.expiresAt },
                       });
+                      _sbStoreId = _sbResult?.account?.store_id || _sbResult?.invite?.store_id || null;
                       // ★ 緊急連絡先を Supabase 側の patient にも反映 (staff 側からも見えるように)
                       const _storeId = invite.storeId || invite.store_id || null;
                       if (_storeId) {
@@ -10754,9 +10772,15 @@ function FamilyView() {
                   try {
                     sessionStorage.setItem('familyAuthPid', String(invite.patientId));
                     sessionStorage.setItem('familyAuthAccId', String(newAccId));
-                    if (invite.storeId || invite.store_id) {
-                      sessionStorage.setItem('familyAuthStoreId', String(invite.storeId || invite.store_id));
+                    // ★ 店舗 ID を確実に保存 (招待 → 無ければ Supabase 返却値)。
+                    //   これが入っていれば「全店舗走査フォールバック」を回避でき、別店舗の同番号利用者に化けない。
+                    const _autoStoreId = invite.storeId || invite.store_id || _sbStoreId || null;
+                    if (_autoStoreId) {
+                      sessionStorage.setItem('familyAuthStoreId', String(_autoStoreId));
                     }
+                    // ★ 期待される利用者名を保存 → 万一フォールバックが動いても氏名一致でガードする
+                    const _expectName = (latest.patients||[]).find(p=>p.id===invite.patientId)?.name || '';
+                    if (_expectName) { try { sessionStorage.setItem('familyAuthPatientName', _expectName); } catch {} }
                     // URL の ?invite= ?t= をクリア (再ログイン時に余計なリダイレクト防止)
                     const _url = new URL(window.location.href);
                     _url.searchParams.delete('invite');
@@ -11037,6 +11061,7 @@ function FamilyView() {
     sessionStorage.removeItem('familyAuthPid');
     sessionStorage.removeItem('familyAuthAccId');
     sessionStorage.removeItem('familyAuthStoreId'); // ★ store_id も削除
+    sessionStorage.removeItem('familyAuthPatientName'); // ★ 氏名ガードもクリア
     setAuthPid(null);
     setAuthAccId(null);
     setLoginForm({ username:'', password:'', error:'', showPw:false });
@@ -11227,6 +11252,16 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       </div>
     );
   }
+  // ★ ヘッダ右側のボタン群を同じサイズ・形に統一するための共有スタイル
+  //   (高さ・フォント・パディング・角丸・枠線を揃えて見た目の不揃いを解消)
+  const hdrBtnStyle = {
+    height: 38, boxSizing: 'border-box',
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    background: 'white', color: '#3d5021', border: '1px solid #94c456',
+    borderRadius: 10, padding: '0 14px', fontSize: 12, fontWeight: 'bold',
+    cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+    lineHeight: 1,
+  };
   return (
     <div style={{minHeight:'100vh',background:'linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%)',fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif',color:'#1e293b'}}>
       {/* iPhone / 狭画面向けレスポンシブ調整 */}
@@ -11271,24 +11306,21 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             {/* 右: 家族追加 + ログアウト — flex-wrap で 横幅が足りないときは折り返し */}
             <div className="family-header-actions" style={{display:'flex',gap:8,marginLeft:'auto',flexShrink:1,flexWrap:'wrap',justifyContent:'flex-end',maxWidth:'100%'}}>
               {onSwitchPatient && (
-                <button onClick={onSwitchPatient}
-                  style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 14px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+                <button onClick={onSwitchPatient} style={hdrBtnStyle}>
                   🔄 利用者切替
                 </button>
               )}
-              <button onClick={()=>setMyInfoOpen(true)}
-                style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 14px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+              <button onClick={()=>setMyInfoOpen(true)} style={hdrBtnStyle}>
                 👤 利用者・登録者情報
               </button>
               {isPrimaryAcc && (
-                <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}}
-                  style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 16px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+                <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
                   {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
                 </button>
               )}
               {/* ★ 期間選択: お知らせと通所記録の両方を絞り込み。 半年/1年/全期間 は「日別/月別」も選べる */}
               {/* ★ 「2026年6月〜」の期間レンジは セレクタ内に集約 (旧: 別の行で1行分占有していた) */}
-              <div style={{display:'flex',flexDirection:'column',alignItems:'flex-start',gap:2,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'4px 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
+              <div style={{height:38,boxSizing:'border-box',display:'flex',flexDirection:'row',alignItems:'center',gap:6,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'0 10px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
                 <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>📅 期間</span>
                 <select value={familyPeriod} onChange={e=>{
@@ -11331,8 +11363,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 })()}
               </div>
               {onLogout && (
-                <button onClick={onLogout}
-                  style={{background:'rgba(255,255,255,0.7)',color:'#3d5021',border:'1px solid rgba(125,170,61,0.5)',borderRadius:10,padding:'10px 14px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                <button onClick={onLogout} style={{...hdrBtnStyle, color:'#64748b', border:'1px solid #cbd5e1'}}>
                   ログアウト
                 </button>
               )}
@@ -12118,10 +12149,16 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     let code = generateOneTimeInviteCode();
                     let retry = 0;
                     while (existingCodes.has(code) && retry < 10) { code = generateOneTimeInviteCode(); retry++; }
+                    // ★ 招待を発行した親アカウントの店舗 ID を必ず継承する。
+                    //   これが無いと、登録後の自動ログイン時に store_id が判らず、
+                    //   「全店舗を走査して同じ連番 ID の利用者を探す」フォールバックが動き、
+                    //   別店舗の同番号の利用者 (例: 田中義男) に化けるバグになる。
+                    const _inviteStoreId = loggedAcc?.storeId || loggedAcc?.store_id || null;
                     const newInvite = {
                       id: `inv_${Date.now()}`,
                       code,
                       patientId: patient.id,
+                      storeId: _inviteStoreId,
                       createdAt: new Date().toISOString(),
                       createdByAccountId: loggedAcc?.id || null,
                       usedBy: null, usedAt: null,
@@ -12132,7 +12169,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
                     setData(updated);
                     if (isSupabaseEnabled) {
-                      const _storeId = loggedAcc?.storeId || loggedAcc?.store_id || null;
+                      const _storeId = _inviteStoreId;
                       supabaseCreateInvite({
                         patientId: patient.id,
                         storeId: _storeId,
@@ -12146,7 +12183,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       }).catch(err => console.warn('[supabase] invite push failed', err));
                     }
                     const baseUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '');
-                    const tk = encodeInviteToken({ c: code, p: patient.id, e: em, r: inviteFamForm.relation||'', x: newInvite.expiresAt||'' });
+                    const tk = encodeInviteToken({ c: code, p: patient.id, s: _inviteStoreId||'', e: em, r: inviteFamForm.relation||'', x: newInvite.expiresAt||'' });
                     const url = `${baseUrl}/?family&invite=${encodeURIComponent(code)}&t=${tk}`;
                     setInviteFamForm(f=>({...f, createdUrl: url, sending: true, sendError: ''}));
                     // Brevo 経由で自動送信

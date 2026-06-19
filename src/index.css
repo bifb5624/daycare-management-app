@@ -9,34 +9,29 @@ html, body, #root {
 }
 
 /* ★ iOS Safari: input/textarea/select の font-size が 16px 未満だと
-   フォーカス時に自動でズームが発生する → 16px を強制して画面の揺れを抑える
-   見た目は元の font-size を保ちたいので、 transform 拡大/縮小はせず、
-   フォントだけ計算上 16px 以上にする (visual fluctuation 防止用) */
+   フォーカス時に自動でズームが発生する → 16px を強制して画面の揺れを抑える。
+   ★ type 属性を省略した <input>（既定で text）は input[type="text"] に当たらず
+   16px 化されずズームしていた。 type 無し input も確実に拾うため :not(...) で
+   「ズームに関係しない type 以外すべて」を対象にする。 */
 @media (max-width: 768px) {
-  input[type="text"],
-  input[type="email"],
-  input[type="password"],
-  input[type="number"],
-  input[type="tel"],
-  input[type="search"],
-  input[type="date"],
-  input[type="time"],
-  input[type="datetime-local"],
-  input[type="month"],
-  input[type="week"],
-  input[type="url"],
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="file"]):not([type="color"]),
   select,
   textarea {
     font-size: 16px !important;
   }
 }
 
-/* ★ 過剰な横スクロール抑制: ルートは画面幅を超えない */
+/* ★ 過剰なスクロール抑制:
+   - 横スクロール: ルートは画面幅を超えない (overflow-x:hidden + max-width:100vw)
+   - 縦/横のラバーバンド(慣性で背景まで動く)を止める: overscroll-behavior:none
+     → 通所記録などを一番下まで見たとき、背景のグレーで止まる挙動になる */
 html, body {
   overflow-x: hidden;
   max-width: 100vw;
+  overscroll-behavior: none;
 }
 #root {
   max-width: 100vw;
   overflow-x: hidden;
+  overscroll-behavior: none;
 }

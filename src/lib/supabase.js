@@ -76,6 +76,7 @@ export async function supabaseSignupFamily({
       .from('family_invites')
       .insert({
         patient_id: String(inviteFallback.patientId),
+        store_id: inviteFallback.storeId || null,  // ★ 店舗 ID を継承 (家族アカウントが正しい店舗に紐付くように)
         code: inviteCode,
         email: email || null,
         relation: relation || null,
@@ -89,8 +90,10 @@ export async function supabaseSignupFamily({
     invite = created;
   }
   if (!invite) throw new Error('招待コードが見つかりません');
-  if (inv.used_by) throw new Error('この招待コードは既に使用済みです');
-  if (inv.expires_at && new Date(inv.expires_at) < new Date()) {
+  // ★ inv は元クエリ結果で、フォールバック作成時は null になりうる。
+  //   used_by / expires_at の判定は実際に使う invite を見る (null 参照クラッシュ防止)。
+  if (invite.used_by) throw new Error('この招待コードは既に使用済みです');
+  if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
     throw new Error('招待コードの有効期限が切れています');
   }
   // 2. username 重複チェック
@@ -110,11 +113,11 @@ export async function supabaseSignupFamily({
       store_id: invite.store_id || null,
       username, password_hash,
       kind: kind || 'family',
-      relation: relation || inv.relation || '',
+      relation: relation || invite.relation || '',
       display_name: displayName || '',
       email: email || '',
-      facility_name: facilityName || inv.facility_name || '',
-      patient_name: patientName || inv.patient_name || '',
+      facility_name: facilityName || invite.facility_name || '',
+      patient_name: patientName || invite.patient_name || '',
       role: role || 'member',
     })
     .select()
@@ -124,8 +127,8 @@ export async function supabaseSignupFamily({
   await supabase
     .from('family_invites')
     .update({ used_by: acc.id, used_at: new Date().toISOString() })
-    .eq('id', inv.id);
-  return { account: acc, invite: inv };
+    .eq('id', invite.id);
+  return { account: acc, invite };
 }
 
 // =========================================================
