@@ -10749,6 +10749,23 @@ function FamilyView() {
                       return;
                     }
                   }
+                  // ★ 新規登録成功 → そのまま自動ログイン状態に
+                  //   セッション情報をセットして、 メイン画面に遷移
+                  try {
+                    sessionStorage.setItem('familyAuthPid', String(invite.patientId));
+                    sessionStorage.setItem('familyAuthAccId', String(newAccId));
+                    if (invite.storeId || invite.store_id) {
+                      sessionStorage.setItem('familyAuthStoreId', String(invite.storeId || invite.store_id));
+                    }
+                    // URL の ?invite= ?t= をクリア (再ログイン時に余計なリダイレクト防止)
+                    const _url = new URL(window.location.href);
+                    _url.searchParams.delete('invite');
+                    _url.searchParams.delete('t');
+                    window.history.replaceState({}, '', _url.toString());
+                  } catch {}
+                  setAuthPid(String(invite.patientId));
+                  setAuthAccId(String(newAccId));
+                  // 完了フラグも立てておく (一瞬「登録完了」 メッセージを出す場合に備えて)
                   setSignupForm(f=>({...f, done:true, error:''}));
                 }}>
                   <div style={{marginBottom:12}}>
@@ -11251,8 +11268,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 );
               })}
             </div>
-            {/* 右: 家族追加 + ログアウト */}
-            <div className="family-header-actions" style={{display:'flex',gap:8,marginLeft:'auto',flexShrink:0}}>
+            {/* 右: 家族追加 + ログアウト — flex-wrap で 横幅が足りないときは折り返し */}
+            <div className="family-header-actions" style={{display:'flex',gap:8,marginLeft:'auto',flexShrink:1,flexWrap:'wrap',justifyContent:'flex-end',maxWidth:'100%'}}>
               {onSwitchPatient && (
                 <button onClick={onSwitchPatient}
                   style={{background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:10,padding:'10px 14px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
@@ -16672,6 +16689,47 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             );
           })()}
         </div>
+
+        {/* ★ 今日の様子 (家族画面のみ): 特記事項を一目でわかるように大きく表示 */}
+        {familyMode && (() => {
+          // 最新の通所記録の特記を取得
+          const _today = new Date(); _today.setHours(0,0,0,0);
+          const _recordToDate = (rec) => {
+            const m = (rec.date||'').match(/(\d+)月(\d+)日/);
+            if (!m) return null;
+            const mm = parseInt(m[1], 10), dd = parseInt(m[2], 10);
+            if (typeof rec.id === 'number' && rec.id > 1e12) {
+              const created = new Date(rec.id);
+              return new Date(created.getFullYear(), mm - 1, dd);
+            }
+            let year = _today.getFullYear();
+            if (mm > _today.getMonth()+1 || (mm === _today.getMonth()+1 && dd > _today.getDate())) year--;
+            return new Date(year, mm - 1, dd);
+          };
+          const _withDates = records.map(r => ({ r, d: _recordToDate(r) })).filter(x => x.d);
+          _withDates.sort((a, b) => b.d.getTime() - a.d.getTime());
+          const _latest = _withDates[0]?.r;
+          if (!_latest) return null;
+          // 特記取得 (override 優先)
+          const _ftoPid = (appData.familyTokkiOverrides||{})[selectedPatientId] || {};
+          const _ov = _ftoPid[_latest.date] || _ftoPid[_latest.id] || {};
+          const _showTokki = _ov.visible !== false;
+          const _tokkiText = _ov.text || _latest.tokki || '';
+          // 特記が無い場合は「大きな変化はなし」 と自動表示
+          const _displayText = (_showTokki && _tokkiText && _tokkiText.trim()) ? _tokkiText : '大きな変化はありません';
+          return (
+            <div style={{marginBottom:16,scrollMarginTop:170,background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',border:'1.5px solid #86efac',borderRadius:14,padding:'14px 18px',boxShadow:'0 2px 6px rgba(34,197,94,0.12)'}}>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <span style={{fontSize:18}}>📝</span>
+                <span style={{fontSize:14,fontWeight:'bold',color:'#166534'}}>今日の様子</span>
+                <span style={{fontSize:11,fontWeight:'bold',color:'#16a34a',background:'#dcfce7',padding:'2px 8px',borderRadius:6,marginLeft:'auto'}}>{_latest.date}</span>
+              </div>
+              <div style={{fontSize:15,color:'#1e293b',lineHeight:1.7,whiteSpace:'pre-wrap',fontWeight:'500',padding:'4px 0'}}>
+                {_displayText}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 今回の記録 (最新の通所記録のサマリー) - 家族・事業所共通 */}
         {(() => {
