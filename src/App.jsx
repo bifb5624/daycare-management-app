@@ -23084,7 +23084,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             for (let r = 1; r < rows.length; r++) {
               const row = rows[r]; if (!row.some(c => (c||'').trim())) continue;
               const rec = {};
-              FIELDS.forEach((f, i) => { rec[f] = (row[colIdx[i]] || '').trim(); });
+              // ★ CSV に存在する列だけ rec に入れる (列が無い項目は触らない)。
+              //   これをしないと、一部列だけの CSV を取り込んだ際に、
+              //   未記載の項目まで空文字で上書きされ既存データが消えてしまう。
+              FIELDS.forEach((f, i) => { if (colIdx[i] >= 0) rec[f] = (row[colIdx[i]] || '').trim(); });
               const idNum = parseInt(rec.id);
               // 1. ID 指定あり & 既存 → 更新
               if (!isNaN(idNum) && existingIds.has(idNum)) {
