@@ -10812,14 +10812,21 @@ function FamilyView() {
                       style={{width:'100%',padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
                   </div>
                   <div style={{marginBottom:12}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>パスワード</label>
-                    <input type="password" value={signupForm.password} onChange={e=>setSignupForm(f=>({...f,password:toHalfWidth(e.target.value),error:''}))}
+                    <label style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>
+                      <span>パスワード</span>
+                      {/* ★ 目のアイコンで入力中のパスワードを一時表示 (確認欄にもまとめて効く) */}
+                      <button type="button" onClick={()=>setSignupForm(f=>({...f,showPw:!f.showPw}))}
+                        style={{background:'none',border:'none',color:'#7daa3d',fontSize:11,fontWeight:'bold',cursor:'pointer',padding:0}}>
+                        {signupForm.showPw ? '🙈 隠す' : '👁 表示'}
+                      </button>
+                    </label>
+                    <input type={signupForm.showPw?'text':'password'} value={signupForm.password} onChange={e=>setSignupForm(f=>({...f,password:toHalfWidth(e.target.value),error:''}))}
                       placeholder="8文字以上、英字+数字" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false}
                       style={{width:'100%',padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
                   </div>
                   <div style={{marginBottom:12}}>
                     <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>パスワード（確認）</label>
-                    <input type="password" value={signupForm.password2} onChange={e=>setSignupForm(f=>({...f,password2:toHalfWidth(e.target.value),error:''}))}
+                    <input type={signupForm.showPw?'text':'password'} value={signupForm.password2} onChange={e=>setSignupForm(f=>({...f,password2:toHalfWidth(e.target.value),error:''}))}
                       placeholder="もう一度入力" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false}
                       style={{width:'100%',padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
                   </div>
@@ -15937,6 +15944,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [barTip, setBarTip] = useState(null);
   const [selTrekkiMonth, setSelTrekkiMonth] = useState(null);
   const [detailMonth, setDetailMonth] = useState(null);
+  // ★ 詳細記録の月選択を期間に連動させる:
+  //   期間が「1ヶ月」のときは基準月 (例: 6月) のみを初期選択にする (全月にしない)。
+  //   2ヶ月以上・全期間のときは「全月」(null) に戻して範囲全体を表示。
+  React.useEffect(() => {
+    const bMonthNum = parseInt((baseMonth.split('-')[1]) || '0', 10);
+    if (period === '1' && bMonthNum) setDetailMonth(`${bMonthNum}月`);
+    else setDetailMonth(null);
+  }, [period, baseMonth]);
   const [moodTooltip, setMoodTooltip] = useState(null); // {x,y,label,arr,arrR,dep,depR}
   // 印刷プレビューに「詳細記録（横ページ）」を含めるか。デフォルト false（ケアマネ向け配付では不要）。
   const [printIncludeDetail, setPrintIncludeDetail] = useState(false);
@@ -21730,7 +21745,6 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyShareModal?.patient?.id]);
   const [accountEditId, setAccountEditId] = useState(null); // 編集中のアカウント id
-  const [revealPwIds, setRevealPwIds] = useState(() => new Set()); // ★ パスワードを表示中のアカウント id 集合
   const [newPatientName, setNewPatientName] = useState('');
   // ★ 姓/名/ふりがな 分割入力
   const [newPatientLast, setNewPatientLast] = useState('');
@@ -23490,35 +23504,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                     <input value={acc.username} disabled={!isEditing} onChange={e=>updateField(acc.id,'username',toHalfWidth(e.target.value))} className={`w-full px-2 py-1 border rounded text-xs font-mono outline-none ${isEditing?'bg-white border-slate-300 focus:border-blue-400':'bg-slate-50 border-slate-100 text-slate-600 cursor-not-allowed'}`}/>
                                   </div>
                                   <div className="col-span-3">
-                                    {(() => {
-                                      // ★ 平文パスワードがあるのは「スタッフ発行」または同一端末で作られたアカウント。
-                                      //   ご家族が自分のスマホで登録した場合は Supabase にハッシュしか無く、
-                                      //   同期時に '****' になる → 表示できない (再発行で対応)。
-                                      const hasRealPw = acc.password && acc.password !== '****' && acc.password !== '••••••••';
-                                      const revealed = revealPwIds.has(acc.id);
-                                      const toggle = () => setRevealPwIds(prev => { const n = new Set(prev); n.has(acc.id) ? n.delete(acc.id) : n.add(acc.id); return n; });
-                                      return (
-                                        <>
-                                          <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-                                            パスワード
-                                            {hasRealPw && (
-                                              <button onClick={toggle} className="text-[10px] text-blue-500 hover:text-blue-700 font-bold" title={revealed?'隠す':'表示する'}>{revealed?'🙈 隠す':'👁 表示'}</button>
-                                            )}
-                                          </div>
-                                          {hasRealPw ? (
-                                            <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-200 text-slate-700 truncate" title={revealed?'クリックでコピー':''}
-                                              onClick={()=>{ if(revealed){ navigator.clipboard?.writeText(acc.password); setShowToast(true);} }}
-                                              style={{cursor: revealed?'pointer':'default'}}>
-                                              {revealed ? acc.password : '••••••••'}
-                                            </div>
-                                          ) : (
-                                            <div className="px-2 py-1 border rounded text-[10px] bg-slate-50 border-slate-100 text-slate-400 leading-tight" title="ご家族がご自身で設定したパスワードは表示できません。必要なら ✏ で新しいパスワードに変更してください。">
-                                              本人設定（非表示）
-                                            </div>
-                                          )}
-                                        </>
-                                      );
-                                    })()}
+                                    <div className="text-[10px] font-bold text-slate-400">パスワード <span className="text-slate-300 font-normal">(本人のみ)</span></div>
+                                    <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-100 text-slate-400" title="ご家族本人がログイン画面の「パスワードを忘れた」から再設定できます">
+                                      {acc.password ? '••••••••' : '—'}
+                                    </div>
                                   </div>
                                   <div className="col-span-1 flex flex-col gap-1">
                                     {isEditing ? (
