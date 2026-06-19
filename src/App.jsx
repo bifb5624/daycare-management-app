@@ -8913,6 +8913,30 @@ const isPatientActiveOnDate = (p, targetDateStr) => {
     return true;
 };
 
+// ★ カレンダーで定休日/休業日を選んだとき、選択できないのではなく「近い営業日」にずらす。
+//   例 (土日定休): 土曜→金曜(後退) / 日曜→月曜(前進)。 距離が同じなら 日曜だけ前進、他は後退。
+//   日誌・提供記録など全カレンダー共通で使う。
+const _isoOf = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const nearestOpenDate = (isoDate, closedDays, holidays) => {
+  if (!isoDate) return isoDate;
+  const closed = Array.isArray(closedDays) ? closedDays : [0];
+  const holiSet = new Set((holidays||[]).map(h => (h && h.date) ? h.date : h));
+  const isClosed = (d) => closed.includes(d.getDay()) || holiSet.has(_isoOf(d));
+  const base = new Date(isoDate);
+  if (isNaN(base.getTime())) return isoDate;
+  if (!isClosed(base)) return isoDate;
+  for (let dist = 1; dist <= 31; dist++) {
+    const back = new Date(base); back.setDate(back.getDate() - dist);
+    const fwd  = new Date(base); fwd.setDate(fwd.getDate() + dist);
+    const backOpen = !isClosed(back);
+    const fwdOpen  = !isClosed(fwd);
+    if (backOpen && fwdOpen) return base.getDay() === 0 ? _isoOf(fwd) : _isoOf(back); // 同距離: 日曜のみ前進
+    if (backOpen) return _isoOf(back);
+    if (fwdOpen)  return _isoOf(fwd);
+  }
+  return isoDate;
+};
+
 const getRowFromKana = (kana) => {
   if (!kana) return 'その他';
   const firstChar = kana.charAt(0);
@@ -8984,6 +9008,8 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
       const dayOfWeek = dateObj.getDay();
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const displayDate = `${month}月${day}日`;
+      // ★ 利用開始日より前 / 利用終了日より後は、この利用者の行を作らない (存在しない期間)
+      if (!isPatientActiveOnDate(patient, dateStr)) continue;
       // ★ 年対応: この月の記録は year で絞る (旧記録=year無しは後方互換で一致)
 
       const isClosedDay = closedDays.includes(dayOfWeek);
@@ -15157,10 +15183,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             {filterMode === 'single' && (
               <div className="flex items-center gap-2">
                   <input type="date" value={selectedDate} onChange={(e) => {
-                  const d=new Date(e.target.value);const dow=d.getDay();
+                  if(!e.target.value) return;
+                  // ★ 定休日/休業日なら近い営業日にずらして選択 (選択不可で止めない)
                   const closed=(appData.systemSettings?.facilityInfo?.closedDays||[0]);
-                  if(closed.includes(dow)){alert('定休日のため選択できません。');return;}
-                  setSelectedDate(e.target.value);
+                  setSelectedDate(nearestOpenDate(e.target.value, closed, appData.holidays));
                 }} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700" />
                   <div className="flex rounded-xl overflow-hidden border border-slate-300">
                     {['AM','PM'].map(v=>(
@@ -15173,10 +15199,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             {filterMode === 'month' && (
               <div className="flex items-center gap-2">
                 <input type="date" value={selectedDate} onChange={e=>{
-                const d=new Date(e.target.value);const dow=d.getDay();
+                if(!e.target.value) return;
                 const closed=(appData.systemSettings?.facilityInfo?.closedDays||[0]);
-                if(closed.includes(dow)){alert('定休日のため選択できません。');return;}
-                setSelectedDate(e.target.value);
+                setSelectedDate(nearestOpenDate(e.target.value, closed, appData.holidays));
               }} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700"/>
                 <select value={monthPatientId || ((appData.patients||[])[0]?.id) || ''} onChange={e=>setMonthPatientId(Number(e.target.value))} className="text-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700">
                   {/* 利用者プルダウン: かな昇順 + ア行/カ行... の optgroup でラベル付け */}
@@ -20328,6 +20353,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     const extraPats = (appData.patients||[]).filter(p => {
       if(recIds.has(p.id) || absentIds.has(p.id)) return false;
       if(getPatientDisplayStatus(p) !== '利用中') return false;
+      if(!isPatientActiveOnDate(p, selectedDate)) return false; // ★ 利用開始日より前/終了後は出さない
       const base = p.scheduleAmPm?.[dow] || '';
       const shiftAM = appData.monthlyShifts?.[monthKey]?.[p.id]?.[`${dayNum}_AM`];
       const shiftPM = appData.monthlyShifts?.[monthKey]?.[p.id]?.[`${dayNum}_PM`];
@@ -20553,10 +20579,9 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         <div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 shrink-0">
           <CalendarCheck size={16} className="text-slate-400 mr-2" />
           <input type="date" value={selectedDate} onChange={(e)=>{
-                const d=new Date(e.target.value);const dow=d.getDay();
+                if(!e.target.value) return;
                 const closed=(appData.systemSettings?.facilityInfo?.closedDays||[0]);
-                if(closed.includes(dow)){alert('定休日のため選択できません。');return;}
-                setSelectedDate(e.target.value);
+                setSelectedDate(nearestOpenDate(e.target.value, closed, appData.holidays));
               }} className="bg-transparent text-sm font-bold outline-none cursor-pointer text-slate-700" />
         </div>
         <div className="bg-emerald-50 px-3 py-2 rounded-xl text-sm font-bold text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shrink-0">
@@ -26479,11 +26504,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                       const isSelected = ds === selectedDate;
                       const closed = d2 && (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(new Date(y,m,d2).getDay());
                       return (
-                        <button key={i} type="button" disabled={!d2||closed}
-                          onClick={()=>{ if(ds&&!closed) setSelectedDate(ds); }}
+                        <button key={i} type="button" disabled={!d2}
+                          onClick={()=>{ if(!ds) return; const _cd=(appData.systemSettings?.facilityInfo?.closedDays||[0]); setSelectedDate(closed ? nearestOpenDate(ds, _cd, appData.holidays) : ds); }}
                           style={{
                             display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-                            aspectRatio:'1',border:'none',borderRadius:6,cursor:d2&&!closed?'pointer':'default',padding:'1px',
+                            aspectRatio:'1',border:'none',borderRadius:6,cursor:d2?'pointer':'default',padding:'1px',
                             background:isSelected?'#2563eb':'transparent',
                             color:isSelected?'white':closed?'#cbd5e1':'#1e293b',
                             fontSize:10,fontWeight:'bold',lineHeight:1,
