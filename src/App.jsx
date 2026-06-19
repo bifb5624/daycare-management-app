@@ -917,6 +917,23 @@ const getActiveRecorderName = () => {
   return '';
 };
 
+// ★ 年対応 (5年以上の保存に対応):
+//   提供記録(ticketRecords)は date を「5月4日」形式(年なし)で保存してきたため、
+//   2025年5月4日と2026年5月4日が区別できなかった。これを段階的に年対応するための共通ヘルパー。
+//   - 既存記録 (year 無し) は「どの年にも一致」させて従来通り表示 (後方互換・非破壊)。
+//   - 新規/再保存した記録には year を持たせ、その年でのみ一致するようにする (= その年で確定)。
+//   これにより、未対応の箇所が残っても従来挙動に degrade するだけで壊れない。
+const recMatchesDateYear = (r, dateStr, year) =>
+  r && r.date === dateStr && (r.year == null || year == null || r.year === year);
+// record から年を取り出す (無ければ null)
+const recYear = (r) => (r && r.year != null ? r.year : null);
+// 月番号フィルタ用: record が (year, month) に該当するか。 year 無し記録は対象年に該当扱い。
+const recMatchesYearMonth = (r, year, month) => {
+  const mm = (r?.date || '').match(/(\d+)月/);
+  if (!mm || parseInt(mm[1], 10) !== month) return false;
+  return r.year == null || year == null || r.year === year;
+};
+
 // === 運動値の主副分解パース ===
 // (既存 parseExerciseValue (8925行) は単一数値抽出用 / こちらは 棒+折れ線 グラフ用に主・副に分解)
 // "10kg×10回" → { primary: 10, unit1: 'kg', secondary: 10, unit2: '回', hasMulti: true }
@@ -8967,6 +8984,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
       const dayOfWeek = dateObj.getDay();
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const displayDate = `${month}月${day}日`;
+      // ★ 年対応: この月の記録は year で絞る (旧記録=year無しは後方互換で一致)
 
       const isClosedDay = closedDays.includes(dayOfWeek);
       const isHoliday = holidays?.some(h => (h.date || h) === dateStr);
@@ -8993,7 +9011,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
       if (isClosedDay && !isBaseAM && !isBasePM) continue;
 
-      const existing = ticketRecords.find(r => r.patientId === patient.id && r.date === displayDate);
+      const existing = ticketRecords.find(r => r.patientId === patient.id && recMatchesDateYear(r, displayDate, year));
 
       let status = "出席";
       if (isHoliday || isClosedDay) status = "休業";
@@ -9006,6 +9024,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
         name: patient.name,
         kana: patient.kana,
         date: displayDate,
+        year: existing?.year ?? year,
         dayNum: day,
         dayOfWeek: dayNames[dayOfWeek],
         isBaseDay: isBaseAM || isBasePM,
@@ -13251,10 +13270,10 @@ export default function App() {
     const updatedPatients = (appData.patients || []).map(p => {
       if (!patientsToSnap.some(x => x.id === p.id)) return p;
       const _snapMonth = prevMonth.getMonth() + 1; // 前月 (1-12)
+      const _snapYear = prevMonth.getFullYear();   // 前月の年
       const records = (appData.ticketRecords || []).filter(t => {
         if (t.patientId !== p.id) return false;
-        const mm = (t.date||'').match(/(\d+)月/); // 提供記録の date は "5月4日" 形式 (年なし)
-        return mm && parseInt(mm[1],10) === _snapMonth;
+        return recMatchesYearMonth(t, _snapYear, _snapMonth); // ★ 年対応
       }).sort((a,b) => {
         const da = parseInt((a.date||'').match(/(\d+)日/)?.[1]||'0',10);
         const db = parseInt((b.date||'').match(/(\d+)日/)?.[1]||'0',10);
@@ -14482,8 +14501,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (filterMode !== 'single' || localPatients.length === 0) return false;
     const dObj = new Date(selectedDate);
     const targetDateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`;
+    const selYear = dObj.getFullYear();
     return localPatients.some(p => {
-      const saved = (appData.ticketRecords||[]).find(r => r.patientId===p.id && r.date===targetDateStr);
+      const saved = (appData.ticketRecords||[]).find(r => r.patientId===p.id && recMatchesDateYear(r, targetDateStr, selYear));
       const commonFields = ['status','massage','tokki','kibunArrival','kibunDeparture','done'];
       if (commonFields.some(f => (p[f]||'') !== (saved?.[f]||''))) return true;
       // ampm 別フィールドの未保存判定
@@ -14553,7 +14573,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           const comingAM = stateAM === "〇" || stateAM === "出席" || stateAM.startsWith("振") || stateAM === "欠席";
           const comingPM = statePM === "〇" || statePM === "出席" || statePM.startsWith("振") || statePM === "欠席";
           const targetDateStr2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
-          const hasRecord = (appData.ticketRecords||[]).some(r=>r.patientId===p.id&&r.date===targetDateStr2);
+          const _selYear2 = new Date(selectedDate).getFullYear();
+          const hasRecord = (appData.ticketRecords||[]).some(r=>r.patientId===p.id&&recMatchesDateYear(r, targetDateStr2, _selYear2));
           if (!comingAM && !comingPM && !hasRecord) return false;
           return true;
       })
@@ -14561,7 +14582,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          let pData = { ...p };
          if (!pData.status || pData.status === '通所' || pData.status === '利用中') pData.status = '出席';
          const targetDateStr = `${new Date(selectedDate).getMonth() + 1}月${new Date(selectedDate).getDate()}日`;
-         const existingRecord = (appData.ticketRecords || []).find(r => r.patientId === p.id && r.date === targetDateStr);
+         const _selYear3 = new Date(selectedDate).getFullYear();
+         const existingRecord = (appData.ticketRecords || []).find(r => r.patientId === p.id && recMatchesDateYear(r, targetDateStr, _selYear3));
          if (existingRecord) {
              pData.recordId = existingRecord.id;
              pData.patientId = p.id;
@@ -14976,15 +14998,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       if (filterMode === 'single') {
           const dObj = new Date(selectedDate);
           const targetDateStr = `${dObj.getMonth() + 1}月${dObj.getDate()}日`;
+          const selYear = dObj.getFullYear(); // ★ 年対応: 保存する記録の年
           const dayOfWeekStr = ['日', '月', '火', '水', '木', '金', '土'][dObj.getDay()];
           localPatients.forEach(p => {
               if (cancelledIds.has(p.id)) return; // 取り消し対象は書き戻さない
-              const recordIndex = updatedTicketRecords.findIndex(r => r.patientId === p.id && r.date === targetDateStr);
+              const recordIndex = updatedTicketRecords.findIndex(r => r.patientId === p.id && recMatchesDateYear(r, targetDateStr, selYear));
               const existing = recordIndex >= 0 ? updatedTicketRecords[recordIndex] : null;
               // 旧形式互換用に plain フィールドも保持 (timeFilter の値を入れる)
               const newRecord = {
                   id: existing ? existing.id : Date.now() + Math.random(),
-                  patientId: p.id, name: p.name, kana: p.kana, date: targetDateStr, dayOfWeek: dayOfWeekStr,
+                  patientId: p.id, name: p.name, kana: p.kana, date: targetDateStr, year: selYear, dayOfWeek: dayOfWeekStr,
                   status: p.status,
                   ...(existing?.furikaeAmpm ? {furikaeAmpm: existing.furikaeAmpm} : {}),
                   // vitals は AM/PM 独立フィールド
@@ -15041,8 +15064,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       if (_activeRec && filterMode === 'single') {
         const _dObj = new Date(selectedDate);
         const _targetDateStr = `${_dObj.getMonth() + 1}月${_dObj.getDate()}日`;
+        const _selYear = _dObj.getFullYear();
         updatedTicketRecords = updatedTicketRecords.map(r => {
-          if (r.date === _targetDateStr) {
+          if (recMatchesDateYear(r, _targetDateStr, _selYear)) {
             return { ...r, recorder: _activeRec };
           }
           return r;
@@ -15077,9 +15101,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     const dayNum2 = new Date(selectedDate).getDate();
     const dow2 = new Date(selectedDate).getDay();
     const targetDateStr3 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
+    const _selYear4 = new Date(selectedDate).getFullYear();
     displayRecords = displayRecords.filter(p => {
       // 振替の record があれば furikaeAmpm を優先（普段の曜日に来なくても表示する）
-      const rec = (appData.ticketRecords||[]).find(r=>r.patientId===p.id && r.date===targetDateStr3);
+      const rec = (appData.ticketRecords||[]).find(r=>r.patientId===p.id && recMatchesDateYear(r, targetDateStr3, _selYear4));
       if (rec && rec.status === '振替') {
         const fa = rec.furikaeAmpm;
         if (fa) return fa === timeFilter || fa === '1日';
@@ -15968,6 +15993,24 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     return months;
   }, [baseMonth, period, customFrom, customTo]);
 
+  // ★ 年対応: 期間内の (年,月) を「Y-M」文字列の Set で持つ。
+  //   records フィルタで「その年・その月」だけに絞る (旧記録=year無しは月だけで後方互換表示)。
+  const targetYearMonths = useMemo(() => {
+    if (period === 'all') return null;
+    const set = new Set();
+    if (period === 'custom') {
+      const [fY, fM] = customFrom.split('-').map(Number);
+      const [tY2, tM2] = customTo.split('-').map(Number);
+      let y = fY, m = fM;
+      while (y < tY2 || (y === tY2 && m <= tM2)) { set.add(`${y}-${m}`); m++; if (m > 12) { m = 1; y++; } }
+      return set;
+    }
+    const [bY, bM] = baseMonth.split('-').map(Number);
+    const n = parseInt(period, 10);
+    for (let i = 0; i < n; i++) { let m = bM - i, y = bY; while (m <= 0) { m += 12; y--; } set.add(`${y}-${m}`); }
+    return set;
+  }, [baseMonth, period, customFrom, customTo]);
+
   const allRecords = useMemo(() => {
     if (!selectedPatientId) return [];
     return (appData.ticketRecords || []).filter(r => r.patientId === selectedPatientId)
@@ -15980,12 +16023,16 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   }, [appData.ticketRecords, selectedPatientId]);
 
   const records = useMemo(() => {
-    if (targetMonths === null) return allRecords;
+    if (targetYearMonths === null) return allRecords; // 全期間
     return allRecords.filter(r => {
       const mM = r.date ? r.date.match(/(\d+)月/) : null;
-      return mM ? targetMonths.includes(parseInt(mM[1], 10)) : false;
+      if (!mM) return false;
+      const rm = parseInt(mM[1], 10);
+      // 新記録 (year あり): その年・その月のみ。 旧記録 (year 無し): 月だけで判定 (後方互換)。
+      if (r.year != null) return targetYearMonths.has(`${r.year}-${rm}`);
+      return targetMonths !== null && targetMonths.includes(rm);
     });
-  }, [allRecords, targetMonths]);
+  }, [allRecords, targetYearMonths, targetMonths]);
 
   const validRecs  = records.filter(r => r.status==='出席'||r.status==='振替');
   const tusho      = records.filter(r=>r.status==='出席').length;
@@ -20259,6 +20306,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const [isPrintPreview, setIsPrintPreview] = useState(false);
 
   const targetDateStr = `${new Date(selectedDate).getMonth() + 1}月${new Date(selectedDate).getDate()}日`;
+  const targetYear = new Date(selectedDate).getFullYear(); // ★ 年対応
   const displayRecords = React.useMemo(() => {
     const d = new Date(selectedDate);
     const dow = d.getDay();
@@ -20268,12 +20316,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
 
     // ticketRecordsから出席・振替（欠席は除外）
     const recs = (appData.ticketRecords || []).filter(r =>
-      r.date === targetDateStr && (r.status === '出席' || (r.status && r.status.startsWith('振')))
+      recMatchesDateYear(r, targetDateStr, targetYear) && (r.status === '出席' || (r.status && r.status.startsWith('振')))
     );
     const recIds = new Set(recs.map(r=>r.patientId));
     // 欠席として記録されている人のIDセット
     const absentIds = new Set(
-      (appData.ticketRecords || []).filter(r => r.date === targetDateStr && r.status === '欠席').map(r=>r.patientId)
+      (appData.ticketRecords || []).filter(r => recMatchesDateYear(r, targetDateStr, targetYear) && r.status === '欠席').map(r=>r.patientId)
     );
 
     // monthlyShiftsから補完（ticketRecordsにない出席者）
@@ -20290,7 +20338,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       if(ampmFilter === 'AM') return comingAM;
       if(ampmFilter === 'PM') return comingPM;
       return comingAM || comingPM;
-    }).map(p => ({id:`auto-${p.id}`,patientId:p.id,date:targetDateStr,status:'出席',name:p.name}));
+    }).map(p => ({id:`auto-${p.id}`,patientId:p.id,date:targetDateStr,year:targetYear,status:'出席',name:p.name}));
 
     // AM/PMフィルタをticketRecordsにも適用
     const filteredRecs = ampmFilter ? recs.filter(r => {
@@ -22335,14 +22383,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // 振替元 ticketRecord（欠席）の更新
     const ampmSuffix = destAmpm !== '1日' ? destAmpm : '';
     const srcTokki = `${destLabel}${ampmSuffix}へ振替${_reason ? '（' + _reason + '）' : ''}`;
-    const srcIdx = ur.findIndex(r => r.patientId === localPatient.id && r.date === srcLabel);
-    if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki };
-    else ur.push({ id: Date.now() + Math.random(), patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki });
+    const srcYear = srcDateObj.getFullYear(); // ★ 年対応
+    const destYear = destDateObj.getFullYear();
+    const srcIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, srcLabel, srcYear));
+    if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear };
+    else ur.push({ id: Date.now() + Math.random(), patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki });
     // 振替先 ticketRecord（振替）の新規作成 / 更新
     const destTokki = `${srcLabel}${ampmSuffix}分振替`;
-    const destIdx = ur.findIndex(r => r.patientId === localPatient.id && r.date === destLabel);
-    if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki };
-    else ur.push({ id: Date.now() + Math.random() + 1, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {} });
+    const destIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, destLabel, destYear));
+    if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear };
+    else ur.push({ id: Date.now() + Math.random() + 1, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {} });
     setPendingShifts(ns);
     setPendingTickets(ur);
     markDirty();
@@ -28638,12 +28688,11 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   // 月次スナップショットを今すぐ作成
   const createMonthlySnapshot = (yyyymm) => {
     const [y, m] = yyyymm.split('-').map(Number);
-    // ★ 提供記録の date は "5月4日" 形式 (年なし)。 ISO ("2026-05-01") 比較では一致せず
-    //   「記録がありません」になっていたため、月番号で絞り込み・日番号で並べ替える。
+    // ★ 年対応: その年・その月の記録だけを集める。
+    //   旧記録 (year 無し) は後方互換で対象年に該当扱い (claim 前まで)。
     const records = (appData.ticketRecords || []).filter(t => {
       if (t.patientId !== patient.id) return false;
-      const mm = (t.date||'').match(/(\d+)月/);
-      return mm && parseInt(mm[1],10) === m;
+      return recMatchesYearMonth(t, y, m);
     }).sort((a,b) => {
       const da = parseInt((a.date||'').match(/(\d+)日/)?.[1]||'0',10);
       const db = parseInt((b.date||'').match(/(\d+)日/)?.[1]||'0',10);
