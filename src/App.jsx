@@ -28538,7 +28538,13 @@ const DEFAULT_PF_CATEGORIES = [
     note: '主治医意見書 / 診療情報提供書 / 処方箋 / 健康記録' },
 ];
 
-function PersonalFileModal({ patient, appData, onSave, onClose }) {
+function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
+  // ★ 常に最新の appData から利用者を取得する。
+  //   patientProp はモーダルを開いた時点のスナップショットで、保存(updatePatient → onSave → setAppData)後も
+  //   更新されない。そのため担当者会議などを保存しても画面に反映されず、再度開いても出ず
+  //   「保存されない / データがどこにもない」ように見えていた。
+  //   appData から id で引き直すことで、保存→即反映＆再表示でも残るようにする。
+  const patient = (appData.patients || []).find(p => p.id === patientProp.id) || patientProp;
   const personalFile = patient.personalFile || { categories: [], files: [], meetings: [] };
   const customCategories = personalFile.categories || [];
   const allCategories = [...DEFAULT_PF_CATEGORIES, ...customCategories];
