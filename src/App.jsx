@@ -11313,11 +11313,10 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               <button onClick={()=>setMyInfoOpen(true)} style={hdrBtnStyle}>
                 👤 利用者・登録者情報
               </button>
-              {isPrimaryAcc && (
-                <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
-                  {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
-                </button>
-              )}
+              {/* ★ 代表者以外も一覧を閲覧できる (招待/取消などの操作はモーダル内で代表者のみ) */}
+              <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
+                {isCmAccount ? '🤝 関係者一覧' : '👨‍👩‍👧 家族一覧'}
+              </button>
               {/* ★ 期間選択: お知らせと通所記録の両方を絞り込み。 半年/1年/全期間 は「日別/月別」も選べる */}
               {/* ★ 「2026年6月〜」の期間レンジは セレクタ内に集約 (旧: 別の行で1行分占有していた) */}
               <div style={{height:38,boxSizing:'border-box',display:'flex',flexDirection:'row',alignItems:'center',gap:6,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'0 10px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
@@ -11362,11 +11361,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   return label ? <span style={{fontSize:10,color:'#5e8030',fontWeight:'bold',whiteSpace:'nowrap'}}>{label}</span> : null;
                 })()}
               </div>
-              {onLogout && (
-                <button onClick={onLogout} style={{...hdrBtnStyle, color:'#64748b', border:'1px solid #cbd5e1'}}>
-                  ログアウト
-                </button>
-              )}
+              {/* ★ ログアウトはヘッダから外し、画面下部のフッターに移動 (ヘッダを横一列にすっきり) */}
             </div>
           </div>
         </div>
@@ -11401,11 +11396,19 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 });
                 return Object.values(groups);
               })();
+              // ★ 利用開始日より前のお知らせは表示しない (利用者がまだ通っていない期間の全体連絡などを隠す)
+              const _startIso = patient?.startDate ? `${patient.startDate}T00:00:00.000Z` : '';
               const merged = [
                 ...personalAnnouncements.map(a=>({...a,_kind:'個別'})),
                 ...announcements.map(a=>({...a,_kind:'全体'})),
                 ...virtualOldAnnouncements,
-              ].sort((a,b) => (b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||''));
+              ]
+              .filter(a => {
+                if (!_startIso) return true;
+                const d = a.postedAt || (a.date ? `${a.date}T00:00:00.000Z` : '');
+                return !d || d >= _startIso; // 日付不明のものは念のため表示
+              })
+              .sort((a,b) => (b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||''));
               // 1ヶ月以内 (recent) と 1ヶ月以上前 (archived) に分割
               const oneMonthAgo = new Date(); oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
               const dateOf = (a) => a.postedAt || (a.date ? `${a.date}T00:00:00.000Z` : '');
@@ -11497,7 +11500,16 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           </div>
         )}
       </div>
-      <div style={{textAlign:'center',padding:'20px 16px 32px',fontSize:10,color:'#94a3b8'}}>
+      {/* ★ フッター: ログアウトはヘッダから外し、ここ (お知らせ/通所記録の一番下) に配置 */}
+      <div style={{maxWidth:720,margin:'0 auto',padding:'8px 16px 4px',display:'flex',justifyContent:'center'}}>
+        {onLogout && (
+          <button onClick={onLogout}
+            style={{width:'100%',maxWidth:320,padding:'12px',background:'white',color:'#64748b',border:'1px solid #cbd5e1',borderRadius:12,fontSize:13,fontWeight:'bold',cursor:'pointer',boxShadow:'0 2px 6px rgba(0,0,0,0.06)'}}>
+            ログアウト
+          </button>
+        )}
+      </div>
+      <div style={{textAlign:'center',padding:'14px 16px 32px',fontSize:10,color:'#94a3b8'}}>
         {facility.name||''} {facility.phone?`／${facility.phone}`:''}<br/>
         このページは {patient.name} 様のご家族専用です
       </div>
@@ -12025,7 +12037,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                               <div style={{fontSize:10,color:'#64748b',marginTop:1}}>📞 {phoneByAcc(m)}</div>
                             )}
                           </div>
-                          {!isMe && (
+                          {!isMe && isPrimaryAcc && (
                             <button onClick={()=>handleDeleteChild(m.id)} style={{padding:'4px 10px',background:'#fef2f2',color:'#dc2626',border:'1px solid #fecaca',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>削除</button>
                           )}
                         </div>
@@ -12038,17 +12050,27 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         <div style={{fontSize:12,fontWeight:'bold',color:'#92400e'}}>📧 招待中: {i.email || '(メール未指定)'}</div>
                         <div style={{fontSize:10,color:'#78350f',marginTop:1}}>{i.relation || '続柄未設定'} / コード: {i.code}</div>
                       </div>
-                      <button onClick={()=>handleDeleteInvite(i.id)} style={{padding:'4px 10px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>取消</button>
+                      {isPrimaryAcc && (
+                        <button onClick={()=>handleDeleteInvite(i.id)} style={{padding:'4px 10px',background:'#fef3c7',color:'#92400e',border:'1px solid #fcd34d',borderRadius:6,fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>取消</button>
+                      )}
                     </div>
                   ))}
                 </div>
-                <div style={{background: remaining===0?'#fef2f2':remaining===1?'#fef3c7':'#f0fdf4',border:`1px solid ${remaining===0?'#fecaca':remaining===1?'#fcd34d':'#86efac'}`,borderRadius:10,padding:'8px 12px',marginBottom:12,fontSize:12,fontWeight:'bold',color:remaining===0?'#991b1b':remaining===1?'#92400e':'#166534'}}>
-                  残り {remaining} 人 招待できます ({memberLabel} 最大 {MAX_CHILDREN} 人まで)
-                </div>
+                {/* ★ 招待枠の案内と新規登録は代表者のみ。代表者以外は閲覧のみ */}
+                {isPrimaryAcc && (
+                  <div style={{background: remaining===0?'#fef2f2':remaining===1?'#fef3c7':'#f0fdf4',border:`1px solid ${remaining===0?'#fecaca':remaining===1?'#fcd34d':'#86efac'}`,borderRadius:10,padding:'8px 12px',marginBottom:12,fontSize:12,fontWeight:'bold',color:remaining===0?'#991b1b':remaining===1?'#92400e':'#166534'}}>
+                    残り {remaining} 人 招待できます ({memberLabel} 最大 {MAX_CHILDREN} 人まで)
+                  </div>
+                )}
+                {!isPrimaryAcc && (
+                  <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'8px 12px',marginBottom:12,fontSize:11,color:'#64748b',lineHeight:1.6}}>
+                    招待・削除などの管理は代表者のみ可能です。一覧の閲覧ができます。
+                  </div>
+                )}
                 <div style={{display:'flex',gap:8}}>
                   <button onClick={()=>{setInviteFamilyOpen(false); setInviteFamForm({email:'',relation:'',createdUrl:'',sentAuto:false,sending:false,sendError:''});}}
                     style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
-                  {canAddMore && (
+                  {canAddMore && isPrimaryAcc && (
                     <button onClick={()=>{setInviteMode('new'); setInviteFamForm({email:'',relation:isCmList?'ケアマネージャー':'',createdUrl:'',sentAuto:false,sending:false,sendError:''});}}
                       style={{flex:1,padding:'11px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>＋ 新規登録</button>
                   )}
@@ -16075,7 +16097,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
         <div className="max-w-5xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-            <input type="text" autoFocus placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
+            {/* ★ スマホで自動的にキーボードが出てしまうため autoFocus は付けない */}
+            <input type="text" placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
               onChange={e=>setPatientSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-blue-400" />
             {/* 行ジャンプボタン */}
@@ -21707,6 +21730,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyShareModal?.patient?.id]);
   const [accountEditId, setAccountEditId] = useState(null); // 編集中のアカウント id
+  const [revealPwIds, setRevealPwIds] = useState(() => new Set()); // ★ パスワードを表示中のアカウント id 集合
   const [newPatientName, setNewPatientName] = useState('');
   // ★ 姓/名/ふりがな 分割入力
   const [newPatientLast, setNewPatientLast] = useState('');
@@ -23466,10 +23490,35 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                     <input value={acc.username} disabled={!isEditing} onChange={e=>updateField(acc.id,'username',toHalfWidth(e.target.value))} className={`w-full px-2 py-1 border rounded text-xs font-mono outline-none ${isEditing?'bg-white border-slate-300 focus:border-blue-400':'bg-slate-50 border-slate-100 text-slate-600 cursor-not-allowed'}`}/>
                                   </div>
                                   <div className="col-span-3">
-                                    <div className="text-[10px] font-bold text-slate-400">パスワード <span className="text-slate-300 font-normal">(本人のみ)</span></div>
-                                    <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-100 text-slate-400" title="ご家族本人がログイン画面の「パスワードを忘れた」から再設定できます">
-                                      {acc.password ? '••••••••' : '—'}
-                                    </div>
+                                    {(() => {
+                                      // ★ 平文パスワードがあるのは「スタッフ発行」または同一端末で作られたアカウント。
+                                      //   ご家族が自分のスマホで登録した場合は Supabase にハッシュしか無く、
+                                      //   同期時に '****' になる → 表示できない (再発行で対応)。
+                                      const hasRealPw = acc.password && acc.password !== '****' && acc.password !== '••••••••';
+                                      const revealed = revealPwIds.has(acc.id);
+                                      const toggle = () => setRevealPwIds(prev => { const n = new Set(prev); n.has(acc.id) ? n.delete(acc.id) : n.add(acc.id); return n; });
+                                      return (
+                                        <>
+                                          <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                            パスワード
+                                            {hasRealPw && (
+                                              <button onClick={toggle} className="text-[10px] text-blue-500 hover:text-blue-700 font-bold" title={revealed?'隠す':'表示する'}>{revealed?'🙈 隠す':'👁 表示'}</button>
+                                            )}
+                                          </div>
+                                          {hasRealPw ? (
+                                            <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-200 text-slate-700 truncate" title={revealed?'クリックでコピー':''}
+                                              onClick={()=>{ if(revealed){ navigator.clipboard?.writeText(acc.password); setShowToast(true);} }}
+                                              style={{cursor: revealed?'pointer':'default'}}>
+                                              {revealed ? acc.password : '••••••••'}
+                                            </div>
+                                          ) : (
+                                            <div className="px-2 py-1 border rounded text-[10px] bg-slate-50 border-slate-100 text-slate-400 leading-tight" title="ご家族がご自身で設定したパスワードは表示できません。必要なら ✏ で新しいパスワードに変更してください。">
+                                              本人設定（非表示）
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
                                   </div>
                                   <div className="col-span-1 flex flex-col gap-1">
                                     {isEditing ? (

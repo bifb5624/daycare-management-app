@@ -35,3 +35,11 @@ html, body {
   overflow-x: hidden;
   overscroll-behavior: none;
 }
+
+/* ★ 内側のスクロール領域 (スタッフ画面は h-screen flex の中で個別に overflow する)
+   - overscroll-behavior:contain で、内側を端までスクロールしても親や背景まで
+     連鎖して動かない (= 項目の背景グレーより先へ余計にスクロールしない)
+   - Tailwind の overflow ユーティリティを使う全コンテナにまとめて適用 */
+.overflow-auto, .overflow-y-auto, .overflow-x-auto, .overflow-scroll {
+  overscroll-behavior: contain;
+}
