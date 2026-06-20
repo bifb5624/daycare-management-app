@@ -28624,6 +28624,38 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 // PersonalFileModal: 利用者の個人ファイル
 // ===========================================
 // カテゴリ: 1.基本情報 2.契約・同意 3.ケアマネジメント 4.計画・アセスメント 5.サービス提供記録 6.健康・医療情報 (+ カスタム)
+// ★ アップロード画像を縮小・圧縮して base64 を返す (localStorage 容量対策)。
+//   長辺を maxDim 以内にリサイズし JPEG 品質 quality で再エンコード。 PDF はそのまま。
+const compressImageFile = (file, maxDim = 1600, quality = 0.7) => new Promise((resolve) => {
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+  const reader = new FileReader();
+  reader.onerror = () => resolve(null);
+  reader.onload = (ev) => {
+    const dataUrl = ev.target.result;
+    if (isPdf || !/^image\//.test(file.type || '')) { resolve(dataUrl); return; } // PDF等はそのまま
+    const img = new Image();
+    img.onerror = () => resolve(dataUrl); // 失敗時は元データ
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); // 透過PNG対策の白背景
+        ctx.drawImage(img, 0, 0, width, height);
+        const out = canvas.toDataURL('image/jpeg', quality);
+        resolve(out && out.length < dataUrl.length ? out : dataUrl); // 縮小できた場合のみ採用
+      } catch { resolve(dataUrl); }
+    };
+    img.src = dataUrl;
+  };
+  reader.readAsDataURL(file);
+});
+
 const DEFAULT_PF_CATEGORIES = [
   { id: 'cat_1', name: '1. 基本情報・本人確認', emoji: '👤', isDefault: true,
     note: 'フェイスシート / 介護保険被保険者証 / 負担割合証 など' },
@@ -28668,12 +28700,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     const newFiles = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      const dataUrl = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = (ev) => resolve(ev.target.result);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(f);
-      });
+      const dataUrl = await compressImageFile(f); // ★ 画像は自動圧縮 (容量対策)、PDFはそのまま
       if (!dataUrl) continue;
       newFiles.push({
         id: `pf_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
@@ -28775,7 +28802,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
           <div>
             <div className="flex items-center gap-2 text-base font-bold text-slate-800">
-              <BookOpen size={20} className="text-emerald-600"/>個人ファイル
+              個人ファイル
             </div>
             <div className="text-xs text-slate-500 mt-0.5">{patient.name} 様 ({patient.kana || ''})</div>
           </div>
@@ -28795,7 +28822,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
         {/* コンテンツ */}
         <div className="flex-1 overflow-auto p-6">
           <div className="mb-4">
-            <div className="text-sm font-bold text-slate-700">{activeCategory.emoji} {activeCategory.name}</div>
+            <div className="text-sm font-bold text-slate-700">{activeCategory.name}</div>
             {activeCategory.note && <div className="text-[11px] text-slate-500 mt-1">{activeCategory.note}</div>}
           </div>
           {/* 基本情報タブのみ: 旧書類フィールドの表示 (docInsurance/docBurden/medicationImages/docOther) */}
@@ -28869,7 +28896,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           {isBasicTab && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-bold text-amber-900">📋 フェイスシート</div>
+                <div className="text-sm font-bold text-amber-900">フェイスシート</div>
                 <div className="flex gap-2">
                   <button onClick={()=>setShowFaceSheetForm(true)}
                     className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold">
@@ -28877,7 +28904,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                   </button>
                   {Object.keys(faceSheet).length > 0 && (
                     <button onClick={()=>setPdfPreviewFaceSheet(true)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">⬇ PDF</button>
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">PDF</button>
                   )}
                 </div>
               </div>
@@ -28894,7 +28921,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           {isServiceTab && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-bold text-emerald-900">📊 サービス提供記録</div>
+                <div className="text-sm font-bold text-emerald-900">サービス提供記録</div>
                 <button onClick={()=>{
                   const today = new Date();
                   const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
@@ -28915,7 +28942,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
               <div className="text-[11px] text-emerald-700 mb-3 leading-relaxed">
                 毎月1日に <b>前月のサービス提供記録</b> が自動でこの一覧に追加されます。<br/>
                 上の「月を指定して作成」で<b>もっと前の月</b>も作成できます (既存の同月は上書き確認あり)。<br/>
-                各月の「⬇ PDF」ボタンからその月の記録一覧を PDF でダウンロードできます。
+                各月の「PDF」ボタンからその月の記録一覧を PDF でダウンロードできます。
               </div>
               {monthlyServiceRecords.length === 0 ? (
                 <div className="text-xs text-slate-500 italic">まだ月次記録がありません。</div>
@@ -28928,7 +28955,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                         <div className="text-[10px] text-slate-400">作成: {new Date(s.generatedAt).toLocaleString('ja-JP')}</div>
                       </div>
                       <div className="flex gap-1">
-                        <button onClick={()=>setPdfPreviewMonthly(s)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold">⬇ PDF</button>
+                        <button onClick={()=>setPdfPreviewMonthly(s)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold">PDF</button>
                         <button onClick={()=>{ if(window.confirm('この月のスナップショットを削除しますか?')) updatePatient({ monthlyServiceRecords: monthlyServiceRecords.filter(x => x.id !== s.id) }); }}
                           className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[11px] font-bold">削除</button>
                       </div>
@@ -28942,7 +28969,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           {isCMTab && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-bold text-blue-900">📅 サービス担当者会議記録 (担会)</div>
+                <div className="text-sm font-bold text-blue-900">サービス担当者会議記録 (担会)</div>
                 <button onClick={()=>{ setEditingMeeting(null); setShowMeetingForm(true); }}
                   className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">+ 新規作成</button>
               </div>
@@ -28957,7 +28984,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                         <div className="text-[11px] text-slate-500">{m.location} / 開催理由: {m.reason || '未記入'}</div>
                       </div>
                       <div className="flex gap-1">
-                        <button onClick={()=>setPdfPreviewMeeting(m)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold">📄 PDF</button>
+                        <button onClick={()=>setPdfPreviewMeeting(m)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold">PDF</button>
                         <button onClick={()=>{ setEditingMeeting(m); setShowMeetingForm(true); }} className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[11px] font-bold">編集</button>
                         <button onClick={()=>{ if(window.confirm('この会議記録を削除しますか?')) updatePatient({ meetings: meetings.filter(x => x.id !== m.id) }); }}
                           className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[11px] font-bold">削除</button>
@@ -28970,7 +28997,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           )}
           {/* ファイル一覧 */}
           <div className="mb-3 flex items-center justify-between">
-            <div className="text-sm font-bold text-slate-700">📎 ファイル ({filesInCat.length})</div>
+            <div className="text-sm font-bold text-slate-700">ファイル ({filesInCat.length})</div>
             <label className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
               <CloudUpload size={14}/> ファイルを追加 (JPEG/PNG/PDF)
               <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFileUpload}/>
@@ -28978,7 +29005,6 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           </div>
           {filesInCat.length === 0 ? (
             <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-8 text-center">
-              <div className="text-3xl mb-2">📂</div>
               <div className="text-sm text-slate-500">まだファイルがありません</div>
               <div className="text-[11px] text-slate-400 mt-1">「ファイルを追加」から JPEG / PNG / PDF をアップロード</div>
             </div>
@@ -28994,7 +29020,6 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                 {yms.map(ym => (
                   <div key={ym}>
                     <div className="flex items-center gap-2 mb-2 pb-1 border-b border-slate-200">
-                      <span className="text-sm">📁</span>
                       <span className="text-sm font-bold text-slate-700">{ym==='不明' || ym.length<7 ? '日付未設定' : `${ym.slice(0,4)}年${parseInt(ym.slice(5,7),10)}月`}</span>
                       <span className="text-[11px] font-bold text-slate-400">{groups[ym].length}件</span>
                     </div>
@@ -29137,7 +29162,7 @@ function MeetingRecordForm({ patient, meeting, onSave, onClose }) {
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
-          <div className="text-base font-bold text-slate-800">📅 サービス担当者会議記録表 (担会)</div>
+          <div className="text-base font-bold text-slate-800">サービス担当者会議記録表 (担会)</div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
         </div>
         <div className="flex-1 overflow-auto p-5 space-y-3 text-sm">
@@ -29285,7 +29310,7 @@ function MeetingPdfPreview({ patient, meeting, onClose }) {
           <div style={{display:'flex',gap:8}}>
             <button onClick={handleDownload} disabled={downloading}
               style={{padding:'8px 14px',background: downloading?'#94a3b8':'#2563eb',color:'white',border:'none',borderRadius:8,fontWeight:'bold',fontSize:13,cursor: downloading?'wait':'pointer'}}>
-              {downloading ? '生成中...' : '⬇ ダウンロード'}
+              {downloading ? '生成中...' : 'ダウンロード'}
             </button>
             <button onClick={onClose} style={{padding:'8px 14px',background:'#e2e8f0',color:'#475569',border:'none',borderRadius:8,fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
           </div>
@@ -29367,7 +29392,7 @@ function MonthlyServicePdfPreview({ patient, snapshot, onClose }) {
           <div style={{display:'flex',gap:8}}>
             <button onClick={handleDownload} disabled={downloading}
               style={{padding:'8px 14px',background: downloading?'#94a3b8':'#2563eb',color:'white',border:'none',borderRadius:8,fontWeight:'bold',fontSize:13,cursor: downloading?'wait':'pointer'}}>
-              {downloading ? '生成中...' : '⬇ ダウンロード'}
+              {downloading ? '生成中...' : 'ダウンロード'}
             </button>
             <button onClick={onClose} style={{padding:'8px 14px',background:'#e2e8f0',color:'#475569',border:'none',borderRadius:8,fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
           </div>
@@ -29488,7 +29513,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     const added = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = () => res(null); r.readAsDataURL(f); });
+      const dataUrl = await compressImageFile(f); // ★ 画像は自動圧縮 (容量対策)、PDFはそのまま
       if (!dataUrl) continue;
       added.push({ id: `fsf_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image', data: dataUrl });
     }
@@ -29499,7 +29524,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
   const renderAttach = (fieldKey) => (
     <div className="mt-2">
       <label className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">
-        📎 画像/PDFを添付
+        画像/PDFを添付
         <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e=>addAttach(fieldKey, e)}/>
       </label>
       {(fs[fieldKey]||[]).length > 0 && (
@@ -29535,7 +29560,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[92vh] flex flex-col" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
-          <div className="text-base font-bold text-slate-800">📋 フェイスシート ({patient.name} 様)</div>
+          <div className="text-base font-bold text-slate-800">フェイスシート ({patient.name} 様)</div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
         </div>
         <div className="flex-1 overflow-auto p-5 space-y-5 text-sm">
@@ -29595,7 +29620,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-2">② 利用者の基本情報</div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-              <div className="text-[11px] text-emerald-700 mb-2 font-bold">📌 基本情報から自動取得</div>
+              <div className="text-[11px] text-emerald-700 mb-2 font-bold">基本情報から自動取得</div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
                 <div><b>氏名：</b>{patient.name || '-'}</div>
                 <div><b>ふりがな：</b>{patient.kana || '-'}</div>
@@ -29637,7 +29662,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
               {renderAttach('genogramFiles')}
             </Field>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
-              <div className="text-[11px] text-blue-700 mb-2 font-bold">📌 緊急連絡先 (基本情報から自動取得)</div>
+              <div className="text-[11px] text-blue-700 mb-2 font-bold">緊急連絡先 (基本情報から自動取得)</div>
               <div className="text-[12px]">
                 {(patient.emergencyContacts || []).length === 0 && <div className="italic text-slate-500">未登録</div>}
                 {(patient.emergencyContacts || []).slice(0,5).map((c,i) => (
@@ -29654,7 +29679,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-2">④ 介護保険・制度情報</div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-              <div className="text-[11px] text-emerald-700 mb-2 font-bold">📌 基本情報から自動取得</div>
+              <div className="text-[11px] text-emerald-700 mb-2 font-bold">基本情報から自動取得</div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
                 <div><b>被保険者番号：</b>{patient.insuranceNo || '-'}</div>
                 <div><b>要介護度：</b>{patient.careLevel || '-'}</div>
@@ -29715,7 +29740,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-2">⑥ ケアマネジメント関連</div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-              <div className="text-[11px] text-emerald-700 mb-2 font-bold">📌 担当ケアマネ (基本情報から自動取得)</div>
+              <div className="text-[11px] text-emerald-700 mb-2 font-bold">担当ケアマネ (基本情報から自動取得)</div>
               <div className="text-[12px]">
                 <div><b>事業所：</b>{patient.cmOffice || '-'}</div>
                 <div><b>担当者：</b>{patient.cmName || '-'}</div>
@@ -29821,7 +29846,7 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
           <div style={{display:'flex',gap:8}}>
             <button onClick={handleDownload} disabled={downloading}
               style={{padding:'8px 14px',background: downloading?'#94a3b8':'#2563eb',color:'white',border:'none',borderRadius:8,fontWeight:'bold',fontSize:13,cursor: downloading?'wait':'pointer'}}>
-              {downloading ? '生成中...' : '⬇ ダウンロード'}
+              {downloading ? '生成中...' : 'ダウンロード'}
             </button>
             <button onClick={onClose} style={{padding:'8px 14px',background:'#e2e8f0',color:'#475569',border:'none',borderRadius:8,fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
           </div>
