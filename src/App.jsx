@@ -28679,6 +28679,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
         id: `pf_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
         categoryId: activeCat,
         name: f.name,
+        title: f.name.replace(/\.[^.]+$/, ''),     // ★ 表示用タイトル (既定: 拡張子なしファイル名、編集可)
+        fileDate: new Date().toISOString().slice(0,10), // ★ 書類の日付 (既定: 本日、編集可)
         type: isPdf ? 'pdf' : 'image',
         mimeType: f.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
         data: dataUrl,
@@ -28693,6 +28695,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   const handleDeleteFile = (fileId) => {
     if (!window.confirm('このファイルを削除しますか?')) return;
     updatePatient({ files: (personalFile.files || []).filter(f => f.id !== fileId) });
+  };
+  // ★ ファイルのタイトル/日付を編集
+  const updateFile = (fileId, patch) => {
+    updatePatient({ files: (personalFile.files || []).map(f => f.id === fileId ? { ...f, ...patch } : f) });
   };
 
   const handleAddCustomCategory = () => {
@@ -28976,30 +28982,54 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
               <div className="text-sm text-slate-500">まだファイルがありません</div>
               <div className="text-[11px] text-slate-400 mt-1">「ファイルを追加」から JPEG / PNG / PDF をアップロード</div>
             </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {filesInCat.map(f => (
-                <div key={f.id} className="bg-white border border-slate-200 rounded-xl p-3 hover:shadow-md transition-shadow">
-                  <div className="aspect-square bg-slate-100 rounded-lg flex items-center justify-center mb-2 overflow-hidden">
-                    {f.type === 'image' ? (
-                      <img src={f.data} alt={f.name} className="w-full h-full object-cover"/>
-                    ) : (
-                      <div className="text-center">
-                        <div className="text-4xl">📄</div>
-                        <div className="text-[10px] text-slate-500 font-bold mt-1">PDF</div>
-                      </div>
-                    )}
+          ) : (() => {
+            // ★ 1件ずつ・時系列 (新しい順)・年月フォルダでグループ表示。 タイトル/日付は編集可。
+            const withDate = filesInCat.map(f => ({ ...f, _date: f.fileDate || (f.uploadedAt||'').slice(0,10) || '' }));
+            withDate.sort((a,b) => (b._date||'').localeCompare(a._date||'') || (b.uploadedAt||'').localeCompare(a.uploadedAt||''));
+            const groups = {};
+            withDate.forEach(f => { const ym = (f._date||'').slice(0,7) || '不明'; (groups[ym] = groups[ym] || []).push(f); });
+            const yms = Object.keys(groups).sort((a,b) => b.localeCompare(a));
+            return (
+              <div className="space-y-4">
+                {yms.map(ym => (
+                  <div key={ym}>
+                    <div className="flex items-center gap-2 mb-2 pb-1 border-b border-slate-200">
+                      <span className="text-sm">📁</span>
+                      <span className="text-sm font-bold text-slate-700">{ym==='不明' || ym.length<7 ? '日付未設定' : `${ym.slice(0,4)}年${parseInt(ym.slice(5,7),10)}月`}</span>
+                      <span className="text-[11px] font-bold text-slate-400">{groups[ym].length}件</span>
+                    </div>
+                    <div className="space-y-2">
+                      {groups[ym].map(f => (
+                        <div key={f.id} className="flex items-start gap-3 bg-white border border-slate-200 rounded-xl p-2.5 hover:shadow-sm transition-shadow">
+                          {/* サムネイル */}
+                          <div className="w-16 h-16 shrink-0 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
+                            {f.type === 'image'
+                              ? <img src={f.data} alt={f.name} className="w-full h-full object-cover"/>
+                              : <div className="text-center"><div className="text-2xl">📄</div><div className="text-[8px] text-slate-500 font-bold">PDF</div></div>}
+                          </div>
+                          {/* タイトル + 日付 (編集可) */}
+                          <div className="flex-1 min-w-0">
+                            <input value={f.title ?? f.name} onChange={e=>updateFile(f.id, { title: e.target.value })}
+                              placeholder="タイトル" className="w-full px-2 py-1 border border-slate-200 rounded text-xs font-bold text-slate-800 outline-none focus:border-emerald-400"/>
+                            <div className="flex items-center gap-2 mt-1">
+                              <input type="date" value={f._date} onChange={e=>updateFile(f.id, { fileDate: e.target.value })}
+                                className="px-2 py-1 border border-slate-200 rounded text-[11px] font-bold text-slate-600 outline-none focus:border-emerald-400"/>
+                              <span className="text-[9px] text-slate-400 truncate" title={f.name}>{f.name}</span>
+                            </div>
+                          </div>
+                          {/* 操作 */}
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <a href={f.data} download={f.name} target="_blank" rel="noreferrer" className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold text-center">開く</a>
+                            <button onClick={()=>handleDeleteFile(f.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold">削除</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-700 font-bold truncate" title={f.name}>{f.name}</div>
-                  <div className="text-[9px] text-slate-400 mt-0.5">{new Date(f.uploadedAt).toLocaleDateString('ja-JP')}</div>
-                  <div className="flex gap-1 mt-2">
-                    <a href={f.data} download={f.name} className="flex-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold text-center">📥 開く</a>
-                    <button onClick={()=>handleDeleteFile(f.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold">削除</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </div>
       {/* 担当者会議 入力モーダル */}
@@ -29444,9 +29474,51 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     pickupNotes: initial?.pickupNotes || '',
     hobby: initial?.hobby || '',
     personality: initial?.personality || '',
+    // ★ 添付ファイル (画像/PDF): ジェノグラム / 自宅見取り図 / 送迎経路
+    genogramFiles: initial?.genogramFiles || [],
+    floorPlanFiles: initial?.floorPlanFiles || [],
+    pickupRouteFiles: initial?.pickupRouteFiles || [],
   });
   const update = (key, val) => setFs(prev => ({ ...prev, [key]: val }));
   const handleSubmit = () => { onSave(fs); };
+  // ★ 添付ファイルの追加 (画像/PDF を base64 で保持)
+  const addAttach = async (key, e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    const added = [];
+    for (const f of files) {
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = ev => res(ev.target.result); r.onerror = () => res(null); r.readAsDataURL(f); });
+      if (!dataUrl) continue;
+      added.push({ id: `fsf_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image', data: dataUrl });
+    }
+    if (added.length) setFs(prev => ({ ...prev, [key]: [...(prev[key]||[]), ...added] }));
+  };
+  const removeAttach = (key, id) => setFs(prev => ({ ...prev, [key]: (prev[key]||[]).filter(x => x.id !== id) }));
+  // ★ 添付エリア (アップロードボタン + サムネイル一覧) を描画
+  const renderAttach = (fieldKey) => (
+    <div className="mt-2">
+      <label className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold cursor-pointer">
+        📎 画像/PDFを添付
+        <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e=>addAttach(fieldKey, e)}/>
+      </label>
+      {(fs[fieldKey]||[]).length > 0 && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {(fs[fieldKey]||[]).map(att => (
+            <div key={att.id} className="relative w-20 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+              <a href={att.data} download={att.name} target="_blank" rel="noreferrer" className="block">
+                {att.type === 'image'
+                  ? <img src={att.data} alt={att.name} className="w-20 h-20 object-cover"/>
+                  : <div className="w-20 h-20 flex flex-col items-center justify-center"><div className="text-2xl">📄</div><div className="text-[8px] font-bold text-slate-500">PDF</div></div>}
+              </a>
+              <button type="button" onClick={()=>removeAttach(fieldKey, att.id)}
+                className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center">×</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const Field = ({ label, children, required }) => (
     <div style={{marginBottom:8}}>
@@ -29559,9 +29631,10 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
                 placeholder={`例:\n田中 一郎 (長男, 別居)\n田中 花子 (妻, 同居)`}
                 className={textareaCls}/>
             </Field>
-            <Field label="ジェノグラム (家族関係図、自由記述)">
+            <Field label="ジェノグラム (家族関係図)">
               <textarea rows={3} value={fs.genogram} onChange={e=>update('genogram', e.target.value)}
-                placeholder="家族関係の説明" className={textareaCls}/>
+                placeholder="家族関係の説明 (図は下から画像/PDFを添付できます)" className={textareaCls}/>
+              {renderAttach('genogramFiles')}
             </Field>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
               <div className="text-[11px] text-blue-700 mb-2 font-bold">📌 緊急連絡先 (基本情報から自動取得)</div>
@@ -29668,11 +29741,13 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
           {/* ⑦ その他 */}
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-3">⑦ その他 (実務上あると便利)</div>
-            <Field label="自宅の見取り図 (自由記述)">
-              <textarea rows={2} value={fs.floorPlan} onChange={e=>update('floorPlan', e.target.value)} className={textareaCls}/>
+            <Field label="自宅の見取り図">
+              <textarea rows={2} value={fs.floorPlan} onChange={e=>update('floorPlan', e.target.value)} placeholder="自由記述 (図は下から画像/PDFを添付できます)" className={textareaCls}/>
+              {renderAttach('floorPlanFiles')}
             </Field>
             <Field label="送迎経路">
-              <textarea rows={2} value={fs.pickupRoute} onChange={e=>update('pickupRoute', e.target.value)} className={textareaCls}/>
+              <textarea rows={2} value={fs.pickupRoute} onChange={e=>update('pickupRoute', e.target.value)} placeholder="自由記述 (地図は下から画像/PDFを添付できます)" className={textareaCls}/>
+              {renderAttach('pickupRouteFiles')}
             </Field>
             <Field label="送迎時の留意点">
               <textarea rows={2} value={fs.pickupNotes} onChange={e=>update('pickupNotes', e.target.value)}
