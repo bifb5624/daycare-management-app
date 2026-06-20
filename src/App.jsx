@@ -9768,10 +9768,9 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
                       {annPhotos.length > 0 && (
                         <div className="grid grid-cols-4 gap-2 mt-2" style={{maxWidth:360}}>
                           {annPhotos.map((p,pi) => (
-                            <div key={p.id||pi} className="aspect-square overflow-hidden rounded-md border border-slate-200 cursor-pointer hover:opacity-80"
-                              onClick={()=>window.open(p.url,'_blank')}>
-                              <img src={p.url} alt="" className="w-full h-full object-cover"/>
-                            </div>
+                            <StoredFileLink key={p.id||pi} file={p} className="aspect-square overflow-hidden rounded-md border border-slate-200 cursor-pointer hover:opacity-80 block">
+                              <StoredImage file={p} alt="" className="w-full h-full object-cover"/>
+                            </StoredFileLink>
                           ))}
                         </div>
                       )}
@@ -9887,11 +9886,22 @@ function FamilyAdminView({ appData, onSave }) {
   const removeAttachedPhoto = (idx) => {
     setPostForm(f => ({...f, files: f.files.filter((_,i)=>i!==idx), filePreview: f.filePreview.filter((_,i)=>i!==idx)}));
   };
-  const submitPost = () => {
+  const submitPost = async () => {
     const hasText = postForm.title.trim();
     const hasPhotos = postForm.files.length > 0;
     if (!hasText && !hasPhotos) { alert('タイトルまたは写真のどちらかを入力してください'); return; }
     if (postForm.scope === 'specific' && postForm.patientIds.length === 0) { alert('対象の利用者を1人以上選択してください'); return; }
+    // ★ 写真/PDFを Supabase Storage(非公開) へアップロードし、storagePath のみ保持。
+    //   未接続/失敗時は従来どおり base64(url) にフォールバック。
+    let uploadedPhotos = postForm.files.map(it => ({ url: it.url, name: it.name }));
+    if (isSupabaseEnabled) {
+      uploadedPhotos = await Promise.all(postForm.files.map(async it => {
+        const blob = dataUrlToBlob(it.url);
+        if (!blob) return { url: it.url, name: it.name };
+        const stored = await supabaseUploadFile(blob, { name: it.name, contentType: blob.type, prefix: 'news' });
+        return stored?.path ? { storagePath: stored.path, name: it.name } : { url: it.url, name: it.name };
+      }));
+    }
     // クォータ超過チェック (Supabase 移行後のシミュレーション + 現在の localStorage 警告)
     try {
       const used = ((localStorage.getItem('daycareAppData_v3')||'').length + (localStorage.getItem('daycarePhotos_v1')||'').length) * 2;
@@ -9909,9 +9919,10 @@ function FamilyAdminView({ appData, onSave }) {
     const ts = Date.now();
     // タイトル/本文がある → お知らせを作成（写真があれば一緒に添付）
     if (hasText) {
-      const buildPhotos = (annId) => postForm.files.map((it, i) => ({
+      const buildPhotos = (annId) => uploadedPhotos.map((it, i) => ({
         id: `${annId}_ph_${i}`,
-        url: it.url, name: it.name,
+        ...(it.storagePath ? { storagePath: it.storagePath } : { url: it.url }),
+        name: it.name,
         caption: postForm.title.trim(),
         class: postForm.eventClass,
       }));
@@ -9936,9 +9947,10 @@ function FamilyAdminView({ appData, onSave }) {
       }
     } else if (hasPhotos) {
       // 写真のみの投稿 → 写真だけのお知らせとして登録 (タイトルなし)
-      const buildPhotos = (annId) => postForm.files.map((it, i) => ({
+      const buildPhotos = (annId) => uploadedPhotos.map((it, i) => ({
         id: `${annId}_ph_${i}`,
-        url: it.url, name: it.name,
+        ...(it.storagePath ? { storagePath: it.storagePath } : { url: it.url }),
+        name: it.name,
         caption: '',
         class: postForm.eventClass,
       }));
@@ -10132,7 +10144,7 @@ function FamilyAdminView({ appData, onSave }) {
                         </span>
                         <span className="text-[11px] text-slate-400 w-24 shrink-0">{e.date}</span>
                         {e._kind === 'photo' ? (
-                          <><img src={e.url} alt="" className="w-10 h-10 object-cover rounded shrink-0"/><span className="text-sm text-slate-700 truncate flex-1">{e.caption || e.name || '(キャプションなし)'}</span>{e.class && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{e.class}</span>}</>
+                          <><StoredImage file={e} alt="" className="w-10 h-10 object-cover rounded shrink-0"/><span className="text-sm text-slate-700 truncate flex-1">{e.caption || e.name || '(キャプションなし)'}</span>{e.class && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{e.class}</span>}</>
                         ) : (
                           <>
                             {/* お知らせに紐付いた写真があれば先頭1枚をサムネ表示 */}
@@ -10187,20 +10199,18 @@ function FamilyAdminView({ appData, onSave }) {
                               const isPdf = /(pdf)|(\.pdf$)/i.test(p.type||p.url||p.name||'');
                               return isPdf ? (
                                 <div key={p.id||pi} className="relative">
-                                  <a href={p.url} target="_blank" rel="noopener noreferrer" className="block">
+                                  <StoredFileLink file={p} className="block">
                                     <div className="w-full aspect-square bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center p-2">
                                       <div className="text-3xl mb-1">📋</div>
                                       <div className="text-[9px] font-bold text-red-600 text-center break-all line-clamp-2">{p.name || 'PDF'}</div>
                                     </div>
-                                  </a>
-                                  <a href={p.url} download={p.name||`doc_${pi+1}.pdf`} className="absolute bottom-1 right-1 bg-black/60 text-white px-2 py-0.5 rounded text-[10px] font-bold no-underline">↓</a>
+                                  </StoredFileLink>
                                 </div>
                               ) : (
                                 <div key={p.id||pi} className="relative">
-                                  <a href={p.url} target="_blank" rel="noopener noreferrer">
-                                    <img src={p.url} alt="" className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer"/>
-                                  </a>
-                                  <a href={p.url} download={p.name||`photo_${pi+1}.jpg`} className="absolute bottom-1 right-1 bg-black/60 text-white px-2 py-0.5 rounded text-[10px] font-bold no-underline">↓</a>
+                                  <StoredFileLink file={p} className="block">
+                                    <StoredImage file={p} alt="" className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer"/>
+                                  </StoredFileLink>
                                 </div>
                               );
                             })}
@@ -11489,13 +11499,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                           return (
                             <div key={p.id||pi} style={{position:'relative'}}>
                               {isPdf ? (
-                                <div onClick={()=>setMediaPreview({url:p.url,name:p.name,type:'pdf'})}
+                                <div onClick={()=>setMediaPreview({file:p,name:p.name,type:'pdf'})}
                                   style={{width:'100%',aspectRatio:'1',borderRadius:8,background:'#fef2f2',border:'1px solid #fecaca',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
                                   <div style={{fontSize:28}}>📋</div>
                                   <div style={{fontSize:8,color:'#dc2626',fontWeight:'bold',padding:'0 2px',textAlign:'center',width:'100%',overflow:'hidden',textOverflow:'ellipsis'}}>PDF</div>
                                 </div>
                               ) : (
-                                <img src={p.url} alt="" onClick={()=>setMediaPreview({url:p.url,name:p.name,type:'image'})}
+                                <StoredImage file={p} alt="" onClick={()=>setMediaPreview({file:p,name:p.name,type:'image'})}
                                   style={{width:'100%',aspectRatio:'1',objectFit:'cover',borderRadius:8,cursor:'pointer'}}/>
                               )}
                             </div>
@@ -11562,29 +11572,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         このページは {patient.name} 様のご家族専用です
       </div>
       {/* 写真・PDF プレビュー (フルスクリーン) */}
-      {mediaPreview && (
-        <div onClick={()=>setMediaPreview(null)}
-          style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:10000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:8}}>
-          <button onClick={(e)=>{e.stopPropagation(); setMediaPreview(null);}}
-            style={{position:'absolute',top:12,right:12,background:'rgba(255,255,255,0.2)',color:'white',border:'none',borderRadius:24,width:44,height:44,fontSize:22,fontWeight:'bold',cursor:'pointer',zIndex:1}}>✕</button>
-          <a href={mediaPreview.url} download={mediaPreview.name||'file'}
-            onClick={(e)=>e.stopPropagation()}
-            style={{position:'absolute',top:12,left:12,background:'#7daa3d',color:'white',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',textDecoration:'none'}}>📥 ダウンロード</a>
-          {mediaPreview.type === 'pdf' ? (
-            <iframe src={mediaPreview.url} title="PDF"
-              style={{width:'100%',height:'100%',maxWidth:'95vw',maxHeight:'90vh',border:'none',background:'white',borderRadius:8}}/>
-          ) : (
-            <img src={mediaPreview.url} alt={mediaPreview.name||''}
-              onClick={(e)=>e.stopPropagation()}
-              style={{maxWidth:'95vw',maxHeight:'90vh',objectFit:'contain',borderRadius:6}}/>
-          )}
-          {mediaPreview.name && (
-            <div style={{position:'absolute',bottom:14,left:14,right:14,textAlign:'center',color:'white',fontSize:13,fontWeight:'bold',textShadow:'0 1px 4px rgba(0,0,0,0.7)'}}>
-              {mediaPreview.name}
-            </div>
-          )}
-        </div>
-      )}
+      {mediaPreview && <MediaPreviewModal media={mediaPreview} onClose={()=>setMediaPreview(null)} />}
       {/* 利用者・登録者情報モーダル (タブ式) */}
       {myInfoOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
@@ -28662,6 +28650,18 @@ const processUploadFile = (file, maxDim = 1600, quality = 0.7) => new Promise((r
   reader.readAsDataURL(file);
 });
 
+// dataURL(base64) を Blob に変換 (Storage アップロード用)
+const dataUrlToBlob = (dataUrl) => {
+  try {
+    const [head, b64] = String(dataUrl).split(',');
+    const mime = (head.match(/data:([^;]+)/) || [])[1] || 'application/octet-stream';
+    const bin = atob(b64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  } catch { return null; }
+};
+
 // ★ 非公開Storage: storagePath から署名URL(時間制限)を取得して表示用URLを返す。
 //   storagePath が無い旧データ(公開url / base64 data)はそれをそのまま使う(後方互換)。
 function useSignedUrl(file) {
@@ -28680,14 +28680,41 @@ function useSignedUrl(file) {
   return src;
 }
 // 画像表示 (署名URL対応)
-function StoredImage({ file, alt, className }) {
+function StoredImage({ file, alt, className, style, onClick }) {
   const src = useSignedUrl(file);
-  return src ? <img src={src} alt={alt||''} className={className}/> : <div className={className} style={{background:'#f1f5f9'}}/>;
+  return src ? <img src={src} alt={alt||''} className={className} style={style} onClick={onClick}/> : <div className={className} style={{background:'#f1f5f9',...(style||{})}} onClick={onClick}/>;
 }
 // 開く/ダウンロード リンク (署名URL対応)
 function StoredFileLink({ file, className, children }) {
   const url = useSignedUrl(file);
   return <a href={url||'#'} download={file?.name} target="_blank" rel="noreferrer" className={className} onClick={e=>{ if(!url) e.preventDefault(); }}>{children}</a>;
+}
+// 写真/PDF 全画面プレビュー (署名URL対応)。 media = { file?, url?, name, type }
+function MediaPreviewModal({ media, onClose }) {
+  const signed = useSignedUrl(media?.file);
+  const url = signed || media?.url || '';
+  return (
+    <div onClick={onClose}
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:10000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:8}}>
+      <button onClick={(e)=>{e.stopPropagation(); onClose();}}
+        style={{position:'absolute',top:12,right:12,background:'rgba(255,255,255,0.2)',color:'white',border:'none',borderRadius:24,width:44,height:44,fontSize:22,fontWeight:'bold',cursor:'pointer',zIndex:1}}>✕</button>
+      {url && <a href={url} download={media.name||'file'} onClick={(e)=>e.stopPropagation()}
+        style={{position:'absolute',top:12,left:12,background:'#7daa3d',color:'white',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',textDecoration:'none'}}>ダウンロード</a>}
+      {!url ? (
+        <div style={{color:'white',fontSize:14,fontWeight:'bold'}}>読み込み中...</div>
+      ) : media.type === 'pdf' ? (
+        <iframe src={url} title="PDF" style={{width:'100%',height:'100%',maxWidth:'95vw',maxHeight:'90vh',border:'none',background:'white',borderRadius:8}}/>
+      ) : (
+        <img src={url} alt={media.name||''} onClick={(e)=>e.stopPropagation()}
+          style={{maxWidth:'95vw',maxHeight:'90vh',objectFit:'contain',borderRadius:6}}/>
+      )}
+      {media.name && (
+        <div style={{position:'absolute',bottom:14,left:14,right:14,textAlign:'center',color:'white',fontSize:13,fontWeight:'bold',textShadow:'0 1px 4px rgba(0,0,0,0.7)'}}>
+          {media.name}
+        </div>
+      )}
+    </div>
+  );
 }
 
 const DEFAULT_PF_CATEGORIES = [
