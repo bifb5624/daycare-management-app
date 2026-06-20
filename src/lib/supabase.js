@@ -646,6 +646,19 @@ export async function supabaseUploadFile(blob, opts = {}) {
   }
 }
 
+// 非公開バケット用: storagePath から署名付きURL (時間制限) を発行
+export async function supabaseGetSignedUrl(path, expiresIn = 900) {
+  if (!supabase || !path) return null;
+  try {
+    const { data, error } = await supabase.storage.from(PF_BUCKET).createSignedUrl(path, expiresIn);
+    if (error) { console.warn('[storage] signedUrl error', error?.message || error); return null; }
+    return data?.signedUrl || null;
+  } catch (e) {
+    console.warn('[storage] signedUrl exception', e?.message || e);
+    return null;
+  }
+}
+
 // Storage 上のファイルを削除 (path 指定)
 export async function supabaseDeleteFile(path) {
   if (!supabase || !path) return false;

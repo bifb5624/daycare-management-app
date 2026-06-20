@@ -38,6 +38,7 @@ import {
   supabaseListStaff,
   supabaseUploadFile,
   supabaseDeleteFile,
+  supabaseGetSignedUrl,
 } from './lib/supabase.js';
 
 // === システム設定 ===
@@ -28661,6 +28662,34 @@ const processUploadFile = (file, maxDim = 1600, quality = 0.7) => new Promise((r
   reader.readAsDataURL(file);
 });
 
+// ★ 非公開Storage: storagePath から署名URL(時間制限)を取得して表示用URLを返す。
+//   storagePath が無い旧データ(公開url / base64 data)はそれをそのまま使う(後方互換)。
+function useSignedUrl(file) {
+  const direct = (file && (file.url || file.data)) || '';
+  const [src, setSrc] = useState(direct);
+  useEffect(() => {
+    let cancelled = false;
+    if (file && file.storagePath && isSupabaseEnabled) {
+      supabaseGetSignedUrl(file.storagePath).then(u => { if (!cancelled) setSrc(u || direct); });
+    } else {
+      setSrc(direct);
+    }
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [file && file.storagePath, file && file.url, file && file.data]);
+  return src;
+}
+// 画像表示 (署名URL対応)
+function StoredImage({ file, alt, className }) {
+  const src = useSignedUrl(file);
+  return src ? <img src={src} alt={alt||''} className={className}/> : <div className={className} style={{background:'#f1f5f9'}}/>;
+}
+// 開く/ダウンロード リンク (署名URL対応)
+function StoredFileLink({ file, className, children }) {
+  const url = useSignedUrl(file);
+  return <a href={url||'#'} download={file?.name} target="_blank" rel="noreferrer" className={className} onClick={e=>{ if(!url) e.preventDefault(); }}>{children}</a>;
+}
+
 const DEFAULT_PF_CATEGORIES = [
   { id: 'cat_1', name: '1. 基本情報・本人確認', emoji: '👤', isDefault: true,
     note: 'フェイスシート / 介護保険被保険者証 / 負担割合証 など' },
@@ -28722,9 +28751,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
       if (isSupabaseEnabled) {
         stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `pf/${patient.id}` });
       }
-      if (stored?.url) { rec.url = stored.url; rec.storagePath = stored.path; }
-      else if (dataUrl) { rec.data = dataUrl; }
-      if (!rec.url && !rec.data) continue; // 失敗 (保存先なし) はスキップ
+      if (stored?.path) { rec.storagePath = stored.path; } // ★ 非公開: パスのみ保持 (表示時に署名URL)
+      else if (dataUrl) { rec.data = dataUrl; }            // フォールバック (未接続/失敗時)
+      if (!rec.storagePath && !rec.data) continue;
       newFiles.push(rec);
     }
     updatePatient({ files: [...(personalFile.files || []), ...newFiles] });
@@ -29043,7 +29072,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                           {/* サムネイル */}
                           <div className="w-16 h-16 shrink-0 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
                             {f.type === 'image'
-                              ? <img src={f.url || f.data} alt={f.name} className="w-full h-full object-cover"/>
+                              ? <StoredImage file={f} alt={f.name} className="w-full h-full object-cover"/>
                               : <div className="text-center"><div className="text-2xl">📄</div><div className="text-[8px] text-slate-500 font-bold">PDF</div></div>}
                           </div>
                           {/* タイトル + 日付 (編集可) */}
@@ -29058,7 +29087,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                           </div>
                           {/* 操作 */}
                           <div className="flex flex-col gap-1 shrink-0">
-                            <a href={f.url || f.data} download={f.name} target="_blank" rel="noreferrer" className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold text-center">開く</a>
+                            <StoredFileLink file={f} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold text-center">開く</StoredFileLink>
                             <button onClick={()=>handleDeleteFile(f.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold">削除</button>
                           </div>
                         </div>
@@ -29531,9 +29560,9 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
       const att = { id: `fsf_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image' };
       let stored = null;
       if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` });
-      if (stored?.url) { att.url = stored.url; att.storagePath = stored.path; }
+      if (stored?.path) { att.storagePath = stored.path; } // ★ 非公開: パスのみ保持
       else if (dataUrl) { att.data = dataUrl; }
-      if (!att.url && !att.data) continue;
+      if (!att.storagePath && !att.data) continue;
       added.push(att);
     }
     if (added.length) setFs(prev => ({ ...prev, [key]: [...(prev[key]||[]), ...added] }));
@@ -29554,11 +29583,11 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
         <div className="flex flex-wrap gap-2 mt-2">
           {(fs[fieldKey]||[]).map(att => (
             <div key={att.id} className="relative w-20 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-              <a href={att.url || att.data} download={att.name} target="_blank" rel="noreferrer" className="block">
+              <StoredFileLink file={att} className="block">
                 {att.type === 'image'
-                  ? <img src={att.url || att.data} alt={att.name} className="w-20 h-20 object-cover"/>
+                  ? <StoredImage file={att} alt={att.name} className="w-20 h-20 object-cover"/>
                   : <div className="w-20 h-20 flex flex-col items-center justify-center"><div className="text-2xl">📄</div><div className="text-[8px] font-bold text-slate-500">PDF</div></div>}
-              </a>
+              </StoredFileLink>
               <button type="button" onClick={()=>removeAttach(fieldKey, att.id)}
                 className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center">×</button>
             </div>
