@@ -36,6 +36,8 @@ import {
   supabaseDeleteSystemNotice,
   supabaseCreateStaff,
   supabaseListStaff,
+  supabaseUploadFile,
+  supabaseDeleteFile,
 } from './lib/supabase.js';
 
 // === システム設定 ===
@@ -28624,17 +28626,18 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 // PersonalFileModal: 利用者の個人ファイル
 // ===========================================
 // カテゴリ: 1.基本情報 2.契約・同意 3.ケアマネジメント 4.計画・アセスメント 5.サービス提供記録 6.健康・医療情報 (+ カスタム)
-// ★ アップロード画像を縮小・圧縮して base64 を返す (localStorage 容量対策)。
-//   長辺を maxDim 以内にリサイズし JPEG 品質 quality で再エンコード。 PDF はそのまま。
-const compressImageFile = (file, maxDim = 1600, quality = 0.7) => new Promise((resolve) => {
-  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+// ★ アップロード用にファイルを準備:
+//   画像は長辺 maxDim 以内・JPEG品質 quality に圧縮し、 { blob(保存用), dataUrl(フォールバック), contentType } を返す。
+//   PDF 等はそのまま。 Supabase Storage には blob を、 未接続/失敗時は dataUrl(base64) を保存する。
+const processUploadFile = (file, maxDim = 1600, quality = 0.7) => new Promise((resolve) => {
+  const isImage = /^image\//.test(file.type || '');
   const reader = new FileReader();
-  reader.onerror = () => resolve(null);
+  reader.onerror = () => resolve({ blob: file, dataUrl: null, contentType: file.type || 'application/octet-stream' });
   reader.onload = (ev) => {
-    const dataUrl = ev.target.result;
-    if (isPdf || !/^image\//.test(file.type || '')) { resolve(dataUrl); return; } // PDF等はそのまま
+    const srcDataUrl = ev.target.result;
+    if (!isImage) { resolve({ blob: file, dataUrl: srcDataUrl, contentType: file.type || 'application/octet-stream' }); return; }
     const img = new Image();
-    img.onerror = () => resolve(dataUrl); // 失敗時は元データ
+    img.onerror = () => resolve({ blob: file, dataUrl: srcDataUrl, contentType: file.type });
     img.onload = () => {
       try {
         let { width, height } = img;
@@ -28647,11 +28650,13 @@ const compressImageFile = (file, maxDim = 1600, quality = 0.7) => new Promise((r
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height); // 透過PNG対策の白背景
         ctx.drawImage(img, 0, 0, width, height);
-        const out = canvas.toDataURL('image/jpeg', quality);
-        resolve(out && out.length < dataUrl.length ? out : dataUrl); // 縮小できた場合のみ採用
-      } catch { resolve(dataUrl); }
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        canvas.toBlob((blob) => {
+          resolve({ blob: blob || file, dataUrl: (dataUrl && dataUrl.length < srcDataUrl.length) ? dataUrl : srcDataUrl, contentType: 'image/jpeg' });
+        }, 'image/jpeg', quality);
+      } catch { resolve({ blob: file, dataUrl: srcDataUrl, contentType: file.type }); }
     };
-    img.src = dataUrl;
+    img.src = srcDataUrl;
   };
   reader.readAsDataURL(file);
 });
@@ -28700,20 +28705,27 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     const newFiles = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      const dataUrl = await compressImageFile(f); // ★ 画像は自動圧縮 (容量対策)、PDFはそのまま
-      if (!dataUrl) continue;
-      newFiles.push({
+      const { blob, dataUrl, contentType } = await processUploadFile(f); // ★ 画像は圧縮、PDFはそのまま
+      const rec = {
         id: `pf_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
         categoryId: activeCat,
         name: f.name,
         title: f.name.replace(/\.[^.]+$/, ''),     // ★ 表示用タイトル (既定: 拡張子なしファイル名、編集可)
         fileDate: new Date().toISOString().slice(0,10), // ★ 書類の日付 (既定: 本日、編集可)
         type: isPdf ? 'pdf' : 'image',
-        mimeType: f.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
-        data: dataUrl,
-        size: f.size,
+        mimeType: contentType,
         uploadedAt: new Date().toISOString(),
-      });
+      };
+      // ★ Supabase Storage に保存し URL だけ保持 (base64 を app_state に積まない)。
+      //   未接続/失敗時は従来どおり base64 を data に保存 (フォールバック)。
+      let stored = null;
+      if (isSupabaseEnabled) {
+        stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `pf/${patient.id}` });
+      }
+      if (stored?.url) { rec.url = stored.url; rec.storagePath = stored.path; }
+      else if (dataUrl) { rec.data = dataUrl; }
+      if (!rec.url && !rec.data) continue; // 失敗 (保存先なし) はスキップ
+      newFiles.push(rec);
     }
     updatePatient({ files: [...(personalFile.files || []), ...newFiles] });
     e.target.value = '';
@@ -28721,6 +28733,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
 
   const handleDeleteFile = (fileId) => {
     if (!window.confirm('このファイルを削除しますか?')) return;
+    const target = (personalFile.files || []).find(f => f.id === fileId);
+    if (target?.storagePath) { supabaseDeleteFile(target.storagePath).catch(()=>{}); } // ★ Storage からも削除
     updatePatient({ files: (personalFile.files || []).filter(f => f.id !== fileId) });
   };
   // ★ ファイルのタイトル/日付を編集
@@ -29029,7 +29043,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                           {/* サムネイル */}
                           <div className="w-16 h-16 shrink-0 bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden">
                             {f.type === 'image'
-                              ? <img src={f.data} alt={f.name} className="w-full h-full object-cover"/>
+                              ? <img src={f.url || f.data} alt={f.name} className="w-full h-full object-cover"/>
                               : <div className="text-center"><div className="text-2xl">📄</div><div className="text-[8px] text-slate-500 font-bold">PDF</div></div>}
                           </div>
                           {/* タイトル + 日付 (編集可) */}
@@ -29044,7 +29058,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                           </div>
                           {/* 操作 */}
                           <div className="flex flex-col gap-1 shrink-0">
-                            <a href={f.data} download={f.name} target="_blank" rel="noreferrer" className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold text-center">開く</a>
+                            <a href={f.url || f.data} download={f.name} target="_blank" rel="noreferrer" className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold text-center">開く</a>
                             <button onClick={()=>handleDeleteFile(f.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold">削除</button>
                           </div>
                         </div>
@@ -29513,13 +29527,22 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     const added = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
-      const dataUrl = await compressImageFile(f); // ★ 画像は自動圧縮 (容量対策)、PDFはそのまま
-      if (!dataUrl) continue;
-      added.push({ id: `fsf_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image', data: dataUrl });
+      const { blob, dataUrl, contentType } = await processUploadFile(f); // ★ 画像は圧縮、PDFはそのまま
+      const att = { id: `fsf_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image' };
+      let stored = null;
+      if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` });
+      if (stored?.url) { att.url = stored.url; att.storagePath = stored.path; }
+      else if (dataUrl) { att.data = dataUrl; }
+      if (!att.url && !att.data) continue;
+      added.push(att);
     }
     if (added.length) setFs(prev => ({ ...prev, [key]: [...(prev[key]||[]), ...added] }));
   };
-  const removeAttach = (key, id) => setFs(prev => ({ ...prev, [key]: (prev[key]||[]).filter(x => x.id !== id) }));
+  const removeAttach = (key, id) => setFs(prev => {
+    const target = (prev[key]||[]).find(x => x.id === id);
+    if (target?.storagePath) { supabaseDeleteFile(target.storagePath).catch(()=>{}); } // ★ Storage からも削除
+    return { ...prev, [key]: (prev[key]||[]).filter(x => x.id !== id) };
+  });
   // ★ 添付エリア (アップロードボタン + サムネイル一覧) を描画
   const renderAttach = (fieldKey) => (
     <div className="mt-2">
@@ -29531,9 +29554,9 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
         <div className="flex flex-wrap gap-2 mt-2">
           {(fs[fieldKey]||[]).map(att => (
             <div key={att.id} className="relative w-20 border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-              <a href={att.data} download={att.name} target="_blank" rel="noreferrer" className="block">
+              <a href={att.url || att.data} download={att.name} target="_blank" rel="noreferrer" className="block">
                 {att.type === 'image'
-                  ? <img src={att.data} alt={att.name} className="w-20 h-20 object-cover"/>
+                  ? <img src={att.url || att.data} alt={att.name} className="w-20 h-20 object-cover"/>
                   : <div className="w-20 h-20 flex flex-col items-center justify-center"><div className="text-2xl">📄</div><div className="text-[8px] font-bold text-slate-500">PDF</div></div>}
               </a>
               <button type="button" onClick={()=>removeAttach(fieldKey, att.id)}

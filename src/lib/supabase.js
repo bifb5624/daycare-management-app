@@ -611,3 +611,50 @@ export async function supabaseListStaff(storeId = null) {
     return data || [];
   } catch { return []; }
 }
+
+// =========================================================
+// Storage: 個人ファイル等の画像/PDF を Supabase Storage に保存
+//   ★ 事前に Supabase 側で公開バケット (PF_BUCKET) の作成と
+//     anon ロールの INSERT/SELECT ポリシー設定が必要。
+//   base64 を app_state(jsonb) に積むのをやめ、URL だけ保持する。
+// =========================================================
+export const PF_BUCKET = 'personal-files';
+
+// Blob/File をアップロードして { path, url } を返す (失敗時 null)
+export async function supabaseUploadFile(blob, opts = {}) {
+  if (!supabase || !blob) return null;
+  try {
+    const contentType = opts.contentType || blob.type || 'application/octet-stream';
+    // 拡張子推定
+    let ext = '';
+    if (opts.name && /\.[^.]+$/.test(opts.name)) ext = opts.name.match(/\.[^.]+$/)[0].toLowerCase();
+    else if (/pdf/.test(contentType)) ext = '.pdf';
+    else if (/png/.test(contentType)) ext = '.png';
+    else if (/jpe?g/.test(contentType)) ext = '.jpg';
+    const rand = Array.from(crypto.getRandomValues(new Uint8Array(8))).map(b=>b.toString(16).padStart(2,'0')).join('');
+    const prefix = opts.prefix ? `${String(opts.prefix).replace(/^\/+|\/+$/g,'')}/` : '';
+    const path = `${prefix}${rand}${ext}`;
+    const { error } = await supabase.storage.from(PF_BUCKET).upload(path, blob, {
+      contentType, upsert: false, cacheControl: '3600',
+    });
+    if (error) { console.warn('[storage] upload error', error?.message || error); return null; }
+    const { data } = supabase.storage.from(PF_BUCKET).getPublicUrl(path);
+    return { path, url: data?.publicUrl || '' };
+  } catch (e) {
+    console.warn('[storage] upload exception', e?.message || e);
+    return null;
+  }
+}
+
+// Storage 上のファイルを削除 (path 指定)
+export async function supabaseDeleteFile(path) {
+  if (!supabase || !path) return false;
+  try {
+    const { error } = await supabase.storage.from(PF_BUCKET).remove([path]);
+    if (error) { console.warn('[storage] delete error', error?.message || error); return false; }
+    return true;
+  } catch (e) {
+    console.warn('[storage] delete exception', e?.message || e);
+    return false;
+  }
+}
