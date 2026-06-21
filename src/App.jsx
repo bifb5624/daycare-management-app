@@ -10648,7 +10648,7 @@ function FamilyView() {
               </g>
               <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
               <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">ご家族と事業所をつなぐ、れんらく帳</text>
+              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">ご利用者を紡ぐ、記録管理アプリ</text>
             </svg>
             <div style={{fontSize:12,fontWeight:'bold',color:'#5e8030',letterSpacing:1,marginTop:8}}>{facility.name||'デイケアサービス'}</div>
             <div style={{fontSize:18,fontWeight:'bold',marginTop:2,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
