@@ -24543,6 +24543,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
   const [newPerson, setNewPerson] = useState({ office: "", name: "", phone: "" });
+  const [officeSearch, setOfficeSearch] = useState('');   // ★ ケアマネ事業所の検索
+  const [managerSearch, setManagerSearch] = useState(''); // ★ 担当ケアマネの検索
   const [facilityInfo, setFacilityInfo] = useState(appData.systemSettings?.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" });
 
   // dirtyRef: facilityInfo等が変わったらdirtyをセット
@@ -25052,9 +25054,32 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
 
           {/* ケアマネ事業所・担当者 */}
           {activeTab === 'cm' && (() => {
-            const sortedOffices = [...cmOffices].map((o, origIdx) => ({...o, origIdx})).sort((a,b)=>(a.name||'').localeCompare(b.name||'', 'ja'));
             const selOffice = selectedOfficeIdx !== null && selectedOfficeIdx < cmOffices.length ? cmOffices[selectedOfficeIdx] : null;
-            const officeFilteredPersons = selOffice ? cmPersons.filter(p => p.office === selOffice.name) : cmPersons;
+            const _oq = officeSearch.trim(), _mq = managerSearch.trim();
+            // ★ ケアマネで検索 → そのケアマネが所属する事業所名の集合
+            const officesWithMatchingMgr = _mq ? new Set(cmPersons.filter(p => (p.name||'').includes(_mq)).map(p => p.office)) : null;
+            // 事業所一覧: 事業所検索 + (ケアマネ検索があれば該当ケアマネの事業所のみ)
+            const allOfficesIdx = cmOffices.map((o, origIdx) => ({...o, origIdx}));
+            const filteredOffices = allOfficesIdx.filter(o => {
+              if (_oq && !((o.name||'').includes(_oq) || (o.kana||'').includes(_oq) || (o.corporateName||'').includes(_oq))) return false;
+              if (officesWithMatchingMgr && !officesWithMatchingMgr.has(o.name)) return false;
+              return true;
+            });
+            const sortedOffices = [...filteredOffices].sort((a,b)=>(a.name||'').localeCompare(b.name||'', 'ja'));
+            // ★ 法人ごとにグループ分け (法人名が空は「その他」)
+            const officeGroups = (() => {
+              const m = new Map();
+              sortedOffices.forEach(o => { const k = (o.corporateName||'').trim() || '（法人名なし）'; if(!m.has(k)) m.set(k, []); m.get(k).push(o); });
+              return [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ja'));
+            })();
+            // 担当ケアマネ一覧: 事業所選択/検索で絞り込み + ケアマネ検索
+            const officeNameSet = (_oq || officesWithMatchingMgr) ? new Set(filteredOffices.map(o=>o.name)) : null;
+            const officeFilteredPersons = cmPersons.filter(p => {
+              if (selOffice && p.office !== selOffice.name) return false;
+              if (_mq && !(p.name||'').includes(_mq)) return false;
+              if (!selOffice && officeNameSet && !officeNameSet.has(p.office)) return false;
+              return true;
+            });
             const sortedPersons = [...officeFilteredPersons].sort((a,b)=>(a.name||'').localeCompare(b.name||'', 'ja'));
             return (
               <div className="grid grid-cols-[40%_1fr] gap-4">
@@ -25083,6 +25108,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                           const norm=(s)=>String(s||'').replace(/[\s　()（）・,，、_\-:：]/g,'').toLowerCase();
                           const findCol=(any,not=[])=>{for(let i=0;i<header.length;i++){const h=norm(header[i]);if(!h)continue;if(not.some(k=>h.includes(norm(k))))continue;if(any.some(k=>h.includes(norm(k))))return i;}return -1;};
                           const col={
+                            corporateName: findCol(['法人名','会社名','法人','会社'],['事業所','施設']),
                             name: findCol(['事業所名','事業者名','施設名','名称'],['カナ','かな','法人','会社']),
                             kana: findCol(['事業所名カナ','事業所カナ','カナ','フリガナ'],['法人','会社']),
                             serviceType: findCol(['サービス種類','サービス種別','種類','種別']),
@@ -25101,33 +25127,39 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                             const row=rows[r]; if(!row.some(c=>(c||'').trim()))continue;
                             const name=val(row,col.name); if(!name)continue;
                             const addr=[val(row,col.pref),val(row,col.city),val(row,col.addr),val(row,col.building)].filter(Boolean).join('');
-                            const rec={name, kana:val(row,col.kana), serviceType:val(row,col.serviceType), providerNumber:val(row,col.providerNumber), zipCode:val(row,col.zip), address:addr, phone:val(row,col.phone), fax:val(row,col.fax)};
+                            const rec={name, corporateName:val(row,col.corporateName), kana:val(row,col.kana), serviceType:val(row,col.serviceType), providerNumber:val(row,col.providerNumber), zipCode:val(row,col.zip), address:addr, phone:val(row,col.phone), fax:val(row,col.fax)};
                             Object.keys(rec).forEach(k=>{ if(rec[k]==='') delete rec[k]; });
                             if(byName.has(name)){ const idx=byName.get(name); list[idx]={...list[idx],...rec}; updated++; }
                             else { list.push(rec); byName.set(name,list.length-1); added++; }
                           }
                           setCmOffices(list);
-                          alert(`ケアマネ事業所 取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n（会社名/法人名は取り込みません。空欄は上書きしません）\n※下部の「保存」を押すと確定します。`);
+                          alert(`ケアマネ事業所 取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n（法人名は事業所のグループ分け用に取り込みます。空欄は上書きしません）\n※下部の「保存」を押すと確定します。`);
                         };
                         reader.readAsArrayBuffer(f);
                         e.target.value='';
                       }}/>
                     </label>
                   </div>
-                  <div className="text-xs text-slate-500 mb-2 px-1">{cmOffices.length}件・あいうえお順 {selectedOfficeIdx!==null && <button onClick={()=>setSelectedOfficeIdx(null)} className="ml-2 text-blue-600 hover:underline">× フィルター解除</button>}</div>
-                  {cmOffices.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
-                    <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">{sortedOffices.map(o => {
-                      const sel = selectedOfficeIdx === o.origIdx;
-                      return (
-                        <div key={o.origIdx} onClick={()=>setSelectedOfficeIdx(sel ? null : o.origIdx)} className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-colors ${sel?'bg-blue-50 border-blue-300':'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-sm text-slate-800 truncate">{o.name}</div>
-                            <div className="text-[11px] text-slate-500 truncate">{o.phone||'-'} / FAX {o.fax||'-'}</div>
-                          </div>
-                          <button type="button" onClick={(e)=>{e.stopPropagation(); setCmOffices(cmOffices.filter((_,j)=>j!==o.origIdx)); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-2 shrink-0"><Trash2 size={14}/></button>
-                        </div>
-                      );
-                    })}</div>
+                  <input type="text" value={officeSearch} onChange={e=>setOfficeSearch(e.target.value)} placeholder="🔍 事業所名・カナ・法人名で検索" className="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg outline-none text-sm font-bold focus:border-blue-400"/>
+                  <div className="text-xs text-slate-500 mb-2 px-1">{sortedOffices.length}/{cmOffices.length}件・法人ごと {selectedOfficeIdx!==null && <button onClick={()=>setSelectedOfficeIdx(null)} className="ml-2 text-blue-600 hover:underline">× 選択解除</button>}</div>
+                  {sortedOffices.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">{cmOffices.length===0?'登録なし':'該当なし'}</div> : (
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">{officeGroups.map(([corp, offices]) => (
+                      <div key={corp}>
+                        <div className="text-[11px] font-bold text-slate-400 px-1 pb-1 border-b border-slate-100 mb-1.5 sticky top-0 bg-white">{corp} <span className="text-slate-300">({offices.length})</span></div>
+                        <div className="space-y-1.5">{offices.map(o => {
+                          const sel = selectedOfficeIdx === o.origIdx;
+                          return (
+                            <div key={o.origIdx} onClick={()=>setSelectedOfficeIdx(sel ? null : o.origIdx)} className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-colors ${sel?'bg-blue-50 border-blue-300':'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-bold text-sm text-slate-800 truncate">{o.name}</div>
+                                <div className="text-[11px] text-slate-500 truncate">{o.phone||'-'} / FAX {o.fax||'-'}</div>
+                              </div>
+                              <button type="button" onClick={(e)=>{e.stopPropagation(); setCmOffices(cmOffices.filter((_,j)=>j!==o.origIdx)); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-2 shrink-0"><Trash2 size={14}/></button>
+                            </div>
+                          );
+                        })}</div>
+                      </div>
+                    ))}</div>
                   )}
                 </SectionCard>
                 <SectionCard title={selOffice ? `担当ケアマネジャー — ${selOffice.name}` : '担当ケアマネジャー（全事業所）'}>
@@ -25148,7 +25180,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
-                  <div className="text-xs text-slate-500 mb-2 px-1">{officeFilteredPersons.length}件{selOffice?`（${selOffice.name}）`:'（全事業所）'}・あいうえお順</div>
+                  <input type="text" value={managerSearch} onChange={e=>setManagerSearch(e.target.value)} placeholder="🔍 担当者名で検索 (該当者の事業所も左で絞り込み)" className="w-full px-3 py-2 mb-2 border border-slate-300 rounded-lg outline-none text-sm font-bold focus:border-blue-400"/>
+                  <div className="text-xs text-slate-500 mb-2 px-1">{sortedPersons.length}件{selOffice?`（${selOffice.name}）`:'（全事業所）'}・あいうえお順</div>
                   {sortedPersons.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
                     <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">{sortedPersons.map((p,i)=>{
                       const origIdx = cmPersons.findIndex(x => x === p);
