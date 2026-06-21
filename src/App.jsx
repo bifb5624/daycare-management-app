@@ -9975,6 +9975,7 @@ function FamilyAdminView({ appData, onSave }) {
   };
   const deletePhoto = (id) => {
     if (!window.confirm('この写真を削除しますか？')) return;
+    purgeStorageFiles(photos.find(p => p.id === id)); // ★ Storage実体も削除
     onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== id) });
   };
   const filteredPhotos = photoFilter ? photos.filter(p => p.class === photoFilter) : photos;
@@ -10226,6 +10227,7 @@ function FamilyAdminView({ appData, onSave }) {
                       }} className="flex-1 py-2 text-xs font-bold bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg">📋 内容をコピー</button>
                       <button onClick={()=>{
                         if (!window.confirm('この項目を削除します。よろしいですか？')) return;
+                        purgeStorageFiles(historyDetail.item); // ★ Storage実体(写真/PDF)も削除
                         if (historyDetail.kind === 'photo') onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== historyDetail.item.id) });
                         else if (historyDetail.kind === 'news_all') onSave({ ...appData, familyAnnouncements: allAnnouncements.filter(a => a.id !== historyDetail.item.id) });
                         else onSave({ ...appData, familyPersonalAnnouncements: personalAnnouncements.filter(a => a.id !== historyDetail.item.id) });
@@ -13547,6 +13549,8 @@ export default function App() {
           for (const f of (pf.files || [])) await migFile(f, `pf/${p.id}`);
           const fs = pf.faceSheet || {};
           for (const k of ['genogramFiles','floorPlanFiles','pickupRouteFiles']) for (const a of (fs[k] || [])) await migFile(a, `fs/${p.id}`);
+          // 旧書類 (保険証/負担割合証/お薬手帳/その他) も Storage へ
+          for (const k of ['docInsurance','docBurden','medicationImages','docOther']) for (const d of (p[k] || [])) await migFile(d, `pf/${p.id}`);
         }
         for (const a of (next.familyAnnouncements || [])) for (const ph of (a.photos || [])) await migFile(ph, 'news');
         for (const a of (next.familyPersonalAnnouncements || [])) for (const ph of (a.photos || [])) await migFile(ph, 'news');
@@ -28694,6 +28698,15 @@ const processUploadFile = (file, maxDim = 1600, quality = 0.7) => new Promise((r
   reader.readAsDataURL(file);
 });
 
+// 削除時に、その項目に紐づく Storage 実体ファイルも削除する (storagePath / photos[].storagePath)
+const purgeStorageFiles = (item) => {
+  if (!item) return;
+  const paths = [];
+  if (item.storagePath) paths.push(item.storagePath);
+  if (Array.isArray(item.photos)) item.photos.forEach(ph => { if (ph && ph.storagePath) paths.push(ph.storagePath); });
+  paths.forEach(p => { try { supabaseDeleteFile(p).catch(()=>{}); } catch {} });
+};
+
 // dataURL(base64) を Blob に変換 (Storage アップロード用)
 const dataUrlToBlob = (dataUrl) => {
   try {
@@ -28948,16 +28961,16 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           {isBasicTab && (
             <div className="mb-4 space-y-3">
               {[
-                {key:'docInsurance', label:'介護保険証', emoji:'🪪'},
-                {key:'docBurden', label:'負担割合証', emoji:'📃'},
-                {key:'medicationImages', label:'お薬手帳・処方箋', emoji:'💊'},
-                {key:'docOther', label:'その他書類', emoji:'📄'},
-              ].map(({key,label,emoji}) => {
+                {key:'docInsurance', label:'介護保険証'},
+                {key:'docBurden', label:'負担割合証'},
+                {key:'medicationImages', label:'お薬手帳・処方箋'},
+                {key:'docOther', label:'その他書類'},
+              ].map(({key,label}) => {
                 const items = patient[key] || [];
                 return (
                   <div key={key} className="bg-white border border-slate-200 rounded-xl p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <div className="text-sm font-bold text-slate-700">{emoji} {label} ({items.length})</div>
+                      <div className="text-sm font-bold text-slate-700">{label} ({items.length})</div>
                       <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
                         <CloudUpload size={12}/> 追加
                         <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={async (e)=>{
@@ -28966,14 +28979,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                           const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
                           const cur = [...(patient[key]||[])];
                           for (const f of files) {
-                            const dataUrl = await new Promise((resolve)=>{
-                              const r = new FileReader();
-                              r.onload = ev => resolve(ev.target.result);
-                              r.onerror = () => resolve(null);
-                              r.readAsDataURL(f);
-                            });
-                            if (!dataUrl) continue;
-                            cur.push({ id: Date.now()+Math.random(), data: dataUrl, name: f.name, type: f.type||'image/jpeg', uploadedAt: today });
+                            // ★ 非公開Storageへ保存 (保険証等は個人情報のため)。 失敗時 base64 フォールバック。
+                            const { blob, dataUrl, contentType } = await processUploadFile(f);
+                            const item = { id: Date.now()+Math.random(), name: f.name, type: f.type||'image/jpeg', uploadedAt: today };
+                            const stored = isSupabaseEnabled ? await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `pf/${patient.id}` }) : null;
+                            if (stored?.path) item.storagePath = stored.path;
+                            else if (dataUrl) item.data = dataUrl;
+                            if (!item.storagePath && !item.data) continue;
+                            cur.push(item);
                           }
                           // patient レベルに保存 (個人ファイル ではなく旧構造)
                           onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: cur } : p) });
@@ -28988,16 +29001,18 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                         {items.map(img => (
                           <div key={img.id} className="relative">
                             {img.type === 'application/pdf' ? (
-                              <div className="aspect-square bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center cursor-pointer p-1"
-                                onClick={()=>window.open(img.data,'_blank')}>
+                              <StoredFileLink file={img} className="aspect-square bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center cursor-pointer p-1">
                                 <span className="text-2xl">📋</span>
                                 <span className="text-[8px] font-bold text-red-600 text-center truncate w-full px-1">{img.name}</span>
-                              </div>
+                              </StoredFileLink>
                             ) : (
-                              <img src={img.data} alt={img.name} className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer" onClick={()=>window.open(img.data,'_blank')}/>
+                              <StoredFileLink file={img} className="block">
+                                <StoredImage file={img} alt={img.name} className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer"/>
+                              </StoredFileLink>
                             )}
                             <button onClick={()=>{
                               if (!window.confirm('削除しますか?')) return;
+                              if (img.storagePath) { supabaseDeleteFile(img.storagePath).catch(()=>{}); }
                               const next = (patient[key]||[]).filter(x => x.id !== img.id);
                               onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: next } : p) });
                             }} style={{position:'absolute',top:-4,right:-4,background:'#ef4444',color:'white',border:'none',borderRadius:'50%',width:18,height:18,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✕</button>
