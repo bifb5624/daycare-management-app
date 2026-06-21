@@ -38,6 +38,7 @@ import {
   supabaseListStaff,
   supabaseUploadFile,
   supabaseDeleteFile,
+  supabaseDeleteFolder,
   supabaseGetSignedUrl,
   supabaseGetPublicUrl,
 } from './lib/supabase.js';
@@ -13564,6 +13565,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSupabaseEnabled, staffSession?.storeId, appData]);
 
+  // ★ ゴミ箱の自動完全削除: 削除から7日を過ぎた個人ファイルを Storage ごと完全削除 (起動時1回)
+  const trashPurgedRef = React.useRef(false);
+  useEffect(() => {
+    if (trashPurgedRef.current) return;
+    if (!staffSession?.storeId || dataLoadedForStoreRef.current !== staffSession.storeId) return;
+    trashPurgedRef.current = true;
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    let changed = false;
+    const patients = (appData.patients || []).map(p => {
+      const trash = p.personalFile?.trash;
+      if (!Array.isArray(trash) || trash.length === 0) return p;
+      const keep = [];
+      trash.forEach(t => {
+        if (t._deletedAt && new Date(t._deletedAt).getTime() < cutoff) {
+          if (t.storagePath && isSupabaseEnabled) supabaseDeleteFile(t.storagePath).catch(()=>{});
+          changed = true;
+        } else { keep.push(t); }
+      });
+      return keep.length === trash.length ? p : { ...p, personalFile: { ...p.personalFile, trash: keep } };
+    });
+    if (changed) { console.log('[trash] 7日経過分を完全削除'); handleSaveToCloud({ ...appData, patients }); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffSession?.storeId, appData]);
+
   // 起動時：予定変更（from <= 今日）を自動適用
   React.useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -22050,6 +22075,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         try { await supabaseDeletePatientFamily(_storeId, pid); }
         catch (e) { console.warn('[supabase] delete patient family failed', e); }
       }
+      // ★ この利用者の Storage 実体ファイルを全削除 (完全削除のため。 退所は status 変更のみで残る)
+      try { await supabaseDeleteFolder(`pf/${pid}`); await supabaseDeleteFolder(`fs/${pid}`); }
+      catch (e) { console.warn('[storage] delete patient folder failed', e); }
     }
     onSave({
       ...appData,
@@ -28850,10 +28878,33 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   };
 
   const handleDeleteFile = (fileId) => {
-    if (!window.confirm('このファイルを削除しますか?')) return;
+    if (!window.confirm('このファイルを削除しますか?\n（ゴミ箱に移動し、7日間は復元できます。その後は自動で完全削除）')) return;
     const target = (personalFile.files || []).find(f => f.id === fileId);
-    if (target?.storagePath) { supabaseDeleteFile(target.storagePath).catch(()=>{}); } // ★ Storage からも削除
-    updatePatient({ files: (personalFile.files || []).filter(f => f.id !== fileId) });
+    if (!target) return;
+    // ★ すぐ消さず ゴミ箱(personalFile.trash)へ。 Storage 実体は残し、7日後に自動完全削除。
+    updatePatient({
+      files: (personalFile.files || []).filter(f => f.id !== fileId),
+      trash: [...(personalFile.trash || []), { ...target, _deletedAt: new Date().toISOString(), _kind: 'file' }],
+    });
+  };
+  // ゴミ箱から復元 / 完全削除
+  const restoreFromTrash = (trashId) => {
+    const t = (personalFile.trash || []).find(x => x.id === trashId);
+    if (!t) return;
+    const { _deletedAt, _kind, _field, ...file } = t;
+    const newTrash = (personalFile.trash || []).filter(x => x.id !== trashId);
+    if (_kind === 'doc' && _field) {
+      onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [_field]: [...(p[_field]||[]), file], personalFile: { ...personalFile, trash: newTrash } } : p) });
+    } else {
+      updatePatient({ files: [...(personalFile.files || []), file], trash: newTrash });
+    }
+  };
+  const purgeFromTrash = (trashId) => {
+    const t = (personalFile.trash || []).find(x => x.id === trashId);
+    if (!t) return;
+    if (!window.confirm('このファイルを完全に削除します。元に戻せません。よろしいですか?')) return;
+    if (t.storagePath) { supabaseDeleteFile(t.storagePath).catch(()=>{}); }
+    updatePatient({ trash: (personalFile.trash || []).filter(x => x.id !== trashId) });
   };
   // ★ ファイルのタイトル/日付を編集
   const updateFile = (fileId, patch) => {
@@ -28893,6 +28944,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     const d = new Date(); d.setMonth(d.getMonth() - 1);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   });
+  const [showTrash, setShowTrash] = useState(false);
+  const trashItems = personalFile.trash || [];
 
   // 月次スナップショットを今すぐ作成
   const createMonthlySnapshot = (yyyymm) => {
@@ -28938,8 +28991,43 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
             </div>
             <div className="text-xs text-slate-500 mt-0.5">{patient.name} 様 ({patient.kana || ''})</div>
           </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+          <div className="flex items-center gap-2">
+            <button onClick={()=>setShowTrash(s=>!s)} className={`px-3 py-1.5 rounded-lg text-xs font-bold ${showTrash?'bg-slate-700 text-white':'bg-slate-100 hover:bg-slate-200 text-slate-600'}`}>
+              ゴミ箱{trashItems.length>0?` (${trashItems.length})`:''}
+            </button>
+            <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+          </div>
         </div>
+        {/* ゴミ箱 (削除後7日間は復元可能) */}
+        {showTrash && (
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 max-h-[40vh] overflow-y-auto shrink-0">
+            <div className="text-sm font-bold text-slate-700 mb-2">ゴミ箱 — 削除後7日間は復元できます（過ぎると自動で完全削除）</div>
+            {trashItems.length === 0 ? (
+              <div className="text-xs text-slate-400 py-3">ゴミ箱は空です</div>
+            ) : (
+              <div className="space-y-2">
+                {[...trashItems].sort((a,b)=>(b._deletedAt||'').localeCompare(a._deletedAt||'')).map(t => {
+                  const days = Math.max(0, 7 - Math.floor((Date.now() - new Date(t._deletedAt||0).getTime())/(1000*60*60*24)));
+                  return (
+                    <div key={t.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-2">
+                      <div className="w-12 h-12 shrink-0 bg-slate-100 rounded flex items-center justify-center overflow-hidden">
+                        {t.type === 'application/pdf' || t.type === 'pdf'
+                          ? <span className="text-xl">📄</span>
+                          : <StoredImage file={t} alt="" className="w-full h-full object-cover"/>}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-bold text-slate-700 truncate">{t.title || t.name}</div>
+                        <div className="text-[10px] text-slate-400">削除: {t._deletedAt ? new Date(t._deletedAt).toLocaleDateString('ja-JP') : '-'} / あと{days}日で完全削除</div>
+                      </div>
+                      <button onClick={()=>restoreFromTrash(t.id)} className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-[11px] font-bold">復元</button>
+                      <button onClick={()=>purgeFromTrash(t.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[11px] font-bold">完全削除</button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {/* タブ */}
         <div className="flex overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50 px-3 gap-1">
           {allCategories.map(c => (
@@ -29011,10 +29099,11 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                               </StoredFileLink>
                             )}
                             <button onClick={()=>{
-                              if (!window.confirm('削除しますか?')) return;
-                              if (img.storagePath) { supabaseDeleteFile(img.storagePath).catch(()=>{}); }
+                              if (!window.confirm('削除しますか?\n（ゴミ箱に移動し、7日間は復元できます）')) return;
+                              // ★ ゴミ箱へ (Storage実体は残し、7日後に自動完全削除)
                               const next = (patient[key]||[]).filter(x => x.id !== img.id);
-                              onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: next } : p) });
+                              const newTrash = [...(personalFile.trash||[]), { ...img, _deletedAt: new Date().toISOString(), _kind: 'doc', _field: key }];
+                              onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: next, personalFile: { ...personalFile, trash: newTrash } } : p) });
                             }} style={{position:'absolute',top:-4,right:-4,background:'#ef4444',color:'white',border:'none',borderRadius:'50%',width:18,height:18,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✕</button>
                             <div className="text-[9px] text-slate-400 text-center mt-1 truncate">{img.uploadedAt}</div>
                           </div>

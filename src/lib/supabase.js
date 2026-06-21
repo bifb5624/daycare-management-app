@@ -668,6 +668,24 @@ export async function supabaseGetSignedUrl(path, expiresIn = 900) {
   }
 }
 
+// 指定プレフィックス(フォルダ)配下のファイルを全削除 (利用者完全削除時など)
+export async function supabaseDeleteFolder(prefix) {
+  if (!supabase || !prefix) return false;
+  try {
+    const clean = String(prefix).replace(/^\/+|\/+$/g, '');
+    const { data: list, error } = await supabase.storage.from(PF_BUCKET).list(clean, { limit: 1000 });
+    if (error) { console.warn('[storage] deleteFolder list error', error?.message || error); return false; }
+    if (list && list.length) {
+      const paths = list.filter(f => f.name).map(f => `${clean}/${f.name}`);
+      if (paths.length) await supabase.storage.from(PF_BUCKET).remove(paths);
+    }
+    return true;
+  } catch (e) {
+    console.warn('[storage] deleteFolder exception', e?.message || e);
+    return false;
+  }
+}
+
 // Storage 上のファイルを削除 (path 指定)
 export async function supabaseDeleteFile(path) {
   if (!supabase || !path) return false;
