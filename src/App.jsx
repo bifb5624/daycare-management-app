@@ -23252,15 +23252,25 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         </div>
       )}
       {csvModal.isOpen && (() => {
-        // CSV ヘルパー: 既往歴 (kiou) 以外の主要フィールドを全て扱う
-        const HEADERS = ['利用者ID','氏名','ふりがな','性別','生年月日','電話番号','郵便番号','住所','被保険者番号','介護度','適用期間開始','適用期間終了','負担割合','ケアマネ事業所','ケアマネ担当者','ケアマネ電話','ケアマネFAX','利用開始日','利用終了日','状態','介護整体姿勢','温浴電療','留意事項'];
-        const FIELDS  = ['id','name','kana','gender','birthDate','phone','zipCode','address','insuranceNo','careLevel','careLevelFrom','careLevelTo','costBurden','cmOffice','cmName','cmPhone','cmFax','startDate','endDate','status','massageNeed','onyokuDenryo','ryui'];
+        // ★ テンプレート/出力の列 (店舗独自=介護整体/温浴は含めない。住所は都道府県/市区町村/町名番地/建物名に分割)
+        const HEADERS = ['利用者ID','氏名','フリガナ','性別','生年月日','郵便番号','都道府県','市区町村','町名番地','建物名','電話番号','携帯電話番号','緊急連絡先氏名','続柄','緊急連絡先電話','被保険者番号','介護度','利用開始日','利用終了日','状態','既往歴','留意点','かかりつけ医'];
         const escCell = (v) => { const s = String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
-        const buildCsv = () => {
-          const rows = [HEADERS.join(',')];
-          (appData.patients||[]).forEach(p => rows.push(FIELDS.map(f => escCell(p[f])).join(',')));
-          return rows.join('\n');
+        // 利用者 → CSV 1行
+        const patientToRow = (p) => {
+          const ec = (p.emergencyContacts||[])[0] || {};
+          return [
+            p.id ?? '',
+            p.name || `${p.lastName||''} ${p.firstName||''}`.trim(),
+            p.kana || `${p.kanaLast||''} ${p.kanaFirst||''}`.trim(),
+            p.gender||'', p.birthDate||'', p.zipCode||'',
+            p.prefecture||'', p.city||'', (p.addressLine||p.address||''), p.building||'',
+            p.phone||'', p.phoneMobile||'',
+            ec.name||p.familyName||'', ec.relation||p.familyRelation||'', ec.phone||ec.phoneMobile||p.familyPhone||'',
+            p.insuranceNo||'', p.careLevel||'', p.startDate||'', p.endDate||'', p.status||'',
+            p.kiou||'', p.ryui||'', (p.personalFile?.faceSheet?.chronicDiseases)||'',
+          ];
         };
+        const buildCsv = () => [HEADERS.join(','), ...(appData.patients||[]).map(p => patientToRow(p).map(escCell).join(','))].join('\n');
         const downloadCsv = () => {
           const csv = '﻿' + buildCsv(); // UTF-8 BOM (Excel 文字化け防止)
           const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
@@ -23269,8 +23279,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           URL.revokeObjectURL(url);
         };
         const downloadTemplate = () => {
-          // ヘッダー + 1行のサンプルデータ。利用者ID 空欄で新規追加、入力済みで更新
-          const sample = ['','介護 太郎','かいご たろう','男性','1940-05-15','03-1234-5678','135-0011','東京都江東区扇橋1-2-3','0123456789','要介護2','2024-06-01','2026-05-31','90%','あおぞら居宅介護','鈴木 一郎','03-1111-2222','03-1111-2223','2023-04-01','','利用中','通常','無し','歩行時見守り必要'];
+          const sample = ['','田中 太郎','たなか たろう','男性','1940-05-15','135-0011','東京都','江東区','扇橋1-2-3','メゾン白子101','03-1234-5678','090-1234-5678','田中 花子','長女','090-2222-3333','0123456789','要介護2','2024-06-01','','利用中','高血圧','歩行時見守り','〇〇クリニック 田中医師'];
           const csv = '﻿' + HEADERS.join(',') + '\n' + sample.map(escCell).join(',');
           const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
           const url = URL.createObjectURL(blob);
@@ -23297,56 +23306,118 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           if (buf || cur.length) { cur.push(buf); lines.push(cur); }
           return lines;
         };
+        // ★ ヘッダー名のゆるい一致 (記号/空白除去・部分一致)。 列順や表記ゆれに強い。
+        const norm = (s) => String(s||'').replace(/[\s　()（）・,，、_\-:：]/g,'').toLowerCase();
+        const findCol = (header, anyKw, notKw=[]) => {
+          for (let i=0;i<header.length;i++){
+            const h = norm(header[i]); if(!h) continue;
+            if (notKw.some(k => h.includes(norm(k)))) continue;
+            if (anyKw.some(k => h.includes(norm(k)))) return i;
+          }
+          return -1;
+        };
+        const normDate = (s) => {
+          const m = String(s||'').match(/(\d{4})[\/\-年.](\d{1,2})[\/\-月.](\d{1,2})/);
+          return m ? `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}` : String(s||'').trim();
+        };
+        const splitName = (full) => { const a=String(full||'').trim().split(/[\s　]+/).filter(Boolean); return { last:a[0]||'', first:a.slice(1).join(' ')||'' }; };
         const doImport = () => {
           try {
             const rows = parseCsv(csvModal.importText.replace(/^﻿/,''));
             if (rows.length < 2) throw new Error('ヘッダー行とデータ行が必要です');
             const header = rows[0];
-            const colIdx = FIELDS.map((f, i) => { const h = HEADERS[i]; return header.findIndex(x => x.trim() === h); });
+            const col = {
+              id:          findCol(header,['利用者id','利用者番号'],['緊急','連絡先']),
+              name:        findCol(header,['氏名','利用者名','お名前','名前'],['カナ','かな','緊急','連絡先','事業所','医']),
+              kana:        findCol(header,['フリガナ','ふりがな','カナ','かな'],['緊急','連絡先','事業所']),
+              gender:      findCol(header,['性別']),
+              birthDate:   findCol(header,['生年月日','誕生']),
+              zipCode:     findCol(header,['郵便','〒'],['緊急','連絡先']),
+              prefecture:  findCol(header,['都道府県'],['緊急','連絡先']),
+              city:        findCol(header,['市区町村'],['緊急','連絡先']),
+              addressLine: findCol(header,['町名番地','町名','番地','住所'],['緊急','連絡先','郵便','都道府県','市区町村','屋号','建物']),
+              building:    findCol(header,['建物','屋号','マンション','アパート','部屋'],['緊急','連絡先']),
+              phone:       findCol(header,['電話'],['緊急','連絡先','携帯','fax','ファックス']),
+              mobile:      findCol(header,['携帯'],['緊急','連絡先']),
+              emName:      findCol(header,['緊急連絡先氏名','緊急連絡先名','連絡先氏名','連絡先名'],['カナ','かな','続柄','電話','郵便','住所','都道府県','市区町村','番地','屋号','建物']),
+              emRelation:  findCol(header,['続柄']),
+              emPhone:     findCol(header,['緊急連絡先電話','連絡先電話'],['氏名','カナ']),
+              insuranceNo: findCol(header,['被保険者番号','被保番','保険者番号']),
+              careLevel:   findCol(header,['介護度','要介護','要支援'],['期間']),
+              startDate:   findCol(header,['利用開始','開始日'],['適用','介護度','緊急']),
+              endDate:     findCol(header,['利用終了','終了日'],['適用']),
+              status:      findCol(header,['状態','利用状態','利用区分']),
+              kiou:        findCol(header,['既往']),
+              ryui:        findCol(header,['留意']),
+              doctor:      findCol(header,['かかりつけ','主治医','担当医']),
+            };
+            const val = (row,i) => (i>=0 ? String(row[i]||'').trim() : '');
             const existing = [...(appData.patients||[])];
-            const existingIds = new Set(existing.map(p => p.id));
-            let maxId = Math.max(0, ...existing.map(p => p.id));
-            // ★ 重複検出キー: (氏名 + 被保険者番号) で既存とマッチング
-            //   → 同じ人を CSV で再投入したときに ID 重複なく既存レコードを更新
-            const dupKey = (name, insNo) => `${(name||'').trim()}|${(insNo||'').trim()}`;
+            const existingIds = new Set(existing.map(p=>p.id));
+            let maxId = Math.max(0, ...existing.map(p=>p.id));
+            const dupKey = (name,ins) => `${(name||'').trim()}|${(ins||'').trim()}`;
             const existingByDup = new Map();
-            existing.forEach(p => { const k = dupKey(p.name, p.insuranceNo); if (k !== '|') existingByDup.set(k, p.id); });
-            let added = 0, updated = 0, dupMerged = 0;
-            for (let r = 1; r < rows.length; r++) {
-              const row = rows[r]; if (!row.some(c => (c||'').trim())) continue;
+            existing.forEach(p=>{ const k=dupKey(p.name,p.insuranceNo); if(k!=='|') existingByDup.set(k,p.id); });
+            const applyEx = (p, emName, emRel, emPhone, doctor) => {
+              let np = {...p};
+              if (emName || emRel || emPhone) {
+                const ec = [...(np.emergencyContacts||[])];
+                ec[0] = { ...(ec[0]||{}), ...(emName?{name:emName}:{}), ...(emRel?{relation:emRel}:{}), ...(emPhone?{phone:emPhone}:{}) };
+                np.emergencyContacts = ec;
+              }
+              if (doctor) { const pf=np.personalFile||{}; np.personalFile={...pf, faceSheet:{...(pf.faceSheet||{}), chronicDiseases: doctor}}; }
+              return np;
+            };
+            let added=0, updated=0;
+            for (let r=1;r<rows.length;r++){
+              const row = rows[r]; if(!row.some(c=>(c||'').trim())) continue;
+              const name = val(row,col.name), kana = val(row,col.kana);
+              const insNo = val(row,col.insuranceNo);
+              const addr = [val(row,col.prefecture),val(row,col.city),val(row,col.addressLine),val(row,col.building)].filter(Boolean).join('');
+              // ★ 空欄は rec に入れない (既存を上書きしない / 新規はデフォルト)
               const rec = {};
-              // ★ CSV に存在する列だけ rec に入れる (列が無い項目は触らない)。
-              //   これをしないと、一部列だけの CSV を取り込んだ際に、
-              //   未記載の項目まで空文字で上書きされ既存データが消えてしまう。
-              FIELDS.forEach((f, i) => { if (colIdx[i] >= 0) rec[f] = (row[colIdx[i]] || '').trim(); });
-              const idNum = parseInt(rec.id);
-              // 1. ID 指定あり & 既存 → 更新
-              if (!isNaN(idNum) && existingIds.has(idNum)) {
-                const idx = existing.findIndex(p => p.id === idNum);
-                existing[idx] = {...existing[idx], ...rec, id: idNum};
+              const set = (k,v) => { if (v !== '') rec[k]=v; };
+              if (name) { const s=splitName(name); rec.name=name; rec.lastName=s.last; rec.firstName=s.first; }
+              if (kana) { const s=splitName(kana); rec.kana=kana; rec.kanaLast=s.last; rec.kanaFirst=s.first; }
+              set('gender', val(row,col.gender));
+              set('birthDate', col.birthDate>=0 && val(row,col.birthDate) ? normDate(val(row,col.birthDate)) : '');
+              set('zipCode', val(row,col.zipCode));
+              set('prefecture', val(row,col.prefecture));
+              set('city', val(row,col.city));
+              set('addressLine', val(row,col.addressLine));
+              set('building', val(row,col.building));
+              if (addr) rec.address = addr;
+              set('phone', val(row,col.phone));
+              set('phoneMobile', val(row,col.mobile));
+              set('insuranceNo', insNo);
+              set('careLevel', val(row,col.careLevel));
+              set('startDate', col.startDate>=0 && val(row,col.startDate) ? normDate(val(row,col.startDate)) : '');
+              set('endDate', col.endDate>=0 && val(row,col.endDate) ? normDate(val(row,col.endDate)) : '');
+              set('status', val(row,col.status));
+              set('kiou', val(row,col.kiou));
+              set('ryui', val(row,col.ryui));
+              const emName=val(row,col.emName), emRel=val(row,col.emRelation), emPhone=val(row,col.emPhone), doctor=val(row,col.doctor);
+              const idNum = parseInt(val(row,col.id));
+              let target = null;
+              if (!isNaN(idNum) && existingIds.has(idNum)) target = existing.find(p=>p.id===idNum);
+              else { const dId = existingByDup.get(dupKey(name, insNo)); if(dId) target = existing.find(p=>p.id===dId); }
+              if (target) {
+                const idx = existing.findIndex(p=>p.id===target.id);
+                existing[idx] = applyEx({ ...existing[idx], ...rec }, emName, emRel, emPhone, doctor);
                 updated++;
-                continue;
+              } else {
+                maxId += 1;
+                let np = { kiou:'', ryui:'', scheduleAmPm:['','','','','','',''], pickupType:'fixed', pickupTimes:['','','','','','',''], autoDeleteAfter5Years:false, massageNeed:'通常', onyokuDenryo:'無し', pauseHistory:[], plannedExercises:{}, ...rec, id:maxId };
+                if (!np.status) np.status='利用中';
+                np = applyEx(np, emName, emRel, emPhone, doctor);
+                existing.push(np);
+                const k=dupKey(np.name, np.insuranceNo); if(k!=='|') existingByDup.set(k,maxId);
+                added++;
               }
-              // 2. ID 指定なし but (氏名 + 被保険者番号) で既存と一致 → 既存に統合
-              const dupId = existingByDup.get(dupKey(rec.name, rec.insuranceNo));
-              if (dupId) {
-                const idx = existing.findIndex(p => p.id === dupId);
-                existing[idx] = {...existing[idx], ...rec, id: dupId};
-                dupMerged++;
-                continue;
-              }
-              // 3. 新規追加
-              maxId += 1;
-              const newPat = {kiou:'', ryui:'', scheduleAmPm:['','','','','','',''], pickupType:'fixed', pickupTimes:['','','','','','',''], autoDeleteAfter5Years:false, massageNeed:'通常', onyokuDenryo:'無し', pauseHistory:[], plannedExercises:{}, ...rec, id:maxId};
-              if (!newPat.status) newPat.status = '利用中';
-              existing.push(newPat);
-              const k = dupKey(newPat.name, newPat.insuranceNo);
-              if (k !== '|') existingByDup.set(k, maxId);
-              added++;
             }
             onSave({...appData, patients: existing});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
-            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${dupMerged>0?` / 重複統合 ${dupMerged} 件 (氏名+被保険者番号が一致)`:''}`);
+            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n（空欄の項目は既存データを上書きしません）`);
           } catch (e) {
             setCsvModal({...csvModal, error: e.message || String(e)});
           }
@@ -23385,12 +23456,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         const f = e.target.files?.[0]; if (!f) return;
                         const reader = new FileReader();
                         reader.onload = (ev) => {
-                          let text = ev.target.result;
-                          // BOM 除去
-                          if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+                          // ★ UTF-8 と Shift-JIS を自動判定 (介護ソフトの書き出しは多くが Shift-JIS)
+                          const buf = new Uint8Array(ev.target.result);
+                          let text = '';
+                          try { text = new TextDecoder('utf-8', { fatal: false }).decode(buf); } catch {}
+                          if (!text || text.includes('�')) { // UTF-8で化けた → Shift-JISで再デコード
+                            try { text = new TextDecoder('shift-jis').decode(buf); } catch {}
+                          }
+                          if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1); // BOM除去
                           setCsvModal(prev => ({...prev, importText: text, error: ''}));
                         };
-                        reader.readAsText(f, 'UTF-8');
+                        reader.readAsArrayBuffer(f);
                         e.target.value = '';
                       }}/>
                     </label>
