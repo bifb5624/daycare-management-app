@@ -39,6 +39,7 @@ import {
   supabaseUploadFile,
   supabaseDeleteFile,
   supabaseGetSignedUrl,
+  supabaseGetPublicUrl,
 } from './lib/supabase.js';
 
 // === システム設定 ===
@@ -28709,11 +28710,17 @@ const dataUrlToBlob = (dataUrl) => {
 //   storagePath が無い旧データ(公開url / base64 data)はそれをそのまま使う(後方互換)。
 function useSignedUrl(file) {
   const direct = (file && (file.url || file.data)) || '';
-  const [src, setSrc] = useState(direct);
+  // 公開バケットなら公開URLが即時に使える (ポリシー不要)。 これを初期値にして確実に表示。
+  const initial = (file && file.storagePath && isSupabaseEnabled) ? (supabaseGetPublicUrl(file.storagePath) || direct) : direct;
+  const [src, setSrc] = useState(initial);
   useEffect(() => {
     let cancelled = false;
     if (file && file.storagePath && isSupabaseEnabled) {
-      supabaseGetSignedUrl(file.storagePath).then(u => { if (!cancelled) setSrc(u || direct); });
+      // 公開URLを即採用 (公開バケット用)
+      const pub = supabaseGetPublicUrl(file.storagePath);
+      setSrc(pub || direct);
+      // 非公開バケットの場合に備え、署名URLが取れたら優先して差し替え
+      supabaseGetSignedUrl(file.storagePath).then(u => { if (!cancelled && u) setSrc(u); });
     } else {
       setSrc(direct);
     }

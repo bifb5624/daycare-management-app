@@ -646,6 +646,15 @@ export async function supabaseUploadFile(blob, opts = {}) {
   }
 }
 
+// 公開バケット用: storagePath から公開URLを返す (同期・ポリシー不要)
+export function supabaseGetPublicUrl(path) {
+  if (!supabase || !path) return null;
+  try {
+    const { data } = supabase.storage.from(PF_BUCKET).getPublicUrl(path);
+    return data?.publicUrl || null;
+  } catch { return null; }
+}
+
 // 非公開バケット用: storagePath から署名付きURL (時間制限) を発行
 export async function supabaseGetSignedUrl(path, expiresIn = 900) {
   if (!supabase || !path) return null;
