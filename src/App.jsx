@@ -10650,8 +10650,7 @@ function FamilyView() {
               <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
               <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">ご利用者を紡ぐ、記録管理アプリ</text>
             </svg>
-            <div style={{fontSize:12,fontWeight:'bold',color:'#5e8030',letterSpacing:1,marginTop:8}}>{facility.name||'デイケアサービス'}</div>
-            <div style={{fontSize:18,fontWeight:'bold',marginTop:2,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
+            <div style={{fontSize:18,fontWeight:'bold',marginTop:10,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
           </div>
           {mode === 'signup' ? (
             <div style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
@@ -11188,8 +11187,8 @@ function FamilyView() {
           </form>
           )}
           <div style={{textAlign:'center',marginTop:20,fontSize:11,color:'rgba(255,255,255,0.85)'}}>
-            お困りの場合は事業所までお問い合わせください<br/>
-            {facility.phone && <span style={{fontWeight:'bold'}}>📞 {facility.phone}</span>}
+            お困りの場合はサポートまでお問い合わせください<br/>
+            <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'inherit',textDecoration:'underline'}}>📧 support@ones-style.co.jp</a>
           </div>
         </div>
       </div>
