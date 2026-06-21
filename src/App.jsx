@@ -25066,6 +25066,53 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                       <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
                     <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice}]); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
+                    {/* ★ CSV取り込み (他社事業所情報。 Shift-JIS自動判定・ゆるいヘッダー一致・会社名/法人名は除外・住所分割) */}
+                    <label className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center cursor-pointer">
+                      <CloudUpload size={14} className="mr-1"/>CSVから一括取り込み
+                      <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e)=>{
+                        const f = e.target.files?.[0]; if(!f) return;
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const buf = new Uint8Array(ev.target.result);
+                          let text=''; try{ text=new TextDecoder('utf-8',{fatal:false}).decode(buf); }catch{}
+                          if(!text || text.includes('�')){ try{ text=new TextDecoder('shift-jis').decode(buf); }catch{} }
+                          if(text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+                          const parseCsv=(t)=>{const out=[];let cur=[],b='',q=false;for(let i=0;i<t.length;i++){const c=t[i];if(q){if(c==='"'){if(t[i+1]==='"'){b+='"';i++;}else q=false;}else b+=c;}else{if(c==='"')q=true;else if(c===','){cur.push(b);b='';}else if(c==='\n'||c==='\r'){if(b||cur.length){cur.push(b);out.push(cur);cur=[];b='';}if(c==='\r'&&t[i+1]==='\n')i++;}else b+=c;}}if(b||cur.length){cur.push(b);out.push(cur);}return out;};
+                          const rows=parseCsv(text.replace(/^﻿/,'')); if(rows.length<2){alert('ヘッダー行とデータ行が必要です');return;}
+                          const header=rows[0];
+                          const norm=(s)=>String(s||'').replace(/[\s　()（）・,，、_\-:：]/g,'').toLowerCase();
+                          const findCol=(any,not=[])=>{for(let i=0;i<header.length;i++){const h=norm(header[i]);if(!h)continue;if(not.some(k=>h.includes(norm(k))))continue;if(any.some(k=>h.includes(norm(k))))return i;}return -1;};
+                          const col={
+                            name: findCol(['事業所名','事業者名','施設名','名称'],['カナ','かな','法人','会社']),
+                            kana: findCol(['事業所名カナ','事業所カナ','カナ','フリガナ'],['法人','会社']),
+                            serviceType: findCol(['サービス種類','サービス種別','種類','種別']),
+                            providerNumber: findCol(['事業所番号','事業者番号','指定番号']),
+                            zip: findCol(['郵便','〒']),
+                            pref: findCol(['都道府県']),
+                            city: findCol(['市区町村']),
+                            addr: findCol(['町名番地','町名','番地','住所'],['郵便','都道府県','市区町村','屋号','建物']),
+                            building: findCol(['建物','屋号','マンション','部屋']),
+                            phone: findCol(['電話'],['fax','ファックス']),
+                            fax: findCol(['fax','ファックス']),
+                          };
+                          const val=(row,i)=>(i>=0?String(row[i]||'').trim():'');
+                          let added=0,updated=0; const list=[...cmOffices]; const byName=new Map(list.map((o,idx)=>[(o.name||'').trim(),idx]));
+                          for(let r=1;r<rows.length;r++){
+                            const row=rows[r]; if(!row.some(c=>(c||'').trim()))continue;
+                            const name=val(row,col.name); if(!name)continue;
+                            const addr=[val(row,col.pref),val(row,col.city),val(row,col.addr),val(row,col.building)].filter(Boolean).join('');
+                            const rec={name, kana:val(row,col.kana), serviceType:val(row,col.serviceType), providerNumber:val(row,col.providerNumber), zipCode:val(row,col.zip), address:addr, phone:val(row,col.phone), fax:val(row,col.fax)};
+                            Object.keys(rec).forEach(k=>{ if(rec[k]==='') delete rec[k]; });
+                            if(byName.has(name)){ const idx=byName.get(name); list[idx]={...list[idx],...rec}; updated++; }
+                            else { list.push(rec); byName.set(name,list.length-1); added++; }
+                          }
+                          setCmOffices(list);
+                          alert(`ケアマネ事業所 取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n（会社名/法人名は取り込みません。空欄は上書きしません）\n※下部の「保存」を押すと確定します。`);
+                        };
+                        reader.readAsArrayBuffer(f);
+                        e.target.value='';
+                      }}/>
+                    </label>
                   </div>
                   <div className="text-xs text-slate-500 mb-2 px-1">{cmOffices.length}件・あいうえお順 {selectedOfficeIdx!==null && <button onClick={()=>setSelectedOfficeIdx(null)} className="ml-2 text-blue-600 hover:underline">× フィルター解除</button>}</div>
                   {cmOffices.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
