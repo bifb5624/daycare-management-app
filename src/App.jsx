@@ -28710,17 +28710,16 @@ const dataUrlToBlob = (dataUrl) => {
 //   storagePath が無い旧データ(公開url / base64 data)はそれをそのまま使う(後方互換)。
 function useSignedUrl(file) {
   const direct = (file && (file.url || file.data)) || '';
-  // 公開バケットなら公開URLが即時に使える (ポリシー不要)。 これを初期値にして確実に表示。
-  const initial = (file && file.storagePath && isSupabaseEnabled) ? (supabaseGetPublicUrl(file.storagePath) || direct) : direct;
-  const [src, setSrc] = useState(initial);
+  const [src, setSrc] = useState(direct);
   useEffect(() => {
     let cancelled = false;
     if (file && file.storagePath && isSupabaseEnabled) {
-      // 公開URLを即採用 (公開バケット用)
-      const pub = supabaseGetPublicUrl(file.storagePath);
-      setSrc(pub || direct);
-      // 非公開バケットの場合に備え、署名URLが取れたら優先して差し替え
-      supabaseGetSignedUrl(file.storagePath).then(u => { if (!cancelled && u) setSrc(u); });
+      // ★ 署名URLを優先 (非公開/公開どちらでも、anon に SELECT 権限があれば有効)。
+      //   取れなければ公開URL (公開バケット時) にフォールバック。
+      supabaseGetSignedUrl(file.storagePath).then(u => {
+        if (cancelled) return;
+        setSrc(u || supabaseGetPublicUrl(file.storagePath) || direct);
+      });
     } else {
       setSrc(direct);
     }
