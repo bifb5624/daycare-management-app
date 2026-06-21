@@ -9975,9 +9975,33 @@ function FamilyAdminView({ appData, onSave }) {
     setPostForm({ scope:'all', patientIds:[], title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass: postForm.eventClass, files:[], filePreview:[] });
   };
   const deletePhoto = (id) => {
-    if (!window.confirm('この写真を削除しますか？')) return;
-    purgeStorageFiles(photos.find(p => p.id === id)); // ★ Storage実体も削除
-    onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== id) });
+    if (!window.confirm('この写真を削除しますか？\n（ゴミ箱に移動し、7日間は復元できます）')) return;
+    const target = photos.find(p => p.id === id);
+    // ★ すぐ消さずゴミ箱(trashedAnnouncements)へ。 7日後に自動完全削除。
+    onSave({ ...appData,
+      familyPhotos: photos.filter(p => p.id !== id),
+      trashedAnnouncements: [...(appData.trashedAnnouncements||[]), { ...target, _deletedAt: new Date().toISOString(), _kind: 'photo' }],
+    });
+  };
+  // ★ お知らせ ゴミ箱: 復元 / 完全削除
+  const annTrash = appData.trashedAnnouncements || [];
+  const restoreAnnTrash = (id) => {
+    const t = annTrash.find(x => x.id === id);
+    if (!t) return;
+    const { _deletedAt, _kind, ...item } = t;
+    const newTrash = annTrash.filter(x => x.id !== id);
+    const patch = { trashedAnnouncements: newTrash };
+    if (_kind === 'photo') patch.familyPhotos = [item, ...(appData.familyPhotos||[])];
+    else if (_kind === 'news_all') patch.familyAnnouncements = [item, ...(appData.familyAnnouncements||[])];
+    else patch.familyPersonalAnnouncements = [item, ...(appData.familyPersonalAnnouncements||[])];
+    onSave({ ...appData, ...patch });
+  };
+  const purgeAnnTrash = (id) => {
+    const t = annTrash.find(x => x.id === id);
+    if (!t) return;
+    if (!window.confirm('完全に削除します。元に戻せません。よろしいですか?')) return;
+    purgeStorageFiles(t); // Storage実体も削除
+    onSave({ ...appData, trashedAnnouncements: annTrash.filter(x => x.id !== id) });
   };
   const filteredPhotos = photoFilter ? photos.filter(p => p.class === photoFilter) : photos;
   // 特記の表示制御
@@ -10116,6 +10140,32 @@ function FamilyAdminView({ appData, onSave }) {
         )}
         {tab === 'history' && (
           <div className="space-y-4">
+            {/* ゴミ箱 (削除後7日間は復元可) */}
+            {annTrash.length > 0 && (
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4">
+                <div className="text-sm font-bold text-amber-800 mb-2">🗑 ゴミ箱 — 削除後7日間は復元できます（過ぎると自動で完全削除）</div>
+                <div className="space-y-2">
+                  {[...annTrash].sort((a,b)=>(b._deletedAt||'').localeCompare(a._deletedAt||'')).map(t => {
+                    const days = Math.max(0, 7 - Math.floor((Date.now() - new Date(t._deletedAt||0).getTime())/(1000*60*60*24)));
+                    const firstPhoto = t._kind==='photo' ? t : (t.photos||[])[0];
+                    const label = t._kind==='photo' ? (t.caption || t.name || '写真') : (t.title || '(タイトルなし)');
+                    return (
+                      <div key={t.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-lg p-2">
+                        <div className="w-12 h-12 shrink-0 bg-slate-100 rounded flex items-center justify-center overflow-hidden">
+                          {firstPhoto ? <StoredImage file={firstPhoto} alt="" className="w-full h-full object-cover"/> : <span className="text-lg">📢</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold text-slate-700 truncate">{label}</div>
+                          <div className="text-[10px] text-slate-400">{t._kind==='photo'?'写真':t._kind==='news_personal'?'個別お知らせ':'全体お知らせ'} / あと{days}日で完全削除</div>
+                        </div>
+                        <button onClick={()=>restoreAnnTrash(t.id)} className="px-2 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-[11px] font-bold">復元</button>
+                        <button onClick={()=>purgeAnnTrash(t.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[11px] font-bold">完全削除</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-bold text-slate-500">絞り込み:</span>
@@ -10227,11 +10277,12 @@ function FamilyAdminView({ appData, onSave }) {
                         navigator.clipboard?.writeText(text); alert('クリップボードにコピーしました');
                       }} className="flex-1 py-2 text-xs font-bold bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg">📋 内容をコピー</button>
                       <button onClick={()=>{
-                        if (!window.confirm('この項目を削除します。よろしいですか？')) return;
-                        purgeStorageFiles(historyDetail.item); // ★ Storage実体(写真/PDF)も削除
-                        if (historyDetail.kind === 'photo') onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== historyDetail.item.id) });
-                        else if (historyDetail.kind === 'news_all') onSave({ ...appData, familyAnnouncements: allAnnouncements.filter(a => a.id !== historyDetail.item.id) });
-                        else onSave({ ...appData, familyPersonalAnnouncements: personalAnnouncements.filter(a => a.id !== historyDetail.item.id) });
+                        if (!window.confirm('この項目を削除します。\n（ゴミ箱に移動し、7日間は復元できます）')) return;
+                        const _trashEntry = { ...historyDetail.item, _deletedAt: new Date().toISOString(), _kind: historyDetail.kind };
+                        const _trash = [...(appData.trashedAnnouncements||[]), _trashEntry];
+                        if (historyDetail.kind === 'photo') onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== historyDetail.item.id), trashedAnnouncements: _trash });
+                        else if (historyDetail.kind === 'news_all') onSave({ ...appData, familyAnnouncements: allAnnouncements.filter(a => a.id !== historyDetail.item.id), trashedAnnouncements: _trash });
+                        else onSave({ ...appData, familyPersonalAnnouncements: personalAnnouncements.filter(a => a.id !== historyDetail.item.id), trashedAnnouncements: _trash });
                         setHistoryDetail(null);
                       }} className="flex-1 py-2 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-700 rounded-lg">🗑 削除</button>
                     </div>
@@ -13585,7 +13636,19 @@ export default function App() {
       });
       return keep.length === trash.length ? p : { ...p, personalFile: { ...p.personalFile, trash: keep } };
     });
-    if (changed) { console.log('[trash] 7日経過分を完全削除'); handleSaveToCloud({ ...appData, patients }); }
+    // お知らせ/写真のゴミ箱も7日で完全削除 (Storage実体も)
+    const annTrash = appData.trashedAnnouncements || [];
+    const annKeep = [];
+    annTrash.forEach(t => {
+      if (t._deletedAt && new Date(t._deletedAt).getTime() < cutoff) {
+        const paths = [];
+        if (t.storagePath) paths.push(t.storagePath);
+        if (Array.isArray(t.photos)) t.photos.forEach(ph => ph?.storagePath && paths.push(ph.storagePath));
+        if (isSupabaseEnabled) paths.forEach(pth => supabaseDeleteFile(pth).catch(()=>{}));
+        changed = true;
+      } else { annKeep.push(t); }
+    });
+    if (changed) { console.log('[trash] 7日経過分を完全削除'); handleSaveToCloud({ ...appData, patients, trashedAnnouncements: annKeep }); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId, appData]);
 
@@ -28895,6 +28958,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     const newTrash = (personalFile.trash || []).filter(x => x.id !== trashId);
     if (_kind === 'doc' && _field) {
       onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [_field]: [...(p[_field]||[]), file], personalFile: { ...personalFile, trash: newTrash } } : p) });
+    } else if (_kind === 'fs' && _field) {
+      const fsObj = personalFile.faceSheet || {};
+      updatePatient({ faceSheet: { ...fsObj, [_field]: [...(fsObj[_field]||[]), file] }, trash: newTrash });
     } else {
       updatePatient({ files: [...(personalFile.files || []), file], trash: newTrash });
     }
@@ -29318,8 +29384,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
           patient={patient}
           appData={appData}
           initial={faceSheet}
-          onSave={(fs)=>{
-            updatePatient({ faceSheet: { ...fs, updatedAt: new Date().toISOString() } });
+          onSave={(fsData, removedAtts)=>{
+            // ★ 削除された添付は personalFile.trash へ (7日間復元可)
+            const now = new Date().toISOString();
+            const trashAdds = (removedAtts||[]).map(a => ({ ...a, _deletedAt: now, _kind: 'fs', _field: a._field }));
+            updatePatient({
+              faceSheet: { ...fsData, updatedAt: now },
+              ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
+            });
             setShowFaceSheetForm(false);
           }}
           onClose={()=>setShowFaceSheetForm(false)}
@@ -29728,7 +29800,9 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     pickupRouteFiles: initial?.pickupRouteFiles || [],
   });
   const update = (key, val) => setFs(prev => ({ ...prev, [key]: val }));
-  const handleSubmit = () => { onSave(fs); };
+  // ★ フォーム保存時にまとめて「ゴミ箱」へ移す削除予定の添付 (キャンセル時は移動しない)
+  const [removedAtts, setRemovedAtts] = useState([]);
+  const handleSubmit = () => { onSave(fs, removedAtts); };
   // ★ 添付ファイルの追加 (画像/PDF を base64 で保持)
   const addAttach = async (key, e) => {
     const files = Array.from(e.target.files || []);
@@ -29747,11 +29821,14 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
     }
     if (added.length) setFs(prev => ({ ...prev, [key]: [...(prev[key]||[]), ...added] }));
   };
-  const removeAttach = (key, id) => setFs(prev => {
-    const target = (prev[key]||[]).find(x => x.id === id);
-    if (target?.storagePath) { supabaseDeleteFile(target.storagePath).catch(()=>{}); } // ★ Storage からも削除
-    return { ...prev, [key]: (prev[key]||[]).filter(x => x.id !== id) };
-  });
+  const removeAttach = (key, id) => {
+    setFs(prev => {
+      const target = (prev[key]||[]).find(x => x.id === id);
+      // ★ すぐ消さずゴミ箱予定に積む (保存時に personalFile.trash へ。 Storage実体は残す)
+      if (target) setRemovedAtts(r => [...r, { ...target, _field: key }]);
+      return { ...prev, [key]: (prev[key]||[]).filter(x => x.id !== id) };
+    });
+  };
   // ★ 添付エリア (アップロードボタン + サムネイル一覧) を描画
   const renderAttach = (fieldKey) => (
     <div className="mt-2">
