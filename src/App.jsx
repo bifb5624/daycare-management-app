@@ -287,7 +287,7 @@ const DataExportSection = ({ appData }) => {
           folder.file(`${baseName}.html`, htmlStr);
         }
       };
-      root.file('_meta.json', JSON.stringify({ exportedAt: new Date().toISOString(), range: label, app: 'Tsumugi (紡ぎ)' }, null, 2));
+      root.file('_meta.json', JSON.stringify({ exportedAt: new Date().toISOString(), range: label, app: 'Tsumugi (つむぎ)' }, null, 2));
 
       // HTML 共通スタイル (印刷時 PDF 化用)
       const htmlBase = (title, body) => `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>${title}</title><style>
@@ -593,7 +593,7 @@ ${allPagesHtml}
       }
 
       // README
-      root.file('README.txt', `Tsumugi (紡ぎ) データエクスポート
+      root.file('README.txt', `Tsumugi (つむぎ) データエクスポート
 
 期間: ${label}
 エクスポート日時: ${new Date().toLocaleString('ja-JP')}
@@ -10646,9 +10646,9 @@ function FamilyView() {
                   <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
                 </g>
               </g>
-              <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="3">紡ぎ</text>
+              <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
               <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">家族と現場を結ぶ、デイサービス管理</text>
+              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">ご家族と事業所をつなぐ、れんらく帳</text>
             </svg>
             <div style={{fontSize:12,fontWeight:'bold',color:'#5e8030',letterSpacing:1,marginTop:8}}>{facility.name||'デイケアサービス'}</div>
             <div style={{fontSize:18,fontWeight:'bold',marginTop:2,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
@@ -13052,9 +13052,9 @@ function StaffLoginGate({ onLogin }) {
                 <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
               </g>
             </g>
-            <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="3">紡ぎ</text>
+            <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
             <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-            <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">家族と現場を結ぶ、デイサービス管理</text>
+            <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">通所介護 業務支援システム</text>
           </svg>
           <div style={{fontSize:18,fontWeight:'bold',marginTop:6,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>事業所スタッフ専用ログイン</div>
         </div>
@@ -13907,9 +13907,9 @@ export default function App() {
                 </g>
               </g>
               {/* テキスト: 丸ゴ (白背景で映える深緑、右に55シフトで中央寄せ) */}
-              <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="3">紡ぎ</text>
+              <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
               <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">家族と現場を結ぶ、デイサービス管理</text>
+              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">通所介護 業務支援システム</text>
             </svg>
           </div>
 
@@ -14135,7 +14135,7 @@ export default function App() {
                 </g>
               </svg>
               <div className="flex-1 min-w-0 leading-none">
-                <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'22px',color:'#3d5021',fontWeight:700,letterSpacing:'2px',lineHeight:1}}>紡ぎ</span>
+                <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'22px',color:'#3d5021',fontWeight:700,letterSpacing:'2px',lineHeight:1}}>つむぎ</span>
                 <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'10px',color:'#7daa3d',letterSpacing:'3px',marginLeft:'8px',fontWeight:500,lineHeight:1,verticalAlign:'middle'}}>Tsumugi</span>
                 {session?.mode==='demo' && <span className="ml-2 text-[9px] font-bold bg-amber-500 text-white px-1.5 py-0.5 rounded">DEMO</span>}
               </div>
