@@ -13082,7 +13082,8 @@ function StaffLoginGate({ onLogin }) {
         </form>
         <div style={{marginTop:18,fontSize:10,color:'#94a3b8',textAlign:'center',lineHeight:1.7}}>
           ご家族の方は <a href="?family" style={{color:'#5e8030',fontWeight:'bold'}}>こちら</a> からログイン<br/>
-          IDをお忘れの場合は事業所までお問い合わせください
+          お困りの場合はサポートまでお問い合わせください<br/>
+          <a href="mailto:support@ones-style.co.jp" style={{color:'#5e8030',fontWeight:'bold',textDecoration:'underline'}}>📧 support@ones-style.co.jp</a>
         </div>
         <div style={{marginTop:10,fontSize:9,color:'#cbd5e1',textAlign:'center',fontFamily:'monospace'}}>
           接続: {sbUrlShort}
