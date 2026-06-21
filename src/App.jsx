@@ -12759,11 +12759,20 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
               まだ店舗が登録されていません。「+ 店舗を追加」から作成してください。
             </div>
           ) : (
-            <div style={{display:'grid',gap:10}}>
-              {stores.map(s => {
-                const staffList = storeStaff[s.id] || [];
-                const showing = showLoginFor[s.id];
-                return (
+            <div style={{display:'grid',gap:16}}>
+              {(() => {
+                // ★ 法人 (org_name) ごとにグループ分け
+                const m = new Map();
+                stores.forEach(s => { const k = (s.org_name||'').trim() || '（法人名なし）'; if(!m.has(k)) m.set(k, []); m.get(k).push(s); });
+                const groups = [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ja'));
+                return groups.map(([org, list]) => (
+                  <div key={org}>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#5e8030',marginBottom:8,paddingBottom:4,borderBottom:'2px solid #e5efd0'}}>🏛 {org} <span style={{color:'#a3b58a',fontWeight:'normal'}}>({list.length}店舗)</span></div>
+                    <div style={{display:'grid',gap:10}}>
+                      {list.map(s => {
+                        const staffList = storeStaff[s.id] || [];
+                        const showing = showLoginFor[s.id];
+                        return (
                 <div key={s.id} style={{padding:14,background:'#f4f8ed',borderRadius:12,border:'1px solid #d4e7a5'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                     <div>
@@ -12813,7 +12822,11 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                   )}
                 </div>
                 );
-              })}
+                      })}
+                    </div>
+                  </div>
+                ));
+              })()}
             </div>
           )}
         </div>
@@ -14134,7 +14147,7 @@ export default function App() {
                   className="w-full px-4 py-2 bg-amber-900/40 hover:bg-amber-900/60 flex items-center justify-between gap-2 transition-colors">
                   <span className="text-[11px] font-bold text-amber-200 truncate flex items-center gap-1.5">
                     <span>🏢</span>
-                    <span className="truncate">{staffSession.storeName || staffSession.storeShortName || '店舗'}</span>
+                    <span className="truncate">{staffSession.storeShortName || staffSession.storeName || '店舗'}</span>
                   </span>
                   <span className="text-[10px] font-bold text-amber-300 px-2 py-1 rounded whitespace-nowrap bg-amber-800/50">
                     {adminStoreDropdownOpen ? '▲' : '▼'} 店舗切替
@@ -14146,7 +14159,12 @@ export default function App() {
                       <div className="px-4 py-3 text-[10px] text-amber-300/70">読込中...</div>
                     ) : (
                       <>
-                        {adminStoresList.map(s => {
+                        {(() => {
+                          // ★ 同一法人(org_name)の店舗のみ切替対象にする
+                          const curOrg = (adminStoresList.find(x => x.id === staffSession.storeId)?.org_name || '').trim();
+                          const switchable = adminStoresList.filter(s => ((s.org_name||'').trim() === curOrg) || s.id === staffSession.storeId);
+                          return switchable;
+                        })().map(s => {
                           const isCurrent = s.id === staffSession.storeId;
                           return (
                             <button key={s.id}
@@ -14185,10 +14203,10 @@ export default function App() {
                               }`}>
                               <span className="flex items-center gap-1.5 truncate">
                                 <span>🏢</span>
-                                <span className="truncate">{s.name}</span>
+                                <span className="truncate">{s.short_name || s.name}</span>
                               </span>
                               <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">
-                                {isCurrent ? '✓ 現在' : 'ログアウトして開く →'}
+                                {isCurrent ? '✓ 現在' : '切替 →'}
                               </span>
                             </button>
                           );
