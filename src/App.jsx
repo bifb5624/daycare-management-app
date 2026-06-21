@@ -29944,6 +29944,29 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
 function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
   const fs = faceSheet || {};
   const [downloading, setDownloading] = useState(false);
+  // ★ 添付資料 (ジェノグラム/見取り図/送迎経路) を PDF に載せる。 署名URLを事前解決。
+  const allAtts = [
+    ...(fs.genogramFiles||[]).map(a=>({ ...a, _group:'ジェノグラム' })),
+    ...(fs.floorPlanFiles||[]).map(a=>({ ...a, _group:'自宅の見取り図' })),
+    ...(fs.pickupRouteFiles||[]).map(a=>({ ...a, _group:'送迎経路' })),
+  ];
+  const [attUrls, setAttUrls] = useState({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const map = {};
+      for (const a of allAtts) {
+        if (a.data) map[a.id] = a.data;
+        else if (a.storagePath && isSupabaseEnabled) {
+          const u = (await supabaseGetSignedUrl(a.storagePath)) || supabaseGetPublicUrl(a.storagePath);
+          if (u) map[a.id] = u;
+        }
+      }
+      if (!cancelled) setAttUrls(map);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const handleDownload = async () => {
     setDownloading(true);
     try {
@@ -30061,6 +30084,25 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
               <Row label="趣味・嗜好" value={fs.hobby}/>
               <Row label="性格・個別情報" value={fs.personality}/>
             </div>
+            {/* ★ 添付資料 (画像のみPDFに埋め込み。 PDF添付は枚数のみ注記) */}
+            {['ジェノグラム','自宅の見取り図','送迎経路'].map(g => {
+              const imgs = allAtts.filter(a => a._group===g && a.type==='image' && attUrls[a.id]);
+              const pdfCount = allAtts.filter(a => a._group===g && a.type==='pdf').length;
+              if (imgs.length === 0 && pdfCount === 0) return null;
+              return (
+                <div key={g} style={{marginBottom:12}}>
+                  <div style={{fontSize:12,fontWeight:'bold',color:'#92400e',background:'#fef3c7',padding:'5px 10px',marginBottom:6}}>添付：{g}{pdfCount>0?`（PDF ${pdfCount} 件は別添）`:''}</div>
+                  {imgs.length > 0 && (
+                    <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                      {imgs.map(a => (
+                        <img key={a.id} src={attUrls[a.id]} crossOrigin="anonymous" alt=""
+                          style={{maxWidth:'46%',maxHeight:240,objectFit:'contain',border:'1px solid #e2e8f0',borderRadius:4}}/>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             <div style={{fontSize:9,color:'#64748b',marginTop:18,textAlign:'right'}}>
               最終更新：{fs.updatedAt ? new Date(fs.updatedAt).toLocaleDateString('ja-JP') : '-'}
             </div>
