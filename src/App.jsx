@@ -13516,6 +13516,49 @@ export default function App() {
     }
   };
 
+  // ★ 旧データ(base64)を Supabase Storage へ自動移行して localStorage 容量を空ける。
+  //   Storage化以前に保存した画像/PDF が base64 のまま残り「容量超過」になるのを解消。
+  //   接続済み・店舗データ読込後に1回だけ実行。 成功した分だけ storagePath に置換 (非破壊)。
+  const base64MigratedRef = React.useRef(false);
+  useEffect(() => {
+    if (!isSupabaseEnabled || base64MigratedRef.current) return;
+    if (!staffSession?.storeId || dataLoadedForStoreRef.current !== staffSession.storeId) return;
+    let hasB64 = false;
+    try { hasB64 = JSON.stringify(appData).includes('"data:'); } catch {}
+    if (!hasB64) return;
+    base64MigratedRef.current = true;
+    (async () => {
+      const next = JSON.parse(JSON.stringify(appData));
+      let migrated = 0;
+      const migFile = async (obj, prefix) => {
+        if (!obj || obj.storagePath) return;
+        const b64 = (obj.data && String(obj.data).startsWith('data:')) ? obj.data
+                  : (obj.url && String(obj.url).startsWith('data:')) ? obj.url : null;
+        if (!b64) return;
+        const blob = dataUrlToBlob(b64);
+        if (!blob) return;
+        const stored = await supabaseUploadFile(blob, { name: obj.name || 'file', contentType: blob.type, prefix });
+        if (stored?.path) { obj.storagePath = stored.path; delete obj.data; delete obj.url; migrated++; }
+      };
+      try {
+        for (const p of (next.patients || [])) {
+          const pf = p.personalFile || {};
+          for (const f of (pf.files || [])) await migFile(f, `pf/${p.id}`);
+          const fs = pf.faceSheet || {};
+          for (const k of ['genogramFiles','floorPlanFiles','pickupRouteFiles']) for (const a of (fs[k] || [])) await migFile(a, `fs/${p.id}`);
+        }
+        for (const a of (next.familyAnnouncements || [])) for (const ph of (a.photos || [])) await migFile(ph, 'news');
+        for (const a of (next.familyPersonalAnnouncements || [])) for (const ph of (a.photos || [])) await migFile(ph, 'news');
+        for (const ph of (next.familyPhotos || [])) await migFile(ph, 'news');
+      } catch (e) { console.warn('[migrate] error', e?.message || e); }
+      if (migrated > 0) {
+        console.log(`[migrate] base64→Storage: ${migrated} 件`);
+        handleSaveToCloud(next, { manual: true, message: `古い画像 ${migrated} 件をクラウドへ移行し、容量を空けました` });
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSupabaseEnabled, staffSession?.storeId, appData]);
+
   // 起動時：予定変更（from <= 今日）を自動適用
   React.useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
