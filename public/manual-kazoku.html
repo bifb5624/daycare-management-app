@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>つむぎ ご利用ガイド｜ご家族・ご関係者向け</title>
+<style>
+  :root{
+    --green:#7daa3d; --green-d:#3d5021; --green-l:#eef6e0; --green-m:#94c456;
+    --ink:#1e293b; --sub:#64748b; --line:#e2e8f0; --bg:#f6f8f1;
+    --blue:#2563eb; --blue-l:#eff6ff; --amber:#f59e0b; --amber-l:#fef3c7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Hiragino Maru Gothic ProN','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.95;font-size:17px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:840px;margin:0 auto;padding:0 18px 80px}
+  .cover{background:linear-gradient(160deg,#fbfdf6,#eef6e0);border-radius:0 0 32px 32px;
+    padding:48px 24px 40px;text-align:center;box-shadow:0 6px 24px rgba(125,170,61,.12)}
+  .badge{display:inline-block;background:var(--blue);color:#fff;font-weight:700;font-size:13px;
+    padding:6px 16px;border-radius:999px;letter-spacing:2px;margin-bottom:18px}
+  .cover h1{font-size:30px;margin:6px 0 2px;color:var(--green-d);letter-spacing:2px}
+  .cover .sub{color:var(--sub);font-size:15px;margin-top:6px}
+  .toc{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 24px;margin:24px 0 8px}
+  .toc h2{font-size:15px;color:var(--green-d);margin:0 0 10px;letter-spacing:1px}
+  .toc ol{margin:0;padding-left:0;list-style:none;counter-reset:toc}
+  .toc li{counter-increment:toc;padding:8px 0;border-bottom:1px dashed var(--line);font-weight:700;font-size:16px}
+  .toc li:last-child{border-bottom:none}
+  .toc li a{color:var(--ink);text-decoration:none}
+  .toc li::before{content:counter(toc);display:inline-flex;width:28px;height:28px;border-radius:50%;
+    background:var(--green-l);color:var(--green-d);font-size:14px;align-items:center;justify-content:center;
+    margin-right:10px;vertical-align:middle}
+  section{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px 26px 30px;margin:22px 0;
+    box-shadow:0 2px 10px rgba(0,0,0,.03)}
+  h2.sec{font-size:22px;color:var(--green-d);margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  h2.sec .n{display:inline-flex;width:36px;height:36px;border-radius:10px;background:var(--green);color:#fff;
+    font-size:18px;align-items:center;justify-content:center;flex:none}
+  .lead{color:var(--sub);font-size:15px;margin:2px 0 18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  h3{font-size:18px;color:var(--green-d);margin:26px 0 8px;padding-left:12px;border-left:5px solid var(--green-m)}
+  p{margin:10px 0}
+  .steps{counter-reset:st;margin:14px 0;padding:0;list-style:none}
+  .steps>li{counter-increment:st;position:relative;padding:16px 14px 16px 58px;margin:12px 0;
+    background:#fbfdf6;border:1px solid var(--green-l);border-radius:14px;font-size:16.5px}
+  .steps>li::before{content:counter(st);position:absolute;left:14px;top:14px;width:32px;height:32px;border-radius:50%;
+    background:var(--green);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:16px}
+  .steps>li b{color:var(--green-d)}
+  .note,.tip,.warn{border-radius:14px;padding:15px 16px 15px 50px;position:relative;margin:16px 0;font-size:15.5px}
+  .note{background:var(--blue-l);border:1px solid #bfdbfe}
+  .tip{background:var(--green-l);border:1px solid #d4e7a5}
+  .warn{background:var(--amber-l);border:1px solid #fcd34d}
+  .note::before,.tip::before,.warn::before{position:absolute;left:15px;top:13px;font-size:21px}
+  .note::before{content:'💡'} .tip::before{content:'✅'} .warn::before{content:'⚠️'}
+  .fig{margin:18px 0;text-align:center}
+  .fig svg{max-width:100%;height:auto;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 14px rgba(0,0,0,.06)}
+  .cap{font-size:13px;color:var(--sub);margin-top:8px}
+  .kbd{display:inline-block;background:#fff;border:1.5px solid var(--green-m);color:var(--green-d);
+    border-radius:8px;padding:1px 10px;font-weight:700;font-size:14.5px;margin:0 2px}
+  .foot{text-align:center;color:var(--sub);font-size:13px;margin-top:30px;line-height:2}
+  a.link{color:var(--green);font-weight:700}
+  @media print{body{background:#fff}section,.toc{box-shadow:none;break-inside:avoid}.cover{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="cover">
+  <svg width="240" viewBox="0 0 460 130" xmlns="http://www.w3.org/2000/svg" aria-label="つむぎロゴ">
+    <defs>
+      <radialGradient id="lA" cx="40%" cy="55%" r="55%"><stop offset="0%" stop-color="#608a3e"/><stop offset="50%" stop-color="#94c456"/><stop offset="100%" stop-color="#d4e7a5"/></radialGradient>
+      <radialGradient id="lB" cx="55%" cy="50%" r="55%"><stop offset="0%" stop-color="#5a8330"/><stop offset="50%" stop-color="#8fb84a"/><stop offset="100%" stop-color="#cee49b"/></radialGradient>
+    </defs>
+    <g transform="translate(105,58) scale(0.8)">
+      <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <g transform="rotate(-60)">
+        <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lA)"/></g>
+        <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lB)"/></g>
+        <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lA)"/></g>
+        <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lB)"/></g>
+        <circle r="4" fill="#fbbf24"/>
+      </g>
+    </g>
+    <text x="155" y="50" font-family="'Hiragino Maru Gothic ProN',sans-serif" font-size="40" fill="#3d5021" font-weight="700" letter-spacing="1">つむぎ</text>
+    <text x="157" y="73" font-family="'Hiragino Maru Gothic ProN',sans-serif" font-size="17" fill="#7daa3d" font-weight="500" letter-spacing="6">Tsumugi</text>
+  </svg>
+  <div class="badge">ご家族・ご関係者向け</div>
+  <h1>ご利用ガイド</h1>
+  <div class="sub">大切なご家族の「今日」を、いつでもどこでも。<br>スマホがはじめての方でも大丈夫です</div>
+</div>
+
+<div class="wrap">
+
+  <div class="toc">
+    <h2>📖 もくじ</h2>
+    <ol>
+      <li><a href="#about">「つむぎ」ってなに？（名前の由来）</a></li>
+      <li><a href="#login">ログインする（はじめての登録）</a></li>
+      <li><a href="#look">ご利用者の様子を見る</a></li>
+      <li><a href="#photo">写真・お知らせを見る</a></li>
+      <li><a href="#myinfo">ご自身の連絡先を登録・変更する</a></li>
+      <li><a href="#help">困ったときは</a></li>
+    </ol>
+  </div>
+
+  <section id="about">
+    <h2 class="sec"><span class="n">1</span>「つむぎ」ってなに？</h2>
+    <div class="lead">デイサービスでの「ご利用者の毎日」を、ご家族がいつでも見られるアプリです。</div>
+    <p><b>「つむぎ」は、お父さま・お母さまなど、デイサービスをご利用の方の様子を、ご家族がスマホやパソコンで見られるアプリです。</b>
+      その日の体温や血圧、運動の様子、連絡帳、行事の写真などを、事業所がアプリに記録し、ご家族と共有します。
+      離れて暮らしていても、「今日は元気にしていたかな」が、すぐにわかります。</p>
+    <h3>🍀 名前の由来</h3>
+    <p>「つむぎ（紡ぎ）」は、糸を<b>紡（つむ）ぐ</b>ことが由来です。
+      <b>ご利用者・ご家族・事業所のスタッフ</b>を、一本の糸のようにやさしくつないでいく——そんな願いを込めました。
+      ロゴの<b>四つ葉のクローバー</b>には「しあわせ」と「みんなのつながり」の意味があります。</p>
+    <div class="tip"><b>できること</b>① 毎日の様子（体温・血圧・気分など）を見る　② 連絡帳を読む　③ 写真・お知らせを見る　④ ご自身の連絡先を登録・変更する</div>
+  </section>
+
+  <section id="login">
+    <h2 class="sec"><span class="n">2</span>ログインする</h2>
+    <div class="lead">事業所から届いた「ご招待」から、はじめての登録をします。</div>
+    <h3>はじめての方（最初の登録）</h3>
+    <ol class="steps">
+      <li>事業所から届いた<b>招待のURL</b>（メールやLINE、紙のQRコードなど）を開きます。</li>
+      <li>ご自身で決めた<b>ログインID</b>と<b>パスワード</b>を入力します。</li>
+      <li><b>お名前（姓・名）・フリガナ・続柄・電話番号・メール</b>を入力します。<br>
+        （この内容が、事業所側の緊急連絡先にも登録されます）</li>
+      <li>利用規約に同意して、<span class="kbd">登録</span> を押せば完了です。</li>
+    </ol>
+    <h3>2回目以降</h3>
+    <ol class="steps">
+      <li>ご家族用のログインページを開きます。</li>
+      <li>登録した<b>ログインID</b>と<b>パスワード</b>を入れて <span class="kbd">ログイン</span>。</li>
+    </ol>
+    <div class="note"><b>パスワードは「👁 表示」で確認</b>入力中、目のマークを押すと入力した文字が見えます。打ち間違いが防げます。</div>
+    <div class="warn"><b>招待URLには期限があります</b>届いてから早めにご登録ください。期限が切れた場合は、事業所に再発行をご依頼ください。</div>
+  </section>
+
+  <section id="look">
+    <h2 class="sec"><span class="n">3</span>ご利用者の様子を見る</h2>
+    <div class="lead">ログインすると、ご利用者の「今日」や記録が見られます。</div>
+    <div class="fig">
+      <svg width="380" viewBox="0 0 380 250">
+        <rect x="10" y="10" width="360" height="230" rx="18" fill="#fff" stroke="#e2e8f0"/>
+        <rect x="10" y="10" width="360" height="56" rx="18" fill="#eef6e0"/>
+        <text x="32" y="38" font-size="13" fill="#64748b">ひかりデイサービス</text>
+        <text x="32" y="57" font-size="17" font-weight="700" fill="#3d5021">介護 太郎 様</text>
+        <text x="32" y="96" font-size="13" font-weight="700" fill="#3d5021">本日の様子</text>
+        <rect x="32" y="108" width="150" height="48" rx="12" fill="#fff" stroke="#e2e8f0"/>
+        <text x="46" y="128" font-size="11" fill="#64748b">体温</text><text x="46" y="147" font-size="16" font-weight="700" fill="#1e293b">36.5℃</text>
+        <rect x="198" y="108" width="150" height="48" rx="12" fill="#fff" stroke="#e2e8f0"/>
+        <text x="212" y="128" font-size="11" fill="#64748b">血圧</text><text x="212" y="147" font-size="16" font-weight="700" fill="#1e293b">128/80</text>
+        <rect x="32" y="166" width="316" height="58" rx="12" fill="#fbfdf6" stroke="#d4e7a5"/>
+        <text x="46" y="188" font-size="11" fill="#64748b">気分・連絡帳</text>
+        <text x="46" y="210" font-size="14" fill="#1e293b">😊 よく食べて、体操も頑張りました！</text>
+      </svg>
+      <div class="cap">ご家族の画面イメージ（スマホ）</div>
+    </div>
+    <ol class="steps">
+      <li>ログインすると、ご利用者の名前と<b>本日の様子</b>が表示されます。</li>
+      <li>下にスクロールすると、体温・血圧・運動・気分・連絡帳などが見られます。</li>
+      <li>日付を変えると、過去の記録もさかのぼって見られます。</li>
+    </ol>
+    <div class="note"><b>見るだけ・安心</b>ご家族の画面は基本的に「見るだけ」です。記録を消したり書き換えたりする心配はありません（連絡先の編集だけ可能です）。</div>
+  </section>
+
+  <section id="photo">
+    <h2 class="sec"><span class="n">4</span>写真・お知らせを見る</h2>
+    <div class="lead">事業所からのお知らせや、行事の写真が届きます。</div>
+    <ol class="steps">
+      <li>画面内の <span class="kbd">お知らせ</span> や <span class="kbd">写真</span> の場所を開きます。</li>
+      <li>新しいお知らせ・写真があると、目印（バッジ）が付きます。</li>
+      <li>写真はタップすると大きく表示できます。</li>
+    </ol>
+    <div class="tip"><b>うれしいお知らせ</b>運動会やお誕生日会など、事業所での楽しい様子が写真で届きます。ぜひご覧ください。</div>
+  </section>
+
+  <section id="myinfo">
+    <h2 class="sec"><span class="n">5</span>ご自身の連絡先を登録・変更する</h2>
+    <div class="lead">引っ越しや電話番号の変更があったら、ご自身で更新できます。</div>
+    <ol class="steps">
+      <li>画面の <span class="kbd">利用者・登録者情報</span> を開き、上のタブで <span class="kbd">登録者基本情報</span> を選びます。</li>
+      <li><b>姓・名・フリガナ（姓/名）・続柄・電話番号（固定/携帯）・メールアドレス</b>を入力します。</li>
+      <li><span class="kbd">💾 保存</span> を押します。</li>
+    </ol>
+    <div class="note"><b>事業所にも自動で反映</b>ここで変更すると、事業所側の「緊急連絡先」にも自動で反映されます。いざという時のために、最新の連絡先にしておきましょう。</div>
+    <div class="tip"><b>フリガナはカタカナ</b>フリガナ欄は、ひらがなで入力しても自動でカタカナに変わります。そのまま入力して大丈夫です。</div>
+    <h3>ご家族を追加したいとき</h3>
+    <p>同じご利用者を、複数のご家族で見ることもできます。追加のご招待は事業所にご依頼ください
+      （事業所がもう1つ招待を発行します）。</p>
+  </section>
+
+  <section id="help">
+    <h2 class="sec"><span class="n">6</span>困ったときは</h2>
+    <ul>
+      <li><b>ログインできない</b> … ID・パスワードをご確認ください。分からなくなった場合は事業所へ。</li>
+      <li><b>招待URLが開けない／期限切れ</b> … 事業所に再発行をご依頼ください。</li>
+      <li><b>画面がうまく表示されない</b> … 一度ページを更新（再読み込み）してみてください。</li>
+    </ul>
+    <div class="note"><b>まずは事業所へ</b>ご不明な点は、ご利用の事業所にお気軽にお問い合わせください。<br>
+      アプリ自体のお問い合わせ：<a class="link" href="mailto:support@ones-style.co.jp">📧 support@ones-style.co.jp</a></div>
+    <div class="foot">
+      🍀 つむぎ（Tsumugi）<br>
+      ご利用者・ご家族・スタッフを、やさしく紡ぐ。<br>
+      © ones-style
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

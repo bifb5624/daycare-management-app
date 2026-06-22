@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>つむぎ 操作マニュアル｜事業所（スタッフ）向け</title>
+<style>
+  :root{
+    --green:#7daa3d; --green-d:#3d5021; --green-l:#eef6e0; --green-m:#94c456;
+    --ink:#1e293b; --sub:#64748b; --line:#e2e8f0; --bg:#f6f8f1;
+    --blue:#2563eb; --blue-l:#eff6ff; --amber:#f59e0b; --amber-l:#fef3c7; --red:#dc2626;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Hiragino Maru Gothic ProN','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;
+    color:var(--ink);background:var(--bg);line-height:1.85;font-size:16px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:880px;margin:0 auto;padding:0 18px 80px}
+  /* 表紙 */
+  .cover{background:linear-gradient(160deg,#fbfdf6,#eef6e0);border-radius:0 0 32px 32px;
+    padding:48px 24px 40px;text-align:center;box-shadow:0 6px 24px rgba(125,170,61,.12);margin-bottom:8px}
+  .badge{display:inline-block;background:var(--green);color:#fff;font-weight:700;font-size:13px;
+    padding:6px 16px;border-radius:999px;letter-spacing:2px;margin-bottom:18px}
+  .cover h1{font-size:30px;margin:6px 0 2px;color:var(--green-d);letter-spacing:2px}
+  .cover .sub{color:var(--sub);font-size:14px;margin-top:6px}
+  /* 目次 */
+  .toc{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 24px;margin:24px 0 8px}
+  .toc h2{font-size:15px;color:var(--green-d);margin:0 0 10px;letter-spacing:1px}
+  .toc ol{margin:0;padding-left:0;list-style:none;counter-reset:toc}
+  .toc li{counter-increment:toc;padding:7px 0;border-bottom:1px dashed var(--line);font-weight:700;font-size:15px}
+  .toc li:last-child{border-bottom:none}
+  .toc li a{color:var(--ink);text-decoration:none}
+  .toc li::before{content:counter(toc);display:inline-flex;width:26px;height:26px;border-radius:50%;
+    background:var(--green-l);color:var(--green-d);font-size:13px;align-items:center;justify-content:center;
+    margin-right:10px;vertical-align:middle}
+  /* セクション */
+  section{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px 26px 30px;margin:22px 0;
+    box-shadow:0 2px 10px rgba(0,0,0,.03)}
+  h2.sec{font-size:21px;color:var(--green-d);margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  h2.sec .n{display:inline-flex;width:34px;height:34px;border-radius:10px;background:var(--green);color:#fff;
+    font-size:17px;align-items:center;justify-content:center;flex:none}
+  .lead{color:var(--sub);font-size:14.5px;margin:2px 0 18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;color:var(--green-d);margin:26px 0 8px;padding-left:12px;border-left:5px solid var(--green-m)}
+  p{margin:8px 0}
+  /* 手順 */
+  .steps{counter-reset:st;margin:14px 0;padding:0;list-style:none}
+  .steps>li{counter-increment:st;position:relative;padding:14px 14px 14px 56px;margin:10px 0;
+    background:#fbfdf6;border:1px solid var(--green-l);border-radius:14px}
+  .steps>li::before{content:counter(st);position:absolute;left:14px;top:13px;width:30px;height:30px;border-radius:50%;
+    background:var(--green);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .steps>li b{color:var(--green-d)}
+  /* コールアウト */
+  .note,.tip,.warn{border-radius:14px;padding:14px 16px 14px 48px;position:relative;margin:16px 0;font-size:14.5px}
+  .note{background:var(--blue-l);border:1px solid #bfdbfe}
+  .tip{background:var(--green-l);border:1px solid #d4e7a5}
+  .warn{background:var(--amber-l);border:1px solid #fcd34d}
+  .note::before,.tip::before,.warn::before{position:absolute;left:14px;top:12px;font-size:20px}
+  .note::before{content:'💡'} .tip::before{content:'✅'} .warn::before{content:'⚠️'}
+  .note b,.tip b,.warn b{display:block;margin-bottom:2px}
+  /* 図 */
+  .fig{margin:18px 0;text-align:center}
+  .fig svg{max-width:100%;height:auto;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 14px rgba(0,0,0,.06)}
+  .cap{font-size:12.5px;color:var(--sub);margin-top:8px}
+  /* ピル/キーワード */
+  .kbd{display:inline-block;background:#fff;border:1.5px solid var(--green-m);color:var(--green-d);
+    border-radius:8px;padding:1px 9px;font-weight:700;font-size:13.5px;margin:0 2px}
+  .pill{display:inline-block;background:var(--green);color:#fff;border-radius:999px;padding:1px 12px;font-weight:700;font-size:13px}
+  hr{border:none;border-top:1px dashed var(--line);margin:24px 0}
+  .foot{text-align:center;color:var(--sub);font-size:13px;margin-top:30px;line-height:2}
+  a.link{color:var(--green);font-weight:700}
+  @media print{body{background:#fff}section,.toc{box-shadow:none;break-inside:avoid}.cover{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="cover">
+  <svg width="240" viewBox="0 0 460 130" xmlns="http://www.w3.org/2000/svg" aria-label="つむぎロゴ">
+    <defs>
+      <radialGradient id="lA" cx="40%" cy="55%" r="55%"><stop offset="0%" stop-color="#608a3e"/><stop offset="50%" stop-color="#94c456"/><stop offset="100%" stop-color="#d4e7a5"/></radialGradient>
+      <radialGradient id="lB" cx="55%" cy="50%" r="55%"><stop offset="0%" stop-color="#5a8330"/><stop offset="50%" stop-color="#8fb84a"/><stop offset="100%" stop-color="#cee49b"/></radialGradient>
+    </defs>
+    <g transform="translate(105,58) scale(0.8)">
+      <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <g transform="rotate(-60)">
+        <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lA)"/></g>
+        <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lB)"/></g>
+        <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lA)"/></g>
+        <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lB)"/></g>
+        <circle r="4" fill="#fbbf24"/>
+      </g>
+    </g>
+    <text x="155" y="50" font-family="'Hiragino Maru Gothic ProN',sans-serif" font-size="40" fill="#3d5021" font-weight="700" letter-spacing="1">つむぎ</text>
+    <text x="157" y="73" font-family="'Hiragino Maru Gothic ProN',sans-serif" font-size="17" fill="#7daa3d" font-weight="500" letter-spacing="6">Tsumugi</text>
+  </svg>
+  <div class="badge">事業所・スタッフ向け</div>
+  <h1>操作マニュアル</h1>
+  <div class="sub">通所介護 業務支援システム「つむぎ」<br>はじめての方でも、この順番どおりに進めれば使えます</div>
+</div>
+
+<div class="wrap">
+
+  <div class="toc">
+    <h2>📖 もくじ</h2>
+    <ol>
+      <li><a href="#about">つむぎってどんなアプリ？（名前の由来）</a></li>
+      <li><a href="#login">ログインする</a></li>
+      <li><a href="#screen">画面の見方（サイドバー・全画面）</a></li>
+      <li><a href="#staff">「スタッフ切替」で担当者を選ぶ</a></li>
+      <li><a href="#master">利用者マスタ管理（登録・CSV取込・緊急連絡先）</a></li>
+      <li><a href="#record">サービス提供記録入力（毎日の記録）</a></li>
+      <li><a href="#sched">月間スケジュール・休止</a></li>
+      <li><a href="#family">ご家族アカウントの招待・管理</a></li>
+      <li><a href="#etc">連絡帳・お知らせ・個人ファイル・分析</a></li>
+      <li><a href="#save">データの保存とバックアップ</a></li>
+      <li><a href="#help">困ったときは</a></li>
+    </ol>
+  </div>
+
+  <!-- 1 -->
+  <section id="about">
+    <h2 class="sec"><span class="n">1</span>つむぎってどんなアプリ？</h2>
+    <div class="lead">まずは「つむぎ」がどんなアプリで、なぜこの名前なのかをご紹介します。</div>
+    <p><b>「つむぎ」は、デイサービス（通所介護）の毎日の記録・運営をまとめて行えるアプリです。</b>
+      利用者さんのバイタル（体温・血圧など）や運動記録、連絡帳、スケジュール管理、ご家族との情報共有まで、
+      紙やバラバラの表で行っていた作業を 1 つにまとめます。パソコン・タブレット（iPad）・スマホのどれでも使えます。</p>
+    <h3>🍀 名前の由来</h3>
+    <p>「つむぎ（紡ぎ）」は、糸を<b>紡（つむ）ぐ</b>ことから来ています。
+      <b>ご利用者・ご家族・現場のスタッフ</b>を、1 本ずつの糸のように、やさしく丁寧につないで（紡いで）いく——
+      そんな想いを込めて名づけました。ロゴの<b>四つ葉のクローバー</b>は「しあわせ」と「みんなのつながり」を表しています。</p>
+    <div class="fig">
+      <svg width="640" viewBox="0 0 640 200">
+        <rect x="40" y="78" width="150" height="46" rx="23" fill="#eef6e0" stroke="#94c456"/>
+        <text x="115" y="106" text-anchor="middle" font-size="17" font-weight="700" fill="#3d5021">ご利用者</text>
+        <rect x="245" y="78" width="150" height="46" rx="23" fill="#7daa3d"/>
+        <text x="320" y="100" text-anchor="middle" font-size="16" font-weight="700" fill="#fff">つむぎ</text>
+        <text x="320" y="116" text-anchor="middle" font-size="10" fill="#eaf3d6">が、つなぐ</text>
+        <rect x="450" y="40" width="150" height="46" rx="23" fill="#eff6ff" stroke="#93c5fd"/>
+        <text x="525" y="68" text-anchor="middle" font-size="17" font-weight="700" fill="#1e40af">ご家族</text>
+        <rect x="450" y="116" width="150" height="46" rx="23" fill="#fef3c7" stroke="#fcd34d"/>
+        <text x="525" y="144" text-anchor="middle" font-size="16" font-weight="700" fill="#92400e">スタッフ</text>
+        <path d="M190 101 H245" stroke="#94c456" stroke-width="3"/>
+        <path d="M395 95 Q430 80 450 63" stroke="#94c456" stroke-width="3" fill="none"/>
+        <path d="M395 107 Q430 125 450 139" stroke="#94c456" stroke-width="3" fill="none"/>
+      </svg>
+      <div class="cap">つむぎは、ご利用者を真ん中に、ご家族とスタッフをつなぎます</div>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section id="login">
+    <h2 class="sec"><span class="n">2</span>ログインする</h2>
+    <div class="lead">事業所から渡された ID とパスワードでログインします。</div>
+    <ol class="steps">
+      <li>ブラウザ（Safari や Chrome）で、事業所の<b>つむぎのURL</b>を開きます。</li>
+      <li><b>「事業所ログイン（スタッフ専用）」</b>の画面で、<b>ログインID</b> と <b>パスワード</b>を入力します。</li>
+      <li><span class="kbd">ログイン</span> ボタンを押します。</li>
+    </ol>
+    <div class="fig">
+      <svg width="360" viewBox="0 0 360 320">
+        <rect x="10" y="10" width="340" height="300" rx="20" fill="#fff" stroke="#e2e8f0"/>
+        <circle cx="180" cy="58" r="22" fill="#eef6e0"/><text x="180" y="65" text-anchor="middle" font-size="22">🍀</text>
+        <text x="180" y="98" text-anchor="middle" font-size="15" font-weight="700" fill="#3d5021">つむぎ</text>
+        <text x="180" y="118" text-anchor="middle" font-size="10" fill="#64748b">通所介護 業務支援システム</text>
+        <text x="40" y="150" font-size="12" font-weight="700" fill="#475569">ログインID</text>
+        <rect x="40" y="158" width="280" height="40" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="56" y="183" font-size="13" fill="#94a3b8">例: honbu</text>
+        <text x="40" y="220" font-size="12" font-weight="700" fill="#475569">パスワード</text>
+        <rect x="40" y="228" width="280" height="40" rx="10" fill="#f8fafc" stroke="#cbd5e1"/>
+        <text x="56" y="253" font-size="14" fill="#475569" letter-spacing="2">••••••••</text>
+        <rect x="40" y="280" width="280" height="22" rx="11" fill="#7daa3d"/>
+      </svg>
+      <div class="cap">事業所ログイン画面のイメージ</div>
+    </div>
+    <div class="note"><b>ID・パスワードを忘れたら</b>画面下の <span class="kbd">📧 support@ones-style.co.jp</span> までご連絡ください。</div>
+  </section>
+
+  <!-- 3 -->
+  <section id="screen">
+    <h2 class="sec"><span class="n">3</span>画面の見方</h2>
+    <div class="lead">左の「サイドバー」からやりたいことを選びます。よく使う機能はこの中にあります。</div>
+    <div class="fig">
+      <svg width="640" viewBox="0 0 640 330">
+        <rect x="10" y="10" width="620" height="310" rx="14" fill="#fff" stroke="#e2e8f0"/>
+        <!-- sidebar -->
+        <rect x="10" y="10" width="180" height="310" rx="14" fill="#1f2937"/>
+        <text x="30" y="44" font-size="14" font-weight="700" fill="#fff">🍀 つむぎ</text>
+        <g font-size="12.5" fill="#cbd5e1" font-weight="700">
+          <rect x="22" y="62" width="156" height="30" rx="8" fill="#2563eb"/><text x="34" y="82" fill="#fff">📝 提供記録入力</text>
+          <text x="34" y="116">📅 月間スケジュール</text>
+          <text x="34" y="146">📒 連絡帳・日誌</text>
+          <text x="34" y="176">👥 利用者マスタ管理</text>
+          <text x="34" y="206">📢 お知らせ・写真</text>
+          <text x="34" y="236">📊 分析</text>
+          <text x="34" y="266">⚙️ 各種設定</text>
+        </g>
+        <text x="30" y="304" font-size="11" fill="#94a3b8">↩ ログアウト</text>
+        <!-- main -->
+        <text x="215" y="40" font-size="15" font-weight="700" fill="#3d5021">選んだ機能がここに表示されます</text>
+        <rect x="215" y="56" width="395" height="60" rx="10" fill="#f6f8f1" stroke="#e2e8f0"/>
+        <text x="232" y="92" font-size="12" fill="#64748b">例）「提供記録入力」を選ぶと、今日の記録表が開きます</text>
+        <rect x="215" y="130" width="395" height="170" rx="10" fill="#fbfdf6" stroke="#e2e8f0"/>
+        <text x="412" y="220" text-anchor="middle" font-size="13" fill="#94a3b8">記録表・スケジュール など</text>
+      </svg>
+      <div class="cap">左：サイドバー（メニュー）／ 右：選んだ画面</div>
+    </div>
+    <div class="tip"><b>全画面表示</b>記録入力などでは右上の <span class="kbd">⛶ 全画面</span> を押すと、表が大きく見やすくなります。元に戻すときは <span class="kbd">⛶ 通常</span> を押します。</div>
+    <div class="note"><b>スマホ・iPadの方へ</b>画面が狭いときは、左上の <span class="kbd">≡</span>（三本線）でサイドバーを開け閉めできます。</div>
+  </section>
+
+  <!-- 4 -->
+  <section id="staff">
+    <h2 class="sec"><span class="n">4</span>「スタッフ切替」で担当者を選ぶ</h2>
+    <div class="lead">記録を入力する前に、<b>「今、記録している人（担当者）」</b>を選んでおきます。記録に担当者名が残ります。</div>
+    <ol class="steps">
+      <li>サイドバーの <span class="kbd">スタッフ切替</span> を押します。</li>
+      <li>今から入力する<b>担当者の名前</b>を選びます。</li>
+      <li>これで、保存する記録にその担当者名が自動で入ります。</li>
+    </ol>
+    <div class="warn"><b>担当者が未選択のまま保存すると</b>「担当者が設定されていません」と確認が出ます。なるべく先に担当者を選んでから入力しましょう。</div>
+  </section>
+
+  <!-- 5 -->
+  <section id="master">
+    <h2 class="sec"><span class="n">5</span>利用者マスタ管理</h2>
+    <div class="lead">ご利用者の基本情報・緊急連絡先・ケアマネ情報などを登録・編集します。</div>
+
+    <h3>① 1人ずつ登録する</h3>
+    <ol class="steps">
+      <li>サイドバー <span class="kbd">利用者マスタ管理</span> → 右上の <span class="kbd">＋ 新規利用者</span> を押します。</li>
+      <li><b>姓・名・姓フリガナ・名フリガナ</b>を入力して <span class="kbd">追加する</span>。</li>
+      <li>一覧から本人を選び、生年月日・介護度・利用開始日・住所などを入力します。</li>
+      <li>入力が終わったら、右上の <span class="kbd">💾 保存</span> を必ず押します。</li>
+    </ol>
+
+    <h3>② CSVでまとめて取り込む（おすすめ）</h3>
+    <p>たくさんの利用者を一度に登録するなら、エクセル等のCSVファイルから取り込めます。介護ソフト（カイポケ等）の書き出しCSVも、そのまま読み込めます。</p>
+    <ol class="steps">
+      <li>利用者マスタ管理の <span class="kbd">CSV入出力</span> を開きます。</li>
+      <li>初めてなら <span class="kbd">テンプレート</span> をダウンロードし、エクセルで入力 → 保存します。</li>
+      <li><span class="kbd">CSVファイルを選択</span> でファイルを選び、内容を確認して <span class="kbd">取り込み</span>。</li>
+    </ol>
+    <div class="tip"><b>かしこい仕組み</b>列の名前が多少違っても自動で見分けて取り込みます。文字コード（Shift-JIS/UTF-8）も自動判定。<b>空欄の項目は上書きしません</b>（記入した項目だけ反映）。氏名は自動で姓・名に分かれます。</div>
+
+    <h3>③ 緊急連絡先（ご家族）</h3>
+    <p>ご家族がアプリに登録すると、その情報（姓・名・フリガナ・続柄・電話・メール）が、利用者マスタの
+      <b>「緊急連絡先（主要）」</b>欄に<b>自動で反映</b>されます。2人目以降は「追加の緊急連絡先」に並びます。
+      もちろんスタッフが直接入力・修正することもできます。</p>
+
+    <h3>④ お休み（休止）の登録</h3>
+    <ol class="steps">
+      <li>本人の <b>状態</b> を <span class="kbd">休止</span> にするか、月間スケジュールのセルから休止期間を登録します。</li>
+      <li>休止期間の<b>開始日</b>（必要なら終了日）と<b>理由</b>を入れて登録します。</li>
+    </ol>
+    <div class="note"><b>退所と完全削除のちがい</b>「退所（利用終了）」は記録を<b>残します</b>。「完全削除」は利用者と関連データ・写真ファイルを<b>すべて消去</b>します（元に戻せません）。</div>
+  </section>
+
+  <!-- 6 -->
+  <section id="record">
+    <h2 class="sec"><span class="n">6</span>サービス提供記録入力（毎日の記録）</h2>
+    <div class="lead">その日のご利用者ごとに、体温・血圧・脈拍・運動・気分・特記などを入力します。</div>
+    <div class="fig">
+      <svg width="640" viewBox="0 0 640 220">
+        <rect x="10" y="10" width="620" height="200" rx="12" fill="#fff" stroke="#e2e8f0"/>
+        <rect x="10" y="10" width="620" height="34" rx="12" fill="#f1f5f9"/>
+        <g font-size="11.5" font-weight="700" fill="#475569">
+          <text x="40" y="32">利用者</text><text x="170" y="32">体温</text><text x="250" y="32">血圧</text>
+          <text x="350" y="32">脈拍</text><text x="430" y="32">運動</text><text x="520" y="32">気分</text>
+        </g>
+        <line x1="10" y1="44" x2="630" y2="44" stroke="#e2e8f0"/>
+        <g font-size="12.5" fill="#1e293b" font-weight="700">
+          <text x="30" y="76">介護 太郎</text>
+          <rect x="150" y="60" width="60" height="26" rx="7" fill="#fff" stroke="#cbd5e1"/><text x="180" y="78" text-anchor="middle">36.5</text>
+          <rect x="230" y="60" width="78" height="26" rx="7" fill="#fff" stroke="#cbd5e1"/><text x="269" y="78" text-anchor="middle">128/80</text>
+          <rect x="335" y="60" width="55" height="26" rx="7" fill="#ecfdf5" stroke="#a7f3d0"/><text x="362" y="78" text-anchor="middle">72</text>
+          <rect x="415" y="60" width="80" height="26" rx="7" fill="#fff" stroke="#cbd5e1"/><text x="455" y="78" text-anchor="middle" font-size="11">10分 ほか</text>
+          <rect x="510" y="58" width="44" height="30" rx="7" fill="#dcfce7"/><text x="532" y="80" text-anchor="middle" font-size="18">😊</text>
+        </g>
+        <rect x="430" y="110" width="180" height="92" rx="12" fill="#fff" stroke="#1e293b" stroke-width="2"/>
+        <text x="520" y="130" text-anchor="middle" font-size="11" font-weight="700" fill="#94a3b8">テンキー（数字パッド）</text>
+        <g font-size="14" font-weight="700" fill="#334155">
+          <text x="455" y="156">7</text><text x="495" y="156">8</text><text x="535" y="156">9</text><text x="578" y="156">⌫</text>
+          <text x="455" y="180">4</text><text x="495" y="180">5</text><text x="535" y="180">6</text>
+        </g>
+      </svg>
+      <div class="cap">記録表のイメージ。数字のマスを押すとテンキーが出ます</div>
+    </div>
+    <h3>入力のしかた</h3>
+    <ol class="steps">
+      <li>サイドバー <span class="kbd">提供記録入力</span> を開き、日付が今日になっているか確認します。</li>
+      <li>体温・血圧・脈拍などの<b>マスを押す</b>と、画面に<b>テンキー（数字パッド）</b>が出ます。数字を押して入力します。</li>
+      <li>血圧は「上／下」をまとめて入力できます（例：128/80）。</li>
+      <li><b>気分</b>のマスを押すと、😊などの絵で気分を選べます。理由も選べます。</li>
+      <li>運動・特記事項なども入力します。</li>
+      <li>すべて終わったら、右上の <span class="kbd">💾 保存</span> を押します。</li>
+    </ol>
+    <div class="tip"><b>テンキーは動かせます</b>邪魔なときは、テンキー上部の <span class="kbd">≡</span> を押したまま動かして移動、<span class="kbd">＋／−</span>で大きさも変えられます。</div>
+    <div class="warn"><b>保存はその日ごと</b>記録は「表示している日」を保存すると残ります。前の日の分は、その日に切り替えてから保存してください。保存した分は自動でクラウドに保存され、分析にも反映されます。</div>
+  </section>
+
+  <!-- 7 -->
+  <section id="sched">
+    <h2 class="sec"><span class="n">7</span>月間スケジュール・休止</h2>
+    <div class="lead">「基本利用曜日」をもとに、1か月の利用予定を自動でつくります。増減や振替もできます。</div>
+    <ol class="steps">
+      <li>サイドバー <span class="kbd">月間スケジュール</span> を開きます。</li>
+      <li>セルを押して、その日の<b>利用（AM/PM）・欠席・振替・休止</b>などを設定します。</li>
+      <li><b>基本利用曜日を増やす／減らす</b>ときは、<b>「いつから適用するか（適用開始日）」</b>を選びます。
+        過去の予定はそのまま、その日以降にだけ反映されるので安心です。</li>
+    </ol>
+    <div class="note"><b>増回・減回もカレンダーで分かる</b>「○月○日から週◯回に増えた」といった変更が、カレンダー上でも確認できます。</div>
+  </section>
+
+  <!-- 8 -->
+  <section id="family">
+    <h2 class="sec"><span class="n">8</span>ご家族アカウントの招待・管理</h2>
+    <div class="lead">ご家族・ご関係者（ケアマネ等）が、記録や写真を見られる専用アカウントを発行します。</div>
+    <ol class="steps">
+      <li>利用者マスタ管理で本人を選び、<span class="kbd">アカウント管理</span> を押します。</li>
+      <li><b>招待を発行</b>すると、招待URL（または招待コード）が作られます。</li>
+      <li>そのURLを、ご家族に<b>メール・LINE・紙</b>などで伝えます（有効期限あり）。</li>
+      <li>ご家族が自分で ID・パスワード・連絡先を登録すると、利用が始まります。</li>
+    </ol>
+    <div class="tip"><b>2人目以降もOK</b>同じ利用者に対して、複数のご家族・ケアマネを招待できます。最初に登録した方が「主要連絡先」になります。</div>
+    <div class="note"><b>見える範囲</b>ご家族には、その利用者の記録・連絡帳・写真・お知らせが見えます。他の利用者の情報は見えません。</div>
+  </section>
+
+  <!-- 9 -->
+  <section id="etc">
+    <h2 class="sec"><span class="n">9</span>連絡帳・お知らせ・個人ファイル・分析</h2>
+    <h3>📒 連絡帳・日誌</h3>
+    <p>その日の様子をご家族向けに記録します。印刷・PDF・FAX送付にも対応しています。</p>
+    <h3>📢 お知らせ・写真</h3>
+    <p>事業所からのお知らせや、行事の写真をご家族へ配信できます。全員向け／特定の方向けを選べます。
+      消したお知らせ・写真は<b>7日間ゴミ箱に残り</b>、戻すこともできます。</p>
+    <h3>📁 個人ファイル（フェイスシート等）</h3>
+    <p>フェイスシート・契約書・ケアプラン・モニタリング・既往歴・かかりつけ医・ジェノグラム/見取り図/送迎経路の画像など、
+      利用者ごとの書類をまとめて保管できます（画像・PDFはクラウドに安全に保存）。</p>
+    <h3>📊 分析</h3>
+    <p>利用者ごと・期間ごとに、バイタルの推移や利用状況をグラフで確認できます。
+      利用開始前の期間は集計から自動で除かれます。</p>
+  </section>
+
+  <!-- 10 -->
+  <section id="save">
+    <h2 class="sec"><span class="n">10</span>データの保存とバックアップ</h2>
+    <div class="lead">入力したデータは自動でクラウド（Supabase）に保存されます。</div>
+    <ul>
+      <li><b>保存ボタンを押すと → すぐクラウドへ</b>保存されます。</li>
+      <li>入力途中などの自動保存は、<b>約1.5秒後</b>にまとめて送られます。</li>
+      <li>通信が不安定なときは、<b>誤って空データで上書きしない</b>安全装置が働き、数秒後に自動で再保存します。</li>
+    </ul>
+    <h3>手動バックアップ（ZIP）</h3>
+    <p><span class="kbd">各種設定</span> → <b>データ管理</b> → <span class="kbd">📦 データ一括エクスポート（ZIP）</span> で、
+      利用者一覧や記録をまとめてダウンロードして保管できます。大切なデータは定期的に保存しておくと安心です。</p>
+  </section>
+
+  <!-- 11 -->
+  <section id="help">
+    <h2 class="sec"><span class="n">11</span>困ったときは</h2>
+    <ul>
+      <li><b>テンキーが出ない／表示が崩れる</b> … 画面を一度更新（リロード）してみてください。</li>
+      <li><b>データが古い気がする</b> … 少し待つと自動で最新に更新されます。改善しなければリロードを。</li>
+      <li><b>ログインできない</b> … ID・パスワードをご確認のうえ、下記サポートへ。</li>
+    </ul>
+    <div class="note"><b>サポート窓口</b><a class="link" href="mailto:support@ones-style.co.jp">📧 support@ones-style.co.jp</a></div>
+    <div class="foot">
+      🍀 つむぎ（Tsumugi）<br>
+      ご利用者・ご家族・スタッフを、やさしく紡ぐ。<br>
+      © ones-style
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
