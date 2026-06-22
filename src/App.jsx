@@ -29373,6 +29373,8 @@ const DEFAULT_PF_CATEGORIES = [
   // ★ サービス提供記録 (月次スナップショット機能) は cat_6 に移動 (isServiceTab も cat_6 を参照)
   { id: 'cat_6', name: '6. サービス提供記録', emoji: '📊', isDefault: true,
     note: '日々の介護記録・経過記録 / サービス提供実績' },
+  { id: 'cat_7', name: '7. 初回ご利用報告', emoji: '📢', isDefault: true,
+    note: '初回通所時のケアマネ向け報告 (バイタル・ご利用の様子)' },
 ];
 
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
@@ -29488,7 +29490,31 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   const isBasicTab = activeCat === 'cat_1';
   const isCMTab = activeCat === 'cat_3';
   const isServiceTab = activeCat === 'cat_6'; // ★ サービス提供記録は cat_6 へ移動
+  const isInitialReportTab = activeCat === 'cat_7'; // ★ 初回ご利用報告
   const activeCategory = allCategories.find(c => c.id === activeCat) || allCategories[0];
+  // ★ 初回ご利用報告: 初回通所記録を検出し、バイタルを自動取得
+  const _irKey = (t) => { const d=String(t.date||''); if(/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0,10); const m=d.match(/(\d+)月(\d+)日/); if(m&&t.year) return `${t.year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; return null; };
+  let _firstTicket=null,_firstKey=null;
+  (appData.ticketRecords||[]).forEach(t=>{ if(t.patientId!==patient.id) return; const st=t.status||''; if(!(st==='通所'||st==='出席'||st.includes('通所'))) return; const k=_irKey(t); if(!k) return; if(!_firstKey||k<_firstKey){_firstKey=k;_firstTicket=t;} });
+  const _ft=_firstTicket, _ampm=_ft?(_ft.scheduledAmpm||(_ft.temp_PM?'PM':'AM')):'AM';
+  const _av=_ft?{temp:_ft[`temp_${_ampm}`]||_ft.temp||'',bpUpSt:_ft[`bpUpSt_${_ampm}`]||_ft.bpUpSt||'',bpDnSt:_ft[`bpDnSt_${_ampm}`]||_ft.bpDnSt||'',plSt:_ft[`plSt_${_ampm}`]||_ft.plSt||'',bpUpEn:_ft[`bpUpEn_${_ampm}`]||_ft.bpUpEn||'',bpDnEn:_ft[`bpDnEn_${_ampm}`]||_ft.bpDnEn||'',plEn:_ft[`plEn_${_ampm}`]||_ft.plEn||''}:{};
+  const _savedIR = personalFile.initialReport || null;
+  const [irForm, setIrForm] = useState(() => _savedIR ? {..._savedIR} : {
+    date: _firstKey || new Date().toISOString().slice(0,10),
+    recipientOffice: patient.cmOffice||'', recipientName: patient.cmName||'',
+    temp:_av.temp||'', bpUpSt:_av.bpUpSt||'', bpDnSt:_av.bpDnSt||'', plSt:_av.plSt||'',
+    bpUpEn:_av.bpUpEn||'', bpDnEn:_av.bpDnEn||'', plEn:_av.plEn||'',
+    content:'', reporter:'',
+  });
+  const saveInitialReport = () => {
+    const createdAt = new Date().toISOString();
+    const report = { ...irForm, createdAt, patientId: patient.id, firstDate: _firstKey || irForm.date };
+    const newPatient = { ...patient, personalFile: { ...personalFile, initialReport: report } };
+    const reportedEntry = { patientId: patient.id, firstTicketId: _ft?.id || null, firstDate: _firstKey || irForm.date, createdAt };
+    const others = (appData.initialReports||[]).filter(r => r.patientId !== patient.id);
+    onSave({ ...appData, patients: (appData.patients||[]).map(p=>p.id===patient.id?newPatient:p), initialReports: [...others, reportedEntry] });
+    alert('初回ご利用報告を保存しました。\n利用者マスタの「📋初回報告」バッジが消えます。');
+  };
   const [pdfPreviewMonthly, setPdfPreviewMonthly] = useState(null);
   const [showFaceSheetForm, setShowFaceSheetForm] = useState(false);
   const [pdfPreviewFaceSheet, setPdfPreviewFaceSheet] = useState(false);
@@ -29694,6 +29720,44 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
             </div>
           )}
           {/* サービス提供記録タブのみ: 月次スナップショット */}
+          {isInitialReportTab && (
+            <div className="space-y-4">
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                初回通所時の様子をケアマネジャー向けにまとめます。 初回通所の記録があればバイタルが自動で入ります（編集可）。保存すると個人ファイルに保管され、利用者マスタの「📋初回報告」バッジが消えます。
+              </div>
+              {_savedIR && <div className="text-[11px] text-emerald-700 font-bold">✓ 保存済み（{(_savedIR.createdAt||'').slice(0,10)} 作成）。 内容を編集して再保存できます。</div>}
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">初回通所日</label>
+                  <input type="date" value={irForm.date} onChange={e=>setIrForm(f=>({...f,date:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">報告者</label>
+                  <input type="text" value={irForm.reporter} onChange={e=>setIrForm(f=>({...f,reporter:e.target.value}))} placeholder="職員名" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">宛先（ケアマネ事業所）</label>
+                  <input type="text" value={irForm.recipientOffice} onChange={e=>setIrForm(f=>({...f,recipientOffice:e.target.value}))} placeholder="○○居宅介護支援事業所" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">担当ケアマネ</label>
+                  <input type="text" value={irForm.recipientName} onChange={e=>setIrForm(f=>({...f,recipientName:e.target.value}))} placeholder="担当者名" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="text-xs font-bold text-slate-600 mb-2">バイタル（初回通所時）</div>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  <div><label className="block text-[10px] text-slate-500 mb-1">体温(℃)</label><input value={irForm.temp} onChange={e=>setIrForm(f=>({...f,temp:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/></div>
+                  <div><label className="block text-[10px] text-slate-500 mb-1">開始 血圧(上/下)</label><div className="flex items-center gap-1"><input value={irForm.bpUpSt} onChange={e=>setIrForm(f=>({...f,bpUpSt:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/><span>/</span><input value={irForm.bpDnSt} onChange={e=>setIrForm(f=>({...f,bpDnSt:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/></div></div>
+                  <div><label className="block text-[10px] text-slate-500 mb-1">開始 脈</label><input value={irForm.plSt} onChange={e=>setIrForm(f=>({...f,plSt:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/></div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div/>
+                  <div><label className="block text-[10px] text-slate-500 mb-1">終了 血圧(上/下)</label><div className="flex items-center gap-1"><input value={irForm.bpUpEn} onChange={e=>setIrForm(f=>({...f,bpUpEn:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/><span>/</span><input value={irForm.bpDnEn} onChange={e=>setIrForm(f=>({...f,bpDnEn:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/></div></div>
+                  <div><label className="block text-[10px] text-slate-500 mb-1">終了 脈</label><input value={irForm.plEn} onChange={e=>setIrForm(f=>({...f,plEn:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/></div>
+                </div>
+              </div>
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">ご利用の様子（運動・活動の様子など）</label>
+                <textarea value={irForm.content} onChange={e=>setIrForm(f=>({...f,content:e.target.value}))} rows={5} placeholder="例: 体操に積極的に取り組まれ、笑顔が見られました。運動メニューも一通りこなされ…" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
+              <div className="flex justify-end">
+                <button onClick={saveInitialReport} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Save size={16}/>初回報告を保存</button>
+              </div>
+            </div>
+          )}
           {isServiceTab && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
