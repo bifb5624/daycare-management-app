@@ -13347,8 +13347,15 @@ export default function App() {
   //   これが無いと: setAppData(空) → lastLocalEditRef 即更新 → 5秒スキップ
   //   → 30秒間データが空のまま (= ユーザーが「データ消失」と認識)
   const pendingPullForStoreRef = React.useRef(null);
+  // ★ 直前の setAppData が「クラウドから pull した内容の反映」かどうかの目印。
+  //   pull で受け取ったデータを そのまま push し返すと、別端末で入力した新しいデータを
+  //   古い内容で上書きしてしまう (複数端末でデータが消える原因)。 pull 由来の変更は push しない。
+  const applyingRemoteRef = React.useRef(false);
   useEffect(()=>{
-    lastLocalEditRef.current = Date.now();
+    const isRemote = applyingRemoteRef.current;
+    applyingRemoteRef.current = false;
+    // ローカル編集の時だけ「最終編集時刻」を更新 (pull は編集ではない)
+    if (!isRemote) lastLocalEditRef.current = Date.now();
     try {
       localStorage.setItem('daycareAppData_v3', JSON.stringify(appData));
       // 成功時: 古い分離保存キーを掃除 (整合性確保)
@@ -13372,7 +13379,8 @@ export default function App() {
     // 3. 店舗切替中ではない
     // 4. dataLoadedForStoreRef が現在の storeId と一致 (= Supabase からこの店舗の data を正常 load 済み)
     //   → 空の初期 state を誤って Supabase に push して他店舗データを消すバグの防止
-    if (isSupabaseEnabled && staffSession?.storeId
+    // 5. ★ pull 由来の変更ではない (= ローカル編集) → pull した内容を押し戻して他端末の入力を消さない
+    if (!isRemote && isSupabaseEnabled && staffSession?.storeId
         && !storeTransitionRef.current
         && dataLoadedForStoreRef.current === staffSession.storeId) {
       const t = setTimeout(async () => {
@@ -13385,7 +13393,8 @@ export default function App() {
             const remotePatients = remote?.data?.patients;
             if (Array.isArray(remotePatients) && remotePatients.length > 0) {
               console.warn('[safety] skip push: local patients=[], remote has', remotePatients.length, 'patients. Refusing to overwrite.');
-              // Supabase 側の値で local を再構築 (誤った 0 件 state を消す)
+              // Supabase 側の値で local を再構築 (誤った 0 件 state を消す)。 pull 由来なので push しない。
+              applyingRemoteRef.current = true;
               setAppData(prev => ({ ...remote.data, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] }));
               return;
             }
@@ -13481,7 +13490,8 @@ export default function App() {
             return;
           }
         }
-        // 通常: 既存データをロード
+        // 通常: 既存データをロード。 pull 由来なので push しない (他端末の入力を上書きしない)。
+        applyingRemoteRef.current = true;
         setAppData(prev => {
           const merged = { ...row.data, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
           return merged;
