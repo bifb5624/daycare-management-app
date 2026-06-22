@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>つむぎ ご利用ガイド｜ケアマネ・関係者向け</title>
+<style>
+  :root{--green:#7daa3d;--green-d:#3d5021;--green-l:#eef6e0;--green-m:#94c456;--ink:#1e293b;--sub:#64748b;--line:#e2e8f0;--bg:#f6f8f1;--cyan:#0891b2;--cyan-l:#e0f2fe;--amber-l:#fef3c7;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Hiragino Maru Gothic ProN','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;color:var(--ink);background:var(--bg);line-height:1.9;font-size:16.5px;-webkit-text-size-adjust:100%}
+  .wrap{max-width:840px;margin:0 auto;padding:0 18px 80px}
+  .cover{background:linear-gradient(160deg,#f0fbff,#e0f2fe);border-radius:0 0 32px 32px;padding:48px 24px 40px;text-align:center;box-shadow:0 6px 24px rgba(8,145,178,.12)}
+  .badge{display:inline-block;background:var(--cyan);color:#fff;font-weight:700;font-size:13px;padding:6px 16px;border-radius:999px;letter-spacing:2px;margin-bottom:18px}
+  .cover h1{font-size:29px;margin:6px 0 2px;color:var(--green-d);letter-spacing:2px}
+  .cover .sub{color:var(--sub);font-size:15px;margin-top:6px}
+  .toc{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 24px;margin:24px 0 8px}
+  .toc h2{font-size:15px;color:var(--green-d);margin:0 0 10px;letter-spacing:1px}
+  .toc ol{margin:0;padding-left:0;list-style:none;counter-reset:toc}
+  .toc li{counter-increment:toc;padding:8px 0;border-bottom:1px dashed var(--line);font-weight:700;font-size:16px}
+  .toc li:last-child{border-bottom:none}
+  .toc li a{color:var(--ink);text-decoration:none}
+  .toc li::before{content:counter(toc);display:inline-flex;width:28px;height:28px;border-radius:50%;background:var(--cyan-l);color:var(--cyan);font-size:14px;align-items:center;justify-content:center;margin-right:10px;vertical-align:middle}
+  section{background:#fff;border:1px solid var(--line);border-radius:20px;padding:26px 26px 30px;margin:22px 0;box-shadow:0 2px 10px rgba(0,0,0,.03)}
+  h2.sec{font-size:21px;color:var(--green-d);margin:0 0 6px;display:flex;align-items:center;gap:10px}
+  h2.sec .n{display:inline-flex;width:34px;height:34px;border-radius:10px;background:var(--cyan);color:#fff;font-size:17px;align-items:center;justify-content:center;flex:none}
+  .lead{color:var(--sub);font-size:14.5px;margin:2px 0 18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+  h3{font-size:17px;color:var(--green-d);margin:24px 0 8px;padding-left:12px;border-left:5px solid var(--cyan)}
+  p{margin:9px 0}
+  .steps{counter-reset:st;margin:14px 0;padding:0;list-style:none}
+  .steps>li{counter-increment:st;position:relative;padding:15px 14px 15px 56px;margin:11px 0;background:#f0fbff;border:1px solid #cfeefb;border-radius:14px;font-size:16px}
+  .steps>li::before{content:counter(st);position:absolute;left:14px;top:14px;width:30px;height:30px;border-radius:50%;background:var(--cyan);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:15px}
+  .steps>li b{color:#075985}
+  .note,.tip,.warn{border-radius:14px;padding:14px 16px 14px 48px;position:relative;margin:16px 0;font-size:15px}
+  .note{background:var(--cyan-l);border:1px solid #7dd3fc}.tip{background:var(--green-l);border:1px solid #d4e7a5}.warn{background:var(--amber-l);border:1px solid #fcd34d}
+  .note::before,.tip::before,.warn::before{position:absolute;left:14px;top:12px;font-size:20px}
+  .note::before{content:'💡'}.tip::before{content:'✅'}.warn::before{content:'⚠️'}
+  .fig{margin:18px 0;text-align:center}
+  .fig svg{max-width:100%;height:auto;border-radius:14px;background:#fff;border:1px solid var(--line);box-shadow:0 4px 14px rgba(0,0,0,.06)}
+  .cap{font-size:12.5px;color:var(--sub);margin-top:8px}
+  .kbd{display:inline-block;background:#fff;border:1.5px solid var(--cyan);color:#075985;border-radius:8px;padding:1px 9px;font-weight:700;font-size:13.5px;margin:0 2px}
+  .foot{text-align:center;color:var(--sub);font-size:13px;margin-top:30px;line-height:2}
+  a.link{color:var(--cyan);font-weight:700}
+  @media print{body{background:#fff}section,.toc{box-shadow:none;break-inside:avoid}.cover{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="cover">
+  <svg width="240" viewBox="0 0 460 130" xmlns="http://www.w3.org/2000/svg" aria-label="つむぎロゴ">
+    <defs><radialGradient id="lA" cx="40%" cy="55%" r="55%"><stop offset="0%" stop-color="#608a3e"/><stop offset="50%" stop-color="#94c456"/><stop offset="100%" stop-color="#d4e7a5"/></radialGradient><radialGradient id="lB" cx="55%" cy="50%" r="55%"><stop offset="0%" stop-color="#5a8330"/><stop offset="50%" stop-color="#8fb84a"/><stop offset="100%" stop-color="#cee49b"/></radialGradient></defs>
+    <g transform="translate(105,58) scale(0.8)"><path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="2.2" fill="none" stroke-linecap="round"/><g transform="rotate(-60)"><g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lA)"/></g><g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lB)"/></g><g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lA)"/></g><g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#lB)"/></g><circle r="4" fill="#fbbf24"/></g></g>
+    <text x="155" y="50" font-family="'Hiragino Maru Gothic ProN',sans-serif" font-size="40" fill="#3d5021" font-weight="700" letter-spacing="1">つむぎ</text>
+    <text x="157" y="73" font-family="'Hiragino Maru Gothic ProN',sans-serif" font-size="17" fill="#7daa3d" font-weight="500" letter-spacing="6">Tsumugi</text>
+  </svg>
+  <div class="badge">ケアマネ・関係者向け</div>
+  <h1>ご利用ガイド</h1>
+  <div class="sub">担当ご利用者の様子を、いつでも確認。<br>訪問看護など関係機関の方もご利用いただけます</div>
+</div>
+
+<div class="wrap">
+  <div class="toc">
+    <h2>📖 もくじ</h2>
+    <ol>
+      <li><a href="#about">「つむぎ」とは（名前の由来）</a></li>
+      <li><a href="#login">招待からの登録・ログイン</a></li>
+      <li><a href="#look">ご利用者の記録を見る</a></li>
+      <li><a href="#switch">複数のご利用者を切り替える</a></li>
+      <li><a href="#info">ご自身・所属事業所の情報</a></li>
+      <li><a href="#help">困ったときは</a></li>
+    </ol>
+  </div>
+
+  <section id="about">
+    <h2 class="sec"><span class="n">1</span>「つむぎ」とは</h2>
+    <div class="lead">デイサービスの記録を、関係機関の方が確認・共有できるアプリです。</div>
+    <p><b>「つむぎ」は、デイサービス（通所介護）の記録を、ケアマネジャーや訪問看護などの関係者が確認できるアプリです。</b>担当ご利用者の体温・血圧・運動・気分・連絡帳などを、いつでもスマホやパソコンで確認できます。</p>
+    <h3>🍀 四つ葉のクローバーに込めた意味</h3>
+    <p>ロゴの四つ葉は、ご利用者を支える <b>4つの存在</b>——<b>ご家族・ケアマネ・事業所・その他関係者</b>——を表します。4枚の葉が <b>1本の茎＝ご利用者</b>から伸び、みんなで一人のご利用者を支えていく姿を描いています。あなたも、その大切な一枚です。</p>
+    <div class="fig">
+      <svg width="600" viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg">
+        <defs><radialGradient id="clv" cx="42%" cy="42%" r="62%"><stop offset="0%" stop-color="#6f9f37"/><stop offset="55%" stop-color="#94c456"/><stop offset="100%" stop-color="#cfe6a0"/></radialGradient></defs>
+        <path d="M300 232 Q306 300 300 344" stroke="#3d5021" stroke-width="6" fill="none" stroke-linecap="round"/>
+        <g transform="translate(300,150) scale(2)">
+          <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#clv)"/></g>
+          <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#clv)"/></g>
+          <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#clv)"/></g>
+          <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#clv)"/></g>
+          <circle r="5" fill="#fbbf24"/>
+        </g>
+        <g font-size="15" font-weight="700">
+          <rect x="36" y="64" width="150" height="40" rx="20" fill="#eff6ff" stroke="#93c5fd"/><text x="111" y="90" text-anchor="middle" fill="#1e40af">ご家族</text>
+          <rect x="414" y="64" width="150" height="40" rx="20" fill="#e0f2fe" stroke="#7dd3fc"/><text x="489" y="90" text-anchor="middle" fill="#075985">ケアマネ</text>
+          <rect x="36" y="196" width="150" height="40" rx="20" fill="#fef3c7" stroke="#fcd34d"/><text x="111" y="222" text-anchor="middle" fill="#92400e">事業所</text>
+          <rect x="414" y="196" width="150" height="40" rx="20" fill="#f1f5f9" stroke="#cbd5e1"/><text x="489" y="222" text-anchor="middle" fill="#334155">その他関係者</text>
+        </g>
+        <rect x="205" y="346" width="190" height="42" rx="21" fill="#3d5021"/><text x="300" y="373" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">ご利用者（茎）</text>
+      </svg>
+      <div class="cap">四つ葉（ご家族・ケアマネ・事業所・その他関係者）が、1本の茎（ご利用者）を支えます</div>
+    </div>
+  </section>
+
+  <section id="login">
+    <h2 class="sec"><span class="n">2</span>招待からの登録・ログイン</h2>
+    <div class="lead">事業所から届いた招待から、はじめの登録をします。</div>
+    <h3>はじめての登録</h3>
+    <ol class="steps">
+      <li>事業所から届いた<b>招待のURL</b>（メール等）を開きます。</li>
+      <li>ご自身で決めた<b>ログインID</b>と<b>パスワード</b>を入力。</li>
+      <li>続柄で <b>「ケアマネージャー」</b> または <b>「その他関係者（訪問看護 等）」</b> を選びます。</li>
+      <li><b>お名前・フリガナ・個人の電話番号</b>（ご登録者情報）を入力。</li>
+      <li>事業所情報を入力します：
+        <br>・<b>ケアマネ</b>… 一覧から<b>事業所を選択</b>（無ければ新規作成し、固定電話・FAXを入力）。
+        <br>・<b>その他関係者</b>… <b>事業所名・電話・FAX</b>を自由記述（任意）。</li>
+      <li>利用規約に同意して <span class="kbd">登録</span>。そのままログインされます。</li>
+    </ol>
+    <div class="note"><b>担当者欄はありません</b>担当ケアマネは「ご登録者情報」のお名前・電話がそのまま使われ、ご利用者の<b>ケアマネ情報に自動反映</b>されます。</div>
+    <h3>2回目以降</h3>
+    <ol class="steps">
+      <li>ログインページで、登録した<b>ID・パスワード</b>を入力して <span class="kbd">ログイン</span>。</li>
+    </ol>
+    <div class="warn"><b>招待URLには期限があります</b>切れた場合は事業所へ再発行をご依頼ください。</div>
+  </section>
+
+  <section id="look">
+    <h2 class="sec"><span class="n">3</span>ご利用者の記録を見る</h2>
+    <div class="lead">ログインすると、担当ご利用者の記録が確認できます。</div>
+    <ol class="steps">
+      <li>ログイン後、ご利用者の<b>本日の様子</b>（体温・血圧・気分など）が表示されます。</li>
+      <li>下にスクロールで、運動・連絡帳・お知らせ・写真などを確認。</li>
+      <li>日付を変えると過去の記録もさかのぼれます。</li>
+    </ol>
+    <div class="note"><b>閲覧専用</b>関係者の画面は記録の閲覧が中心です（ご自身の連絡先・所属情報の編集のみ可能）。</div>
+  </section>
+
+  <section id="switch">
+    <h2 class="sec"><span class="n">4</span>複数のご利用者を切り替える</h2>
+    <div class="lead">複数のご利用者を担当している場合の切り替え方です。</div>
+    <p>同じ<b>メールアドレス・パスワード</b>で複数のご利用者ぶんの招待を登録すると、1回のログインで切り替えて閲覧できます。</p>
+    <ol class="steps">
+      <li>ログインすると、まず<b>そのIDのご利用者</b>の画面に入ります。</li>
+      <li>画面の <span class="kbd">利用者切替</span> から、他の担当ご利用者へ切り替えます。</li>
+    </ol>
+    <div class="tip"><b>正しいご利用者に入ります</b>ログインしたIDのご利用者へ必ず直接入るようになっています。別の方の閲覧は「利用者切替」から行ってください。</div>
+  </section>
+
+  <section id="info">
+    <h2 class="sec"><span class="n">5</span>ご自身・所属事業所の情報</h2>
+    <div class="lead">電話番号や所属事業所が変わったら、ご自身で更新できます。</div>
+    <ol class="steps">
+      <li><span class="kbd">利用者・登録者情報</span> → <span class="kbd">登録者基本情報</span> を開く。</li>
+      <li><b>姓・名・フリガナ・続柄・電話番号・所属事業所名</b>を確認・修正。</li>
+      <li><span class="kbd">💾 保存</span> を押すと、事業所側にも反映されます。</li>
+    </ol>
+    <div class="note"><b>続柄</b>「ケアマネージャー」「その他関係者」から選べます。一覧に無い関係（例: 訪問看護・地域包括 等）は「その他」で自由に入力できます。</div>
+  </section>
+
+  <section id="help">
+    <h2 class="sec"><span class="n">6</span>困ったときは</h2>
+    <ul>
+      <li><b>ログインできない</b> … ID・パスワードをご確認のうえ、事業所へ。</li>
+      <li><b>別のご利用者に入ってしまう</b> … 「利用者切替」で正しい方を選んでください。</li>
+      <li><b>招待URLが切れた</b> … 事業所へ再発行をご依頼ください。</li>
+    </ul>
+    <div class="note"><b>まずは担当事業所へ</b>ご不明な点は、ご利用のデイサービス事業所へお問い合わせください。<br>アプリ自体のお問い合わせ：<a class="link" href="mailto:support@ones-style.co.jp">📧 support@ones-style.co.jp</a></div>
+    <div class="foot">🍀 つむぎ（Tsumugi）<br>ご家族・ケアマネ・事業所・関係者が、ご利用者を支え、やさしく紡ぐ。<br>© ones-style</div>
+  </section>
+</div>
+</body>
+</html>
