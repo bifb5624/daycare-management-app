@@ -989,6 +989,19 @@ const toKatakana = (s) => (s||'')
   .normalize('NFKC')                                    // 半角カナ等を全角化
   .replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)); // ひらがな→カタカナ
 
+// ★ フリガナ専用入力: IME変換中は変換せず、確定時(compositionEnd)や直接入力時のみカタカナ化する。
+//   これをしないと iOS 等の日本語入力中に「タ」→「タタ」のように二重入力されてしまう。
+function KanaInput({ value, onChangeText, ...rest }) {
+  const composing = React.useRef(false);
+  return (
+    <input {...rest} value={value}
+      onCompositionStart={() => { composing.current = true; }}
+      onCompositionEnd={(e) => { composing.current = false; onChangeText(toKatakana(e.target.value)); }}
+      onChange={(e) => { const raw = e.target.value; onChangeText(composing.current ? raw : toKatakana(raw)); }}
+    />
+  );
+}
+
 // ★ 郵便番号 → 住所 自動補完 (zipcloud API)
 //   郵便番号 (7桁) を渡すと {prefecture, city, address} を返す
 //   失敗時は null を返す (ネットワークエラー等)
@@ -11012,13 +11025,13 @@ function FamilyView() {
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                       <div>
                         <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（姓） <span style={{color:'#dc2626'}}>*</span></label>
-                        <input value={signupForm.ecKanaLast} onChange={e=>setSignupForm(f=>({...f,ecKanaLast:toKatakana(e.target.value),error:''}))}
+                        <KanaInput value={signupForm.ecKanaLast} onChangeText={v=>setSignupForm(f=>({...f,ecKanaLast:v,error:''}))}
                           placeholder="例: ヤマダ"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fde68a',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       </div>
                       <div>
                         <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（名） <span style={{color:'#dc2626'}}>*</span></label>
-                        <input value={signupForm.ecKanaFirst} onChange={e=>setSignupForm(f=>({...f,ecKanaFirst:toKatakana(e.target.value),error:''}))}
+                        <KanaInput value={signupForm.ecKanaFirst} onChangeText={v=>setSignupForm(f=>({...f,ecKanaFirst:v,error:''}))}
                           placeholder="例: タロウ"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fde68a',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       </div>
@@ -11851,13 +11864,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（姓）</label>
-                  <input value={myInfoForm.kanaLast} onChange={e=>{const v=toKatakana(e.target.value); setMyInfoForm(f=>({...f,kanaLast:v,kana:`${v} ${f.kanaFirst||''}`.trim(),savedMsg:''}));}}
+                  <KanaInput value={myInfoForm.kanaLast} onChangeText={v=>setMyInfoForm(f=>({...f,kanaLast:v,kana:`${v} ${f.kanaFirst||''}`.trim(),savedMsg:''}))}
                     placeholder="例: タナカ"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（名）</label>
-                  <input value={myInfoForm.kanaFirst} onChange={e=>{const v=toKatakana(e.target.value); setMyInfoForm(f=>({...f,kanaFirst:v,kana:`${f.kanaLast||''} ${v}`.trim(),savedMsg:''}));}}
+                  <KanaInput value={myInfoForm.kanaFirst} onChangeText={v=>setMyInfoForm(f=>({...f,kanaFirst:v,kana:`${f.kanaLast||''} ${v}`.trim(),savedMsg:''}))}
                     placeholder="例: ハナコ"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
@@ -22886,12 +22899,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <div>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (姓 / 名)</label>
                     <div className="grid grid-cols-2 gap-2">
-                      <input disabled={isOff} value={ks.sn}
-                        onChange={e=>updateLP('kana',_joinSG(toKatakana(e.target.value.replace(/[\s　]/g,'')),ks.gn))}
+                      <KanaInput disabled={isOff} value={ks.sn}
+                        onChangeText={v=>updateLP('kana',_joinSG(v.replace(/[\s　]/g,''),ks.gn))}
                         placeholder="ヤマダ"
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                      <input disabled={isOff} value={ks.gn}
-                        onChange={e=>updateLP('kana',_joinSG(ks.sn,toKatakana(e.target.value.replace(/[\s　]/g,''))))}
+                      <KanaInput disabled={isOff} value={ks.gn}
+                        onChangeText={v=>updateLP('kana',_joinSG(ks.sn,v.replace(/[\s　]/g,'')))}
                         placeholder="タロウ"
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
@@ -23049,11 +23062,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (姓)</label>
-                      <input disabled={isOff} value={localPatient.familyKanaLast||''} onChange={e=>{const k=toKatakana(e.target.value); updateLPFields({familyKanaLast:k, familyKana:`${k} ${localPatient.familyKanaFirst||''}`.trim()});}} placeholder="カイゴ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <KanaInput disabled={isOff} value={localPatient.familyKanaLast||''} onChangeText={k=>updateLPFields({familyKanaLast:k, familyKana:`${k} ${localPatient.familyKanaFirst||''}`.trim()})} placeholder="カイゴ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (名)</label>
-                      <input disabled={isOff} value={localPatient.familyKanaFirst||''} onChange={e=>{const k=toKatakana(e.target.value); updateLPFields({familyKanaFirst:k, familyKana:`${localPatient.familyKanaLast||''} ${k}`.trim()});}} placeholder="ハナコ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <KanaInput disabled={isOff} value={localPatient.familyKanaFirst||''} onChangeText={k=>updateLPFields({familyKanaFirst:k, familyKana:`${localPatient.familyKanaLast||''} ${k}`.trim()})} placeholder="ハナコ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label>
@@ -24044,13 +24057,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">姓 フリガナ <span className="text-red-500">*</span></label>
-                <input type="text" value={newPatientKanaLast} onChange={e=>setNewPatientKanaLast(toKatakana(e.target.value))}
+                <KanaInput type="text" value={newPatientKanaLast} onChangeText={v=>setNewPatientKanaLast(v)}
                   onKeyDown={e=>{if(e.nativeEvent.isComposing||e.isComposing) return; if(e.key==='Enter') submit();}}
                   placeholder="タナカ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">名 フリガナ <span className="text-red-500">*</span></label>
-                <input type="text" value={newPatientKanaFirst} onChange={e=>setNewPatientKanaFirst(toKatakana(e.target.value))}
+                <KanaInput type="text" value={newPatientKanaFirst} onChangeText={v=>setNewPatientKanaFirst(v)}
                   onKeyDown={e=>{if(e.nativeEvent.isComposing||e.isComposing) return; if(e.key==='Enter') submit();}}
                   placeholder="タロウ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
