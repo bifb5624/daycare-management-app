@@ -22587,6 +22587,30 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const now = new Date();
     return exp.getFullYear() === now.getFullYear() && exp.getMonth() === now.getMonth();
   };
+  // ★ 初回ご利用報告が未報告の利用者 (初回通所日が今日以前 かつ initialReports 未登録)
+  const pendingInitialReportSet = React.useMemo(() => {
+    const reported = new Set((appData.initialReports||[]).map(r => r.patientId));
+    const toKey = (t) => {
+      const d = String(t.date||'');
+      if (/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0,10);
+      const m = d.match(/(\d+)月(\d+)日/);
+      if (m && t.year) return `${t.year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`;
+      return '9999-99-99'; // 年不明 → 未来扱い(対象外)
+    };
+    const firstByPatient = new Map();
+    (appData.ticketRecords||[]).forEach(t => {
+      if (!t.patientId) return;
+      const st = t.status||'';
+      if (!(st==='通所' || st==='出席' || st.includes('通所'))) return;
+      const k = toKey(t);
+      const cur = firstByPatient.get(t.patientId);
+      if (!cur || k < cur) firstByPatient.set(t.patientId, k);
+    });
+    const todayStr = new Date().toISOString().slice(0,10);
+    const set = new Set();
+    firstByPatient.forEach((firstKey, pid) => { if (!reported.has(pid) && firstKey <= todayStr) set.add(pid); });
+    return set;
+  }, [appData.ticketRecords, appData.initialReports]);
   const dPats = (appData.patients||[]).filter(p => {
     const s = getPatientDisplayStatus(p);
     if (patientStatusFilter !== s) return false;
@@ -22919,7 +22943,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               onPatientChange && onPatientChange(p.id);
             }} className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between border gap-3 transition-all ${editingPatientId === p.id ? 'bg-blue-50 border-blue-200 shadow-sm' : expiring ? 'border-red-200 bg-red-50' : bday ? 'border-yellow-200 bg-yellow-50' : 'border-transparent hover:bg-white'}`}>
               <div className="flex flex-col min-w-0 flex-1">
-                <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
+                <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{pendingInitialReportSet.has(p.id) && <span title="初回ご利用報告が未報告です" className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded px-1 py-0.5 shrink-0">📋初回報告</span>}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
                 {p.careLevel && <span className="text-[11px] text-blue-600 font-bold">{p.careLevel}</span>}
                 {_sortExtra}
                 {expiring && p.careLevelTo && <span className="text-[10px] text-red-600 font-bold">⚠ 保険更新 {p.careLevelTo.replace(/-/g,'/')}迄</span>}
