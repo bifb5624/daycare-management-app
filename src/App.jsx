@@ -11336,6 +11336,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         lastName: _nm.last, firstName: _nm.first,
         kana: _kanaFull, kanaLast: _kn.last, kanaFirst: _kn.first,
         relation: patient.familyRelation || loggedAcc.relation || '',
+        relOther: false,
         phone: patient.familyPhone || loggedAcc.phone || '',
         phoneMobile: patient.familyPhoneMobile || loggedAcc.phoneMobile || '',
         email: patient.familyEmail || loggedAcc.email || '',
@@ -11364,8 +11365,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         phone: myEc?.phone || loggedAcc?.phone || '',
         phoneMobile: myEc?.phoneMobile || loggedAcc?.phoneMobile || '',
         email: myEc?.email || loggedAcc?.email || '',
-        cmOffice: myEc?.cmOffice || loggedAcc?.cmOffice || '',
-        relationship: myEc?.relationship || loggedAcc?.relationship || '',
+        cmOffice: myEc?.cmOffice || loggedAcc?.cmOffice || patient?.cmOffice || '',
+        relOther: false,
         saving: false, savedMsg: '',
       });
     }
@@ -11875,34 +11876,40 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
               </div>
-              <div>
-                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>続柄</label>
-                <select value={myInfoForm.relation} onChange={e=>setMyInfoForm(f=>({...f,relation:e.target.value,savedMsg:''}))}
-                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
-                  <option value="">— 選択 —</option>
-                  <option value="配偶者">配偶者</option><option value="長男">長男</option><option value="次男">次男</option>
-                  <option value="三男">三男</option><option value="長女">長女</option><option value="次女">次女</option>
-                  <option value="三女">三女</option><option value="兄">兄</option><option value="弟">弟</option>
-                  <option value="姉">姉</option><option value="妹">妹</option>
-                  <option value="ケアマネージャー">ケアマネージャー</option>
-                  <option value="その他関係者">その他関係者</option>
-                </select>
-              </div>
-              {/* ★ ケアマネ閲覧時 (isCmAccount) は 事業所名 / 関係性 (どのような関係か) を入力 */}
-              {isCmAccount && (<>
+              {(() => {
+                // ★ 続柄: 家族は家族続柄、ケアマネは ケアマネージャー/その他関係者。 リストに無い値は「その他（自由入力）」。
+                const relOptions = isCmAccount ? ['ケアマネージャー','その他関係者'] : ['配偶者','長男','次男','三男','長女','次女','三女','兄','弟','姉','妹'];
+                const isOtherRel = myInfoForm.relOther || (!!myInfoForm.relation && !relOptions.includes(myInfoForm.relation));
+                return (<>
+                  <div>
+                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>続柄</label>
+                    <select value={isOtherRel ? 'その他' : myInfoForm.relation}
+                      onChange={e=>{const v=e.target.value; if(v==='その他'){setMyInfoForm(f=>({...f, relOther:true, relation:(f.relation && !relOptions.includes(f.relation))?f.relation:'', savedMsg:''}));} else {setMyInfoForm(f=>({...f, relOther:false, relation:v, savedMsg:''}));}}}
+                      style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}>
+                      <option value="">— 選択 —</option>
+                      {relOptions.map(o=><option key={o} value={o}>{o}</option>)}
+                      <option value="その他">その他（自由入力）</option>
+                    </select>
+                  </div>
+                  {isOtherRel && (
+                    <div>
+                      <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>続柄（自由入力）</label>
+                      <input value={myInfoForm.relation} onChange={e=>setMyInfoForm(f=>({...f, relation:e.target.value, relOther:true, savedMsg:''}))}
+                        placeholder={isCmAccount?'例: 訪問看護 / 地域包括 など':'例: 叔母 / 知人 など'}
+                        style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                    </div>
+                  )}
+                </>);
+              })()}
+              {/* ★ ケアマネ閲覧時 (isCmAccount) のみ 所属事業所名 (関係性欄は廃止: 続柄と重複のため) */}
+              {isCmAccount && (
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>所属事業所名 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(ケアマネ事業所など)</span></label>
                   <input value={myInfoForm.cmOffice||''} onChange={e=>setMyInfoForm(f=>({...f,cmOffice:e.target.value,savedMsg:''}))}
                     placeholder="例: ○○居宅介護支援事業所"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
-                <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>関係性 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(どのような関係か)</span></label>
-                  <input value={myInfoForm.relationship||''} onChange={e=>setMyInfoForm(f=>({...f,relationship:e.target.value,savedMsg:''}))}
-                    placeholder="例: 担当ケアマネージャー / 訪問看護 等"
-                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                </div>
-              </>)}
+              )}
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 (固定)</label>
                 <input value={myInfoForm.phone} onChange={e=>setMyInfoForm(f=>({...f,phone:e.target.value.replace(/[^0-9-]/g,''),savedMsg:''}))}
