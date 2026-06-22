@@ -310,6 +310,51 @@ export async function supabaseSyncStateForStore(storeId, data) {
   }
 }
 
+// ★ 記録単位でマージしてから保存 (複数端末の同時編集でデータが消えないように)。
+//   read-modify-write: クラウド最新を取得 → 記録配列を id 単位で「新しい _savedAt 優先」で統合 → 保存。
+//   別々の利用者/日付/項目を同時に編集しても、お互いの記録が消えない (同じ記録の同時編集だけ後勝ち)。
+export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
+  if (!supabase || !storeId) return false;
+  // id 単位マージ: 同じ id は _savedAt が新しい方を採用。 片方にしか無い id は残す。
+  const mergeById = (localArr, cloudArr) => {
+    const l = Array.isArray(localArr) ? localArr : [];
+    const c = Array.isArray(cloudArr) ? cloudArr : [];
+    const map = new Map();
+    c.forEach(r => { if (r && r.id != null) map.set(String(r.id), r); });
+    l.forEach(r => {
+      if (!r || r.id == null) return;
+      const k = String(r.id);
+      const ex = map.get(k);
+      // ローカルの方が新しい(または同点/未スタンプ)なら採用。 クラウドが明確に新しければ残す。
+      if (!ex || (Number(r._savedAt) || 0) >= (Number(ex._savedAt) || 0)) map.set(k, r);
+    });
+    return [...map.values()];
+  };
+  try {
+    let cloud = null;
+    try { const row = await supabaseLoadStateForStore(storeId); cloud = row && row.data ? row.data : null; }
+    catch (e) {
+      // クラウドを読めない (通信エラー等) → 上書きで他端末のデータを消す危険があるので保存しない
+      console.warn('[supabase] mergeAndSync: load failed, skip save', e);
+      return false;
+    }
+    // クラウドが空(=新規店舗) ならそのまま保存
+    if (!cloud || Object.keys(cloud).length === 0) {
+      return await supabaseSyncStateForStore(storeId, localData);
+    }
+    // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
+    // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
+    //   上書きする恐れがあるためマージ対象に含めない (= 従来どおり編集端末の値を採用)。
+    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos'];
+    const merged = { ...localData };
+    ARRAY_KEYS.forEach(k => { merged[k] = mergeById(localData[k], cloud[k]); });
+    return await supabaseSyncStateForStore(storeId, merged);
+  } catch (e) {
+    console.warn('[supabase] mergeAndSync exception', e);
+    return false;
+  }
+}
+
 export async function supabaseLoadStateForStore(storeId) {
   if (!supabase || !storeId) return null;
   // ★ 重要: 通信エラー (529 Overloaded / ネットワーク断 / RLS) のときは null を返さず必ず throw する。

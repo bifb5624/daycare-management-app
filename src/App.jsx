@@ -18,6 +18,7 @@ import {
   supabaseLoadState,
   supabaseSubscribeState,
   supabaseSyncStateForStore,
+  supabaseMergeAndSyncStateForStore,
   supabaseLoadStateForStore,
   supabaseStaffLogin,
   supabaseStaffChangePassword,
@@ -13399,7 +13400,7 @@ export default function App() {
               return;
             }
           }
-          supabaseSyncStateForStore(staffSession.storeId, appData);
+          supabaseMergeAndSyncStateForStore(staffSession.storeId, appData);
         } catch (e) {
           // ★ 0件pushの安全確認に失敗 (通信エラー等)。 リモートを確認できない以上、
           //   空データで上書きしてしまう危険があるので push しない (データ消失防止)。
@@ -13408,7 +13409,7 @@ export default function App() {
             return;
           }
           // 利用者がいる通常データはそのまま push (確認不要)
-          supabaseSyncStateForStore(staffSession.storeId, appData);
+          supabaseMergeAndSyncStateForStore(staffSession.storeId, appData);
         }
       }, 1500);
       return () => clearTimeout(t);
@@ -13509,7 +13510,7 @@ export default function App() {
       }
     };
     checkAndPull(); // 即時1回
-    const timer = setInterval(checkAndPull, 30000); // 30秒ごと
+    const timer = setInterval(checkAndPull, 8000); // ★ 8秒ごと (他端末の入力を早く反映)
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId]);
@@ -13758,7 +13759,7 @@ export default function App() {
           && !storeTransitionRef.current
           && dataLoadedForStoreRef.current === staffSession.storeId
           && (newData.patients || []).length > 0) {
-        try { supabaseSyncStateForStore(staffSession.storeId, newData); } catch (e) { console.warn('[supabase] immediate save failed', e); }
+        try { supabaseMergeAndSyncStateForStore(staffSession.storeId, newData); } catch (e) { console.warn('[supabase] immediate save failed', e); }
       }
       setToastMsg(options.message || '保存されました');
       setShowToast(true);
@@ -15415,7 +15416,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   // ★ 担当者: スタッフ切替で選んでいるアクティブ記録者を保存
                   //   未選択の場合は 既存値を維持 (それ以外のフォールバックは使わない)
                   recorder: getRecorderName() || existing?.recorder || '',
-                  done: p.done || false
+                  done: p.done || false,
+                  _savedAt: Date.now() // ★ 複数端末マージ用: この記録を保存した時刻
               };
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
               else updatedTicketRecords.push(newRecord);
@@ -15427,10 +15429,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         updatedTicketRecords = localTicketRecords.map(r => {
           const original = _originalById.get(r.id);
           // 変更検知: 元の record と JSON 文字列で差分があれば recorder 上書き
-          const changed = !original || JSON.stringify({...original, recorder:undefined}) !== JSON.stringify({...r, recorder:undefined});
-          if (changed && _activeRec) {
-            return { ...r, recorder: _activeRec };
-          }
+          const changed = !original || JSON.stringify({...original, recorder:undefined,_savedAt:undefined}) !== JSON.stringify({...r, recorder:undefined,_savedAt:undefined});
+          // ★ 変更された記録は _savedAt を更新 (複数端末マージ用)
+          if (changed) return { ...r, ...(_activeRec ? {recorder:_activeRec} : {}), _savedAt: Date.now() };
           return r;
         });
       }
