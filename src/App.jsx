@@ -13640,6 +13640,20 @@ export default function App() {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 768;
   });
+  // ★ iOS Safari 対策: サイドバー開閉で flex レイアウトが変わると position:sticky が再計算されず、
+  //   上部バー(期間/利用者選択/ジャンプ等)が固定されなくなる。 開閉のたびにメイン領域を一瞬だけ
+  //   reflow させて sticky を強制再計算させる (同一タスク内なので画面のちらつきは出ない)。
+  useEffect(() => {
+    const id = setTimeout(() => {
+      const el = document.getElementById('appMainArea');
+      if (!el) return;
+      const prev = el.style.display;
+      el.style.display = 'none';
+      void el.offsetHeight; // 強制 reflow
+      el.style.display = prev || '';
+    }, 330); // サイドバーの transition(300ms)完了後
+    return () => clearTimeout(id);
+  }, [isSidebarOpen]);
   const DESIGN_WIDTH = 1100;
   const contentRef = useRef(null);
   const [contentScale, setContentScale] = useState(1);
@@ -14490,7 +14504,7 @@ export default function App() {
           </div>
       </div>
 
-      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative min-w-0">
+      <div id="appMainArea" className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative min-w-0">
           <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
             <div className="flex items-center min-w-0 flex-1">
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
