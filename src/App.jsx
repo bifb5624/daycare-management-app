@@ -1028,15 +1028,26 @@ function SuggestInput({ value, onChangeText, options = [], onSelect, maxItems = 
   );
 }
 
-// ★ フリガナ専用入力: IME変換中は変換せず、確定時(compositionEnd)や直接入力時のみカタカナ化する。
-//   これをしないと iOS 等の日本語入力中に「タ」→「タタ」のように二重入力されてしまう。
+// ★ フリガナ専用入力: 日本語入力(IME)の変換中は「内部表示」だけを更新し、確定(compositionEnd)時や
+//   直接入力時にだけカタカナ化して親へ渡す。 こうしないと
+//   ・iOS: 変換中に制御値を上書きして「タ」→「タタ」のように二重入力される
+//   ・PC: 変換確定とのタイミングずれでカタカナに変換されない
+//   という不具合が起きる。 内部 state を持ち、変換中は親の value で上書きしないのがポイント。
 function KanaInput({ value, onChangeText, ...rest }) {
-  const composing = React.useRef(false);
+  const composingRef = React.useRef(false);
+  const [inner, setInner] = React.useState(value ?? '');
+  // 変換中でないときだけ、親から来た value を内部表示に同期
+  React.useEffect(() => { if (!composingRef.current) setInner(value ?? ''); }, [value]);
+  const commit = (raw) => { const v = toKatakana(raw); setInner(v); onChangeText(v); };
   return (
-    <input {...rest} value={value}
-      onCompositionStart={() => { composing.current = true; }}
-      onCompositionEnd={(e) => { composing.current = false; onChangeText(toKatakana(e.target.value)); }}
-      onChange={(e) => { const raw = e.target.value; onChangeText(composing.current ? raw : toKatakana(raw)); }}
+    <input {...rest} value={inner}
+      onCompositionStart={() => { composingRef.current = true; }}
+      onCompositionEnd={(e) => { composingRef.current = false; commit(e.target.value); }}
+      onChange={(e) => {
+        const raw = e.target.value;
+        if (composingRef.current) setInner(raw);   // 変換中: 内部表示のみ(変換しない・親を呼ばない)
+        else commit(raw);                           // 確定/直接入力: カタカナ化して親へ
+      }}
     />
   );
 }
