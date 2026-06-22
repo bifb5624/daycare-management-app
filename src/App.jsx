@@ -29502,13 +29502,23 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
   (appData.ticketRecords||[]).forEach(t=>{ if(t.patientId!==patient.id) return; const st=t.status||''; if(!(st==='通所'||st==='出席'||st.includes('通所'))) return; const k=_irKey(t); if(!k) return; if(!_firstKey||k<_firstKey){_firstKey=k;_firstTicket=t;} });
   const _ft=_firstTicket, _ampm=_ft?(_ft.scheduledAmpm||(_ft.temp_PM?'PM':'AM')):'AM';
   const _av=_ft?{temp:_ft[`temp_${_ampm}`]||_ft.temp||'',bpUpSt:_ft[`bpUpSt_${_ampm}`]||_ft.bpUpSt||'',bpDnSt:_ft[`bpDnSt_${_ampm}`]||_ft.bpDnSt||'',plSt:_ft[`plSt_${_ampm}`]||_ft.plSt||'',bpUpEn:_ft[`bpUpEn_${_ampm}`]||_ft.bpUpEn||'',bpDnEn:_ft[`bpDnEn_${_ampm}`]||_ft.bpDnEn||'',plEn:_ft[`plEn_${_ampm}`]||_ft.plEn||''}:{};
+  // ★ 初回通所の運動記録を「項目名: 値」で整形 (各種設定の運動メニュー順)
+  const _exItems = appData.systemSettings?.exerciseItems || [];
+  const _exText = (() => {
+    const ex = _ft?.exercises || {};
+    const parts = _exItems.map(it => { const v = ex[it.id]; return (v && String(v).trim() && String(v).trim()!=='ー') ? `${it.name}: ${v}` : null; }).filter(Boolean);
+    return parts.join('\n');
+  })();
+  // ★ 報告者の既定 = スタッフ切替で選択中の人。 プルダウン候補 = 各種設定の従業員。
+  const _staffList = (appData.diarySettings?.staff || []).map(s => s.name).filter(Boolean);
+  const _activeRec = getActiveRecorderName();
   const _savedIR = personalFile.initialReport || null;
-  const [irForm, setIrForm] = useState(() => _savedIR ? {..._savedIR} : {
+  const [irForm, setIrForm] = useState(() => _savedIR ? {exercise:'', ..._savedIR} : {
     date: _firstKey || new Date().toISOString().slice(0,10),
     recipientOffice: patient.cmOffice||'', recipientName: patient.cmName||'',
     temp:_av.temp||'', bpUpSt:_av.bpUpSt||'', bpDnSt:_av.bpDnSt||'', plSt:_av.plSt||'',
     bpUpEn:_av.bpUpEn||'', bpDnEn:_av.bpDnEn||'', plEn:_av.plEn||'',
-    content:'', reporter:'',
+    exercise:_exText, content:'', reporter:_activeRec||'',
   });
   const saveInitialReport = () => {
     const createdAt = new Date().toISOString();
@@ -29539,6 +29549,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
         体温：${esc(f.temp)||'－'} ℃<br>
         開始時 血圧：${esc(f.bpUpSt)||'－'}/${esc(f.bpDnSt)||'－'} mmHg　脈：${esc(f.plSt)||'－'} 回<br>
         終了時 血圧：${esc(f.bpUpEn)||'－'}/${esc(f.bpDnEn)||'－'} mmHg　脈：${esc(f.plEn)||'－'} 回</div>
+      <div class="box"><b>■ 運動の記録</b><br>${esc(f.exercise)||'－'}</div>
       <div class="box"><b>■ ご利用の様子</b><br>${esc(f.content)||'－'}</div>
       <div class="sign">${esc(fac.name)||''}<br>${fac.phone?('TEL '+esc(fac.phone)):''}　${fac.fax?('FAX '+esc(fac.fax)):''}<br>報告者：${esc(f.reporter)||'　　　　'}</div>
     </body></html>`;
@@ -29761,8 +29772,12 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">初回通所日</label>
                   <input type="date" value={irForm.date} onChange={e=>setIrForm(f=>({...f,date:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                <div><label className="block text-xs font-bold text-slate-500 mb-1">報告者</label>
-                  <input type="text" value={irForm.reporter} onChange={e=>setIrForm(f=>({...f,reporter:e.target.value}))} placeholder="職員名" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">報告者（スタッフ切替の選択者が既定）</label>
+                  <select value={irForm.reporter} onChange={e=>setIrForm(f=>({...f,reporter:e.target.value}))} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none">
+                    <option value="">— 選択 —</option>
+                    {irForm.reporter && !_staffList.includes(irForm.reporter) && <option value={irForm.reporter}>{irForm.reporter}</option>}
+                    {_staffList.map((n,i)=><option key={i} value={n}>{n}</option>)}
+                  </select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">宛先（ケアマネ事業所）</label>
@@ -29783,7 +29798,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                   <div><label className="block text-[10px] text-slate-500 mb-1">終了 脈</label><input value={irForm.plEn} onChange={e=>setIrForm(f=>({...f,plEn:e.target.value}))} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-sm outline-none"/></div>
                 </div>
               </div>
-              <div><label className="block text-xs font-bold text-slate-500 mb-1">ご利用の様子（運動・活動の様子など）</label>
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">運動の記録（初回通所時）</label>
+                <textarea value={irForm.exercise} onChange={e=>setIrForm(f=>({...f,exercise:e.target.value}))} rows={4} placeholder="初回通所の運動記録があれば自動で入ります（例: ①バイク: 10分 / 平行棒: 10/20 …）。編集できます。" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">ご利用の様子（活動・表情など）</label>
                 <textarea value={irForm.content} onChange={e=>setIrForm(f=>({...f,content:e.target.value}))} rows={5} placeholder="例: 体操に積極的に取り組まれ、笑顔が見られました。運動メニューも一通りこなされ…" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
               <div className="flex justify-end gap-2">
                 <button onClick={printInitialReport} className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Printer size={16}/>印刷 / PDF保存</button>
