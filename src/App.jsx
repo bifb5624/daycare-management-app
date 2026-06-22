@@ -17,6 +17,7 @@ import {
   supabaseSyncState,
   supabaseLoadState,
   supabaseSubscribeState,
+  supabaseSubscribeStoreRealtime,
   supabaseSyncStateForStore,
   supabaseMergeAndSyncStateForStore,
   supabaseLoadStateForStore,
@@ -13510,8 +13511,14 @@ export default function App() {
       }
     };
     checkAndPull(); // 即時1回
-    const timer = setInterval(checkAndPull, 8000); // ★ 8秒ごと (他端末の入力を早く反映)
-    return () => clearInterval(timer);
+    const timer = setInterval(checkAndPull, 8000); // ★ 8秒ごと (Realtime未有効時の保険)
+    // ★ Realtime購読: 同じ店舗の app_state が変わった瞬間に即 pull (1〜2秒で反映)。
+    //   他店舗の変更では通知は来ない(店舗IDでフィルタ)。 Supabase側でRealtime有効化すると動作。
+    const stopRealtime = supabaseSubscribeStoreRealtime(newStoreId, () => {
+      // 自分の保存直後(編集中)は checkAndPull 内の「5秒スキップ」で上書きを防止
+      checkAndPull();
+    });
+    return () => { clearInterval(timer); try { stopRealtime && stopRealtime(); } catch {} };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId]);
 

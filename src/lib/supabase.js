@@ -294,6 +294,30 @@ export function supabaseSubscribeState(onChange, intervalMs = 15000, storeId = A
   return () => { stopped = true; clearInterval(timer); };
 }
 
+// ★ Realtime購読: 指定店舗(key=storeId)の app_state 行が変わった瞬間に onChange を呼ぶ。
+//   同じ店舗の行だけを対象(filter)にするので、他店舗の変更では通知は来ない。
+//   Supabase 管理画面で app_state テーブルの Realtime を有効化すると動作する
+//   (未有効でもエラーにはならず、 ポーリングが保険として働く)。
+//   戻り値は購読停止関数。
+export function supabaseSubscribeStoreRealtime(storeId, onChange) {
+  if (!supabase || !storeId) return () => {};
+  let channel;
+  try {
+    channel = supabase
+      .channel(`app_state_${storeId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'app_state', filter: `key=eq.${storeId}` },
+        (payload) => { try { onChange && onChange(payload); } catch {} }
+      )
+      .subscribe();
+  } catch (e) {
+    console.warn('[supabase] realtime subscribe failed', e);
+    return () => {};
+  }
+  return () => { try { if (channel) supabase.removeChannel(channel); } catch {} };
+}
+
 // =========================================================
 // 店舗ごとの app_state 保存・読込 (マルチテナント用)
 // =========================================================
