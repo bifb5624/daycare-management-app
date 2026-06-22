@@ -14874,18 +14874,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   //   通所時(arrival)=来た時の今の気持ち(非過去)、帰宅時(departure)=一日の振り返りの気持ち(過去)。
   const KIBUN_REASONS_BY_TIMING = {
     arrival: {
-      excellent: ['よく眠れた','体調がいい','気分がいい','調子がいい','楽しみ','食欲がある','すっきりしている','元気いっぱい','うれしい','ごきげん'],
-      good:      ['よく眠れた','体調はいい','気分はいい','落ち着いている','食欲がある','まあまあ元気','調子はいい','穏やかな気分','痛みはない','気分が明るい'],
+      excellent: ['よく眠れた','体調がいい','気分がいい','調子がいい','楽しみ','体が軽い','すっきりしている','元気いっぱい','うれしい','ごきげん'],
+      good:      ['よく眠れた','体調はいい','気分はいい','落ち着いている','体が軽い','まあまあ元気','調子はいい','穏やかな気分','痛みはない','気分が明るい'],
       normal:    ['いつも通り','特に変わりない','まあまあ','ふつう','落ち着いている','可もなく不可もなく','体調はふつう','よく眠れた方','特に問題なし','変わりない'],
-      bad:       ['あまり眠れなかった','少しだるい','食欲がない','疲れ気味','痛むところがある','気分が乗らない','少し不安','体調がいまいち','すっきりしない','元気が出ない'],
-      terrible:  ['よく眠れなかった','体調が悪い','痛みがある','食欲がない','だるくてつらい','めまいがする','気分が悪い','不安が強い','吐き気がする','起きるのがつらかった'],
+      bad:       ['あまり眠れなかった','少しだるい','体が重い','疲れ気味','痛むところがある','気分が乗らない','少し不安','体調がいまいち','すっきりしない','元気が出ない'],
+      terrible:  ['よく眠れなかった','体調が悪い','痛みがある','体がだるい','つらい','めまいがする','気分が悪い','不安が強い','吐き気がする','起きるのがつらかった'],
     },
     departure: {
-      excellent: ['とても楽しかった','よく食べられた','会話が楽しかった','体操をがんばれた','たくさん笑えた','よく動けた','満足した','うれしかった','元気に過ごせた','また来たい'],
-      good:      ['楽しかった','食事がおいしかった','落ち着いて過ごせた','おしゃべりできた','体を動かせた','穏やかに過ごせた','よく休めた','まあまあ楽しめた','痛みなく過ごせた','気分よく過ごせた'],
+      excellent: ['とても楽しかった','体操をがんばれた','会話が楽しかった','たくさん体を動かせた','たくさん笑えた','よく動けた','満足した','うれしかった','元気に過ごせた','また来たい'],
+      good:      ['楽しかった','体を動かせた','落ち着いて過ごせた','おしゃべりできた','運動できた','穏やかに過ごせた','よく休めた','まあまあ楽しめた','痛みなく過ごせた','気分よく過ごせた'],
       normal:    ['いつも通りだった','特に変わりなかった','まあまあだった','ふつうに過ごせた','落ち着いて過ごせた','可もなく不可もなく','問題なく過ごせた','静かに過ごせた','特に問題なし','変わりなかった'],
-      bad:       ['食事が進まなかった','痛みがあった','疲れてしまった','あまり楽しめなかった','気分が乗らなかった','少しだるかった','うとうとしてしまった','落ち着かなかった','早く帰りたかった','元気が出なかった'],
-      terrible:  ['食べられなかった','とても痛かった','体調を崩した','つらかった','めまいがした','ぐったりした','気分が悪かった','不安だった','吐き気がした','途中で休んだ'],
+      bad:       ['体が動かなかった','痛みがあった','疲れてしまった','あまり楽しめなかった','気分が乗らなかった','少しだるかった','うとうとしてしまった','落ち着かなかった','早く帰りたかった','元気が出なかった'],
+      terrible:  ['力が出なかった','とても痛かった','体調を崩した','つらかった','めまいがした','ぐったりした','気分が悪かった','不安だった','吐き気がした','途中で休んだ'],
     },
   };
   const getKibunReasons = (timing, mood) => (KIBUN_REASONS_BY_TIMING[timing==='departure'?'departure':'arrival']?.[mood]) || [];
@@ -24894,26 +24894,6 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
 
           {/* 事業所情報 */}
           {activeTab === 'facility' && (<>
-            <SectionCard title="📖 操作マニュアル・ご利用ガイド">
-              <p className="text-xs text-slate-500 mb-3">各マニュアルは新しいタブで開きます（印刷・PDF保存も可能）。ご家族・ケアマネ用は、そのURLをそのままお渡しいただけます。</p>
-              <div className="grid sm:grid-cols-3 gap-3">
-                <a href="/manual-jigyosho.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 transition-colors text-center">
-                  <div className="text-2xl mb-1">🏢</div>
-                  <div className="font-bold text-sm text-green-800">事業所・スタッフ向け</div>
-                  <div className="text-[11px] text-green-600 mt-1">操作マニュアル</div>
-                </a>
-                <a href="/manual-kazoku.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors text-center">
-                  <div className="text-2xl mb-1">👨‍👩‍👧</div>
-                  <div className="font-bold text-sm text-blue-800">ご家族向け</div>
-                  <div className="text-[11px] text-blue-600 mt-1">ご利用ガイド</div>
-                </a>
-                <a href="/manual-kankeisha.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-cyan-200 bg-cyan-50 hover:bg-cyan-100 transition-colors text-center">
-                  <div className="text-2xl mb-1">🤝</div>
-                  <div className="font-bold text-sm text-cyan-800">ケアマネ・関係者向け</div>
-                  <div className="text-[11px] text-cyan-600 mt-1">ご利用ガイド</div>
-                </a>
-              </div>
-            </SectionCard>
             <SectionCard title="事業所情報">
               {/* ★ 縦並びレイアウトに変更 (項目ごとに行を分けて見やすく) */}
               <div className="space-y-4">
@@ -25745,6 +25725,26 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
 
           {/* システム */}
           {activeTab === 'system' && (<>
+            <SectionCard title="📖 操作マニュアル・ご利用ガイド">
+              <p className="text-xs text-slate-500 mb-3">各マニュアルは新しいタブで開きます（印刷・PDF保存も可能）。ご家族・ケアマネ用は、そのURLをそのままお渡しいただけます。</p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <a href="/manual-jigyosho.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 transition-colors text-center">
+                  <div className="text-2xl mb-1">🏢</div>
+                  <div className="font-bold text-sm text-green-800">事業所・スタッフ向け</div>
+                  <div className="text-[11px] text-green-600 mt-1">操作マニュアル</div>
+                </a>
+                <a href="/manual-kazoku.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors text-center">
+                  <div className="text-2xl mb-1">👨‍👩‍👧</div>
+                  <div className="font-bold text-sm text-blue-800">ご家族向け</div>
+                  <div className="text-[11px] text-blue-600 mt-1">ご利用ガイド</div>
+                </a>
+                <a href="/manual-kankeisha.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-cyan-200 bg-cyan-50 hover:bg-cyan-100 transition-colors text-center">
+                  <div className="text-2xl mb-1">🤝</div>
+                  <div className="font-bold text-sm text-cyan-800">ケアマネ・関係者向け</div>
+                  <div className="text-[11px] text-cyan-600 mt-1">ご利用ガイド</div>
+                </a>
+              </div>
+            </SectionCard>
             <SectionCard title="ログイン情報">
               {(() => {
                 const allCreds = appData.systemSettings?.loginCredentials || [];
