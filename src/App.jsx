@@ -16550,9 +16550,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           {/* 利用者プルダウン: かな昇順 + ア行/カ行... の optgroup でラベル付け */}
           {!hidePatientSelector && (
             <>
-              <input type="text" placeholder="🔍 利用者を検索" value={patientSearch}
-                onChange={e=>setPatientSearch(e.target.value)}
-                style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',outline:'none',width:130,fontFamily:'inherit'}}/>
+              <SuggestInput value={patientSearch} onChangeText={setPatientSearch}
+                options={(appData.patients||[]).map(p=>({key:p.id, label:p.name, sub:p.kana}))}
+                onSelect={(o)=>{ const id=Number(o.key); setSelectedPatientId(id); onPatientChange&&onPatientChange(id); setPatientSearch(''); }}
+                wrapStyle={{width:160}}
+                inputProps={{type:'text', placeholder:'🔍 利用者を検索', style:{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',outline:'none',width:'100%',fontFamily:'inherit',boxSizing:'border-box'}}}/>
               <select value={selectedPatientId||""} onChange={e=>{const id=Number(e.target.value);setSelectedPatientId(id);onPatientChange&&onPatientChange(id);}}
                 style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:13,fontWeight:'bold',outline:'none',cursor:'pointer'}}>
                 {groupPatientsByKanaRow(filteredPatientsForSelector).map(g => (
