@@ -15378,10 +15378,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   bpUpEn_AM: p.bpUpEn_AM ?? "", bpUpEn_PM: p.bpUpEn_PM ?? "",
                   bpDnEn_AM: p.bpDnEn_AM ?? "", bpDnEn_PM: p.bpDnEn_PM ?? "",
                   plEn_AM: p.plEn_AM ?? "", plEn_PM: p.plEn_PM ?? "",
-                  // 旧形式互換用: 現 timeFilter の値を plain にも反映 (古いビューが参照する場合)
-                  temp: p[`temp_${timeFilter}`] ?? "",
-                  bpUpSt: p[`bpUpSt_${timeFilter}`] ?? "", bpDnSt: p[`bpDnSt_${timeFilter}`] ?? "", plSt: p[`plSt_${timeFilter}`] ?? "",
-                  bpUpEn: p[`bpUpEn_${timeFilter}`] ?? "", bpDnEn: p[`bpDnEn_${timeFilter}`] ?? "", plEn: p[`plEn_${timeFilter}`] ?? "",
+                  // ★ 旧形式互換 (plain) フィールド: 分析・グラフ・家族画面などが参照する。
+                  //   現 timeFilter の値を優先しつつ、空なら もう一方(AM/PM)の値を使う。
+                  //   こうしないと「AMで血圧入力→保存(表示OK)→PM保存(PM血圧は空)」で plain が空に上書きされ、
+                  //   分析やグラフから血圧が消えてしまう (次に記録するまで残るように)。
+                  temp: p[`temp_${timeFilter}`] || p.temp_AM || p.temp_PM || "",
+                  bpUpSt: p[`bpUpSt_${timeFilter}`] || p.bpUpSt_AM || p.bpUpSt_PM || "", bpDnSt: p[`bpDnSt_${timeFilter}`] || p.bpDnSt_AM || p.bpDnSt_PM || "", plSt: p[`plSt_${timeFilter}`] || p.plSt_AM || p.plSt_PM || "",
+                  bpUpEn: p[`bpUpEn_${timeFilter}`] || p.bpUpEn_AM || p.bpUpEn_PM || "", bpDnEn: p[`bpDnEn_${timeFilter}`] || p.bpDnEn_AM || p.bpDnEn_PM || "", plEn: p[`plEn_${timeFilter}`] || p.plEn_AM || p.plEn_PM || "",
                   massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
@@ -16602,11 +16605,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           {/* 利用者プルダウン: かな昇順 + ア行/カ行... の optgroup でラベル付け */}
           {!hidePatientSelector && (
             <>
-              <SuggestInput value={patientSearch} onChangeText={setPatientSearch}
-                options={(appData.patients||[]).map(p=>({key:p.id, label:p.name, sub:p.kana}))}
-                onSelect={(o)=>{ const id=Number(o.key); setSelectedPatientId(id); onPatientChange&&onPatientChange(id); setPatientSearch(''); }}
-                wrapStyle={{width:160}}
-                inputProps={{type:'text', placeholder:'🔍 利用者を検索', style:{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:12,fontWeight:'bold',outline:'none',width:'100%',fontFamily:'inherit',boxSizing:'border-box'}}}/>
+              {/* ★ 利用者の検索欄は廃止 (プルダウンから選択)。 */}
               <select value={selectedPatientId||""} onChange={e=>{const id=Number(e.target.value);setSelectedPatientId(id);onPatientChange&&onPatientChange(id);}}
                 style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 12px',fontSize:13,fontWeight:'bold',outline:'none',cursor:'pointer'}}>
                 {groupPatientsByKanaRow(filteredPatientsForSelector).map(g => (
