@@ -16610,7 +16610,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   // ★ スタッフ表示では自前スクロール土台(height+overflow)にして、iPad(iOS)で上部バーの sticky が
   //   効かない不具合を解消。 家族/ケアマネ表示(familyMode)は親側でスクロールするため従来どおり。
   return (
-    <div className="w-full" style={{backgroundColor:'#f0f4f9', ...(familyMode ? {minHeight:'100%'} : {height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch'})}}>
+    <div className="w-full" style={{backgroundColor:'#f0f4f9', ...(familyMode ? {minHeight:'100%'} : {flex:'1 1 0%', minHeight:0, overflowY:'auto'})}}>
       {/* ヘッダーバー（固定） — scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
       {/* ★ 分析個人ヘッダ: 淡い青グラデーション、 文字は黒で読みやすく */}
@@ -28760,9 +28760,9 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
 
   return (
-    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
-      {/* ヘッダー（スクロール時も上部に固定） */}
-      <div style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#1e293b,#334155)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>
+    <div style={{flex:'1 1 0%',minHeight:0,display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
+      {/* ヘッダー（flexShrink:0 で上部に固定。 height:100% だと iPad で解決せず崩れるため flex 充填に） */}
+      <div style={{flexShrink:0,zIndex:30,background:'linear-gradient(135deg,#1e293b,#334155)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <FileText size={20}/>
           <span style={{fontSize:17,fontWeight:'bold'}}>休み連絡</span>
