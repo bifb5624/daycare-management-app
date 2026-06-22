@@ -29515,6 +29515,34 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     onSave({ ...appData, patients: (appData.patients||[]).map(p=>p.id===patient.id?newPatient:p), initialReports: [...others, reportedEntry] });
     alert('初回ご利用報告を保存しました。\n利用者マスタの「📋初回報告」バッジが消えます。');
   };
+  // ★ 初回報告を印刷/PDF保存 (ブラウザの「PDFに保存」で PDF 化、 画面キャプチャで JPEG 化も可)
+  const printInitialReport = () => {
+    const fac = appData.systemSettings?.facilityInfo || {};
+    const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    const f = irForm;
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>初回ご利用報告_${esc(patient.name)}</title>
+      <style>@page{size:A4;margin:18mm}body{font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#1e293b;line-height:1.9;font-size:14px}
+      h1{text-align:center;font-size:22px;letter-spacing:4px;margin:0 0 6px}.sub{text-align:center;color:#475569;font-size:12px;margin-bottom:20px}
+      .row{margin:6px 0}.lbl{font-weight:bold;display:inline-block;min-width:7em}
+      .box{border:1px solid #94a3b8;border-radius:8px;padding:12px 14px;margin:14px 0}
+      .sign{margin-top:30px;text-align:right;line-height:1.8}table{border-collapse:collapse;width:100%}td{padding:4px 8px}</style></head><body>
+      <h1>初回ご利用報告書</h1>
+      <div class="sub">${esc(f.date)}　ご利用分</div>
+      <div class="row">${esc(f.recipientOffice)}　${esc(f.recipientName)}　様</div>
+      <div class="row" style="text-align:right">${esc(patient.name)} 様（初回通所日：${esc(f.date)}）</div>
+      <p>平素より大変お世話になっております。標記の方の初回ご利用の状況をご報告いたします。</p>
+      <div class="box"><b>■ バイタル</b><br>
+        体温：${esc(f.temp)||'－'} ℃<br>
+        開始時 血圧：${esc(f.bpUpSt)||'－'}/${esc(f.bpDnSt)||'－'} mmHg　脈：${esc(f.plSt)||'－'} 回<br>
+        終了時 血圧：${esc(f.bpUpEn)||'－'}/${esc(f.bpDnEn)||'－'} mmHg　脈：${esc(f.plEn)||'－'} 回</div>
+      <div class="box"><b>■ ご利用の様子</b><br>${esc(f.content)||'－'}</div>
+      <div class="sign">${esc(fac.name)||''}<br>${fac.phone?('TEL '+esc(fac.phone)):''}　${fac.fax?('FAX '+esc(fac.fax)):''}<br>報告者：${esc(f.reporter)||'　　　　'}</div>
+    </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} }, 350);
+  };
   const [pdfPreviewMonthly, setPdfPreviewMonthly] = useState(null);
   const [showFaceSheetForm, setShowFaceSheetForm] = useState(false);
   const [pdfPreviewFaceSheet, setPdfPreviewFaceSheet] = useState(false);
@@ -29753,7 +29781,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
               </div>
               <div><label className="block text-xs font-bold text-slate-500 mb-1">ご利用の様子（運動・活動の様子など）</label>
                 <textarea value={irForm.content} onChange={e=>setIrForm(f=>({...f,content:e.target.value}))} rows={5} placeholder="例: 体操に積極的に取り組まれ、笑顔が見られました。運動メニューも一通りこなされ…" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                <button onClick={printInitialReport} className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Printer size={16}/>印刷 / PDF保存</button>
                 <button onClick={saveInitialReport} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Save size={16}/>初回報告を保存</button>
               </div>
             </div>
