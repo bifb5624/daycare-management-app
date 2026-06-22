@@ -14870,21 +14870,22 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     { key: 'bad',       label: 'イマイチ',   emoji: '😞', color: 'bg-orange-400', textColor: 'text-orange-900' },
     { key: 'terrible',  label: 'とても悪い', emoji: '😫', color: 'bg-red-500',    textColor: 'text-red-900' },
   ];
-  // ★ 通所時(arrival)は「今の様子」=非過去、帰宅時(departure)は「一日の振り返り」=過去 で言い回しを分ける。
+  // ★ ご利用者ご本人の「気持ち」ベースの言い回し。
+  //   通所時(arrival)=来た時の今の気持ち(非過去)、帰宅時(departure)=一日の振り返りの気持ち(過去)。
   const KIBUN_REASONS_BY_TIMING = {
     arrival: {
-      excellent: ['よく眠れている','体調がとても良い','食欲がある','気分爽快','顔色が良い','笑顔が多い','意欲的','会話がはずむ','痛みがない','ご機嫌が良い'],
-      good:      ['体調が良い','食欲がある','よく眠れている','落ち着いている','顔色が良い','会話ができる','穏やか','痛みがない','意欲がある','表情が明るい'],
-      normal:    ['いつも通り','特に変化なし','落ち着いている','大きな訴えなし','平熱','食欲ふつう','睡眠はふつう','表情おだやか','体調はふつう','変わりなし'],
-      bad:       ['食欲がない','痛みがある','寝不足のよう','疲れ気味','元気がない','顔色がさえない','だるそう','気分がすぐれない','表情が硬い','訴えが多い'],
-      terrible:  ['食欲がない','強い痛みがある','よく眠れていない','体調が悪い','顔色が悪い','めまいがある','ぐったりしている','発熱ぎみ','吐き気がある','元気がない'],
+      excellent: ['よく眠れた','体調がいい','気分がいい','調子がいい','楽しみ','食欲がある','すっきりしている','元気いっぱい','うれしい','ごきげん'],
+      good:      ['よく眠れた','体調はいい','気分はいい','落ち着いている','食欲がある','まあまあ元気','調子はいい','穏やかな気分','痛みはない','気分が明るい'],
+      normal:    ['いつも通り','特に変わりない','まあまあ','ふつう','落ち着いている','可もなく不可もなく','体調はふつう','よく眠れた方','特に問題なし','変わりない'],
+      bad:       ['あまり眠れなかった','少しだるい','食欲がない','疲れ気味','痛むところがある','気分が乗らない','少し不安','体調がいまいち','すっきりしない','元気が出ない'],
+      terrible:  ['よく眠れなかった','体調が悪い','痛みがある','食欲がない','だるくてつらい','めまいがする','気分が悪い','不安が強い','吐き気がする','起きるのがつらかった'],
     },
     departure: {
-      excellent: ['とても楽しく過ごせた','よく食べられた','会話がはずんだ','活動に積極的だった','笑顔が多かった','体操をがんばった','よく動けた','ご機嫌だった','痛みなく過ごせた','満足された様子'],
-      good:      ['楽しく過ごせた','食事がとれた','落ち着いて過ごせた','会話ができた','活動に参加できた','体操ができた','穏やかに過ごせた','よく休めた','痛みなく過ごせた','笑顔が見られた'],
-      normal:    ['いつも通り過ごせた','特に変化なし','落ち着いて過ごせた','大きな訴えなし','食事はふつう','活動はふつうに参加','表情おだやか','体調変わりなし','問題なく過ごせた','静かに過ごせた'],
-      bad:       ['食事が進まなかった','痛みを訴えた','疲れた様子だった','元気がなかった','活動に消極的だった','表情が硬かった','うとうとされていた','落ち着かなかった','訴えが多かった','顔色がさえなかった'],
-      terrible:  ['食事がとれなかった','強い痛みを訴えた','体調を崩された','顔色が悪かった','めまいを訴えた','ぐったりされていた','発熱があった','吐き気を訴えた','途中で休まれた','元気がなかった'],
+      excellent: ['とても楽しかった','よく食べられた','会話が楽しかった','体操をがんばれた','たくさん笑えた','よく動けた','満足した','うれしかった','元気に過ごせた','また来たい'],
+      good:      ['楽しかった','食事がおいしかった','落ち着いて過ごせた','おしゃべりできた','体を動かせた','穏やかに過ごせた','よく休めた','まあまあ楽しめた','痛みなく過ごせた','気分よく過ごせた'],
+      normal:    ['いつも通りだった','特に変わりなかった','まあまあだった','ふつうに過ごせた','落ち着いて過ごせた','可もなく不可もなく','問題なく過ごせた','静かに過ごせた','特に問題なし','変わりなかった'],
+      bad:       ['食事が進まなかった','痛みがあった','疲れてしまった','あまり楽しめなかった','気分が乗らなかった','少しだるかった','うとうとしてしまった','落ち着かなかった','早く帰りたかった','元気が出なかった'],
+      terrible:  ['食べられなかった','とても痛かった','体調を崩した','つらかった','めまいがした','ぐったりした','気分が悪かった','不安だった','吐き気がした','途中で休んだ'],
     },
   };
   const getKibunReasons = (timing, mood) => (KIBUN_REASONS_BY_TIMING[timing==='departure'?'departure':'arrival']?.[mood]) || [];
@@ -24893,6 +24894,26 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
 
           {/* 事業所情報 */}
           {activeTab === 'facility' && (<>
+            <SectionCard title="📖 操作マニュアル・ご利用ガイド">
+              <p className="text-xs text-slate-500 mb-3">各マニュアルは新しいタブで開きます（印刷・PDF保存も可能）。ご家族・ケアマネ用は、そのURLをそのままお渡しいただけます。</p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <a href="/manual-jigyosho.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-green-200 bg-green-50 hover:bg-green-100 transition-colors text-center">
+                  <div className="text-2xl mb-1">🏢</div>
+                  <div className="font-bold text-sm text-green-800">事業所・スタッフ向け</div>
+                  <div className="text-[11px] text-green-600 mt-1">操作マニュアル</div>
+                </a>
+                <a href="/manual-kazoku.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors text-center">
+                  <div className="text-2xl mb-1">👨‍👩‍👧</div>
+                  <div className="font-bold text-sm text-blue-800">ご家族向け</div>
+                  <div className="text-[11px] text-blue-600 mt-1">ご利用ガイド</div>
+                </a>
+                <a href="/manual-kankeisha.html" target="_blank" rel="noopener noreferrer" className="block p-4 rounded-xl border-2 border-cyan-200 bg-cyan-50 hover:bg-cyan-100 transition-colors text-center">
+                  <div className="text-2xl mb-1">🤝</div>
+                  <div className="font-bold text-sm text-cyan-800">ケアマネ・関係者向け</div>
+                  <div className="text-[11px] text-cyan-600 mt-1">ご利用ガイド</div>
+                </a>
+              </div>
+            </SectionCard>
             <SectionCard title="事業所情報">
               {/* ★ 縦並びレイアウトに変更 (項目ごとに行を分けて見やすく) */}
               <div className="space-y-4">
