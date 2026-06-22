@@ -10815,14 +10815,19 @@ function FamilyView() {
                     systemSettings: isCaremanager ? { ...(latest.systemSettings||{}), cmOffices: nextCmOffices, careManagers: nextCareManagers } : (latest.systemSettings || {}),
                     patients: (latest.patients||[]).map(p => {
                       if (p.id !== invite.patientId) return p;
-                      // 親アカウント (利用者の主要連絡先) は familyName/Relation/Phone/Email にセット (1件目=主要)
-                      // 親が未登録ならこの人を主要連絡先に。それ以外 (child/ケアマネ) は追加緊急連絡先 (配列)
-                      const isPrimary = accRole === 'parent' && !p.familyName;
+                      // ★ 1件目に登録した人 (役割を問わず) を主要連絡先 (familyName 等) にセット。
+                      //   2人目以降は追加緊急連絡先 (emergencyContacts 配列) に自動追加。
+                      //   ケアマネ (isCaremanager) は連絡先ではないので主要にしない。
+                      const isPrimary = !isCaremanager && !p.familyName;
                       let primaryFields = {};
                       if (isPrimary) {
                         primaryFields = {
                           familyName: ecName,
+                          familyLastName: ecLastName,
+                          familyFirstName: ecFirstName,
                           familyKana: `${ecKanaLast} ${ecKanaFirst}`.trim(),
+                          familyKanaLast: ecKanaLast,
+                          familyKanaFirst: ecKanaFirst,
                           familyRelation: ecRelation,
                           familyPhone: ecPhone || '',
                           familyPhoneMobile: ecMobile || '',
@@ -10877,7 +10882,11 @@ function FamilyView() {
                         if (patchedPatient) {
                           await supabaseMergePatientFromFamily(_storeId, invite.patientId, {
                             familyName: patchedPatient.familyName,
+                            familyLastName: patchedPatient.familyLastName,
+                            familyFirstName: patchedPatient.familyFirstName,
                             familyKana: patchedPatient.familyKana,
+                            familyKanaLast: patchedPatient.familyKanaLast,
+                            familyKanaFirst: patchedPatient.familyKanaFirst,
                             familyRelation: patchedPatient.familyRelation,
                             familyPhone: patchedPatient.familyPhone,
                             familyPhoneMobile: patchedPatient.familyPhoneMobile,
@@ -11270,17 +11279,23 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   // ★ 利用者・登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
-  const [myInfoForm, setMyInfoForm] = useState({ name: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
+  const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
   const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', email:'', doctor:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
   // モーダルを開いたタイミングで loggedAcc + patient から現在の情報を読み込み
   React.useEffect(() => {
     if (!myInfoOpen) return;
     // この家族の登録情報を patient.familyName / emergencyContacts から探す
+    // ★ 姓/名 の分割ヘルパー (姓名が無い旧データは氏名を空白で分割)
+    const _splitNm = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
     if (loggedAcc?.role === 'parent') {
       // 親 → 主要連絡先 (familyName/familyPhone 等)
+      const _nm = (patient.familyLastName || patient.familyFirstName)
+        ? { last: patient.familyLastName||'', first: patient.familyFirstName||'' }
+        : _splitNm(patient.familyName || loggedAcc.displayName);
       setMyInfoForm({
         name: patient.familyName || loggedAcc.displayName || '',
+        lastName: _nm.last, firstName: _nm.first,
         kana: patient.familyKana || '',
         relation: patient.familyRelation || loggedAcc.relation || '',
         phone: patient.familyPhone || '',
@@ -11294,8 +11309,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         (ec.email||'').trim() === (loggedAcc?.email||'').trim() ||
         (ec.name||'').trim() === (loggedAcc?.displayName||'').trim()
       );
+      const _nm = (myEc?.lastName || myEc?.firstName)
+        ? { last: myEc.lastName||'', first: myEc.firstName||'' }
+        : _splitNm(myEc?.name || loggedAcc?.displayName);
       setMyInfoForm({
         name: myEc?.name || loggedAcc?.displayName || '',
+        lastName: _nm.last, firstName: _nm.first,
         kana: myEc?.kana || '',
         relation: myEc?.relation || loggedAcc?.relation || '',
         phone: myEc?.phone || '',
@@ -11784,11 +11803,19 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               </div>
             )}
             <div style={{display:'grid',gap:10}}>
-              <div>
-                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>お名前</label>
-                <input value={myInfoForm.name} onChange={e=>setMyInfoForm(f=>({...f,name:e.target.value,savedMsg:''}))}
-                  placeholder="例: 田中 花子"
-                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>姓</label>
+                  <input value={myInfoForm.lastName} onChange={e=>setMyInfoForm(f=>({...f,lastName:e.target.value,name:`${e.target.value} ${f.firstName||''}`.trim(),savedMsg:''}))}
+                    placeholder="例: 田中"
+                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>名</label>
+                  <input value={myInfoForm.firstName} onChange={e=>setMyInfoForm(f=>({...f,firstName:e.target.value,name:`${f.lastName||''} ${e.target.value}`.trim(),savedMsg:''}))}
+                    placeholder="例: 花子"
+                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                </div>
               </div>
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな</label>
@@ -11853,7 +11880,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 if (isParent) {
                   updatedPatient = {
                     ...patient,
-                    familyName: myInfoForm.name,
+                    familyName: `${myInfoForm.lastName||''} ${myInfoForm.firstName||''}`.trim() || myInfoForm.name,
+                    familyLastName: myInfoForm.lastName,
+                    familyFirstName: myInfoForm.firstName,
                     familyKana: myInfoForm.kana,
                     familyRelation: myInfoForm.relation,
                     familyPhone: myInfoForm.phone,
@@ -11868,7 +11897,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     (ec.name||'').trim() === (loggedAcc?.displayName||'').trim()
                   );
                   const myEntry = {
-                    name: myInfoForm.name,
+                    name: `${myInfoForm.lastName||''} ${myInfoForm.firstName||''}`.trim() || myInfoForm.name,
+                    lastName: myInfoForm.lastName,
+                    firstName: myInfoForm.firstName,
                     kana: myInfoForm.kana,
                     relation: myInfoForm.relation,
                     phone: myInfoForm.phone,
@@ -11901,6 +11932,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     try {
                       await supabaseMergePatientFromFamily(_storeId, patient.id, isParent ? {
                         familyName: updatedPatient.familyName,
+                        familyLastName: updatedPatient.familyLastName,
+                        familyFirstName: updatedPatient.familyFirstName,
                         familyKana: updatedPatient.familyKana,
                         familyRelation: updatedPatient.familyRelation,
                         familyPhone: updatedPatient.familyPhone,
@@ -22048,7 +22081,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       const p = (appData.patients||[]).find(pt => pt.id === editingPatientId);
       // 既に同じ ID の localPatient がある場合は上書きしない (編集中のデータを保護)
       if (!localPatient || localPatient.id !== editingPatientId) {
-        setLocalPatient(p ? JSON.parse(JSON.stringify(p)) : null);
+        let lp = p ? JSON.parse(JSON.stringify(p)) : null;
+        // ★ 旧データ互換: 主要連絡先が氏名(familyName)のみで姓/名・ふりがなが未分割なら自動分割
+        if (lp) {
+          const _sp = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
+          if (lp.familyName && !lp.familyLastName && !lp.familyFirstName) { const s=_sp(lp.familyName); lp.familyLastName=s.last; lp.familyFirstName=s.first; }
+          if (lp.familyKana && !lp.familyKanaLast && !lp.familyKanaFirst) { const s=_sp(lp.familyKana); lp.familyKanaLast=s.last; lp.familyKanaFirst=s.first; }
+        }
+        setLocalPatient(lp);
       }
     } else {
       setLocalPatient(null);
@@ -22056,6 +22096,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingPatientId]);
 
+  const updateLPFields = (obj) => {
+    if (!localPatient) return;
+    const updated = { ...localPatient, ...obj };
+    setLocalPatient(updated);
+    if (dirtyRef) dirtyRef.current = true;
+  };
   const updateLP = (field, value) => {
     if (!localPatient) return;
     const updated = { ...localPatient, [field]: value };
@@ -22935,11 +22981,26 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   );
                 })()}
                 <div className="space-y-3">
-                  {/* 氏名 + 続柄 */}
+                  {/* ★ 氏名は姓/名に分割。 1人目に登録した家族・関係者の情報がここに入る */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-sm font-bold text-slate-600 mb-1.5">氏名</label>
-                      <input disabled={isOff} value={localPatient.familyName||''} onChange={e=>updateLP('familyName',e.target.value)} placeholder="例: 介護 花子" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">姓</label>
+                      <input disabled={isOff} value={localPatient.familyLastName||''} onChange={e=>{const last=e.target.value; updateLPFields({familyLastName:last, familyName:`${last} ${localPatient.familyFirstName||''}`.trim()});}} placeholder="例: 介護" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">名</label>
+                      <input disabled={isOff} value={localPatient.familyFirstName||''} onChange={e=>{const first=e.target.value; updateLPFields({familyFirstName:first, familyName:`${localPatient.familyLastName||''} ${first}`.trim()});}} placeholder="例: 花子" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                  </div>
+                  {/* ふりがな (姓/名) + 続柄 */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">ふりがな (姓)</label>
+                      <input disabled={isOff} value={localPatient.familyKanaLast||''} onChange={e=>{const k=e.target.value; updateLPFields({familyKanaLast:k, familyKana:`${k} ${localPatient.familyKanaFirst||''}`.trim()});}} placeholder="かいご" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">ふりがな (名)</label>
+                      <input disabled={isOff} value={localPatient.familyKanaFirst||''} onChange={e=>{const k=e.target.value; updateLPFields({familyKanaFirst:k, familyKana:`${localPatient.familyKanaLast||''} ${k}`.trim()});}} placeholder="はなこ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label>
