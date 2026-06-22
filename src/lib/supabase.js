@@ -312,21 +312,20 @@ export async function supabaseSyncStateForStore(storeId, data) {
 
 export async function supabaseLoadStateForStore(storeId) {
   if (!supabase || !storeId) return null;
-  try {
-    const { data, error } = await supabase
-      .from('app_state')
-      .select('data, updated_at')
-      .eq('key', storeId)
-      .maybeSingle();
-    if (error) {
-      console.warn('[supabase] loadStateForStore error', error);
-      return null;
-    }
-    return data;
-  } catch (e) {
-    console.warn('[supabase] loadStateForStore exception', e);
-    return null;
+  // ★ 重要: 通信エラー (529 Overloaded / ネットワーク断 / RLS) のときは null を返さず必ず throw する。
+  //   null を返すと呼び出し側が「行が無い = 新規店舗」と誤認し、空(BLANK)データで
+  //   既存のクラウドデータを上書き消去してしまう (データ消失バグの原因)。
+  //   「行が本当に無い (新規店舗)」場合のみ data=null を返す (maybeSingle は error=null)。
+  const { data, error } = await supabase
+    .from('app_state')
+    .select('data, updated_at')
+    .eq('key', storeId)
+    .maybeSingle();
+  if (error) {
+    console.warn('[supabase] loadStateForStore error', error);
+    throw new Error('loadStateForStore failed: ' + (error.message || error.code || 'unknown'));
   }
+  return data; // 行が無ければ null (= 真の新規店舗)。 それ以外は { data, updated_at }
 }
 
 // =========================================================

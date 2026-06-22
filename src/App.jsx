@@ -13255,7 +13255,13 @@ export default function App() {
           }
           supabaseSyncStateForStore(staffSession.storeId, appData);
         } catch (e) {
-          console.warn('[supabase] safety check failed, attempting push anyway', e);
+          // ★ 0件pushの安全確認に失敗 (通信エラー等)。 リモートを確認できない以上、
+          //   空データで上書きしてしまう危険があるので push しない (データ消失防止)。
+          if ((appData.patients || []).length === 0) {
+            console.warn('[supabase] safety check failed & local patients=[]; skip push to avoid data loss', e);
+            return;
+          }
+          // 利用者がいる通常データはそのまま push (確認不要)
           supabaseSyncStateForStore(staffSession.storeId, appData);
         }
       }, 1500);
@@ -13347,7 +13353,12 @@ export default function App() {
         dataLoadedForStoreRef.current = newStoreId;
         storeTransitionRef.current = false;
       } catch (e) {
-        console.warn('[supabase] pull/reset-check failed', e);
+        // ★ 通信エラー (529 Overloaded 等)。 BLANK 初期化も push も一切せず (データ消失防止)、
+        //   storeTransitionRef は true のまま = push 封鎖を維持して数秒後に素早く再試行。
+        console.warn('[supabase] pull/reset-check failed (will retry)', e);
+        if (pendingPullForStoreRef.current === newStoreId) {
+          setTimeout(() => { checkAndPull(); }, 3000);
+        }
       }
     };
     checkAndPull(); // 即時1回
@@ -22190,6 +22201,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const saveMasterInfo = () => {
     if (!localPatient) return;
     if (dirtyRef) dirtyRef.current = false;
+    let next = { ...appData };
+    // ★ 月間スケジュール/チケットの保留変更も一緒に確定する。
+    //   これをしないと保存後も pendingShifts/pendingTickets が残り、
+    //   画面移動時に「未保存のデータがあります」が誤表示される (+変更も保存されない)。
+    if (pendingShifts) { next.monthlyShifts = pendingShifts; setPendingShifts(null); }
+    if (pendingTickets) { next.ticketRecords = pendingTickets; setPendingTickets(null); }
     const prev = (appData.patients||[]).find(p => p.id === localPatient.id) || {};
     let pat = {...localPatient};
     ['kiou','ryui','scheduleAmPm','costBurden','status'].forEach(field => {
@@ -22198,8 +22215,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
+    next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
     // ★ manual:true でトースト表示
-    onSave({ ...appData, patients: appData.patients.map(p => p.id === pat.id ? pat : p) }, { manual: true, message: '✓ 利用者マスタを保存しました' });
+    onSave(next, { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
 
   const handleStatusChange = (val) => {
