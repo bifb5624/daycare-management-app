@@ -16610,7 +16610,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   // ★ スタッフ表示では自前スクロール土台(height+overflow)にして、iPad(iOS)で上部バーの sticky が
   //   効かない不具合を解消。 家族/ケアマネ表示(familyMode)は親側でスクロールするため従来どおり。
   return (
-    <div className="w-full" style={{backgroundColor:'#f0f4f9', ...(familyMode ? {minHeight:'100%'} : {flex:'1 1 0%', minHeight:0, overflowY:'auto'})}}>
+    <div className="w-full" style={{backgroundColor:'#f0f4f9', ...(familyMode ? {minHeight:'100%'} : {height:'100%', overflowY:'auto'})}}>
       {/* ヘッダーバー（固定） — scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
       {/* ★ 分析個人ヘッダ: 淡い青グラデーション、 文字は黒で読みやすく */}
@@ -28760,9 +28760,10 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
 
   return (
-    <div style={{flex:'1 1 0%',minHeight:0,display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
-      {/* ヘッダー（flexShrink:0 で上部に固定。 height:100% だと iPad で解決せず崩れるため flex 充填に） */}
-      <div style={{flexShrink:0,zIndex:30,background:'linear-gradient(135deg,#1e293b,#334155)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>
+    // ★ 分析稼働と同じ「ルート自体がスクロール(height:100%+overflow)」方式。 ヘッダと曜日行を sticky で固定。
+    <div style={{height:'100%',overflowY:'auto',background:'#f0f4f9'}}>
+      {/* ヘッダー（スクロール時も上部に固定） */}
+      <div style={{position:'sticky',top:0,zIndex:30,background:'linear-gradient(135deg,#1e293b,#334155)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <FileText size={20}/>
           <span style={{fontSize:17,fontWeight:'bold'}}>休み連絡</span>
@@ -28784,11 +28785,11 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
         </div>
       </div>
 
-      {/* カレンダー: 曜日ヘッダーを sticky にし、ヘッダーとの間に隙間を作らない */}
-      <div style={{flex:1,overflow:'auto',padding:'0 20px 20px'}}>
+      {/* カレンダー (ルートがスクロール。 曜日ヘッダーはメインヘッダーの下に sticky 固定) */}
+      <div style={{padding:'0 20px 20px'}}>
         <div style={{background:'white',borderLeft:'1px solid #e2e8f0',borderRight:'1px solid #e2e8f0',borderBottom:'1px solid #e2e8f0',borderBottomLeftRadius:14,borderBottomRightRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.08)'}}>
-          {/* 曜日ヘッダー（スクロール時も上に固定） */}
-          <div style={{position:'sticky',top:0,zIndex:25,display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'#334155',borderTop:'1px solid #e2e8f0'}}>
+          {/* 曜日ヘッダー（メインヘッダー(約56px)の下に固定） */}
+          <div style={{position:'sticky',top:56,zIndex:25,display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'#334155',borderTop:'1px solid #e2e8f0'}}>
             {['日','月','火','水','木','金','土'].map((d,i)=>{
               const isClosed=(appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(i);
               return (
