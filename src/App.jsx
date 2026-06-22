@@ -984,6 +984,11 @@ const toHalfWidth = (s) => (s||'')
   .replace(/　/g, ' ')
   .replace(/[ー－]/g, '-');
 
+// ★ フリガナ入力をカタカナ表示に統一: ひらがな→全角カタカナへ変換 (半角カナも全角化)
+const toKatakana = (s) => (s||'')
+  .normalize('NFKC')                                    // 半角カナ等を全角化
+  .replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60)); // ひらがな→カタカナ
+
 // ★ 郵便番号 → 住所 自動補完 (zipcloud API)
 //   郵便番号 (7桁) を渡すと {prefecture, city, address} を返す
 //   失敗時は null を返す (ネットワークエラー等)
@@ -9625,7 +9630,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
                   <div style={{display:'flex',alignItems:'center',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px'}}>
                     <Search size={14} color="#94a3b8"/>
                     <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
-                      placeholder="氏名・ふりがなで検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
+                      placeholder="氏名・フリガナで検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
                     {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
                   </div>
                 </div>
@@ -9677,7 +9682,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
               <div className="text-sm font-bold text-slate-700">📱 利用者を選択してプレビュー</div>
               <div className="text-xs text-slate-400 font-bold">利用中 {allPats.length}名</div>
             </div>
-            <input type="text" autoFocus placeholder="🔍 氏名・ふりがな・ID で検索" value={patSearch}
+            <input type="text" autoFocus placeholder="🔍 氏名・フリガナ・ID で検索" value={patSearch}
               onChange={e=>setPatSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-emerald-400" />
             <div className="flex flex-wrap gap-1 mb-3 pb-3 border-b border-slate-100">
@@ -10699,7 +10704,7 @@ function FamilyView() {
                   const ecPhone = signupForm.ecPhone.trim();
                   const ecMobile = signupForm.ecMobile.trim();
                   if (!ecName) { setSignupForm(f=>({...f, error:'お名前 (姓・名) を入力してください'})); return; }
-                  if (!signupForm.ecKanaLast?.trim() || !signupForm.ecKanaFirst?.trim()) { setSignupForm(f=>({...f, error:'ふりがな (姓・名) を入力してください'})); return; }
+                  if (!signupForm.ecKanaLast?.trim() || !signupForm.ecKanaFirst?.trim()) { setSignupForm(f=>({...f, error:'フリガナ (姓・名) を入力してください'})); return; }
                   if (!ecRelation) { setSignupForm(f=>({...f, error:'続柄を選択してください'})); return; }
                   if (!ecPhone && !ecMobile) { setSignupForm(f=>({...f, error:'電話番号（固定または携帯）を1つ以上入力してください'})); return; }
                   const isCaremanager = ecRelation === 'ケアマネージャー';
@@ -11000,18 +11005,18 @@ function FamilyView() {
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       </div>
                     </div>
-                    {/* ふりがな 姓 + 名 */}
+                    {/* フリガナ 姓 + 名 */}
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                       <div>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな（姓） <span style={{color:'#dc2626'}}>*</span></label>
-                        <input value={signupForm.ecKanaLast} onChange={e=>setSignupForm(f=>({...f,ecKanaLast:e.target.value,error:''}))}
-                          placeholder="例: やまだ"
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（姓） <span style={{color:'#dc2626'}}>*</span></label>
+                        <input value={signupForm.ecKanaLast} onChange={e=>setSignupForm(f=>({...f,ecKanaLast:toKatakana(e.target.value),error:''}))}
+                          placeholder="例: ヤマダ"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fde68a',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       </div>
                       <div>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな（名） <span style={{color:'#dc2626'}}>*</span></label>
-                        <input value={signupForm.ecKanaFirst} onChange={e=>setSignupForm(f=>({...f,ecKanaFirst:e.target.value,error:''}))}
-                          placeholder="例: たろう"
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（名） <span style={{color:'#dc2626'}}>*</span></label>
+                        <input value={signupForm.ecKanaFirst} onChange={e=>setSignupForm(f=>({...f,ecKanaFirst:toKatakana(e.target.value),error:''}))}
+                          placeholder="例: タロウ"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fde68a',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       </div>
                     </div>
@@ -11146,7 +11151,7 @@ function FamilyView() {
                       4. システム停止・不具合により生じた損害について事業所は責任を負いません。<br/>
                       5. 本サービスの利用は予告なく停止される場合があります。<br/><br/>
                       <b style={{color:'#166534'}}>【プライバシーポリシー】</b><br/>
-                      1. 収集する情報: 氏名、ふりがな、続柄、メールアドレス、電話番号、ログインID、パスワード (暗号化)、アクセスログ。<br/>
+                      1. 収集する情報: 氏名、フリガナ、続柄、メールアドレス、電話番号、ログインID、パスワード (暗号化)、アクセスログ。<br/>
                       2. 利用目的: ご利用者の介護記録・連絡・お知らせの提供と緊急連絡先管理のため。<br/>
                       3. 第三者提供: 法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。<br/>
                       4. 委託先: メール送信のためメール配信サービス (Brevo) を利用します。<br/>
@@ -11711,7 +11716,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   //   - 電話番号 / 住所 / 既往歴 / 留意点 は代表者なら編集可
                   const readOnlyFields = [
                     {key:'name',       label:'お名前'},
-                    {key:'kana',       label:'ふりがな'},
+                    {key:'kana',       label:'フリガナ'},
                   ];
                   const editableFields = [
                     {key:'phone',      label:'電話番号',       type:'text', placeholder:'03-XXXX-XXXX'},
@@ -11842,15 +11847,15 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな（姓）</label>
-                  <input value={myInfoForm.kanaLast} onChange={e=>setMyInfoForm(f=>({...f,kanaLast:e.target.value,kana:`${e.target.value} ${f.kanaFirst||''}`.trim(),savedMsg:''}))}
-                    placeholder="例: たなか"
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（姓）</label>
+                  <input value={myInfoForm.kanaLast} onChange={e=>{const v=toKatakana(e.target.value); setMyInfoForm(f=>({...f,kanaLast:v,kana:`${v} ${f.kanaFirst||''}`.trim(),savedMsg:''}));}}
+                    placeholder="例: タナカ"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな（名）</label>
-                  <input value={myInfoForm.kanaFirst} onChange={e=>setMyInfoForm(f=>({...f,kanaFirst:e.target.value,kana:`${f.kanaLast||''} ${e.target.value}`.trim(),savedMsg:''}))}
-                    placeholder="例: はなこ"
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>フリガナ（名）</label>
+                  <input value={myInfoForm.kanaFirst} onChange={e=>{const v=toKatakana(e.target.value); setMyInfoForm(f=>({...f,kanaFirst:v,kana:`${f.kanaLast||''} ${v}`.trim(),savedMsg:''}));}}
+                    placeholder="例: ハナコ"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
               </div>
@@ -16434,7 +16439,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         <div className="max-w-5xl mx-auto p-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
             {/* ★ スマホで自動的にキーボードが出てしまうため autoFocus は付けない */}
-            <input type="text" placeholder="🔍 氏名・ふりがな・ID で検索" value={patientSearch}
+            <input type="text" placeholder="🔍 氏名・フリガナ・ID で検索" value={patientSearch}
               onChange={e=>setPatientSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-blue-400" />
             {/* 行ジャンプボタン */}
@@ -22851,7 +22856,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               {/* ① 状態・利用開始日・利用終了日 */}
               <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => updateLP('endDate', e.target.value)} /></div>
 
-              {/* ② 氏名・ふりがな・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
+              {/* ② 氏名・フリガナ・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
               {(() => {
                 const _splitSG = (s) => { const a=(s||'').split(/[\s　]+/).filter(Boolean); return { sn: a[0]||'', gn: a.slice(1).join(' ')||'' }; };
                 const _joinSG = (sn,gn) => { sn=(sn||'').trim(); gn=(gn||'').trim(); return sn && gn ? `${sn} ${gn}` : (sn || gn || ''); };
@@ -22873,17 +22878,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                   </div>
-                  {/* ふりがな 行 */}
+                  {/* フリガナ 行 */}
                   <div>
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">ふりがな (姓 / 名)</label>
+                    <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (姓 / 名)</label>
                     <div className="grid grid-cols-2 gap-2">
                       <input disabled={isOff} value={ks.sn}
-                        onChange={e=>updateLP('kana',_joinSG(e.target.value.replace(/[\s　]/g,''),ks.gn))}
-                        placeholder="やまだ"
+                        onChange={e=>updateLP('kana',_joinSG(toKatakana(e.target.value.replace(/[\s　]/g,'')),ks.gn))}
+                        placeholder="ヤマダ"
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                       <input disabled={isOff} value={ks.gn}
-                        onChange={e=>updateLP('kana',_joinSG(ks.sn,e.target.value.replace(/[\s　]/g,'')))}
-                        placeholder="たろう"
+                        onChange={e=>updateLP('kana',_joinSG(ks.sn,toKatakana(e.target.value.replace(/[\s　]/g,''))))}
+                        placeholder="タロウ"
                         className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                   </div>
@@ -23039,12 +23044,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   {/* ふりがな (姓/名) + 続柄 */}
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-sm font-bold text-slate-600 mb-1.5">ふりがな (姓)</label>
-                      <input disabled={isOff} value={localPatient.familyKanaLast||''} onChange={e=>{const k=e.target.value; updateLPFields({familyKanaLast:k, familyKana:`${k} ${localPatient.familyKanaFirst||''}`.trim()});}} placeholder="かいご" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (姓)</label>
+                      <input disabled={isOff} value={localPatient.familyKanaLast||''} onChange={e=>{const k=toKatakana(e.target.value); updateLPFields({familyKanaLast:k, familyKana:`${k} ${localPatient.familyKanaFirst||''}`.trim()});}} placeholder="カイゴ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-600 mb-1.5">ふりがな (名)</label>
-                      <input disabled={isOff} value={localPatient.familyKanaFirst||''} onChange={e=>{const k=e.target.value; updateLPFields({familyKanaFirst:k, familyKana:`${localPatient.familyKanaLast||''} ${k}`.trim()});}} placeholder="はなこ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (名)</label>
+                      <input disabled={isOff} value={localPatient.familyKanaFirst||''} onChange={e=>{const k=toKatakana(e.target.value); updateLPFields({familyKanaFirst:k, familyKana:`${localPatient.familyKanaLast||''} ${k}`.trim()});}} placeholder="ハナコ" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label>
@@ -24034,16 +24039,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   placeholder="例: 太郎" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-base outline-none focus:border-blue-400"/>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">姓 ふりがな <span className="text-red-500">*</span></label>
-                <input type="text" value={newPatientKanaLast} onChange={e=>setNewPatientKanaLast(e.target.value)}
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">姓 フリガナ <span className="text-red-500">*</span></label>
+                <input type="text" value={newPatientKanaLast} onChange={e=>setNewPatientKanaLast(toKatakana(e.target.value))}
                   onKeyDown={e=>{if(e.nativeEvent.isComposing||e.isComposing) return; if(e.key==='Enter') submit();}}
-                  placeholder="たなか" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
+                  placeholder="タナカ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">名 ふりがな <span className="text-red-500">*</span></label>
-                <input type="text" value={newPatientKanaFirst} onChange={e=>setNewPatientKanaFirst(e.target.value)}
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">名 フリガナ <span className="text-red-500">*</span></label>
+                <input type="text" value={newPatientKanaFirst} onChange={e=>setNewPatientKanaFirst(toKatakana(e.target.value))}
                   onKeyDown={e=>{if(e.nativeEvent.isComposing||e.isComposing) return; if(e.key==='Enter') submit();}}
-                  placeholder="たろう" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
+                  placeholder="タロウ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
             </div>
             <div className="flex gap-3">
@@ -30232,7 +30237,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
               <div className="text-[11px] text-emerald-700 mb-2 font-bold">基本情報から自動取得</div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
                 <div><b>氏名：</b>{patient.name || '-'}</div>
-                <div><b>ふりがな：</b>{patient.kana || '-'}</div>
+                <div><b>フリガナ：</b>{patient.kana || '-'}</div>
                 <div><b>性別：</b>{patient.gender || '-'}</div>
                 <div><b>生年月日：</b>{patient.birthDate || '-'}</div>
                 <div><b>住所：</b>{patient.address || '-'}</div>
@@ -30497,7 +30502,7 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
             <div style={{marginBottom:14}}>
               <div style={{fontSize:13,fontWeight:'bold',color:'#92400e',background:'#fef3c7',padding:'6px 10px',marginBottom:8}}>② 利用者の基本情報</div>
               <Row label="氏名" value={patient.name}/>
-              <Row label="ふりがな" value={patient.kana}/>
+              <Row label="フリガナ" value={patient.kana}/>
               <Row label="性別" value={patient.gender}/>
               <Row label="生年月日" value={patient.birthDate}/>
               <Row label="住所" value={patient.address}/>
