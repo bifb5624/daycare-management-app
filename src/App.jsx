@@ -10679,7 +10679,7 @@ function FamilyView() {
           {mode === 'signup' ? (
             <div style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
               <div style={{textAlign:'center',marginBottom:18}}>
-                <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b'}}>新規ご家族の登録</div>
+                <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b'}}>{signupForm.ecRelation==='ケアマネージャー'?'新規ご関係者の登録':'新規ご家族の登録'}</div>
                 <div style={{fontSize:11,color:'#94a3b8',marginTop:4,lineHeight:1.7}}>
                   事業所から伝えられた招待コードを入力してください
                 </div>
@@ -10745,23 +10745,10 @@ function FamilyView() {
                       cmOfficeFax = signupForm.cmNewOffice.fax.trim();
                       if (!cmOfficeName) { setSignupForm(f=>({...f, error:'事業所名を入力してください'})); return; }
                     }
-                    if (signupForm.cmManagerMode === 'select') {
-                      const cm = careManagers.find(c => c.office === cmOfficeName && (c.name === signupForm.cmManagerId));
-                      if (!cm) { setSignupForm(f=>({...f, error:'担当者を選択してください'})); return; }
-                      const sp = (cm.name||'').split(/\s+/);
-                      cmManagerLast = sp[0]||''; cmManagerFirst = sp.slice(1).join(' ')||'';
-                      cmManagerDirect = cm.phoneDirect || cm.phone || '';
-                    } else {
-                      cmManagerLast = signupForm.cmNewManager.lastName.trim();
-                      cmManagerFirst = signupForm.cmNewManager.firstName.trim();
-                      cmManagerDirect = signupForm.cmNewManager.phoneDirect.trim();
-                      if (!cmManagerLast || !cmManagerFirst) { setSignupForm(f=>({...f, error:'担当者の姓と名を入力してください'})); return; }
-                    }
-                    // ecName をケアマネ名に合わせる
-                    const cmFullName = `${cmManagerLast} ${cmManagerFirst}`.trim();
-                    if (!signupForm.ecName.trim()) {
-                      // 自動補完 (お名前が空ならケアマネ名を使う)
-                    }
+                    // ★ 担当者欄は廃止。 担当ケアマネ = 登録者本人 (ご登録者情報の姓名・個人電話)。
+                    cmManagerLast = (signupForm.ecLastName||'').trim();
+                    cmManagerFirst = (signupForm.ecFirstName||'').trim();
+                    cmManagerDirect = ecPhone || ecMobile || ''; // 個人(直通)の電話番号
                   }
                   // 2. 最新の localStorage を取得して招待コードを検証
                   let latest;
@@ -11003,7 +10990,7 @@ function FamilyView() {
                   </div>
                   {/* お名前 + 続柄 + 連絡先 */}
                   <div style={{background:'#fef3c7',border:'1px solid #fbbf24',borderRadius:12,padding:14,marginBottom:12}}>
-                    <div style={{fontSize:12,fontWeight:'bold',color:'#92400e',marginBottom:4}}>📞 ご登録者情報・緊急連絡先</div>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#92400e',marginBottom:4}}>📞 ご登録者情報</div>
                     <div style={{fontSize:10,color:'#78350f',marginBottom:10,lineHeight:1.5}}>
                       ご利用者の緊急連絡先として事業所に登録されます。
                     </div>
@@ -11067,7 +11054,7 @@ function FamilyView() {
                     )}
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                       <div>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>家の電話番号 <span style={{color:'#94a3b8',fontWeight:'normal'}}>(ハイフン不要)</span></label>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>{signupForm.ecRelation==='ケアマネージャー'?'電話番号（直通・個人）':'固定電話番号'} <span style={{color:'#94a3b8',fontWeight:'normal'}}>(ハイフン不要)</span></label>
                         <input type="tel" inputMode="numeric" value={signupForm.ecPhone} onChange={e=>{const v=toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,11); setSignupForm(f=>({...f,ecPhone:v,error:''}));}}
                           placeholder="0312345678"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',letterSpacing:1}}/>
@@ -11092,7 +11079,8 @@ function FamilyView() {
                     const filteredManagers = careManagers.filter(c => c.office === selectedOfficeName);
                     return (
                       <div style={{background:'#e0f2fe',border:'1px solid #38bdf8',borderRadius:12,padding:14,marginBottom:12}}>
-                        <div style={{fontSize:12,fontWeight:'bold',color:'#075985',marginBottom:6}}>🩺 ケアマネ事業所・担当者</div>
+                        <div style={{fontSize:12,fontWeight:'bold',color:'#075985',marginBottom:6}}>🩺 ケアマネージャー事業所</div>
+                        <div style={{fontSize:10,color:'#0369a1',marginBottom:8,lineHeight:1.5}}>担当者はご登録者情報のお名前・電話がそのまま使われます。</div>
                         {/* 事業所 */}
                         <div style={{marginBottom:10}}>
                           <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>事業所 <span style={{color:'#dc2626'}}>*</span></label>
@@ -11114,39 +11102,10 @@ function FamilyView() {
                               placeholder="事業所名 (例: あおぞら居宅介護支援事業所)"
                               style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
                             <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.phone)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, phone:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
-                              placeholder="電話番号 (ハイフン不要)"
+                              placeholder="事業所の固定電話 (ハイフン不要)"
                               style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
                             <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.fax)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, fax:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
                               placeholder="FAX (ハイフン不要)"
-                              style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
-                          </div>
-                        )}
-                        {/* 担当者 */}
-                        <div style={{marginBottom:8}}>
-                          <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>担当者 <span style={{color:'#dc2626'}}>*</span></label>
-                          <select value={signupForm.cmManagerMode === 'new' ? '__new__' : signupForm.cmManagerId}
-                            onChange={e=>{
-                              if (e.target.value === '__new__') setSignupForm(f=>({...f, cmManagerMode:'new', cmManagerId:'', error:''}));
-                              else setSignupForm(f=>({...f, cmManagerMode:'select', cmManagerId:e.target.value, error:''}));
-                            }}
-                            disabled={!selectedOfficeName}
-                            style={{width:'100%',padding:'10px 12px',border:'1px solid #7dd3fc',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',fontWeight:'bold',opacity:!selectedOfficeName?0.5:1}}>
-                            <option value="">— 選択 —</option>
-                            {filteredManagers.map((c,i) => <option key={i} value={c.name}>{c.name}</option>)}
-                            <option value="__new__">＋ 新規作成（リストにない場合）</option>
-                          </select>
-                        </div>
-                        {signupForm.cmManagerMode === 'new' && (
-                          <div style={{background:'white',borderRadius:8,padding:10,border:'1px dashed #7dd3fc'}}>
-                            <div style={{fontSize:10,fontWeight:'bold',color:'#0369a1',marginBottom:6}}>新規担当者の登録</div>
-                            <input value={signupForm.cmNewManager.lastName} onChange={e=>setSignupForm(f=>({...f, cmNewManager:{...f.cmNewManager, lastName:e.target.value}, error:''}))}
-                              placeholder="姓"
-                              style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
-                            <input value={signupForm.cmNewManager.firstName} onChange={e=>setSignupForm(f=>({...f, cmNewManager:{...f.cmNewManager, firstName:e.target.value}, error:''}))}
-                              placeholder="名"
-                              style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
-                            <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewManager.phoneDirect)} onChange={e=>setSignupForm(f=>({...f, cmNewManager:{...f.cmNewManager, phoneDirect:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
-                              placeholder="直通電話番号 (任意、ハイフン不要)"
                               style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
                           </div>
                         )}
