@@ -8982,9 +8982,13 @@ const isPatientResigned = (p) => {
 
 const isPatientActiveOnDate = (p, targetDateStr) => {
     if (!p || !targetDateStr) return true;
-    const targetDate = new Date(targetDateStr); targetDate.setHours(0,0,0,0);
-    if (p.startDate && new Date(p.startDate) > targetDate) return false;
-    if (p.endDate && new Date(p.endDate) < targetDate) return false;
+    // ★ 日付文字列(YYYY-MM-DD)同士で比較する。 new Date('2026-06-23') は UTC0時=JST午前9時に
+    //   解釈されるため、ローカル0時の対象日と比較すると「利用開始日 当日」が "開始前" と
+    //   誤判定され、開始日の翌日からしか予定が反映されない不具合になっていた。
+    //   文字列比較なら 当日(開始日==対象日)も「利用中」に含まれる。
+    const t = String(targetDateStr).slice(0, 10);
+    if (p.startDate && String(p.startDate).slice(0, 10) > t) return false; // 開始日より前のみ除外(当日は含む)
+    if (p.endDate && String(p.endDate).slice(0, 10) < t) return false;     // 終了日より後のみ除外(当日は含む)
     return true;
 };
 
