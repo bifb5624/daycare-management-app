@@ -16576,8 +16576,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   }
 
   return (
-    <div className="w-full" style={{backgroundColor:'#f0f4f9',minHeight:'100%'}}>
-      {/* ヘッダーバー（固定） — 親 scroll container 内で sticky */}
+    {/* ★ スタッフ表示では自前スクロール土台(height+overflow)にして、iPad(iOS)で上部バーの sticky が
+        効かない不具合を解消。 家族/ケアマネ表示(familyMode)は親側でスクロールするため従来どおり。 */}
+    <div className="w-full" style={{backgroundColor:'#f0f4f9', ...(familyMode ? {minHeight:'100%'} : {height:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch'})}}>
+      {/* ヘッダーバー（固定） — scroll container 内で sticky */}
       <div style={{position:'sticky',top: stickyTop, zIndex:familyMode?40:30,background: familyMode ? '#f4f8ed' : '#f0f4f9'}}>
       {/* ★ 分析個人ヘッダ: 淡い青グラデーション、 文字は黒で読みやすく */}
       <div style={{background: compactMode ? '#d4e7a5' : 'linear-gradient(135deg,#dbeafe 0%,#93c5fd 100%)',color: compactMode ? '#3d5021' : '#1e293b',padding:'12px 24px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
