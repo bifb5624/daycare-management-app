@@ -9245,7 +9245,9 @@ function DigitalKeypad({ isOpen, value, isFirstInput, onInput, onEnter, onTab, o
   const row4col2 = mode === 'time' ? '00' : '.';
   const keys = ['7','8','9','DEL','4','5','6',rightCol1,'1','2','3',rightCol2,'0',row4col2,rightCol3,'ENTER'];
 
-  return (
+  // ★ body 直下に Portal でレンダリング。 全画面でない時に親要素の transform で
+  //   position:fixed が閉じ込められ、テンキーが見切れて出てこない不具合を防ぐ。
+  return ReactDOM.createPortal((
     <div ref={keypadRef} style={{
       position:'fixed', left:pos.x, top:pos.y, zIndex:99999,
       background:'white', borderRadius:18, border:'2.5px solid #1e293b',
@@ -9308,7 +9310,7 @@ function DigitalKeypad({ isOpen, value, isFirstInput, onInput, onEnter, onTab, o
         </div>
       )}
     </div>
-  );
+  ), document.body);
 }
 
 
@@ -10770,6 +10772,14 @@ function FamilyView() {
                     role: accRole,           // 'parent' | 'child' | 'caremanager'
                     relation: ecRelation,
                     displayName: ecName,
+                    // ★ 緊急連絡先として利用者マスタに自動反映するため、姓名/ふりがな/電話もアカウントに保持
+                    lastName: (signupForm.ecLastName||'').trim(),
+                    firstName: (signupForm.ecFirstName||'').trim(),
+                    kana: `${(signupForm.ecKanaLast||'').trim()} ${(signupForm.ecKanaFirst||'').trim()}`.trim(),
+                    kanaLast: (signupForm.ecKanaLast||'').trim(),
+                    kanaFirst: (signupForm.ecKanaFirst||'').trim(),
+                    phone: ecPhone,
+                    phoneMobile: ecMobile,
                     email: email,
                     createdAt: new Date().toISOString().slice(0,10),
                     invitedByAccountId: invite.createdByAccountId || null,
@@ -11279,7 +11289,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   // ★ 利用者・登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
-  const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
+  const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
   const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', email:'', doctor:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
   // モーダルを開いたタイミングで loggedAcc + patient から現在の情報を読み込み
@@ -11288,37 +11298,50 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
     // この家族の登録情報を patient.familyName / emergencyContacts から探す
     // ★ 姓/名 の分割ヘルパー (姓名が無い旧データは氏名を空白で分割)
     const _splitNm = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
+    const _splitKana = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
     if (loggedAcc?.role === 'parent') {
-      // 親 → 主要連絡先 (familyName/familyPhone 等)
+      // 親 → 主要連絡先 (familyName/familyPhone 等)。 未設定なら登録アカウント(loggedAcc)の値で補完。
       const _nm = (patient.familyLastName || patient.familyFirstName)
         ? { last: patient.familyLastName||'', first: patient.familyFirstName||'' }
         : _splitNm(patient.familyName || loggedAcc.displayName);
+      const _kanaFull = patient.familyKana || loggedAcc.kana || '';
+      const _kn = (patient.familyKanaLast || patient.familyKanaFirst)
+        ? { last: patient.familyKanaLast||'', first: patient.familyKanaFirst||'' }
+        : (loggedAcc.kanaLast || loggedAcc.kanaFirst)
+          ? { last: loggedAcc.kanaLast||'', first: loggedAcc.kanaFirst||'' }
+          : _splitKana(_kanaFull);
       setMyInfoForm({
         name: patient.familyName || loggedAcc.displayName || '',
         lastName: _nm.last, firstName: _nm.first,
-        kana: patient.familyKana || '',
+        kana: _kanaFull, kanaLast: _kn.last, kanaFirst: _kn.first,
         relation: patient.familyRelation || loggedAcc.relation || '',
-        phone: patient.familyPhone || '',
-        phoneMobile: patient.familyPhoneMobile || '',
+        phone: patient.familyPhone || loggedAcc.phone || '',
+        phoneMobile: patient.familyPhoneMobile || loggedAcc.phoneMobile || '',
         email: patient.familyEmail || loggedAcc.email || '',
         saving: false, savedMsg: '',
       });
     } else {
-      // 子 → emergencyContacts から自分を探す
+      // 子 → emergencyContacts から自分を探す。 無ければ登録アカウント(loggedAcc)の値で補完。
       const myEc = (patient.emergencyContacts || []).find(ec =>
         (ec.email||'').trim() === (loggedAcc?.email||'').trim() ||
         (ec.name||'').trim() === (loggedAcc?.displayName||'').trim()
       );
       const _nm = (myEc?.lastName || myEc?.firstName)
         ? { last: myEc.lastName||'', first: myEc.firstName||'' }
-        : _splitNm(myEc?.name || loggedAcc?.displayName);
+        : (loggedAcc?.lastName || loggedAcc?.firstName)
+          ? { last: loggedAcc.lastName||'', first: loggedAcc.firstName||'' }
+          : _splitNm(myEc?.name || loggedAcc?.displayName);
+      const _kanaFull = myEc?.kana || loggedAcc?.kana || '';
+      const _kn = (loggedAcc?.kanaLast || loggedAcc?.kanaFirst)
+        ? { last: loggedAcc.kanaLast||'', first: loggedAcc.kanaFirst||'' }
+        : _splitKana(_kanaFull);
       setMyInfoForm({
         name: myEc?.name || loggedAcc?.displayName || '',
         lastName: _nm.last, firstName: _nm.first,
-        kana: myEc?.kana || '',
+        kana: _kanaFull, kanaLast: _kn.last, kanaFirst: _kn.first,
         relation: myEc?.relation || loggedAcc?.relation || '',
-        phone: myEc?.phone || '',
-        phoneMobile: myEc?.phoneMobile || '',
+        phone: myEc?.phone || loggedAcc?.phone || '',
+        phoneMobile: myEc?.phoneMobile || loggedAcc?.phoneMobile || '',
         email: myEc?.email || loggedAcc?.email || '',
         cmOffice: myEc?.cmOffice || loggedAcc?.cmOffice || '',
         relationship: myEc?.relationship || loggedAcc?.relationship || '',
@@ -11817,11 +11840,19 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
               </div>
-              <div>
-                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな</label>
-                <input value={myInfoForm.kana} onChange={e=>setMyInfoForm(f=>({...f,kana:e.target.value,savedMsg:''}))}
-                  placeholder="例: たなか はなこ"
-                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな（姓）</label>
+                  <input value={myInfoForm.kanaLast} onChange={e=>setMyInfoForm(f=>({...f,kanaLast:e.target.value,kana:`${e.target.value} ${f.kanaFirst||''}`.trim(),savedMsg:''}))}
+                    placeholder="例: たなか"
+                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>ふりがな（名）</label>
+                  <input value={myInfoForm.kanaFirst} onChange={e=>setMyInfoForm(f=>({...f,kanaFirst:e.target.value,kana:`${f.kanaLast||''} ${e.target.value}`.trim(),savedMsg:''}))}
+                    placeholder="例: はなこ"
+                    style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                </div>
               </div>
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>続柄</label>
@@ -11883,7 +11914,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     familyName: `${myInfoForm.lastName||''} ${myInfoForm.firstName||''}`.trim() || myInfoForm.name,
                     familyLastName: myInfoForm.lastName,
                     familyFirstName: myInfoForm.firstName,
-                    familyKana: myInfoForm.kana,
+                    familyKana: `${myInfoForm.kanaLast||''} ${myInfoForm.kanaFirst||''}`.trim() || myInfoForm.kana,
+                    familyKanaLast: myInfoForm.kanaLast,
+                    familyKanaFirst: myInfoForm.kanaFirst,
                     familyRelation: myInfoForm.relation,
                     familyPhone: myInfoForm.phone,
                     familyPhoneMobile: myInfoForm.phoneMobile,
@@ -11900,7 +11933,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     name: `${myInfoForm.lastName||''} ${myInfoForm.firstName||''}`.trim() || myInfoForm.name,
                     lastName: myInfoForm.lastName,
                     firstName: myInfoForm.firstName,
-                    kana: myInfoForm.kana,
+                    kana: `${myInfoForm.kanaLast||''} ${myInfoForm.kanaFirst||''}`.trim() || myInfoForm.kana,
+                    kanaLast: myInfoForm.kanaLast,
+                    kanaFirst: myInfoForm.kanaFirst,
                     relation: myInfoForm.relation,
                     phone: myInfoForm.phone,
                     phoneMobile: myInfoForm.phoneMobile,
@@ -11935,6 +11970,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         familyLastName: updatedPatient.familyLastName,
                         familyFirstName: updatedPatient.familyFirstName,
                         familyKana: updatedPatient.familyKana,
+                        familyKanaLast: updatedPatient.familyKanaLast,
+                        familyKanaFirst: updatedPatient.familyKanaFirst,
                         familyRelation: updatedPatient.familyRelation,
                         familyPhone: updatedPatient.familyPhone,
                         familyPhoneMobile: updatedPatient.familyPhoneMobile,
@@ -13622,6 +13659,16 @@ export default function App() {
     // ★ 手動保存ボタン押下時 (options.manual=true) のみトーストを表示
     //   自動保存・編集中の付随保存ではトーストを出さない
     if (options.manual) {
+      // ★ 手動保存は debounce(1.5秒)を待たず即時クラウド保存する。
+      //   保存直後に別画面へ移動 → pull で古いクラウドデータに上書きされて
+      //   入力が消える、というレースを防ぐ (保存と同時にクラウドを最新化)。
+      lastLocalEditRef.current = Date.now();
+      if (isSupabaseEnabled && staffSession?.storeId
+          && !storeTransitionRef.current
+          && dataLoadedForStoreRef.current === staffSession.storeId
+          && (newData.patients || []).length > 0) {
+        try { supabaseSyncStateForStore(staffSession.storeId, newData); } catch (e) { console.warn('[supabase] immediate save failed', e); }
+      }
       setToastMsg(options.message || '保存されました');
       setShowToast(true);
       setTimeout(() => setShowToast(false), 3000);
@@ -15659,11 +15706,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       {isEditingThis ? (
                         <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
                           onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold'}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',minHeight:32,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
                       ) : (
                         <div onClick={() => { if (isAbsent || isReadOnly || isPause) return; openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1,minHeight:32,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none shadow-inner ${(isAbsent||isReadOnly||isPause)?'opacity-50':''} ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
                           {vBu && vBd ? (
                             <><span className={getBpUpColorClass(vBu)}>{vBu}</span><span className="text-slate-400">/</span><span className={getBpDnColorClass(vBd)}>{vBd}</span></>
@@ -15684,11 +15731,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       {isEditingThis ? (
                         <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
                           onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold'}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',minHeight:32,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
                       ) : (
                         <div onClick={() => { if (isAbsent || isReadOnly || isPause) return; openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1,minHeight:32,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none shadow-inner ${(isAbsent||isReadOnly||isPause)?'opacity-50':''} ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
                           {vBu && vBd ? (
                             <><span className={getBpUpColorClass(vBu)}>{vBu}</span><span className="text-slate-400">/</span><span className={getBpDnColorClass(vBd)}>{vBd}</span></>
@@ -22082,9 +22129,26 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       // 既に同じ ID の localPatient がある場合は上書きしない (編集中のデータを保護)
       if (!localPatient || localPatient.id !== editingPatientId) {
         let lp = p ? JSON.parse(JSON.stringify(p)) : null;
-        // ★ 旧データ互換: 主要連絡先が氏名(familyName)のみで姓/名・ふりがなが未分割なら自動分割
         if (lp) {
           const _sp = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
+          // ★ 主要連絡先(familyName)が未設定なら、登録済み家族アカウント / 緊急連絡先から自動反映。
+          //   家族が登録した情報を「緊急連絡先(主要)」欄に自動で載せる (紫ボックスの代わり)。
+          if (!lp.familyName) {
+            const acc = (appData.familyAccounts||[]).filter(a => a.patientId === lp.id && (a.kind||'family')==='family')[0];
+            const ec = (lp.emergencyContacts||[])[0];
+            const src = acc || ec;
+            if (src) {
+              const nm = (src.lastName||src.firstName) ? {last:src.lastName||'',first:src.firstName||''} : _sp(src.displayName||src.name||'');
+              lp.familyName = src.displayName || src.name || `${nm.last} ${nm.first}`.trim();
+              lp.familyLastName = nm.last; lp.familyFirstName = nm.first;
+              lp.familyKana = src.kana || '';
+              lp.familyRelation = src.relation || '';
+              lp.familyPhone = src.phone || '';
+              lp.familyPhoneMobile = src.phoneMobile || '';
+              lp.familyEmail = src.email || '';
+            }
+          }
+          // 旧データ互換: 氏名/ふりがなが未分割なら姓/名へ自動分割
           if (lp.familyName && !lp.familyLastName && !lp.familyFirstName) { const s=_sp(lp.familyName); lp.familyLastName=s.last; lp.familyFirstName=s.first; }
           if (lp.familyKana && !lp.familyKanaLast && !lp.familyKanaFirst) { const s=_sp(lp.familyKana); lp.familyKanaLast=s.last; lp.familyKanaFirst=s.first; }
         }
@@ -22959,27 +23023,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               {/* ⑦ 緊急連絡先 — 縦並びレイアウト */}
               <div className="border-t border-slate-200 pt-4">
                 <h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>緊急連絡先 (主要)</h3>
-                {/* ★ 登録済家族閲覧アカウントのサマリー表示 (readonly) */}
-                {(()=>{
-                  const familyAccs = (appData.familyAccounts||[]).filter(a => a.patientId === localPatient.id && (a.kind||'family') === 'family');
-                  if (familyAccs.length === 0) return null;
-                  return (
-                    <div className="mb-4 p-3 bg-violet-50 border border-violet-200 rounded-xl">
-                      <div className="text-xs font-bold text-violet-700 mb-2 flex items-center gap-1.5">👨‍👩‍👧 登録済 家族・関係者閲覧アカウント ({familyAccs.length}件)</div>
-                      <div className="space-y-1">
-                        {familyAccs.map(a => (
-                          <div key={a.id} className="text-xs text-violet-900 flex flex-wrap gap-x-3 gap-y-0.5">
-                            <span className="font-bold">{a.displayName || a.username || '(名前未設定)'}</span>
-                            {a.relation && <span className="bg-white px-1.5 py-0.5 rounded text-[10px] font-bold">{a.relation}</span>}
-                            {a.email && <span className="text-violet-600">📧 {a.email}</span>}
-                            <span className="text-[10px] text-violet-400">ID: {a.username}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="text-[10px] text-violet-500 mt-2">※ 上の「アカウント管理」ボタンから追加・編集・削除できます</div>
-                    </div>
-                  );
-                })()}
+                {/* ★ 紫サマリーは廃止。 家族・関係者が登録した情報は下の各欄に自動反映される */}
                 <div className="space-y-3">
                   {/* ★ 氏名は姓/名に分割。 1人目に登録した家族・関係者の情報がここに入る */}
                   <div className="grid grid-cols-2 gap-3">
