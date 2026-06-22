@@ -23273,7 +23273,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             </div>
             <div className="mb-5">
               <label className="block text-sm font-bold text-slate-600 mb-1.5">適用開始日</label>
-              <input type="date" autoFocus value={schedModal.applyFrom}
+              {/* ★ autoFocus を外す: iPad でモーダル表示と同時にネイティブ日付ピッカーが
+                  自動で開こうとして一瞬で閉じてしまう不具合を防ぐ (タップで開き、開いたままになる) */}
+              <input type="date" value={schedModal.applyFrom}
                 onChange={e=>setSchedModal(m=>({...m, applyFrom:e.target.value}))}
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"/>
               <p className="text-xs text-slate-400 mt-1.5">この日以降の月間スケジュールに反映されます</p>
@@ -24281,7 +24283,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div><label className="text-xs font-bold text-slate-500 block mb-1">休止理由</label>
                 <input type="text" value={pauseFromCellModal.reason} onChange={e=>setPauseFromCellModal({...pauseFromCellModal,reason:e.target.value})} placeholder="例: 入院、施設入所、家庭の都合" className="w-full p-3 bg-white border border-slate-300 rounded-xl font-bold outline-none"/>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              {/* ★ iPad等で日付入力の最小幅が広く横並びだと重なるため、縦並びにする */}
+              <div className="space-y-4">
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label>
                   <input type="date" value={pauseFromCellModal.fromDate} onChange={e=>setPauseFromCellModal({...pauseFromCellModal,fromDate:e.target.value})} className="w-full p-3 bg-white border border-slate-300 rounded-xl font-bold outline-none"/>
                 </div>
