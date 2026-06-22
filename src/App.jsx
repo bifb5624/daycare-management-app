@@ -14870,13 +14870,24 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     { key: 'bad',       label: 'イマイチ',   emoji: '😞', color: 'bg-orange-400', textColor: 'text-orange-900' },
     { key: 'terrible',  label: 'とても悪い', emoji: '😫', color: 'bg-red-500',    textColor: 'text-red-900' },
   ];
-  const KIBUN_REASONS = {
-    excellent: ['いいことがあった','食欲あり','よく眠れた','外出できた','気分爽快'],
-    good:      ['食欲あり','よく眠れた','体の調子良い','会話が楽しかった'],
-    normal:    ['いつも通り','特に変化なし'],
-    bad:       ['食欲なし','痛みあり','寝不足','疲れ気味','気分が優れない'],
-    terrible:  ['食欲なし','痛みあり','寝不足','体調不良','気分が悪い','めまいあり'],
+  // ★ 通所時(arrival)は「今の様子」=非過去、帰宅時(departure)は「一日の振り返り」=過去 で言い回しを分ける。
+  const KIBUN_REASONS_BY_TIMING = {
+    arrival: {
+      excellent: ['よく眠れている','体調がとても良い','食欲がある','気分爽快','顔色が良い','笑顔が多い','意欲的','会話がはずむ','痛みがない','ご機嫌が良い'],
+      good:      ['体調が良い','食欲がある','よく眠れている','落ち着いている','顔色が良い','会話ができる','穏やか','痛みがない','意欲がある','表情が明るい'],
+      normal:    ['いつも通り','特に変化なし','落ち着いている','大きな訴えなし','平熱','食欲ふつう','睡眠はふつう','表情おだやか','体調はふつう','変わりなし'],
+      bad:       ['食欲がない','痛みがある','寝不足のよう','疲れ気味','元気がない','顔色がさえない','だるそう','気分がすぐれない','表情が硬い','訴えが多い'],
+      terrible:  ['食欲がない','強い痛みがある','よく眠れていない','体調が悪い','顔色が悪い','めまいがある','ぐったりしている','発熱ぎみ','吐き気がある','元気がない'],
+    },
+    departure: {
+      excellent: ['とても楽しく過ごせた','よく食べられた','会話がはずんだ','活動に積極的だった','笑顔が多かった','体操をがんばった','よく動けた','ご機嫌だった','痛みなく過ごせた','満足された様子'],
+      good:      ['楽しく過ごせた','食事がとれた','落ち着いて過ごせた','会話ができた','活動に参加できた','体操ができた','穏やかに過ごせた','よく休めた','痛みなく過ごせた','笑顔が見られた'],
+      normal:    ['いつも通り過ごせた','特に変化なし','落ち着いて過ごせた','大きな訴えなし','食事はふつう','活動はふつうに参加','表情おだやか','体調変わりなし','問題なく過ごせた','静かに過ごせた'],
+      bad:       ['食事が進まなかった','痛みを訴えた','疲れた様子だった','元気がなかった','活動に消極的だった','表情が硬かった','うとうとされていた','落ち着かなかった','訴えが多かった','顔色がさえなかった'],
+      terrible:  ['食事がとれなかった','強い痛みを訴えた','体調を崩された','顔色が悪かった','めまいを訴えた','ぐったりされていた','発熱があった','吐き気を訴えた','途中で休まれた','元気がなかった'],
+    },
   };
+  const getKibunReasons = (timing, mood) => (KIBUN_REASONS_BY_TIMING[timing==='departure'?'departure':'arrival']?.[mood]) || [];
 
   const openKibunModal = (recordId, timing) => {
     setKibunModal({ isOpen: true, recordId, timing });
@@ -16118,7 +16129,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             </div>
             {kibunStep === 'mood' ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
-                <div className="text-slate-600 text-sm font-bold mb-2">気分を選んでください</div>
+                <div className="text-slate-700 text-2xl font-bold mb-2">{timing==='arrival'?'通所時の気分を選んでください':'帰宅時の気分を選んでください'}</div>
                 <div className="grid grid-cols-5 gap-4 w-full max-w-2xl">
                   {KIBUN_MOODS.map(mood => (
                     <button key={mood.key} onClick={() => { setKibunTempMood(mood.key); setKibunStep('reason'); }}
@@ -16137,7 +16148,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <div className="flex-1 flex flex-col items-center justify-start gap-4 p-6 overflow-y-auto">
                 <div className="text-slate-600 text-sm font-bold">理由を選んでください（複数選択可）</div>
                 <div className="grid grid-cols-2 gap-3 w-full max-w-lg">
-                  {(KIBUN_REASONS[kibunTempMood]||[]).map(reason => {
+                  {getKibunReasons(timing, kibunTempMood).map(reason => {
                     const cur = currentRec?.[reasonKey] || '';
                     const selected = cur.split('・').includes(reason);
                     return (
@@ -16154,9 +16165,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="w-full max-w-lg mt-2">
                   <div className="text-slate-500 text-xs font-bold mb-1">その他（自由入力）</div>
                   <input type="text"
-                    value={(() => { const cur = currentRec?.[reasonKey]||''; const known = KIBUN_REASONS[kibunTempMood]||[]; return cur.split('・').filter(r=>r&&!known.includes(r)).join('・'); })()}
+                    value={(() => { const cur = currentRec?.[reasonKey]||''; const known = getKibunReasons(timing, kibunTempMood); return cur.split('・').filter(r=>r&&!known.includes(r)).join('・'); })()}
                     onChange={e => {
-                      const known = KIBUN_REASONS[kibunTempMood]||[];
+                      const known = getKibunReasons(timing, kibunTempMood);
                       const cur = currentRec?.[reasonKey]||'';
                       const sel = cur.split('・').filter(r=>r&&known.includes(r));
                       updateRecord(recId, reasonKey, [...sel, ...(e.target.value?[e.target.value]:[])].join('・'));
