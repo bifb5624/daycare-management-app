@@ -20793,15 +20793,21 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       return h;
     }).filter(Boolean);
     if(!htmlParts.length){ alert('印刷データが見つかりません。'); return; }
-    // B5 横 (257×182mm) ページ内に連絡帳 (182×257mm 縦) を中央配置 (微縮小)
+    // ★ 用紙向き設定: 'b6port'=B6縦(128×182) / 'b5land'=B5横(257×182, 既定)。
+    //   連絡帳の中身は常に縦(182×257)。 用紙サイズと中央配置の縮率だけ変える。
+    const paper = appData.systemSettings?.renrakuPaper || 'b5land';
+    const isB6 = paper === 'b6port';
+    const pageW = isB6 ? 128 : 257;
+    const scale = isB6 ? 0.70 : 0.66; // 連絡帳(182×257縦)を各用紙に収める縮率
+    const pageSizeStr = `${pageW}mm 182mm`;
     const combinedHtml = htmlParts.map((h,i)=>
-      `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:257mm;height:182mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
-        <div style="transform:scale(0.66);transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h}</div>
+      `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:182mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
+        <div style="transform:scale(${scale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h}</div>
       </div>`
     ).join('');
-    if(onShowPrintPreview) onShowPrintPreview(title, '257mm 182mm', null);
+    if(onShowPrintPreview) onShowPrintPreview(title, pageSizeStr, null);
     setTimeout(()=>{
-      window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'257mm 182mm',html:combinedHtml}}));
+      window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:pageSizeStr,html:combinedHtml}}));
     },50);
   };
   const handleSaveConfig = (newConfig) => { markClean(); onSave({ ...appData, contactBookConfig: newConfig }); setIsConfigOpen(false); };
@@ -20919,6 +20925,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         <button onClick={() => setIsConfigOpen(true)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
           <Settings size={16} className="mr-1.5" /> 項目 設定
         </button>
+        {/* ★ 用紙の向き: 横(B5)＝B6非対応の複合機向け / 縦(B6)＝B6対応機向け。 連絡帳の中身は常に縦。 */}
+        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
+          title="B6サイズに対応した複合機がなければ「横（B5）」を選び、B5用紙の中央に連絡帳を配置して印刷します。B6対応機なら「縦（B6）」で連絡帳サイズそのまま印刷できます。">
+          <span className="text-[12px] font-bold text-slate-500">🖨 用紙</span>
+          <select value={appData.systemSettings?.renrakuPaper || 'b5land'}
+            onChange={e=>onSave({...appData, systemSettings:{...(appData.systemSettings||{}), renrakuPaper:e.target.value}})}
+            className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer">
+            <option value="b5land">横（B5）</option>
+            <option value="b6port">縦（B6）</option>
+          </select>
+          <span className="text-slate-300 text-sm" title="B6サイズに対応した複合機がなければ「横（B5）」を選び、B5用紙の中央に連絡帳を配置して印刷します。B6対応機なら「縦（B6）」を選べます。">ⓘ</span>
+        </div>
         <button onClick={handlePrint} className="bg-slate-900 hover:bg-black text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
           <Printer size={16} className="mr-1.5" /> プレビュー
         </button>
