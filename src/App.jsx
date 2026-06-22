@@ -10764,9 +10764,17 @@ function FamilyView() {
                   if (!ecRelation) { setSignupForm(f=>({...f, error:'続柄を選択してください'})); return; }
                   if (!ecPhone && !ecMobile) { setSignupForm(f=>({...f, error:'電話番号（固定または携帯）を1つ以上入力してください'})); return; }
                   const isCaremanager = ecRelation === 'ケアマネージャー';
-                  // ケアマネのみ: 事業所と担当者の入力
+                  const isRelatedParty = ecRelation === 'その他関係者'; // 訪問看護 等
+                  const isCmKind = isCaremanager || isRelatedParty;      // = 関係者 (kind:'caremanager')
+                  // ケアマネ/その他関係者: 事業所情報
                   let cmOfficeName='', cmOfficePhone='', cmOfficeFax='';
                   let cmManagerLast='', cmManagerFirst='', cmManagerDirect='';
+                  if (isRelatedParty) {
+                    // その他関係者: 事業所名・電話・FAX を自由記述で取り込む (任意)
+                    cmOfficeName = signupForm.cmNewOffice.name.trim();
+                    cmOfficePhone = signupForm.cmNewOffice.phone.trim();
+                    cmOfficeFax = signupForm.cmNewOffice.fax.trim();
+                  }
                   if (isCaremanager) {
                     // 最新の localStorage を読んで既存マスタを取得
                     let _lt;
@@ -10809,14 +10817,14 @@ function FamilyView() {
                   // 4. アカウント作成 + 招待コードを使用済みに + 利用者の緊急連絡先に追加
                   // 既存の家族アカウント (同一利用者) の有無で parent/child を決定
                   const existingFamilyForPat = (latest.familyAccounts||[]).filter(a => a.patientId === invite.patientId && a.kind === 'family');
-                  const accRole = isCaremanager ? 'caremanager' : (existingFamilyForPat.length === 0 ? 'parent' : 'child');
-                  const newAccId = `${isCaremanager?'cm':'fam'}_${Date.now()}`;
+                  const accRole = isCmKind ? 'caremanager' : (existingFamilyForPat.length === 0 ? 'parent' : 'child');
+                  const newAccId = `${isCmKind?'cm':'fam'}_${Date.now()}`;
                   const newAcc = {
                     id: newAccId,
                     patientId: invite.patientId,
                     username: uname,
                     password: pw,
-                    kind: isCaremanager ? 'caremanager' : 'family',
+                    kind: isCmKind ? 'caremanager' : 'family',
                     role: accRole,           // 'parent' | 'child' | 'caremanager'
                     relation: ecRelation,
                     displayName: ecName,
@@ -10828,6 +10836,8 @@ function FamilyView() {
                     kanaFirst: (signupForm.ecKanaFirst||'').trim(),
                     phone: ecPhone,
                     phoneMobile: ecMobile,
+                    // ★ 関係者(ケアマネ/その他関係者)の所属事業所情報
+                    ...(isCmKind ? { cmOffice: cmOfficeName, officePhone: cmOfficePhone, officeFax: cmOfficeFax } : {}),
                     email: email,
                     createdAt: new Date().toISOString().slice(0,10),
                     invitedByAccountId: invite.createdByAccountId || null,
@@ -10851,6 +10861,8 @@ function FamilyView() {
                     phone: ecPhone,
                     phoneMobile: ecMobile,
                     email: email,
+                    // ★ 関係者(ケアマネ/その他関係者)の所属事業所情報も緊急連絡先に保持
+                    ...(isCmKind ? { cmOffice: cmOfficeName, officePhone: cmOfficePhone, officeFax: cmOfficeFax } : {}),
                     addedByFamilyAccountId: newAccId,
                     addedAt: new Date().toISOString(),
                   };
@@ -10875,8 +10887,8 @@ function FamilyView() {
                       if (p.id !== invite.patientId) return p;
                       // ★ 1件目に登録した人 (役割を問わず) を主要連絡先 (familyName 等) にセット。
                       //   2人目以降は追加緊急連絡先 (emergencyContacts 配列) に自動追加。
-                      //   ケアマネ (isCaremanager) は連絡先ではないので主要にしない。
-                      const isPrimary = !isCaremanager && !p.familyName;
+                      //   関係者 (ケアマネ/その他関係者) は家族の主要連絡先にしない。
+                      const isPrimary = !isCmKind && !p.familyName;
                       let primaryFields = {};
                       if (isPrimary) {
                         primaryFields = {
@@ -10926,7 +10938,7 @@ function FamilyView() {
                         email: email,
                         relation: ecRelation,
                         displayName: ecName,
-                        kind: isCaremanager ? 'caremanager' : 'family',
+                        kind: isCmKind ? 'caremanager' : 'family',
                         role: accRole === 'parent' ? 'parent' : 'member',
                         facilityName: latest.facility?.name || '',
                         patientName: (latest.patients||[]).find(p=>p.id===invite.patientId)?.name || '',
@@ -11080,6 +11092,7 @@ function FamilyView() {
                           <option value="姉">姉</option>
                           <option value="妹">妹</option>
                           <option value="ケアマネージャー">ケアマネージャー</option>
+                          <option value="その他関係者">その他関係者（訪問看護 等）</option>
                           <option value="その他">その他...</option>
                         </select>
                       </div>
@@ -11155,6 +11168,22 @@ function FamilyView() {
                       </div>
                     );
                   })()}
+                  {/* その他関係者 (訪問看護 等): 事業所名・電話・FAX を自由記述 */}
+                  {signupForm.ecRelation === 'その他関係者' && (
+                    <div style={{background:'#f1f5f9',border:'1px solid #cbd5e1',borderRadius:12,padding:14,marginBottom:12}}>
+                      <div style={{fontSize:12,fontWeight:'bold',color:'#334155',marginBottom:6}}>🏢 ご所属の事業所情報 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(任意・自由記述)</span></div>
+                      <input value={signupForm.cmNewOffice.name} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, name:e.target.value}, error:''}))}
+                        placeholder="事業所名 (例: ○○訪問看護ステーション)"
+                        style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:6,background:'white'}}/>
+                      <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.phone)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, phone:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
+                        placeholder="事業所の電話番号 (ハイフン不要)"
+                        style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:6,background:'white'}}/>
+                      <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.fax)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, fax:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
+                        placeholder="FAX (ハイフン不要)"
+                        style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
+                      <div style={{fontSize:10,color:'#64748b',marginTop:6}}>※ 個人の電話番号は上の「ご登録者情報」に入力してください。</div>
+                    </div>
+                  )}
                   {/* 利用規約・プライバシーポリシー 同意 */}
                   <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:12,padding:14,marginBottom:12,marginTop:8}}>
                     <div style={{fontSize:12,fontWeight:'bold',color:'#166534',marginBottom:8}}>📜 利用規約・プライバシーポリシー</div>
