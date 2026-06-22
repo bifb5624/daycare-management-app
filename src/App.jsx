@@ -9255,6 +9255,9 @@ function DigitalKeypad({ isOpen, value, isFirstInput, onInput, onEnter, onTab, o
   return ReactDOM.createPortal((
     <div ref={keypadRef} style={{
       position:'fixed', left:pos.x, top:pos.y, zIndex:99999,
+      // ★ iOS Safari 対策: body直下の position:fixed が単独だと描画されず透明になる不具合を、
+      //   独自コンポジットレイヤー化 (translateZ) で強制的に描画させる。
+      transform:'translateZ(0)', WebkitTransform:'translateZ(0)',
       background:'white', borderRadius:18, border:'2.5px solid #1e293b',
       boxShadow:'0 8px 40px rgba(0,0,0,0.35)',
       padding:'12px', width:padW, userSelect:'none', touchAction:'none'
@@ -15949,7 +15952,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
       {statusModal.isOpen && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-10">
+        <div className="fixed inset-0 flex items-start justify-center bg-black/40 pt-10" style={{zIndex:10000}}>
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md mx-4">
             <div className="flex items-center gap-3 mb-5">
               <span className={`px-3 py-1 rounded-full text-sm font-bold ${statusModal.status==='欠席'?'bg-red-100 text-red-700':statusModal.status==='休業'?'bg-slate-100 text-slate-600':statusModal.status==='休止'?'bg-orange-100 text-orange-700':'bg-blue-100 text-blue-700'}`}>{statusModal.status}</span>
@@ -16059,7 +16062,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         const reasonKey = timing === 'arrival' ? 'kibunArrivalReason' : 'kibunDepartureReason';
         const currentRec = localPatients.find(p => p.id === recId) || localTicketRecords.find(p => p.id === recId);
         return ReactDOM.createPortal(
-          <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          // ★ zIndex は全画面オーバーレイ(9999)より上に。 全画面時に気分モーダルが裏に隠れて反応しないのを防ぐ
+          <div className="fixed inset-0 flex flex-col bg-white" style={{zIndex:10000}}>
             <div className="flex items-center justify-between px-6 py-4 bg-slate-100 border-b border-slate-200">
               <div className="text-slate-800 font-bold text-lg">{timing==='arrival'?'🏢 通所時の気分':'🏠 帰宅時の気分'}{kibunStep==='reason'&&` — ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.emoji} ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.label}`}</div>
               <button onClick={closeKibunModal} className="text-slate-400 hover:text-slate-700 text-2xl font-bold px-2">✕</button>
@@ -16123,7 +16127,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       })()}
       {/* === 未保存確認モーダル — ★ Portal + 上部固定 === */}
       {unsavedModal.isOpen && ReactDOM.createPortal(
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 pt-20">
+        <div className="fixed inset-0 flex items-start justify-center bg-black/50 pt-20" style={{zIndex:10000}}>
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
             <div className="w-14 h-14 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4">
               <CloudUpload size={28} />
