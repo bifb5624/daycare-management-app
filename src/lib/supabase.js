@@ -96,10 +96,10 @@ export async function supabaseSignupFamily({
   if (invite.expires_at && new Date(invite.expires_at) < new Date()) {
     throw new Error('招待コードの有効期限が切れています');
   }
-  // 2. username 重複チェック
+  // 2. username 重複チェック (★ 削除済みアカウントは除外 → 削除後に同じIDを再利用できる)
   const { data: uExists } = await supabase
     .from('family_accounts')
-    .select('id').eq('username', username).maybeSingle();
+    .select('id').eq('username', username).is('deleted_at', null).maybeSingle();
   if (uExists) throw new Error('このログインIDは既に使用されています');
   // 3. メール重複は許容 (1 人で複数利用者を見るケース: 夫婦の子、複数利用者を担当するケアマネ等)
   //    別ユーザー名で同じメールアドレスで複数アカウント作成可能

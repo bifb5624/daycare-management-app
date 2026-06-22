@@ -10581,7 +10581,16 @@ function FamilyView() {
             localStorage.setItem('daycareAppData_v3', JSON.stringify(fresh));
             setData(fresh);
           } catch {}
-          // 複数あれば picker、1 つなら直接 in
+          // ★ 重要: ログインしたユーザー名のアカウントが紐づく利用者へ「必ず直接」入る。
+          //   以前は複数リンク時に picker 任せで、別の利用者に着地してしまう不具合があった。
+          //   複数利用者を担当 (同一メール+パスワード) の場合は、入った後に「利用者切替」ボタンで切り替える。
+          sessionStorage.setItem('familyAuthPid', String(sbAcc.patient_id));
+          sessionStorage.setItem('familyAuthAccId', String(sbAcc.id));
+          // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
+          if (sbAcc.store_id) sessionStorage.setItem('familyAuthStoreId', String(sbAcc.store_id));
+          // ★ 期待利用者名 (フォールバック走査時の氏名一致ガード用)
+          if (sbAcc.patient_name) { try { sessionStorage.setItem('familyAuthPatientName', String(sbAcc.patient_name)); } catch {} }
+          // 複数利用者を担当している場合のみ、切替用にリンク一覧を保持 (picker は自動表示しない)
           if (linked.length > 1) {
             const accDescriptors = linked.map(la => ({
               id: la.id, patientId: la.patient_id, storeId: la.store_id || null,
@@ -10591,17 +10600,9 @@ function FamilyView() {
             }));
             sessionStorage.setItem('familyLinkedAccounts', JSON.stringify(accDescriptors));
             setLinkedFamilyAccounts(accDescriptors);
-          } else {
-            sessionStorage.setItem('familyAuthPid', String(sbAcc.patient_id));
-            sessionStorage.setItem('familyAuthAccId', String(sbAcc.id));
-            // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
-            //   (data.familyAccounts に未反映でも、 subscribe を開始できるようにするため)
-            if (sbAcc.store_id) sessionStorage.setItem('familyAuthStoreId', String(sbAcc.store_id));
-            // ★ 期待利用者名 (フォールバック走査時の氏名一致ガード用)
-            if (sbAcc.patient_name) { try { sessionStorage.setItem('familyAuthPatientName', String(sbAcc.patient_name)); } catch {} }
-            setAuthPid(String(sbAcc.patient_id));
-            setAuthAccId(String(sbAcc.id));
           }
+          setAuthPid(String(sbAcc.patient_id));
+          setAuthAccId(String(sbAcc.id));
           return;
         } catch (sbErr) {
           console.warn('[supabase] login fallback', sbErr?.message);
