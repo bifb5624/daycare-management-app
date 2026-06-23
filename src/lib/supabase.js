@@ -571,6 +571,21 @@ export async function supabaseCreateStore({ id, name, short_name, org_name, zip_
   return data;
 }
 
+// ★ 店舗情報の更新 (店舗ID以外の 店舗名/短縮名/法人名/住所/電話/FAX 等を後から編集)
+export async function supabaseUpdateStore(id, patch) {
+  if (!supabase || !id) throw new Error('店舗IDが必要です');
+  // id は変更不可 (ログインや app_state のキーになっているため)。 patch から除外。
+  const { id: _omit, ...fields } = patch || {};
+  const { data, error } = await supabase
+    .from('stores')
+    .update(fields)
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 // 家族アカウント削除 (username 即時解放)
 // ★ 利用者を削除する際に、その利用者の家族アカウント + 招待を Supabase から物理削除
 //   (削除しないと、別の利用者が同じ patient_id を再利用したときに古い家族情報が漏洩する)

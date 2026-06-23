@@ -25,6 +25,7 @@ import {
   supabaseStaffChangePassword,
   supabaseListStores,
   supabaseCreateStore,
+  supabaseUpdateStore,
   supabaseDeleteStore,
   supabaseDeleteFamilyAccount,
   supabaseDeleteInvite,
@@ -12783,6 +12784,28 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [showAddStore, setShowAddStore] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
+  // ★ 店舗情報の後編集 (店舗名・短縮名・法人名・住所・電話・FAX。 店舗IDは変更不可)
+  const [editStore, setEditStore] = useState(null); // {id, name, short_name, org_name, zip_code, address, phone, fax, loading, error}
+  const handleUpdateStore = async () => {
+    if (!editStore) return;
+    if (!editStore.name?.trim()) { setEditStore(s=>({...s, error:'店舗名は必須です'})); return; }
+    setEditStore(s=>({...s, loading:true, error:''}));
+    try {
+      await supabaseUpdateStore(editStore.id, {
+        name: editStore.name.trim(),
+        short_name: (editStore.short_name||'').trim() || editStore.name.trim(),
+        org_name: (editStore.org_name||'').trim(),
+        zip_code: formatJpZip(editStore.zip_code||''),
+        address: (editStore.address||'').trim(),
+        phone: formatJpPhone(editStore.phone||''),
+        fax: formatJpPhone(editStore.fax||''),
+      });
+      setEditStore(null);
+      await loadStores();
+    } catch (e) {
+      setEditStore(s=>({...s, loading:false, error: '更新に失敗: '+(e?.message||'不明')}));
+    }
+  };
   const [storeForm, setStoreForm] = useState({ id:'', name:'', short_name:'', org_name:'', zip:'', address:'', addressBuilding:'', phone:'', fax:'', login_id:'', login_pw:'', login_email:'', login_phone:'', error:'', loading:false });
   const [staffForm, setStaffForm] = useState({ store_id:'', username:'', password:'', role:'manager', last_name:'', first_name:'', email:'', error:'', loading:false });
 
@@ -12924,6 +12947,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                     <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                       <button onClick={()=>setShowLoginFor(prev => ({...prev, [s.id]: !prev[s.id]}))} style={{padding:'8px 12px',background:showing?'#94c456':'white',color:showing?'white':'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🔑 {showing?'隠す':'ログイン情報'}</button>
                       <button onClick={()=>onSelectStore(s)} style={{padding:'8px 14px',background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>この店舗を開く →</button>
+                      <button onClick={()=>setEditStore({ id:s.id, name:s.name||'', short_name:s.short_name||'', org_name:s.org_name||'', zip_code:s.zip_code||'', address:s.address||'', phone:s.phone||'', fax:s.fax||'', loading:false, error:'' })} style={{padding:'8px 12px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>✏️ 編集</button>
                       <button onClick={async ()=>{
                         if (!window.confirm(`「${s.name}」を完全に削除します。\n\n・全てのデータ (利用者・記録・お知らせ・メンバー)\n・店舗管理者アカウント\n・家族アカウント / 招待\n\nこの操作は元に戻せません。本当に実行しますか?`)) return;
                         if (!window.confirm(`もう一度確認: 「${s.name}」を本当に削除しますか?`)) return;
@@ -12986,6 +13010,39 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         </div>
       </div>
       {/* 店舗追加モーダル */}
+      {/* ★ 店舗情報の編集 (後から店舗名・短縮名・法人名・住所・電話・FAXを変更) */}
+      {editStore && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}} onClick={()=>!editStore.loading&&setEditStore(null)}>
+          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:4}}>🏢 店舗情報を編集</div>
+            <div style={{fontSize:11,color:'#94a3b8',marginBottom:16}}>店舗ID（{editStore.id}）は変更できません。</div>
+            {editStore.error && <div style={{background:'#fef2f2',color:'#dc2626',padding:'8px 12px',borderRadius:8,fontSize:12,fontWeight:'bold',marginBottom:12}}>{editStore.error}</div>}
+            {[
+              {k:'name',label:'店舗名 (正式) *',ph:'ひかりデイサービス本所店'},
+              {k:'short_name',label:'短縮名',ph:'本所店'},
+              {k:'org_name',label:'法人名',ph:'株式会社ワンズスタイル'},
+              {k:'zip_code',label:'郵便番号',ph:'1350011'},
+              {k:'address',label:'住所',ph:'東京都江東区…'},
+            ].map(fld=>(
+              <div key={fld.k} style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:5}}>{fld.label}</label>
+                <input value={editStore[fld.k]||''} onChange={e=>setEditStore(s=>({...s,[fld.k]:e.target.value,error:''}))} placeholder={fld.ph}
+                  style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+              </div>
+            ))}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
+              <div><label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:5}}>電話番号</label>
+                <input value={editStore.phone||''} onChange={e=>setEditStore(s=>({...s,phone:e.target.value.replace(/[^0-9]/g,''),error:''}))} inputMode="numeric" placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/></div>
+              <div><label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:5}}>FAX</label>
+                <input value={editStore.fax||''} onChange={e=>setEditStore(s=>({...s,fax:e.target.value.replace(/[^0-9]/g,''),error:''}))} inputMode="numeric" placeholder="0312345679" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/></div>
+            </div>
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={()=>setEditStore(null)} disabled={editStore.loading} style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+              <button onClick={handleUpdateStore} disabled={editStore.loading} style={{flex:1,padding:'11px',background:editStore.loading?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:editStore.loading?'wait':'pointer'}}>{editStore.loading?'保存中…':'💾 保存'}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showAddStore && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}}>
           <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
@@ -22891,9 +22948,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const LabelInput = ({ label, disabled, value, onChange, type = "text", placeholder = "" }) => (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 
   return (
-    <div className="flex h-full w-full max-w-[1800px] mx-auto gap-4 relative">
+    <div className="flex h-full min-h-0 w-full max-w-[1800px] mx-auto gap-4 relative">
       {/* 名簿 */}
-      <div className={`bg-white rounded-2xl shadow-md border border-slate-300 flex flex-col overflow-hidden flex-shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-[44px]' : 'w-[340px]'}`}>
+      <div className={`bg-white rounded-2xl shadow-md border border-slate-300 flex flex-col overflow-hidden flex-shrink-0 min-h-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-[44px]' : 'w-[340px]'}`}>
         {isSidebarCollapsed ? (<button onClick={() => setIsSidebarCollapsed(false)} className="h-full flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50"><ChevronRight size={18} /><span className="text-[9px] font-bold mt-2" style={{ writingMode: 'vertical-rl' }}>名簿</span></button>) : (<>
           <div className="p-3 border-b border-slate-200 bg-slate-50 shrink-0">
             <div className="flex justify-between items-center mb-2">
@@ -22925,7 +22982,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               ))}
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5 bg-slate-50">{dPats.map(p => { const inf = subInfo(p); const bday = isBirthMonth(p); const expiring = isInsuranceExpiring(p); const bdayDate = bday && p.birthDate ? `${new Date(p.birthDate).getMonth()+1}/${new Date(p.birthDate).getDate()}` : null; const _age = calcAge(p.birthDate);
+          <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-0.5 bg-slate-50">{dPats.map(p => { const inf = subInfo(p); const bday = isBirthMonth(p); const expiring = isInsuranceExpiring(p); const bdayDate = bday && p.birthDate ? `${new Date(p.birthDate).getMonth()+1}/${new Date(p.birthDate).getDate()}` : null; const _age = calcAge(p.birthDate);
             // 並び順による追加バッジ（事業所・ケアマネ・介護度は常に表示するので除外）
             const _sortExtra =
               masterSort === 'startDate' && p.startDate ? <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1 self-start mt-0.5">通所 {dTxt(dBtw(p.startDate,new Date()))}</span> :
