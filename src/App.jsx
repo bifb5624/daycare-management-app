@@ -295,7 +295,7 @@ const DataExportSection = ({ appData }) => {
 
       // HTML 共通スタイル (印刷時 PDF 化用)
       const htmlBase = (title, body) => `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>${title}</title><style>
-@page { size: A4; margin: 12mm; }
+@page { size: A4; margin: 0; }
 body { font-family: "Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif; color:#1e293b; max-width:780px; margin:20px auto; padding:0 12px; line-height:1.6; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
 h1 { font-size:18px; border-bottom:2px solid #334155; padding-bottom:6px; }
 h2 { font-size:15px; margin-top:20px; color:#475569; }
@@ -305,7 +305,7 @@ th { background:#f1f5f9; font-weight:bold; }
 .label { color:#64748b; font-size:11px; font-weight:bold; }
 .section { margin:18px 0; }
 .no-print { background:#fef3c7; border:1px solid #fbbf24; padding:8px 12px; border-radius:6px; margin:14px 0; font-size:12px; }
-@media print { .no-print { display:none; } body { margin:0; max-width:none; } }
+@media print { .no-print { display:none; } body { margin:0; max-width:none; padding:12mm 14mm; } }
 .print-hint button { padding:8px 18px; font-weight:bold; cursor:pointer; }
 </style></head><body>
 <div class="no-print print-hint">💡 ブラウザで「ファイル → 印刷 → 送信先: PDF として保存」を選択するとPDF化できます。<button onclick="window.print()">🖨 今すぐ印刷</button></div>
@@ -27300,8 +27300,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         @media print {
           body, html, #root { height: auto !important; overflow: visible !important; background: white !important; }
           .no-print, .no-print * { display: none !important; }
-          #diary-print-content { display: block !important; }
-          @page { size: A4 portrait; margin: 10mm; }
+          #diary-print-content { display: block !important; padding: 10mm !important; box-sizing: border-box !important; }
+          @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
       <TimeKeypadModal />
@@ -29854,7 +29854,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
     const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
     const f = irForm;
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>初回ご利用報告_${esc(patient.name)}</title>
-      <style>@page{size:A4;margin:18mm}body{font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#1e293b;line-height:1.9;font-size:14px}
+      <style>@page{size:A4;margin:0}body{font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#1e293b;line-height:1.9;font-size:14px;padding:18mm;box-sizing:border-box}
       h1{text-align:center;font-size:22px;letter-spacing:4px;margin:0 0 6px}.sub{text-align:center;color:#475569;font-size:12px;margin-bottom:20px}
       .row{margin:6px 0}.lbl{font-weight:bold;display:inline-block;min-width:7em}
       .box{border:1px solid #94a3b8;border-radius:8px;padding:12px 14px;margin:14px 0}
