@@ -17346,8 +17346,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })()}
         </div>
 
-        {/* ★ 今回の様子 (家族画面のみ): 特記事項を一目でわかるように大きく表示 */}
-        {familyMode && (() => {
+        {/* ★ 今回の様子 (家族・ケアマネ・事業所 共通): 特記事項を一目でわかるように大きく表示。
+            「今回の記録」内の特記と重複するため、特記はこちらに集約し下側からは削除 */}
+        {(() => {
           // 最新の通所記録の特記を取得
           const _today = new Date(); _today.setHours(0,0,0,0);
           const _recordToDate = (rec) => {
@@ -17460,12 +17461,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       {lastPause.reason || '休止中'}
                       {lastPause.fromDate && <span style={{marginLeft:10,fontSize:12,color:'#7c2d12'}}>{lastPause.fromDate} 〜 現在</span>}
                     </div>
-                    {tokkiText && showTokki && (
-                      <div style={{marginTop:10,paddingTop:10,borderTop:`1px dashed ${headerBorder}`}}>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>特記</span>
-                        <div style={{fontSize:13,color:'#1e293b',lineHeight:1.6,whiteSpace:'pre-wrap',marginTop:4}}>{tokkiText}</div>
-                      </div>
-                    )}
+                    {/* 特記は上部「今回の様子」に集約したためここでは非表示 */}
                   </div>
                 ) : isAbsent ? (
                   /* 欠席: 理由 + 特記 */
@@ -17593,13 +17589,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         </div>
                       </div>
                     )}
-                    {/* 特記 */}
-                    {showTokki && tokkiText && (
-                      <div style={{marginTop:10,paddingTop:10,borderTop:`1px dashed ${headerBorder}`}}>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>📝 特記</span>
-                        <div style={{fontSize:13,color:'#1e293b',lineHeight:1.6,whiteSpace:'pre-wrap',marginTop:4}}>{tokkiText}</div>
-                      </div>
-                    )}
+                    {/* 特記は上部「今回の様子」に集約したためここでは非表示 */}
                   </>
                 )}
               </div>
