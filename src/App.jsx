@@ -13813,6 +13813,38 @@ export default function App() {
   const absenceSaveFnRef = React.useRef(null);
   const generalFaxDirtyRef = React.useRef(false);
   const generalFaxSaveFnRef = React.useRef(null);
+  // ★ データ消失対策: アプリ切替/タブ離脱/スリープ移行時に、開いている入力画面の未保存データを自動保存。
+  //   入力画面は「保存」を押すまでローカル保持のため、押さずに離れると消える。 これを背景化時に拾う。
+  useEffect(() => {
+    const refMap = {
+      record: [recordDirtyRef, recordSaveFnRef], master: [masterDirtyRef, masterSaveFnRef],
+      settings: [settingsDirtyRef, settingsSaveFnRef], print: [printDirtyRef, printSaveFnRef],
+      fitness: [fitnessDirtyRef, fitnessSaveFnRef], diary: [diaryDirtyRef, diarySaveFnRef],
+      monitoring: [monitoringDirtyRef, monitoringSaveFnRef], ticket: [ticketDirtyRef, ticketSaveFnRef],
+      absence_fax: [absenceDirtyRef, absenceSaveFnRef], general_fax: [generalFaxDirtyRef, generalFaxSaveFnRef],
+    };
+    // 現在の画面のみ保存 (他画面の古い ref を呼ぶと過去状態で上書きしてしまうため)
+    const flushCurrent = () => {
+      const pair = refMap[currentView];
+      if (pair && pair[0]?.current && typeof pair[1]?.current === 'function') {
+        try { pair[1].current(); } catch (e) { console.warn('[autosave-on-hide] failed', e); }
+      }
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flushCurrent(); };
+    const onPageHide = () => flushCurrent();
+    const onBeforeUnload = (e) => {
+      const pair = refMap[currentView];
+      if (pair && pair[0]?.current) { flushCurrent(); e.preventDefault(); e.returnValue = ''; return ''; }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [currentView]);
   const [sharedAmpm, setSharedAmpm] = useState('AM'); // 'AM' or 'PM'
 
   const handleSaveToCloud = (newData, options = {}) => {
