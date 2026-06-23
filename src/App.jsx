@@ -10984,7 +10984,7 @@ function FamilyView() {
                             cmName: patchedPatient.cmName,
                             cmPhone: patchedPatient.cmPhone,
                             cmFax: patchedPatient.cmFax,
-                          });
+                          }, isCaremanager ? { cmOffices: nextCmOffices, careManagers: nextCareManagers } : undefined);
                         }
                       }
                     } catch (sbErr) {
@@ -24135,6 +24135,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     );
                     return ec?.phoneMobile || ec?.phone || '';
                   };
+                  // ★ ケアマネ/その他関係者の所属事業所名 (アカウント→緊急連絡先→利用者cm の順で引き当て)
+                  const officeByAcc = (acc) => {
+                    if (!acc) return '';
+                    if (acc.cmOffice) return acc.cmOffice;
+                    const ec = (pat.emergencyContacts||[]).find(c =>
+                      (c.addedByFamilyAccountId === acc.id) ||
+                      ((c.email||'').trim() === (acc.email||'').trim() && (acc.email||'').trim() !== '')
+                    );
+                    if (ec?.cmOffice) return ec.cmOffice;
+                    if ((acc.relation === 'ケアマネージャー' || acc.kind === 'caremanager') && pat.cmOffice) return pat.cmOffice;
+                    return '';
+                  };
                   return (
                     <div>
                       <div className="text-sm font-bold text-slate-700 mb-2">📋 登録済アカウント ({allAccs.length}件)</div>
@@ -24168,6 +24180,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                     </div>
                                     {acc.email && <div className="text-[10px] text-slate-500 mt-0.5 truncate">📧 {acc.email}</div>}
                                     {accPhone && <div className="text-[10px] text-slate-500 truncate">📞 {accPhone}</div>}
+                                    {isCm && officeByAcc(acc) && <div className="text-[10px] text-teal-600 font-bold truncate">🏢 {officeByAcc(acc)}</div>}
                                   </div>
                                   <div className="col-span-4">
                                     <div className="text-[10px] font-bold text-slate-400">ログインID</div>

@@ -473,7 +473,7 @@ export async function supabaseDeleteSystemNotice(id) {
 // ★ 家族側から patient 1件だけを安全に update する
 //   (家族側でデータ全体を push すると、staff の編集を上書きしてしまうため)
 //   最新の app_state を取得 → 対象 patient を merge → 戻す
-export async function supabaseMergePatientFromFamily(storeId, patientId, patientPatch) {
+export async function supabaseMergePatientFromFamily(storeId, patientId, patientPatch, extra) {
   if (!supabase || !storeId || !patientId) return false;
   try {
     const row = await supabaseLoadStateForStore(storeId);
@@ -502,7 +502,25 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
       });
       return { ...p, ...filteredPatch, emergencyContacts: mergedContacts };
     });
-    const updatedData = { ...currentData, patients };
+    // ★ ケアマネ事業所/担当者マスタ (systemSettings) も、家族(関係者)登録で増えた分を統合 (重複は追加しない)
+    let nextSettings = currentData.systemSettings || {};
+    if (extra && (extra.cmOffices || extra.careManagers)) {
+      nextSettings = { ...nextSettings };
+      if (Array.isArray(extra.cmOffices)) {
+        const exist = nextSettings.cmOffices || [];
+        const names = new Set(exist.map(o => (o.name||'').trim()));
+        const add = extra.cmOffices.filter(o => o && o.name && !names.has((o.name||'').trim()));
+        if (add.length) nextSettings.cmOffices = [...exist, ...add];
+      }
+      if (Array.isArray(extra.careManagers)) {
+        const exist = nextSettings.careManagers || [];
+        const key = c => `${(c.office||'').trim()}|${(c.name||'').trim()}`;
+        const keys = new Set(exist.map(key));
+        const add = extra.careManagers.filter(c => c && c.name && !keys.has(key(c)));
+        if (add.length) nextSettings.careManagers = [...exist, ...add];
+      }
+    }
+    const updatedData = { ...currentData, patients, systemSettings: nextSettings };
     await supabase.from('app_state').upsert({ key: storeId, data: updatedData });
     return true;
   } catch (e) {
