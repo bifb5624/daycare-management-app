@@ -14329,39 +14329,24 @@ export default function App() {
           };
           const openPrintWindow = (autoClose=true) => {
             if(!printPreviewContent.html) return;
-            // ★ iOS Safari: ①iframe等の遅延print()は「このWebサイトから自動的に印刷～」ダイアログでブロックされる
-            //   ②1pxのiframeでは横長の表がレイアウトされず真っ白になる。
-            //   → 本体ページに印刷用DOMを差し込み、タップと同期して window.print() を呼ぶ(実DOM描画+ユーザー操作扱い)。
+            const docHtml = buildDocHtml();
+            // ★ iOS Safari: 自動印刷(programmatic print)は「このWebサイトから自動的に印刷～」でブロックされ、
+            //   本体ページ印刷だとプレビュー画面ごと写ってしまう。 → PCと同じく「表だけのクリーンな別タブ」を開き、
+            //   そのタブ内の印刷ボタン(=ユーザー操作)で印刷/PDF保存してもらう(ダイアログも出ず、背景グレー等も無し)。
             if (isIOS) {
-              document.getElementById('tsumugi-print-style')?.remove();
-              document.getElementById('tsumugi-print-root')?.remove();
-              const style = document.createElement('style');
-              style.id = 'tsumugi-print-style';
-              style.textContent = `
-                #tsumugi-print-root{display:none;}
-                @media print{
-                  html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;height:auto!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-                  body > *:not(#tsumugi-print-root){display:none!important;visibility:hidden!important;}
-                  #tsumugi-print-root{display:block!important;visibility:visible!important;position:static!important;}
-                  @page{size:${pageW}mm ${pageH}mm;margin:0;}
-                  #tsumugi-print-root .diary-page-wrap,#tsumugi-print-root .tp{margin:0!important;page-break-inside:avoid!important;break-inside:avoid!important;}
-                  #tsumugi-print-root .diary-page-wrap:not(:last-child),#tsumugi-print-root .tp:not(:last-child){page-break-after:always!important;break-after:page!important;}
-                  .no-print,.thp,.page-sep{display:none!important;}
-                }
-              `;
-              const root = document.createElement('div');
-              root.id = 'tsumugi-print-root';
-              root.setAttribute('aria-hidden','true');
-              root.innerHTML = printPreviewContent.html;
-              document.body.appendChild(style);
-              document.body.appendChild(root);
-              const cleanup = () => { try { root.remove(); style.remove(); } catch(e){} window.removeEventListener('afterprint', cleanup); };
-              window.addEventListener('afterprint', cleanup);
-              try { window.print(); } catch(e){}
-              setTimeout(cleanup, 120000);
+              const isB5w = Math.round(pageW)===257, isB6w = Math.round(pageW)===128, isLand = pageW > pageH;
+              const orient = isB6w ? '用紙サイズ「B6」' : isB5w ? '用紙「B5」＋「横向き」' : isLand ? '「横向き」' : '';
+              const hint = orient ? `印刷オプションで ${orient} を選ぶと、はみ出さずにきれいに印刷できます` : '印刷オプションで用紙サイズ・向きを選べます';
+              const bar = `<div class="no-print" style="position:fixed;top:0;left:0;right:0;background:#1e293b;color:#fff;padding:12px 16px;text-align:center;font-family:-apple-system,sans-serif;z-index:99999;box-shadow:0 2px 10px rgba(0,0,0,0.35);">
+                  <button onclick="window.print()" style="font-size:17px;font-weight:bold;padding:11px 28px;background:#2563eb;color:#fff;border:none;border-radius:10px;cursor:pointer;">🖨 印刷 / PDF保存</button>
+                  <div style="font-size:12px;margin-top:7px;color:#cbd5e1;">${hint}</div>
+                </div><div class="no-print" style="height:78px;"></div>`;
+              const w = window.open('', '_blank');
+              if (!w) { alert('印刷用の画面を開けませんでした。Safari の設定でポップアップの許可をご確認ください。'); return; }
+              w.document.write(docHtml.replace('<body>', '<body>' + bar));
+              w.document.close();
               return;
             }
-            const docHtml = buildDocHtml();
             const w = window.open('','_blank','width=900,height=700');
             if (!w) { alert('ポップアップがブロックされました。ブラウザでポップアップを許可してください。'); return; }
             w.document.write(docHtml);
