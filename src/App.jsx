@@ -22553,7 +22553,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       updateLP('status', '利用中');
     } else updateLP('status', val);
   };
-  const updateSched = (i, v) => { if (!localPatient) return; const oldV = localPatient.scheduleAmPm?.[i] || ''; if(oldV === v) return; setSchedModal({dayIndex:i, newVal:v, oldVal:oldV, applyFrom:''}); };
+  const updateSched = (i, v) => { if (!localPatient) return; const oldV = localPatient.scheduleAmPm?.[i] || ''; if(oldV === v) return; const t=new Date(); const ds=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; setSchedModal({dayIndex:i, newVal:v, oldVal:oldV, applyFrom:ds, vY:t.getFullYear(), vM:t.getMonth()}); };
 
   const applySchedChange = (dayIndex, newVal, oldVal, applyFrom) => {
     if(!localPatient || !applyFrom) return;
@@ -23622,12 +23622,36 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             </div>
             <div className="mb-5">
               <label className="block text-sm font-bold text-slate-600 mb-1.5">適用開始日</label>
-              {/* ★ autoFocus を外す: iPad でモーダル表示と同時にネイティブ日付ピッカーが
-                  自動で開こうとして一瞬で閉じてしまう不具合を防ぐ (タップで開き、開いたままになる) */}
-              <input type="date" value={schedModal.applyFrom}
-                onChange={e=>setSchedModal(m=>({...m, applyFrom:e.target.value}))}
-                className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"/>
-              <p className="text-xs text-slate-400 mt-1.5">この日以降の月間スケジュールに反映されます</p>
+              {/* ★ iPad のネイティブ日付ピッカーはモーダル内で開かない事があるため、
+                  常時表示のインラインカレンダーに変更 (タップで確実に選択できる) */}
+              {(() => {
+                const vY = schedModal.vY ?? new Date().getFullYear();
+                const vM = schedModal.vM ?? new Date().getMonth();
+                const startDow = new Date(vY, vM, 1).getDay();
+                const daysIn = new Date(vY, vM+1, 0).getDate();
+                const cells = []; for (let i=0;i<startDow;i++) cells.push(null); for (let d=1;d<=daysIn;d++) cells.push(d);
+                const sel = schedModal.applyFrom;
+                return (
+                  <div className="border border-slate-200 rounded-xl p-2.5 bg-white">
+                    <div className="flex items-center justify-between mb-2">
+                      <button onClick={()=>setSchedModal(m=>{const nm=(m.vM??new Date().getMonth())-1; return nm<0?{...m,vY:(m.vY??new Date().getFullYear())-1,vM:11}:{...m,vM:nm};})} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center active:scale-95">‹</button>
+                      <span className="font-bold text-slate-800 text-sm">{vY}年 {vM+1}月</span>
+                      <button onClick={()=>setSchedModal(m=>{const nm=(m.vM??new Date().getMonth())+1; return nm>11?{...m,vY:(m.vY??new Date().getFullYear())+1,vM:0}:{...m,vM:nm};})} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold flex items-center justify-center active:scale-95">›</button>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {['日','月','火','水','木','金','土'].map((w,i)=><div key={w} className={`text-center text-[10px] font-bold py-0.5 ${i===0?'text-red-400':i===6?'text-blue-400':'text-slate-400'}`}>{w}</div>)}
+                      {cells.map((d,i)=>{
+                        if (d===null) return <div key={`e${i}`}/>;
+                        const ds = `${vY}-${String(vM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                        const isSel = ds===sel; const dow=(startDow+d-1)%7;
+                        return (<button key={ds} onClick={()=>setSchedModal(m=>({...m, applyFrom:ds}))}
+                          className={`h-9 rounded-lg text-sm font-bold active:scale-95 ${isSel?'bg-blue-600 text-white shadow':'hover:bg-slate-100 '+(dow===0?'text-red-500':dow===6?'text-blue-500':'text-slate-700')}`}>{d}</button>);
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+              <p className="text-xs text-slate-500 mt-1.5">選択中: <b className="text-slate-700">{schedModal.applyFrom || '未選択'}</b>　この日以降の月間スケジュールに反映されます</p>
             </div>
             <div className="flex gap-3">
               <button onClick={()=>setSchedModal(null)} className="flex-1 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">キャンセル</button>
