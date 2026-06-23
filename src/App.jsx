@@ -22393,6 +22393,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // 月を切り替えたら保留はクリアして混乱を避ける。
   }, []);
   const [schedModal, setSchedModal] = useState(null); // {dayIndex, newVal, oldVal, applyFrom}
+  const [keypad, setKeypad] = useState({ isOpen: false, field: null, exerciseId: null, value: "", isFirstInput: false, mode: 'exercise' });
   // ★ 重複利用者の統合 (記録は統合先へ引き継ぐ)
   const [mergeModal, setMergeModal] = useState(null); // {open:true}
   const [mergeKeep, setMergeKeep] = useState({}); // {groupKey: keepId}
