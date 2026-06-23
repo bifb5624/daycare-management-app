@@ -14295,8 +14295,31 @@ export default function App() {
             setAppData(prev => ({...prev, faxHistory: [newEntry, ...(prev.faxHistory||[])]}));
           };
 
-          const getStyles = () => Array.from(document.querySelectorAll('link[rel="stylesheet"],style'))
-            .map(s=>s.tagName==='LINK'?s.outerHTML:`<style>${s.textContent.replace(/@page\s*\{[^}]*\}/g,'')}</style>`).join('');
+          // ★ iPad対策: <link> の外部CSS(Tailwind)は印刷ウィンドウ/iframeで読込が間に合わず
+          //   表が組まれず文字だけになる。 読込済みのCSSルールを同期的にインライン展開して回避する。
+          const getStyles = () => {
+            const parts = [];
+            Array.from(document.querySelectorAll('link[rel="stylesheet"],style')).forEach(s => {
+              if (s.tagName !== 'LINK') {
+                parts.push(`<style>${s.textContent.replace(/@page\s*\{[^}]*\}/g,'')}</style>`);
+                return;
+              }
+              // <link>: 読込済みルールをインライン化 (同一オリジンのみ)。 不可なら link タグのまま。
+              try {
+                const sheet = s.sheet;
+                if (sheet && sheet.cssRules && sheet.cssRules.length) {
+                  let css = '';
+                  for (const r of Array.from(sheet.cssRules)) css += r.cssText + '\n';
+                  parts.push(`<style>${css.replace(/@page\s*\{[^}]*\}/g,'')}</style>`);
+                } else {
+                  parts.push(s.outerHTML);
+                }
+              } catch (e) {
+                parts.push(s.outerHTML);
+              }
+            });
+            return parts.join('');
+          };
 
           // iPad/iPhone 判定 (iPadOS 13+ は MacIntel + タッチで判定)
           const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
@@ -21201,8 +21224,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         )}
 
         {/* 印刷対象選択モーダル（チェックされた利用者だけ印刷） */}
-        {printModeModal && (
-          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={()=>setPrintModeModal(false)}>
+        {printModeModal && ReactDOM.createPortal((
+          <div className="fixed inset-0 bg-slate-900/50 z-[9999] flex items-center justify-center p-4" onClick={()=>setPrintModeModal(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style={{maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
               <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
                 <div className="font-bold text-slate-800 text-base">🖨️ 印刷する利用者を選択</div>
@@ -21239,7 +21262,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
               </div>
             </div>
           </div>
-        )}
+        ), document.body)}
 
         {/* 利用者ごと項目の編集ダイアログ — ★ Portal + 画面上部固定 */}
         {patientValueModal && (() => {
