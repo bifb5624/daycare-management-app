@@ -22335,7 +22335,61 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // 月を切り替えたら保留はクリアして混乱を避ける。
   }, []);
   const [schedModal, setSchedModal] = useState(null); // {dayIndex, newVal, oldVal, applyFrom}
-  const [keypad, setKeypad] = useState({ isOpen: false, field: null, exerciseId: null, value: "", isFirstInput: false, mode: 'exercise' });
+  // ★ 重複利用者の統合 (記録は統合先へ引き継ぐ)
+  const [mergeModal, setMergeModal] = useState(null); // {open:true}
+  const [mergeKeep, setMergeKeep] = useState({}); // {groupKey: keepId}
+  // 氏名(空白無視)が同じ利用者をグループ化。 2件以上のグループ = 重複候補
+  const duplicateGroups = React.useMemo(() => {
+    const norm = (s) => String(s||'').replace(/[\s　]/g,'').trim();
+    const map = new Map();
+    (appData.patients||[]).forEach(p => { const k=norm(p.name); if(!k) return; if(!map.has(k)) map.set(k,[]); map.get(k).push(p); });
+    return [...map.entries()].filter(([,arr]) => arr.length>1).map(([key,arr]) => ({ key, patients: arr }));
+  }, [appData.patients]);
+  // 記録を持つ件数 (どれを残すか判断材料に)
+  const recordCountOf = (pid) => {
+    const a = appData;
+    const arrCnt = (key) => (a[key]||[]).filter(r => r && r.patientId === pid).length;
+    let n = arrCnt('ticketRecords')+arrCnt('dailyLogs')+arrCnt('monitoringRecords')+arrCnt('fitnessRecords')+arrCnt('initialReports');
+    Object.values(a.monthlyShifts||{}).forEach(m => { if (m && m[pid]) n += Object.keys(m[pid]).length; });
+    return n;
+  };
+  // ★ 利用者統合の本体: dropIds の全記録を keepId へ付け替え、患者の空欄を補完し、drop を削除
+  const performMerge = (keepId, dropIds) => {
+    const drops = new Set(dropIds.map(id=>id));
+    const keep = (appData.patients||[]).find(p=>p.id===keepId);
+    const dropPats = (appData.patients||[]).filter(p=>drops.has(p.id));
+    if (!keep) return;
+    // 1. 患者フィールドの補完 (keep優先・空欄のみ drop から埋める)
+    const mergedKeep = { ...keep };
+    const isEmpty = (v) => v===undefined || v===null || v==='' || (Array.isArray(v) && v.length===0);
+    dropPats.forEach(dp => {
+      Object.keys(dp).forEach(k => {
+        if (k==='id') return;
+        if (isEmpty(mergedKeep[k]) && !isEmpty(dp[k])) mergedKeep[k] = dp[k];
+      });
+    });
+    // 2. patientId を持つ配列を全て付け替え
+    const REPOINT = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','familyInvites','familyAccounts','absences','notices'];
+    const next = { ...appData };
+    REPOINT.forEach(key => {
+      if (!Array.isArray(next[key])) return;
+      next[key] = next[key].map(r => (r && drops.has(r.patientId)) ? { ...r, patientId: keepId } : r);
+    });
+    // 3. monthlyShifts: drop の月別シフトを keep へ統合 (keep優先で衝突を解決)
+    const ms = { ...(next.monthlyShifts||{}) };
+    Object.keys(ms).forEach(mKey => {
+      const month = { ...(ms[mKey]||{}) };
+      let changed = false;
+      dropIds.forEach(did => {
+        if (month[did]) { month[keepId] = { ...(month[did]||{}), ...(month[keepId]||{}) }; delete month[did]; changed = true; }
+      });
+      if (changed) ms[mKey] = month;
+    });
+    next.monthlyShifts = ms;
+    // 4. patients: keep を更新し drop を除去
+    next.patients = (appData.patients||[]).filter(p=>!drops.has(p.id)).map(p => p.id===keepId ? mergedKeep : p);
+    onSave(next, { manual: true, message: '✓ 重複を統合しました' });
+  };
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   // ★ 編集中のリセット防止: 同じ患者編集中の appData.patients 更新では localPatient を上書きしない
@@ -22988,6 +23042,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div className="flex items-center gap-1">
                 <button onClick={()=>{setNewPatientName('');setNewPatientModal(true);}} className="flex items-center gap-1 px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0"><Plus size={13}/>新規</button>
                 <button onClick={()=>setCsvModal({isOpen:true, mode:null, importText:'', error:''})} title="CSV入出力" className="flex items-center gap-1 px-2 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0">CSV</button>
+                <button onClick={()=>setMergeModal({open:true})} title="重複している利用者を統合（記録は引き継ぎ）" className="flex items-center gap-1 px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0">重複</button>
                 <button onClick={() => setIsSidebarCollapsed(true)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg"><ChevronLeft size={18} /></button>
               </div>
             </div>
@@ -23658,6 +23713,60 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <button disabled={!schedModal.applyFrom}
                 onClick={()=>applySchedChange(schedModal.dayIndex, schedModal.newVal, schedModal.oldVal, schedModal.applyFrom)}
                 className="flex-1 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 shadow-lg active:scale-95">適用する</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ★ 重複利用者の統合モーダル */}
+      {mergeModal?.open && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
+              <h2 className="text-base font-bold text-slate-800">重複利用者の統合</h2>
+              <button onClick={()=>{setMergeModal(null);setMergeKeep({});}} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+            </div>
+            <div className="p-6 overflow-y-auto space-y-4">
+              <div className="text-[12px] bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-900 leading-relaxed">
+                氏名が同じ利用者を重複候補として表示します。<b>残す1人</b>を選んで「統合する」を押すと、もう片方の<b>サービス提供記録・連絡帳・体力測定・初回報告・月間スケジュール</b>などをすべて残す側へ引き継ぎ、空欄は相手の情報で補完します。<b>記録は消えません。</b>
+              </div>
+              {duplicateGroups.length === 0 ? (
+                <div className="text-center text-slate-400 py-10 font-bold">重複している利用者は見つかりませんでした 🎉</div>
+              ) : duplicateGroups.map(g => {
+                const keepId = mergeKeep[g.key] ?? g.patients[0].id;
+                return (
+                  <div key={g.key} className="border border-amber-200 rounded-2xl overflow-hidden">
+                    <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-200 font-bold text-amber-800 text-sm flex items-center gap-2">⚠ 「{g.patients[0].name}」が {g.patients.length} 件</div>
+                    <div className="p-3 space-y-2">
+                      {g.patients.map(p => {
+                        const rc = recordCountOf(p.id);
+                        const sel = keepId === p.id;
+                        return (
+                          <label key={p.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer ${sel?'border-emerald-400 bg-emerald-50':'border-slate-200 bg-white hover:bg-slate-50'}`}>
+                            <input type="radio" name={`keep_${g.key}`} checked={sel} onChange={()=>setMergeKeep(m=>({...m,[g.key]:p.id}))} className="mt-1"/>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-bold text-slate-800 text-sm">{p.name} <span className="text-[11px] font-normal text-slate-400">(ID:{p.id})</span> {sel && <span className="ml-1 text-[10px] font-bold text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded">残す</span>}</div>
+                              <div className="text-[11px] text-slate-500 mt-0.5">
+                                {p.birthDate||'生年月日なし'}　{p.careLevel||'介護度なし'}　{p.startDate?`利用開始 ${p.startDate}`:'開始日なし'}
+                              </div>
+                              <div className="text-[11px] font-bold mt-0.5"><span className={rc>0?'text-blue-600':'text-slate-400'}>記録 {rc} 件</span></div>
+                            </div>
+                          </label>
+                        );
+                      })}
+                      <button onClick={()=>{
+                        const dropIds = g.patients.map(p=>p.id).filter(id=>id!==keepId);
+                        const keepName = g.patients.find(p=>p.id===keepId)?.name||'';
+                        if (!window.confirm(`「${keepName}」(ID:${keepId}) に統合します。\n他の ${dropIds.length} 件の記録もこの利用者へ引き継ぎ、統合元は削除されます。\n\n実行しますか？`)) return;
+                        performMerge(keepId, dropIds);
+                        setMergeKeep(m=>{const n={...m};delete n[g.key];return n;});
+                      }} className="w-full mt-1 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95">この内容で統合する（記録は引き継ぎ）</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 shrink-0">
+              <button onClick={()=>{setMergeModal(null);setMergeKeep({});}} className="w-full py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">閉じる</button>
             </div>
           </div>
         </div>
