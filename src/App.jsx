@@ -14266,11 +14266,35 @@ export default function App() {
           const getStyles = () => Array.from(document.querySelectorAll('link[rel="stylesheet"],style'))
             .map(s=>s.tagName==='LINK'?s.outerHTML:`<style>${s.textContent.replace(/@page\s*\{[^}]*\}/g,'')}</style>`).join('');
 
+          // iPad/iPhone 判定 (iPadOS 13+ は MacIntel + タッチで判定)
+          const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+          const buildDocHtml = () => {
+            const styles = getStyles();
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${printPreviewContent.title}</title>${styles}<style>*{box-sizing:border-box;}html,body{margin:0;padding:0;background:white;width:${pageW}mm;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:visible;}svg{overflow:visible!important;max-width:none!important;}@page{size:${pageW}mm ${pageH}mm;margin:0;}*{box-shadow:none!important;outline:none!important;--tw-ring-shadow:0 0 transparent!important;--tw-ring-color:transparent!important;--tw-ring-offset-shadow:0 0 transparent!important;}@media print{html,body{width:${pageW}mm;height:auto;overflow:hidden;margin:0!important;padding:0!important;}body>*{margin:0!important;padding:0!important;}body>*>*+*{margin-top:0!important;}.no-print,.thp,.page-sep{display:none!important;}.tp{page-break-inside:avoid;break-inside:avoid;}.tp:not(:last-child){page-break-after:always!important;break-after:page!important;}.tp:last-child{page-break-after:avoid!important;break-after:avoid!important;}[data-page-break]{page-break-before:always;break-before:page;}}</style></head><body>${printPreviewContent.html}</body></html>`;
+          };
           const openPrintWindow = (autoClose=true) => {
             if(!printPreviewContent.html) return;
-            const styles = getStyles();
+            const docHtml = buildDocHtml();
+            // ★ iOS Safari: window.open は不安定(空タブ/ブロック)で、外部CSSの読込が間に合わず表が崩れたり
+            //   用紙の向きが無視される。 同一ページ内の隠し iframe に書き出し、読込完了(onload)を待ってから印刷する。
+            if (isIOS) {
+              const prev = document.getElementById('ios-print-iframe'); if (prev) prev.remove();
+              const iframe = document.createElement('iframe');
+              iframe.id = 'ios-print-iframe';
+              iframe.setAttribute('aria-hidden','true');
+              iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;z-index:-1;';
+              document.body.appendChild(iframe);
+              const idoc = iframe.contentWindow.document;
+              idoc.open(); idoc.write(docHtml); idoc.close();
+              let fired = false;
+              const fire = () => { if (fired) return; fired = true; try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e){} };
+              iframe.onload = () => setTimeout(fire, 450); // 画像・CSS の読込完了後
+              setTimeout(() => { if (!fired && idoc.readyState === 'complete') fire(); }, 1500); // フォールバック
+              return;
+            }
             const w = window.open('','_blank','width=900,height=700');
-            w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${printPreviewContent.title}</title>${styles}<style>*{box-sizing:border-box;}html,body{margin:0;padding:0;background:white;width:${pageW}mm;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:visible;}svg{overflow:visible!important;max-width:none!important;}@page{size:${pageW}mm ${pageH}mm;margin:0;}*{box-shadow:none!important;outline:none!important;--tw-ring-shadow:0 0 transparent!important;--tw-ring-color:transparent!important;--tw-ring-offset-shadow:0 0 transparent!important;}@media print{html,body{width:${pageW}mm;height:auto;overflow:hidden;margin:0!important;padding:0!important;}body>*{margin:0!important;padding:0!important;}body>*>*+*{margin-top:0!important;}.no-print,.thp,.page-sep{display:none!important;}.tp{page-break-inside:avoid;break-inside:avoid;}.tp:not(:last-child){page-break-after:always!important;break-after:page!important;}.tp:last-child{page-break-after:avoid!important;break-after:avoid!important;}[data-page-break]{page-break-before:always;break-before:page;}}</style></head><body>${printPreviewContent.html}</body></html>`);
+            if (!w) { alert('ポップアップがブロックされました。ブラウザでポップアップを許可してください。'); return; }
+            w.document.write(docHtml);
             w.document.close();
             setTimeout(()=>{ w.focus(); w.print(); if(autoClose) setTimeout(()=>w.close(),1000); }, 800);
           };
@@ -16328,9 +16352,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         </div>,
         document.body
       )}
-      {/* 介護整体確認ツールチップ（固定位置） */}
-      <div id="massage-tooltip" onClick={()=>{const el=document.getElementById('massage-tooltip');if(el)el.style.display='none';}}
-        style={{display:'none',position:'fixed',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 4px 16px rgba(0,0,0,0.4)',zIndex:99999,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}/>
+      {/* 介護整体確認ツールチップ（固定位置）。 ★ body へポータルして、祖先の transform 等の影響で
+          position:fixed の基準がズレる(iPadで中央や表の背面に出る)のを防ぐ */}
+      {ReactDOM.createPortal(
+        <div id="massage-tooltip" onClick={()=>{const el=document.getElementById('massage-tooltip');if(el)el.style.display='none';}}
+          style={{display:'none',position:'fixed',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 4px 16px rgba(0,0,0,0.4)',zIndex:99999,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}/>,
+        document.body
+      )}
       {/* 利用者情報ポップアップ */}
       {patientInfoModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setPatientInfoModal(null)}>
@@ -20912,10 +20940,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         <div style="transform:scale(${scale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h}</div>
       </div>`
     ).join('');
-    if(onShowPrintPreview) onShowPrintPreview(title, pageSizeStr, null);
-    setTimeout(()=>{
-      window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:pageSizeStr,html:combinedHtml}}));
-    },50);
+    // ★ iPadで確実に開くよう、null→遅延イベントの2段階をやめ、HTML付きイベントを即時発火 (1段階で表示)
+    window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:pageSizeStr,html:combinedHtml,elementId:null}}));
   };
   const handleSaveConfig = (newConfig) => { markClean(); onSave({ ...appData, contactBookConfig: newConfig }); setIsConfigOpen(false); };
 
