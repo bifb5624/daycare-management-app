@@ -17342,8 +17342,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <div>
                         <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>気分</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,marginTop:4,lineHeight:1.5}}>
-                          {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}</div>}
-                          {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}</div>}
+                          {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}{latest.kibunArrivalReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunArrivalReason}）</span>}</div>}
+                          {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}{latest.kibunDepartureReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunDepartureReason}）</span>}</div>}
                           {!latest.kibunArrival && !latest.kibunDeparture && <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
                         </div>
                       </div>
@@ -17375,8 +17375,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <div>
                         <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>気分</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,marginTop:4,lineHeight:1.5}}>
-                          {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}</div>}
-                          {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}</div>}
+                          {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}{latest.kibunArrivalReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunArrivalReason}）</span>}</div>}
+                          {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}{latest.kibunDepartureReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunDepartureReason}）</span>}</div>}
                           {!latest.kibunArrival && !latest.kibunDeparture && <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
                         </div>
                       </div>
@@ -22997,7 +22997,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   ))}
                 </>);
               })()}{(localPatient.cmOffice||localPatient.cmName) && <div className="flex flex-col"><span className="text-[13px] font-bold text-slate-900">{localPatient.cmOffice}</span><span className="text-[13px] font-bold text-slate-900">{localPatient.cmName}</span></div>}{localPatient.startDate && <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">{dTxt(dBtw(localPatient.startDate,new Date()))}利用</span>}</div>{isResigned && <span className="text-xs font-bold bg-slate-200 text-slate-600 px-3 py-1 rounded-lg">終了</span>}
-            <div className="flex items-center gap-2">{isResigned ? (<>{!isEditingResigned && <button onClick={() => setIsEditingResigned(true)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm flex items-center active:scale-95"><Lock size={14} className="mr-1" />編集</button>}{isEditingResigned && <button onClick={() => { saveMasterInfo(); setIsEditingResigned(false); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center active:scale-95"><Save size={14} className="mr-1" />保存</button>}<button onClick={() => setDeleteConfirmModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm flex items-center shadow-lg active:scale-95"><Trash2 size={14} className="mr-1" />完全削除</button></>) : (<div className="flex gap-2"><button onClick={() => setDeleteConfirmModal(true)} className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl font-bold text-sm flex items-center active:scale-95" title={localPatient.startDate ? '利用中の利用者を削除します (関連記録も削除されます)' : '利用者を削除'}><Trash2 size={14} className="mr-1" />削除</button><button onClick={()=>setPersonalFileModal({patient:localPatient})} className="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl font-bold text-sm flex items-center active:scale-95" title="個人ファイル: フェイスシート・契約書・ケアプラン・モニタリング 等"><BookOpen size={14} className="mr-1"/>個人ファイル</button><button onClick={()=>setFamilyShareModal({patient:localPatient})} className="px-3 py-2 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-xl font-bold text-sm flex items-center active:scale-95" title="家族・ケアマネ用ログインアカウントを発行・管理"><QrCode size={14} className="mr-1"/>アカウント管理</button><button onClick={saveMasterInfo} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center shadow-lg active:scale-95 text-sm"><Save size={16} className="mr-1.5" />保存</button></div>)}</div>
+            <div className="flex items-center gap-2">{isResigned ? (<>{!isEditingResigned && <button onClick={() => setIsEditingResigned(true)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm flex items-center active:scale-95"><Lock size={14} className="mr-1" />編集</button>}{isEditingResigned && <button onClick={() => { saveMasterInfo(); setIsEditingResigned(false); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center active:scale-95"><Save size={14} className="mr-1" />保存</button>}<button onClick={() => setDeleteConfirmModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm flex items-center shadow-lg active:scale-95"><Trash2 size={14} className="mr-1" />完全削除</button></>) : (<div className="flex gap-2 flex-wrap justify-end"><button onClick={() => setDeleteConfirmModal(true)} className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl font-bold text-sm flex items-center whitespace-nowrap shrink-0 active:scale-95" title={localPatient.startDate ? '利用中の利用者を削除します (関連記録も削除されます)' : '利用者を削除'}><Trash2 size={14} className="mr-1" />削除</button><button onClick={()=>setPersonalFileModal({patient:localPatient})} className="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl font-bold text-sm flex items-center whitespace-nowrap shrink-0 active:scale-95" title="個人ファイル: フェイスシート・契約書・ケアプラン・モニタリング 等"><BookOpen size={14} className="mr-1"/>個人ファイル</button><button onClick={()=>setFamilyShareModal({patient:localPatient})} className="px-3 py-2 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-xl font-bold text-sm flex items-center whitespace-nowrap shrink-0 active:scale-95" title="家族・ケアマネ用ログインアカウントを発行・管理"><QrCode size={14} className="mr-1"/>アカウント管理</button><button onClick={saveMasterInfo} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center whitespace-nowrap shrink-0 shadow-lg active:scale-95 text-sm"><Save size={16} className="mr-1.5" />保存</button></div>)}</div>
           </div>
           <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 px-6"><button onClick={() => setActiveDetailTab('basic')} className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'basic' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>基本情報</button><button onClick={() => setActiveDetailTab('service')} className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'service' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>サービス提供内容</button><button onClick={() => setActiveDetailTab('history')} className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>変更履歴</button></div>
           <div className="flex-1 overflow-auto p-6"><div className="max-w-5xl mx-auto space-y-5 pb-12 master-detail-content">
@@ -26902,7 +26902,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           }
         `}</style>
         <div className="no-print sticky top-0 z-50 flex items-center gap-4 px-6 py-3" style={{backgroundColor:'#333'}}>
-          <button onClick={()=>{ setIsPrintPreview(false); document.title='Tsumugi'; }} className="bg-white text-gray-800 px-4 py-2 rounded-xl font-bold text-sm hover:bg-gray-100">← 編集に戻る</button>
+          <button onClick={()=>{ setIsPrintPreview(false); document.title='つむぎ｜デイサービス管理'; }} className="bg-white text-gray-800 px-4 py-2 rounded-xl font-bold text-sm hover:bg-gray-100">← 編集に戻る</button>
           <span className="text-sm text-white opacity-80">印刷プレビュー（A4縦）{printPages.length > 1 ? ' — 2ページ' : ''}</span>
           <button onClick={()=>{
               const pages = document.querySelectorAll('.diary-print-page');
@@ -27671,7 +27671,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     } else {
       setIsPrintMode(true);
       document.title=`モニタリング_${tY}年${tM}月`;
-      setTimeout(()=>{window.print();setTimeout(()=>{document.title='Tsumugi';setIsPrintMode(false);},500);},300);
+      setTimeout(()=>{window.print();setTimeout(()=>{document.title='つむぎ｜デイサービス管理';setIsPrintMode(false);},500);},300);
     }
   };
 
@@ -28503,12 +28503,12 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
 
   const handlePrint = () => {
-    const doAfterPrint = () => { document.title='Tsumugi';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:'printed'});}};
+    const doAfterPrint = () => { document.title='つむぎ｜デイサービス管理';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:'printed'});}};
     if(onShowPrintPreview){setIsPrint(true);setTimeout(()=>{onShowPrintPreview(`休み連絡_${selectedEntry?.patient?.name||''}`, 'A4 portrait', 'print-content-fax');doAfterPrint();},100);}
     else{setIsPrint(true);document.title=`休み連絡_${selectedEntry?.patient?.name||''}`;setTimeout(()=>{window.print();setTimeout(doAfterPrint,500);},100);}
   };
   const handleSavePdf = () => {
-    const doAfterPdf=()=>{document.title='Tsumugi';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);const cur=getFax(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:cur.status==='printed'?'both':'pdf'});}};
+    const doAfterPdf=()=>{document.title='つむぎ｜デイサービス管理';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);const cur=getFax(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:cur.status==='printed'?'both':'pdf'});}};
     if(onShowPrintPreview){setIsPrint(true);setTimeout(()=>{onShowPrintPreview(`休み連絡_${selectedEntry?.patient?.name||''}`, 'A4 portrait', 'print-content-fax');doAfterPdf();},100);}
     else{setIsPrint(true);document.title=`休み連絡_${selectedEntry?.patient?.name||''}`;setTimeout(()=>{window.print();setTimeout(doAfterPdf,500);},100);}
   };
