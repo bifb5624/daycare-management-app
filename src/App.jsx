@@ -23640,7 +23640,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       )}
       {csvModal.isOpen && (() => {
         // ★ テンプレート/出力の列 (店舗独自=介護整体/温浴は含めない。住所は都道府県/市区町村/町名番地/建物名に分割)
-        const HEADERS = ['利用者ID','氏名','フリガナ','性別','生年月日','郵便番号','都道府県','市区町村','町名番地','建物名','電話番号','携帯電話番号','緊急連絡先氏名','続柄','緊急連絡先電話','被保険者番号','介護度','利用開始日','利用終了日','状態','既往歴','留意点','かかりつけ医'];
+        const HEADERS = ['利用者ID','氏名','フリガナ','性別','生年月日','郵便番号','都道府県','市区町村','町名番地','建物名','電話番号','携帯電話番号','緊急連絡先氏名','続柄','緊急連絡先電話','被保険者番号','介護度','利用開始日','利用終了日','状態','既往歴','留意点','かかりつけ医','メールアドレス','認定有効期間（開始）','認定有効期間（終了）','負担割合','ケアマネ事業所','担当ケアマネ','ケアマネ電話','ケアマネFAX'];
         const escCell = (v) => { const s = String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
         // 利用者 → CSV 1行
         const patientToRow = (p) => {
@@ -23655,6 +23655,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             ec.name||p.familyName||'', ec.relation||p.familyRelation||'', ec.phone||ec.phoneMobile||p.familyPhone||'',
             p.insuranceNo||'', p.careLevel||'', p.startDate||'', p.endDate||'', p.status||'',
             p.kiou||'', p.ryui||'', (p.personalFile?.faceSheet?.chronicDiseases)||'',
+            p.email||'', p.careLevelFrom||'', p.careLevelTo||'', p.costBurden||'',
+            p.cmOffice||'', p.cmName||'', p.cmPhone||'', p.cmFax||'',
           ];
         };
         const buildCsv = () => [HEADERS.join(','), ...(appData.patients||[]).map(p => patientToRow(p).map(escCell).join(','))].join('\n');
@@ -23666,7 +23668,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           URL.revokeObjectURL(url);
         };
         const downloadTemplate = () => {
-          const sample = ['','田中 太郎','たなか たろう','男性','1940-05-15','135-0011','東京都','江東区','扇橋1-2-3','メゾン白子101','03-1234-5678','090-1234-5678','田中 花子','長女','090-2222-3333','0123456789','要介護2','2024-06-01','','利用中','高血圧','歩行時見守り','〇〇クリニック 田中医師'];
+          const sample = ['','田中 太郎','たなか たろう','男性','1940-05-15','135-0011','東京都','江東区','扇橋1-2-3','メゾン白子101','03-1234-5678','090-1234-5678','田中 花子','長女','090-2222-3333','0123456789','要介護2','2024-06-01','','利用中','高血圧','歩行時見守り','〇〇クリニック 田中医師','tanaka@example.com','2024-04-01','2027-03-31','1割','ひかり居宅介護支援','鈴木 一郎','03-1111-2222','03-1111-2223'];
           const csv = '﻿' + HEADERS.join(',') + '\n' + sample.map(escCell).join(',');
           const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
           const url = URL.createObjectURL(blob);
@@ -23737,14 +23739,24 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               kiou:        findCol(header,['既往']),
               ryui:        findCol(header,['留意']),
               doctor:      findCol(header,['かかりつけ','主治医','担当医']),
+              email:       findCol(header,['メール','email','eメール'],['緊急','連絡先']),
+              careLevelFrom: findCol(header,['認定有効期間開始','有効期間開始','認定開始','認定有効開始'],['終了']),
+              careLevelTo:   findCol(header,['認定有効期間終了','有効期間終了','認定終了','認定有効終了'],['開始']),
+              costBurden:  findCol(header,['負担割合','負担割']),
+              cmOffice:    findCol(header,['ケアマネ事業所','居宅介護支援','ケアマネージャー事業所','cm事業所'],['担当','電話','fax','ファックス']),
+              cmName:      findCol(header,['担当ケアマネ','担当ケアマネージャー','ケアマネ氏名','ケアマネ名'],['事業所','電話','fax','ファックス']),
+              cmPhone:     findCol(header,['ケアマネ電話','cm電話'],['fax','ファックス','事業所']),
+              cmFax:       findCol(header,['ケアマネfax','ケアマネファックス','cmfax']),
             };
             const val = (row,i) => (i>=0 ? String(row[i]||'').trim() : '');
             const existing = [...(appData.patients||[])];
             const existingIds = new Set(existing.map(p=>p.id));
             let maxId = Math.max(0, ...existing.map(p=>p.id));
-            const dupKey = (name,ins) => `${(name||'').trim()}|${(ins||'').trim()}`;
-            const existingByDup = new Map();
-            existing.forEach(p=>{ const k=dupKey(p.name,p.insuranceNo); if(k!=='|') existingByDup.set(k,p.id); });
+            // ★ 氏名(空白無視)で重複判定。 dupMode='replace'(置き換え) / 'keepBoth'(両方残す)
+            const dupMode = csvModal.dupMode || 'replace';
+            const normName = (s) => String(s||'').replace(/[\s　]/g,'').trim();
+            const existingByName = new Map();
+            existing.forEach(p=>{ const k=normName(p.name); if(k) existingByName.set(k,p.id); });
             const applyEx = (p, emName, emRel, emPhone, doctor) => {
               let np = {...p};
               if (emName || emRel || emPhone) {
@@ -23783,11 +23795,20 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               set('status', val(row,col.status));
               set('kiou', val(row,col.kiou));
               set('ryui', val(row,col.ryui));
+              set('email', val(row,col.email));
+              set('careLevelFrom', col.careLevelFrom>=0 && val(row,col.careLevelFrom) ? normDate(val(row,col.careLevelFrom)) : '');
+              set('careLevelTo', col.careLevelTo>=0 && val(row,col.careLevelTo) ? normDate(val(row,col.careLevelTo)) : '');
+              set('costBurden', val(row,col.costBurden));
+              set('cmOffice', val(row,col.cmOffice));
+              set('cmName', val(row,col.cmName));
+              set('cmPhone', val(row,col.cmPhone));
+              set('cmFax', val(row,col.cmFax));
               const emName=val(row,col.emName), emRel=val(row,col.emRelation), emPhone=val(row,col.emPhone), doctor=val(row,col.doctor);
               const idNum = parseInt(val(row,col.id));
               let target = null;
               if (!isNaN(idNum) && existingIds.has(idNum)) target = existing.find(p=>p.id===idNum);
-              else { const dId = existingByDup.get(dupKey(name, insNo)); if(dId) target = existing.find(p=>p.id===dId); }
+              else if (name && dupMode === 'replace') { const dId = existingByName.get(normName(name)); if(dId!=null) target = existing.find(p=>p.id===dId); }
+              // dupMode==='keepBoth' のときは氏名一致でも target を立てず → 新規追加 (両方残す)
               if (target) {
                 const idx = existing.findIndex(p=>p.id===target.id);
                 existing[idx] = applyEx({ ...existing[idx], ...rec }, emName, emRel, emPhone, doctor);
@@ -23798,13 +23819,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 if (!np.status) np.status='利用中';
                 np = applyEx(np, emName, emRel, emPhone, doctor);
                 existing.push(np);
-                const k=dupKey(np.name, np.insuranceNo); if(k!=='|') existingByDup.set(k,maxId);
+                const k=normName(np.name); if(k) existingByName.set(k,maxId);
                 added++;
               }
             }
             onSave({...appData, patients: existing});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
-            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n（空欄の項目は既存データを上書きしません）`);
+            const modeTxt = dupMode==='replace' ? '氏名一致は置き換え(更新)' : '氏名一致でも両方残す(新規追加)';
+            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n重複時の扱い: ${modeTxt}\n（空欄の項目は既存データを上書きしません）`);
           } catch (e) {
             setCsvModal({...csvModal, error: e.message || String(e)});
           }
@@ -23867,6 +23889,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                       ・例: 「氏名,利用者ID,...」の順でも「利用者ID,氏名,...」でもOK<br/>
                       ・列名が間違っていると一致せず読み飛ばされます<br/>
                       ・<b>テンプレート</b>ボタンで正しい列名付きの雛形が手に入ります
+                    </div>
+                    {/* ★ 氏名が一致する利用者がいた場合の扱い */}
+                    <div className="text-[12px] bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      <div className="font-bold text-slate-700 mb-1.5">氏名が一致する利用者がいた場合</div>
+                      <label className="flex items-start gap-2 cursor-pointer mb-1">
+                        <input type="radio" name="csvDupMode" checked={(csvModal.dupMode||'replace')==='replace'} onChange={()=>setCsvModal({...csvModal,dupMode:'replace'})} className="mt-0.5"/>
+                        <span className="text-slate-700"><b>置き換える（更新）</b> … 同じ氏名の利用者の情報をCSVの内容で上書き（空欄は元のまま）。<span className="text-slate-400">重複が増えません</span></span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input type="radio" name="csvDupMode" checked={csvModal.dupMode==='keepBoth'} onChange={()=>setCsvModal({...csvModal,dupMode:'keepBoth'})} className="mt-0.5"/>
+                        <span className="text-slate-700"><b>両方残す（新規追加）</b> … 同じ氏名でも別の利用者として追加</span>
+                      </label>
                     </div>
                     {csvModal.error && <div className="text-xs font-bold text-red-600">エラー: {csvModal.error}</div>}
                     <button disabled={!csvModal.importText.trim()} onClick={doImport} className="w-full py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40">取り込みを実行</button>
