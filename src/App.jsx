@@ -14329,24 +14329,39 @@ export default function App() {
           };
           const openPrintWindow = (autoClose=true) => {
             if(!printPreviewContent.html) return;
-            const docHtml = buildDocHtml();
-            // ★ iOS Safari: window.open は不安定(空タブ/ブロック)で、外部CSSの読込が間に合わず表が崩れたり
-            //   用紙の向きが無視される。 同一ページ内の隠し iframe に書き出し、読込完了(onload)を待ってから印刷する。
+            // ★ iOS Safari: ①iframe等の遅延print()は「このWebサイトから自動的に印刷～」ダイアログでブロックされる
+            //   ②1pxのiframeでは横長の表がレイアウトされず真っ白になる。
+            //   → 本体ページに印刷用DOMを差し込み、タップと同期して window.print() を呼ぶ(実DOM描画+ユーザー操作扱い)。
             if (isIOS) {
-              const prev = document.getElementById('ios-print-iframe'); if (prev) prev.remove();
-              const iframe = document.createElement('iframe');
-              iframe.id = 'ios-print-iframe';
-              iframe.setAttribute('aria-hidden','true');
-              iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;z-index:-1;';
-              document.body.appendChild(iframe);
-              const idoc = iframe.contentWindow.document;
-              idoc.open(); idoc.write(docHtml); idoc.close();
-              let fired = false;
-              const fire = () => { if (fired) return; fired = true; try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch(e){} };
-              iframe.onload = () => setTimeout(fire, 450); // 画像・CSS の読込完了後
-              setTimeout(() => { if (!fired && idoc.readyState === 'complete') fire(); }, 1500); // フォールバック
+              document.getElementById('tsumugi-print-style')?.remove();
+              document.getElementById('tsumugi-print-root')?.remove();
+              const style = document.createElement('style');
+              style.id = 'tsumugi-print-style';
+              style.textContent = `
+                #tsumugi-print-root{display:none;}
+                @media print{
+                  html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;height:auto!important;overflow:visible!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+                  body > *:not(#tsumugi-print-root){display:none!important;visibility:hidden!important;}
+                  #tsumugi-print-root{display:block!important;visibility:visible!important;position:static!important;}
+                  @page{size:${pageW}mm ${pageH}mm;margin:0;}
+                  #tsumugi-print-root .diary-page-wrap,#tsumugi-print-root .tp{margin:0!important;page-break-inside:avoid!important;break-inside:avoid!important;}
+                  #tsumugi-print-root .diary-page-wrap:not(:last-child),#tsumugi-print-root .tp:not(:last-child){page-break-after:always!important;break-after:page!important;}
+                  .no-print,.thp,.page-sep{display:none!important;}
+                }
+              `;
+              const root = document.createElement('div');
+              root.id = 'tsumugi-print-root';
+              root.setAttribute('aria-hidden','true');
+              root.innerHTML = printPreviewContent.html;
+              document.body.appendChild(style);
+              document.body.appendChild(root);
+              const cleanup = () => { try { root.remove(); style.remove(); } catch(e){} window.removeEventListener('afterprint', cleanup); };
+              window.addEventListener('afterprint', cleanup);
+              try { window.print(); } catch(e){}
+              setTimeout(cleanup, 120000);
               return;
             }
+            const docHtml = buildDocHtml();
             const w = window.open('','_blank','width=900,height=700');
             if (!w) { alert('ポップアップがブロックされました。ブラウザでポップアップを許可してください。'); return; }
             w.document.write(docHtml);
