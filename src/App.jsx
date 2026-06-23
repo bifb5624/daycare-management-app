@@ -26,6 +26,7 @@ import {
   supabaseListStores,
   supabaseCreateStore,
   supabaseUpdateStore,
+  supabaseUpdateFamilyAccount,
   supabaseDeleteStore,
   supabaseDeleteFamilyAccount,
   supabaseDeleteInvite,
@@ -22270,6 +22271,28 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [familyShareModal?.patient?.id]);
   const [accountEditId, setAccountEditId] = useState(null); // 編集中のアカウント id
+  const [accountEditOrig, setAccountEditOrig] = useState(null); // {username} 編集開始時の旧ログインID (Supabase 同期照合用)
+  const [accountEditSaving, setAccountEditSaving] = useState(false);
+  // ★ ログインID編集の確定: ローカルは updateField で反映済み。 Supabase 側の username も同期 (旧IDで照合)。
+  //   revert(u): 失敗時にローカルの username を旧IDへ戻すコールバック
+  const confirmAccountEdit = async (acc, revert) => {
+    const origUser = accountEditOrig?.username ?? acc.username;
+    const newUser = (acc.username || '').trim();
+    if (!newUser || newUser.length < 4) { alert('ログインIDは4文字以上で入力してください'); return; }
+    if (newUser === origUser) { setAccountEditId(null); setAccountEditOrig(null); return; }
+    setAccountEditSaving(true);
+    try {
+      await supabaseUpdateFamilyAccount(acc.id, { username: newUser }, { matchUsername: origUser });
+      setAccountEditId(null); setAccountEditOrig(null);
+      alert(`ログインIDを「${newUser}」に変更しました。\nご本人へ新しいIDをお伝えください。`);
+    } catch (e) {
+      // 失敗時はローカルを旧IDに戻す
+      try { revert && revert(origUser); } catch {}
+      alert('ログインIDの変更に失敗しました: ' + (e?.message || '不明'));
+    } finally {
+      setAccountEditSaving(false);
+    }
+  };
   const [newPatientName, setNewPatientName] = useState('');
   // ★ 姓/名/ふりがな 分割入力
   const [newPatientLast, setNewPatientLast] = useState('');
@@ -24194,9 +24217,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                   </div>
                                   <div className="col-span-1 flex flex-col gap-1">
                                     {isEditing ? (
-                                      <button onClick={()=>setAccountEditId(null)} className="px-1.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-[10px] font-bold" title="編集を確定">✓</button>
+                                      <button disabled={accountEditSaving} onClick={()=>confirmAccountEdit(acc, (u)=>updateField(acc.id,'username',u))} className="px-1.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-[10px] font-bold disabled:opacity-50" title="編集を確定 (ログインIDの変更を保存)">{accountEditSaving?'…':'✓'}</button>
                                     ) : (
-                                      <button onClick={()=>setAccountEditId(acc.id)} className="px-1.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold" title="ID/PW を編集">✏</button>
+                                      <button onClick={()=>{setAccountEditId(acc.id); setAccountEditOrig({username: acc.username});}} className="px-1.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold" title="ログインID を編集">✏</button>
                                     )}
                                     <button onClick={()=>printSheet(acc)} className={`px-1.5 py-1 ${printBg} rounded text-[10px] font-bold`} title="ログイン情報シート印刷">🖨</button>
                                     <button onClick={()=>removeAccount(acc.id)} className="px-1.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold" title="削除">✕</button>

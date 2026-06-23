@@ -589,6 +589,29 @@ export async function supabaseCreateStore({ id, name, short_name, org_name, zip_
   return data;
 }
 
+// ★ 家族/ケアマネ アカウントの更新 (ログインID(username)・パスワード 等を後から変更)。
+//   username 変更時は重複チェック (削除済み除外・自分除外)。
+export async function supabaseUpdateFamilyAccount(accountId, patch, opts = {}) {
+  if (!supabase) throw new Error('Supabase 未接続');
+  const fields = { ...(patch || {}) };
+  // 行の特定: 通常は id。 ローカルidとSupabase idが食い違う場合に備え、旧username(matchUsername)でも特定可。
+  const matchUsername = opts.matchUsername || null;
+  if (fields.username) {
+    const { data: dups } = await supabase
+      .from('family_accounts')
+      .select('id,username').eq('username', fields.username).is('deleted_at', null);
+    const conflict = (dups || []).some(d => matchUsername ? (d.username !== matchUsername) : (String(d.id) !== String(accountId)));
+    if (conflict) throw new Error('このログインIDは既に使用されています');
+  }
+  // パスワード変更があれば hash 化して password_hash に
+  if (fields.password) { fields.password_hash = await hashPassword(fields.password); delete fields.password; }
+  let upd = supabase.from('family_accounts').update(fields);
+  upd = matchUsername ? upd.eq('username', matchUsername).is('deleted_at', null) : upd.eq('id', accountId);
+  const { error } = await upd;
+  if (error) throw error;
+  return true;
+}
+
 // ★ 店舗情報の更新 (店舗ID以外の 店舗名/短縮名/法人名/住所/電話/FAX 等を後から編集)
 export async function supabaseUpdateStore(id, patch) {
   if (!supabase || !id) throw new Error('店舗IDが必要です');
