@@ -22777,12 +22777,22 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       });
     }
 
-    // 4. localPatientと保留シフトを更新
+    // 4. localPatientを更新し、その場で即クラウド保存する。
+    //   ★ 以前は下書き(pendingShifts)＋dirtyのみで、保存を押す前に利用者切替/ログアウトすると
+    //     基本利用日の変更が消えていた。 適用＝確定なので即 onSave(manual) で永続化する。
     const changeLog=[...(localPatient.changeLog||[]),changeLogEntry];
     const newPat = {...localPatient, scheduleAmPm:newSched, scheduleChangeHistory:hist, changeLog};
     setLocalPatient(newPat);
-    setPendingShifts(newShifts);
-    markDirty();
+    setPendingShifts(null);
+    const nextData = {
+      ...appData,
+      monthlyShifts: newShifts,
+      ...(pendingTickets ? { ticketRecords: pendingTickets } : {}),
+      patients: (appData.patients||[]).map(p => p.id === newPat.id ? newPat : p),
+    };
+    if (pendingTickets) setPendingTickets(null);
+    if (dirtyRef) dirtyRef.current = false;
+    onSave(nextData, { manual: true, message: '✓ 基本利用日を保存しました' });
   };
   const handleKpInput = (nv) => { setKeypad(p => ({ ...p, value: nv, isFirstInput: false })); if (keypad.field === 'plannedExercise' && localPatient) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: nv }); };
   const isResigned = localPatient ? isPatientResigned(localPatient) : false;
