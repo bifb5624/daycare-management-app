@@ -21193,6 +21193,20 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               );
             })()}
 
+            {/* ★ 運動メニュー（設定数値）独立表 — 黒ヘッダーの上に配置 */}
+            <table className="w-full border-collapse border border-slate-600 text-[10px] mb-1 shrink-0" style={{tableLayout:'fixed'}}>
+              <tbody>
+                <tr>
+                  <th className="border border-slate-600 px-1 py-0.5 text-center" style={{background:'#f1f5f9',color:'#000',fontSize:9,width:62,lineHeight:1.1}}>運動メニュー</th>
+                  {ex.map(it=>(<th key={it.id} className="border border-slate-600 px-0 py-0.5 text-center" style={{background:'#f8fafc',color:'#000',fontSize:8,lineHeight:1.05,wordBreak:'break-all',fontWeight:'bold'}}>{it.name}</th>))}
+                </tr>
+                <tr>
+                  <td className="border border-slate-600 px-1 py-0.5 text-center font-bold" style={{fontSize:9,lineHeight:1.1}}>設定数値</td>
+                  {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 py-0.5 text-center font-bold" style={{fontSize:9,lineHeight:1.1,wordBreak:'break-all'}}>{_planUnit(plannedM[it.id], it.defaultUnit)}</td>))}
+                </tr>
+              </tbody>
+            </table>
+
             {/* メインテーブル: print 時の flex 計算問題を避けるためフロー配置 */}
             <div className="flex flex-col" style={{overflowX:'auto'}}>
               <style>{`
@@ -21237,14 +21251,6 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       ));
                     })()}
                     <th className="border border-slate-600 py-1 text-[8px]" style={{width: ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42}}>介護整体</th>
-                  </tr>
-                  {/* ★ 設定数値の行 (運動メニューの予定値) */}
-                  <tr className="bg-amber-50 text-slate-700" style={{height:18}}>
-                    <td colSpan={6} className="border border-slate-400 px-1 text-right font-bold" style={{fontSize:9}}>設定数値 →</td>
-                    {ex.map(it => (
-                      <td key={it.id} className="border border-slate-400 text-center font-bold" style={{fontSize:8,lineHeight:1.1,wordBreak:'break-all'}}>{_planUnit(plannedM[it.id], it.defaultUnit)}</td>
-                    ))}
-                    <td className="border border-slate-400"></td>
                   </tr>
                 </thead>
                 <tbody>
@@ -24378,7 +24384,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           </div></div>
         </>) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">左から利用者を選択してください</div>)}
       </div>
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({ ...keypad, isOpen: false })} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => {
+        // ★ 運動メニューの入力を閉じる時、数値だけなら単位を自動付与 (例: 10 → 10分)
+        if (keypad.field === 'plannedExercise' && localPatient) {
+          const _it = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(e => e.id === keypad.exerciseId);
+          const _unit = _it?.defaultUnit || '';
+          const _raw = String(keypad.value ?? '').trim();
+          const _fin = (/^[0-9０-９.]+$/.test(_raw) && _unit) ? _raw + _unit : _raw;
+          if (_fin !== _raw) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: _fin });
+        }
+        setKeypad({ ...keypad, isOpen: false });
+      }} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
       {pauseModal.isOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"><div className="px-6 py-4 bg-orange-50 border-b border-orange-200 flex justify-between items-center"><h2 className="text-lg font-bold text-orange-800 flex items-center"><CalendarOff size={20} className="mr-2" />休止理由の登録</h2><button onClick={cancelPause} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20} /></button></div><div className="p-6 space-y-5">{localPatient?.pauseHistory?.length > 0 && (<div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs"><span className="font-bold text-slate-500">前回: </span><span className="font-bold text-slate-700">{latPause(localPatient)?.reason}</span><span className="text-slate-400 ml-2">{fD(latPause(localPatient)?.fromDate)}〜</span></div>)}<div><label className="text-xs font-bold text-slate-500 block mb-1">休止の理由</label><input type="text" value={pauseModal.reason} onChange={e => setPauseModal({ ...pauseModal, reason: e.target.value })} placeholder="例: 入院、自宅療養" className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div><div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label><input type="date" value={pauseModal.fromDate} onChange={e => setPauseModal({ ...pauseModal, fromDate: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div></div><div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3"><button onClick={cancelPause} className="px-5 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">キャンセル</button><button onClick={submitPause} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">確定</button></div></div></div>)}
       {/* 運動メニュー(予定値)変更の適用開始月モーダル */}
       {plannedExModal && (
