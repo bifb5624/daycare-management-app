@@ -10960,7 +10960,17 @@ function FamilyView() {
                         if (!p.cmPhone) cmFields.cmPhone = cmManagerDirect || cmOfficePhone;
                         if (!p.cmFax) cmFields.cmFax = cmOfficeFax;
                       }
-                      return {...p, emergencyContacts: updatedContacts, ...primaryFields, ...cmFields};
+                      // ★ その他関係者: 利用者マスタの「その他関係者」に自動追加 (同名+同事業所は重複追加しない)
+                      let relatedFields = {};
+                      if (isRelatedParty) {
+                        const rpName = ecName || `${ecLastName} ${ecFirstName}`.trim();
+                        const existingRp = p.relatedParties || [];
+                        const dupRp = existingRp.some(x => (x.name||'').trim() === rpName && (x.office||'').trim() === (cmOfficeName||'').trim());
+                        if (!dupRp && rpName) {
+                          relatedFields.relatedParties = [...existingRp, { name: rpName, relation: ecRelation, office: cmOfficeName, phone: cmOfficePhone, fax: cmOfficeFax, addedByFamilyAccountId: newAccId }];
+                        }
+                      }
+                      return {...p, emergencyContacts: updatedContacts, ...primaryFields, ...cmFields, ...relatedFields};
                     }),
                   };
                   try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
@@ -11005,6 +11015,7 @@ function FamilyView() {
                             cmName: patchedPatient.cmName,
                             cmPhone: patchedPatient.cmPhone,
                             cmFax: patchedPatient.cmFax,
+                            relatedParties: patchedPatient.relatedParties || [],
                           }, isCaremanager ? { cmOffices: nextCmOffices, careManagers: nextCareManagers } : undefined);
                         }
                       }
@@ -23436,6 +23447,37 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     </div>
                   );
                 })()}
+              </div>
+
+              {/* ⑥-2 その他関係者 (訪問看護 等) — その他関係者がアカウント登録するとここに自動追加 */}
+              <div className="border-t border-slate-200 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-slate-600 flex items-center gap-1.5"><Users size={16}/>その他関係者</h3>
+                  <button disabled={isOff} onClick={()=>updateLPFields({relatedParties:[...(localPatient.relatedParties||[]), {name:'',relation:'',office:'',phone:'',fax:''}]})} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold disabled:opacity-50">＋ 関係者を追加</button>
+                </div>
+                {(localPatient.relatedParties||[]).length===0 ? (
+                  <div className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 leading-relaxed">登録されている関係者はいません。<br/>その他関係者（訪問看護 等）が<b>アカウント登録すると、ここに自動で追加</b>されます（手動でも追加できます）。</div>
+                ) : (
+                  <div className="space-y-3">
+                    {(localPatient.relatedParties||[]).map((rp,ri)=>{
+                      const upd=(field,val)=>{const arr=[...(localPatient.relatedParties||[])];arr[ri]={...arr[ri],[field]:val};updateLPFields({relatedParties:arr});};
+                      return (
+                        <div key={ri} className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative">
+                          <button disabled={isOff} onClick={()=>{if(!window.confirm('この関係者を削除しますか？'))return;const arr=(localPatient.relatedParties||[]).filter((_,i)=>i!==ri);updateLPFields({relatedParties:arr});}} className="absolute top-2 right-2 text-red-400 hover:text-red-600 disabled:opacity-40" title="削除"><Trash2 size={14}/></button>
+                          <div className="grid grid-cols-2 gap-3 mb-2">
+                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">関係者名</label><input disabled={isOff} value={rp.name||''} onChange={e=>upd('name',e.target.value)} placeholder="例: 山田 花子" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">関係（種別）</label><input disabled={isOff} value={rp.relation||''} onChange={e=>upd('relation',e.target.value)} placeholder="例: 訪問看護" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                          </div>
+                          <div className="mb-2"><label className="block text-[11px] font-bold text-slate-500 mb-1">事業所名</label><input disabled={isOff} value={rp.office||''} onChange={e=>upd('office',e.target.value)} placeholder="例: ○○訪問看護ステーション" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">電話番号</label><input disabled={isOff} value={rp.phone||''} onChange={e=>upd('phone',e.target.value)} placeholder="0312345678" inputMode="tel" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">FAX</label><input disabled={isOff} value={rp.fax||''} onChange={e=>upd('fax',e.target.value)} placeholder="0312345679" inputMode="tel" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* ⑦ 緊急連絡先 — 縦並びレイアウト */}

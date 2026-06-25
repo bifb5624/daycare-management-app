@@ -493,14 +493,25 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
           if (!dup) mergedContacts = [...mergedContacts, c];
         });
       }
+      // relatedParties (その他関係者) も配列マージ (同名+同事業所は重複防止)
+      let mergedRelated = p.relatedParties || [];
+      if (patientPatch.relatedParties) {
+        (patientPatch.relatedParties || []).forEach(c => {
+          const dup = mergedRelated.some(ex =>
+            (ex.name||'').trim() === (c.name||'').trim() &&
+            (ex.office||'').trim() === (c.office||'').trim()
+          );
+          if (!dup) mergedRelated = [...mergedRelated, c];
+        });
+      }
       // それ以外のフィールドはマージ (空でない値だけ上書き)
       const filteredPatch = {};
       Object.keys(patientPatch).forEach(k => {
-        if (k === 'emergencyContacts') return;
+        if (k === 'emergencyContacts' || k === 'relatedParties') return;
         const v = patientPatch[k];
         if (v !== undefined && v !== null && v !== '') filteredPatch[k] = v;
       });
-      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts };
+      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts, relatedParties: mergedRelated };
     });
     // ★ ケアマネ事業所/担当者マスタ (systemSettings) も、家族(関係者)登録で増えた分を統合 (重複は追加しない)
     let nextSettings = currentData.systemSettings || {};
