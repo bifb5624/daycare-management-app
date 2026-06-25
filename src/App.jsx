@@ -15618,7 +15618,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               const existing = recordIndex >= 0 ? updatedTicketRecords[recordIndex] : null;
               // 旧形式互換用に plain フィールドも保持 (timeFilter の値を入れる)
               const newRecord = {
-                  id: existing ? existing.id : Date.now() + Math.random(),
+                  // ★ id は患者+年+月日で決定的に (端末間で同じidになり、別々のランダムidで重複しない)
+                  id: existing ? existing.id : `tr_${p.id}_${selYear}_${dObj.getMonth() + 1}_${dObj.getDate()}`,
                   patientId: p.id, name: p.name, kana: p.kana, date: targetDateStr, year: selYear, dayOfWeek: dayOfWeekStr,
                   status: p.status,
                   ...(existing?.furikaeAmpm ? {furikaeAmpm: existing.furikaeAmpm} : {}),
@@ -15644,8 +15645,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   //   未選択の場合は 既存値を維持 (それ以外のフォールバックは使わない)
                   recorder: getRecorderName() || existing?.recorder || '',
                   done: p.done || false,
-                  _savedAt: Date.now() // ★ 複数端末マージ用: この記録を保存した時刻
               };
+              // ★ 複数端末マージ対策: _savedAt は「実際にデータがある／変更があった」時だけ新しくする。
+              //   空欄の出席記録に毎回新しい時刻を付けると、後で空欄保存した端末が、先に入力済みの端末の記録を
+              //   上書きしてしまう (= 入力が消える)。 空欄は _savedAt=0 にして、入力済み(時刻>0)を上書きさせない。
+              const _hasData = !!(newRecord.temp_AM||newRecord.temp_PM||newRecord.bpUpSt_AM||newRecord.bpUpSt_PM||newRecord.bpDnSt_AM||newRecord.bpDnSt_PM||newRecord.plSt_AM||newRecord.plSt_PM||newRecord.bpUpEn_AM||newRecord.bpUpEn_PM||newRecord.bpDnEn_AM||newRecord.bpDnEn_PM||newRecord.plEn_AM||newRecord.plEn_PM||newRecord.massage||(newRecord.exercises&&Object.keys(newRecord.exercises).length)||newRecord.tokki||newRecord.kibunArrival||newRecord.kibunDeparture||newRecord.actualTime) || (newRecord.status && newRecord.status!=='出席');
+              const _cmpRec = (o)=>JSON.stringify({...o, id:undefined, _savedAt:undefined, recorder:undefined});
+              newRecord._savedAt = existing
+                ? (_cmpRec(existing)!==_cmpRec(newRecord) ? Date.now() : (Number(existing._savedAt)||0))
+                : (_hasData ? Date.now() : 0);
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
               else updatedTicketRecords.push(newRecord);
           });

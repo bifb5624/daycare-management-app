@@ -372,6 +372,22 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos'];
     const merged = { ...localData };
     ARRAY_KEYS.forEach(k => { merged[k] = mergeById(localData[k], cloud[k]); });
+    // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
+    //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
+    if (Array.isArray(merged.ticketRecords)) {
+      const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
+      const FIELDS = ['temp_AM','temp_PM','bpUpSt_AM','bpUpSt_PM','bpDnSt_AM','bpDnSt_PM','plSt_AM','plSt_PM','bpUpEn_AM','bpUpEn_PM','bpDnEn_AM','bpDnEn_PM','plEn_AM','plEn_PM','massage','tokki','kibunArrival','kibunDeparture','actualTime'];
+      const score = (r) => { let s=0; FIELDS.forEach(f=>{ if(r && r[f]) s++; }); if(r && r.exercises && Object.keys(r.exercises).length) s+=Object.keys(r.exercises).length; if(r && r.status && r.status!=='出席') s+=1; return s; };
+      const best = new Map();
+      merged.ticketRecords.forEach(r => {
+        if (!r || r.patientId == null || !r.date) return;
+        const k = keyOf(r); const ex = best.get(k);
+        if (!ex) { best.set(k, r); return; }
+        const rs = score(r), es = score(ex);
+        if (rs > es || (rs === es && (Number(r._savedAt)||0) >= (Number(ex._savedAt)||0))) best.set(k, r);
+      });
+      merged.ticketRecords = [...best.values()];
+    }
     return await supabaseSyncStateForStore(storeId, merged);
   } catch (e) {
     console.warn('[supabase] mergeAndSync exception', e);
