@@ -965,8 +965,8 @@ const recMatchesYearMonth = (r, year, month) => {
 const parseExerciseDuo = (val) => {
   if (val == null || val === '') return null;
   const s = String(val).normalize('NFKC').trim();
-  // 区切り: × x ✕ * (前後の空白許可)
-  const m = s.match(/^([\d.]+)\s*([^\d×x✕*\s]*)\s*[×x✕*]\s*([\d.]+)\s*([^\s]*)\s*$/);
+  // 区切り: × x ✕ * / （前後の空白許可）。 「/」も主副の区切りとして扱う(例: 平行棒 8/20)
+  const m = s.match(/^([\d.]+)\s*([^\d×x✕*\/\s]*)\s*[×x✕*\/]\s*([\d.]+)\s*([^\s]*)\s*$/);
   if (m) {
     const p = parseFloat(m[1]);
     const sec = parseFloat(m[3]);
@@ -991,7 +991,7 @@ const parseExerciseDuo = (val) => {
 const resolveGraphType = (item, sampleValues) => {
   const gt = item?.graphType || 'auto';
   if (gt === 'single' || gt === 'weight_reps') return gt;
-  const hasMulti = (sampleValues || []).some(v => /[×x✕*]/.test(String(v||'')));
+  const hasMulti = (sampleValues || []).some(v => /[×x✕*\/]/.test(String(v||'')));
   return hasMulti ? 'weight_reps' : 'single';
 };
 
@@ -16881,7 +16881,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               </div>
               {(appData.systemSettings?.serviceItems||[{id:'massage',label:'介護整体',options:'',showInPopup:true},{id:'onyoku',label:'温浴時電療',options:'',showInPopup:true}]).filter(si=>si.showInPopup).map(si=>{
                 const fkey=si.id==='massage'?'massageNeed':si.id==='onyoku'?'onyokuDenryo':`svc_${si.id}`;
-                const val=patientInfoModal[fkey]||'未設定';
+                const _opts0=(si.options||'').split(/[、,]+/).map(s=>s.trim()).filter(Boolean)[0]||'';
+                const val=patientInfoModal[fkey]||_opts0||'未設定';
                 return(<div key={si.id} className="bg-blue-50 rounded-xl p-3"><div className="text-[10px] font-bold text-blue-400 mb-1">{si.label}</div><div className="text-sm text-slate-700">{val}</div></div>);
               })}
             </div>
@@ -21163,9 +21164,10 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                     <tr>
                       {items.map((si,i)=>{
                         const fkey=si.id==='massage'?'massageNeed':si.id==='onyoku'?'onyokuDenryo':`svc_${si.id}`;
+                        const _opts0=(si.options||'').split(/[、,]+/).map(s=>s.trim()).filter(Boolean)[0]||'';
                         return(<React.Fragment key={si.id}>
                           <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:10,wordBreak:'break-all',lineHeight:1.1,fontWeight:'normal'}}>{si.label}</th>
-                          <td className="border border-slate-600 px-1.5 py-0 font-bold" style={{fontSize:11,lineHeight:1.2,wordBreak:'break-all',overflow:'hidden',height:'18px'}}>{sp[fkey]||'ー'}</td>
+                          <td className="border border-slate-600 px-1.5 py-0 font-bold" style={{fontSize:11,lineHeight:1.2,wordBreak:'break-all',overflow:'hidden',height:'18px'}}>{sp[fkey]||_opts0||'ー'}</td>
                         </React.Fragment>);
                       })}
                     </tr>
