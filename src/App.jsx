@@ -18240,11 +18240,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {normalBand && <rect x={0} y={yP(normalBand.max)} width={W} height={yP(normalBand.min)-yP(normalBand.max)} fill={normalBand.color||'#bfdbfe'} opacity={0.25}/>}
                   {normalBand?.min2!=null && <rect x={0} y={yP(normalBand.max2)} width={W} height={yP(normalBand.min2)-yP(normalBand.max2)} fill={normalBand.color2||'#fda4af'} opacity={0.2}/>}
                   <line x1={0} y1={4} x2={0} y2={H-4} stroke="#e2e8f0" strokeWidth={1}/>
-                  {pts2.length>0&&<polyline points={pts2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={0.85}/>}
-                  <polyline points={pts1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={3.8} strokeLinecap="round" strokeLinejoin="round"/>
+                  {pts2.length>0&&<polyline points={pts2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" opacity={0.85}/>}
+                  <polyline points={pts1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round"/>
                   {/* ★ 終了時(点線): 運動後の血圧・脈。 通所時(実線)と区別 */}
-                  {ptsE2.length>0&&<polyline points={ptsE2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={2.5} strokeDasharray="7,5" strokeLinecap="round" strokeLinejoin="round" opacity={0.75}/>}
-                  {ptsE1.length>0&&<polyline points={ptsE1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={3} strokeDasharray="7,5" strokeLinecap="round" strokeLinejoin="round" opacity={0.8}/>}
+                  {ptsE2.length>0&&<polyline points={ptsE2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={1.8} strokeDasharray="7,5" strokeLinecap="round" strokeLinejoin="round" opacity={0.75}/>}
+                  {ptsE1.length>0&&<polyline points={ptsE1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={2.1} strokeDasharray="7,5" strokeLinecap="round" strokeLinejoin="round" opacity={0.8}/>}
                   {ptsE1.map(p=>(<circle key={'e1'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={4.5} fill="white" stroke={color1} strokeWidth={2.2} pointerEvents="none"/>))}
                   {ptsE2.map(p=>(<circle key={'e2'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={4.5} fill="white" stroke={color2} strokeWidth={2.2} pointerEvents="none"/>))}
                   {/* max/min ハイライト輪郭（pts1） */}
