@@ -938,9 +938,15 @@ const recMatchesDateYear = (r, dateStr, year) =>
 // === アドオン(オプション機能) ===
 // 本部(super_admin)が店舗ごとに ON/OFF。 店舗データの systemSettings.addons に保存。
 const ADDONS = [
-  { key: 'kinou_keikaku', label: '個別機能訓練計画書', desc: '個別機能訓練加算の計画書を作成・印刷（運動・バイタル・体力測定から自動補完）' },
+  { key: 'kinou_keikaku', label: '個別機能訓練計画書', icon: '📝', desc: '個別機能訓練加算の計画書を作成・印刷（運動・バイタル・体力測定から自動補完）' },
+  { key: 'tsusho_keikaku', label: '通所介護計画書', icon: '📄', desc: '通所介護（地域密着型）計画書の作成・印刷', soon: true },
+  { key: 'assessment', label: 'アセスメント・居宅訪問', icon: '🏠', desc: 'アセスメント記録・居宅訪問記録の作成・保管', soon: true },
+  { key: 'life', label: 'LIFE連携（科学的介護）', icon: '🔬', desc: 'LIFE（科学的介護情報システム）提出用データの出力', soon: true },
 ];
+const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
+// 有効なアドオンのラベル配列 (チップ表示用)
+const activeAddonLabels = (addonsObj) => ADDONS.filter(a => addonsObj?.[a.key]).map(a => a.label);
 // record から年を取り出す (無ければ null)
 const recYear = (r) => (r && r.year != null ? r.year : null);
 // 月番号フィルタ用: record が (year, month) に該当するか。 year 無し記録は対象年に該当扱い。
@@ -13077,6 +13083,32 @@ function SystemNoticesPanel({ stores, staffSession }) {
 function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   const [stores, setStores] = useState([]);
   const [loading, setLoading] = useState(true);
+  // ★ アドオン (店舗ごとの ON/OFF を本部がここで管理)
+  const [storeAddons, setStoreAddons] = useState({}); // {storeId: {kinou_keikaku:true,...}}
+  const [addonModal, setAddonModal] = useState(null); // {storeId, storeName}
+  const [addonBusy, setAddonBusy] = useState(null);   // 保存中の storeId
+  const loadStoreAddons = async (list) => {
+    try {
+      const entries = await Promise.all((list||[]).map(async s => {
+        try { const row = await supabaseLoadStateForStore(s.id); return [s.id, row?.data?.systemSettings?.addons || {}]; }
+        catch { return [s.id, {}]; }
+      }));
+      setStoreAddons(Object.fromEntries(entries));
+    } catch (e) { console.warn('[addons] load failed', e); }
+  };
+  const toggleStoreAddon = async (storeId, key) => {
+    setAddonBusy(storeId);
+    try {
+      const row = await supabaseLoadStateForStore(storeId);
+      const data = row?.data || {};
+      const cur = data.systemSettings?.addons || {};
+      const nextAddons = { ...cur, [key]: !cur[key] };
+      // merge版: 記録(ticketRecords等)は他端末の更新を保ちつつ、systemSettings(addons)を反映
+      await supabaseMergeAndSyncStateForStore(storeId, { ...data, systemSettings: { ...(data.systemSettings||{}), addons: nextAddons } });
+      setStoreAddons(prev => ({ ...prev, [storeId]: nextAddons }));
+    } catch (e) { alert('アドオンの更新に失敗しました: ' + (e?.message||'')); }
+    setAddonBusy(null);
+  };
   const [showAddStore, setShowAddStore] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
   // ★ 店舗情報の後編集 (店舗名・短縮名・法人名・住所・電話・FAX。 店舗IDは変更不可)
@@ -13120,6 +13152,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
       setStoreStaff(byStore);
     } catch (e) { console.warn('[supabase] listStaff failed', e); }
     setLoading(false);
+    loadStoreAddons(list);
   };
   useEffect(() => { loadStores(); }, []);
   // 店舗ログイン情報の表示/非表示制御
@@ -13238,9 +13271,16 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                     <div>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#3d5021'}}>{s.name}</div>
                       <div style={{fontSize:10,color:'#64748b',marginTop:2}}>ID: {s.id} {s.phone && `/ ${s.phone}`}</div>
+                      {/* ★ 有効アドオンのチップ (ぱっと見で分かるように) */}
+                      <div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:4}}>
+                        {activeAddonLabels(storeAddons[s.id]).length > 0
+                          ? activeAddonLabels(storeAddons[s.id]).map(l => <span key={l} style={{fontSize:9,fontWeight:'bold',color:'#0e7490',background:'#cffafe',border:'1px solid #a5f3fc',borderRadius:999,padding:'1px 7px'}}>🧩 {l}</span>)
+                          : <span style={{fontSize:9,color:'#a3b58a'}}>アドオンなし</span>}
+                      </div>
                     </div>
                     <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                       <button onClick={()=>setShowLoginFor(prev => ({...prev, [s.id]: !prev[s.id]}))} style={{padding:'8px 12px',background:showing?'#94c456':'white',color:showing?'white':'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🔑 {showing?'隠す':'ログイン情報'}</button>
+                      <button onClick={()=>setAddonModal({storeId:s.id, storeName:s.name})} style={{padding:'8px 12px',background:'white',color:'#0e7490',border:'1px solid #67e8f9',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🧩 アドオン</button>
                       <button onClick={()=>onSelectStore(s)} style={{padding:'8px 14px',background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>この店舗を開く →</button>
                       <button onClick={()=>setEditStore({ id:s.id, name:s.name||'', short_name:s.short_name||'', org_name:s.org_name||'', zip_code:s.zip_code||'', address:s.address||'', phone:s.phone||'', fax:s.fax||'', loading:false, error:'' })} style={{padding:'8px 12px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>✏️ 編集</button>
                       <button onClick={async ()=>{
@@ -13306,6 +13346,38 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
       </div>
       {/* 店舗追加モーダル */}
       {/* ★ 店舗情報の編集 (後から店舗名・短縮名・法人名・住所・電話・FAXを変更) */}
+      {/* ★ アドオン管理モーダル (本部が店舗ごとに ON/OFF) */}
+      {addonModal && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}} onClick={()=>!addonBusy&&setAddonModal(null)}>
+          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:520,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:2}}>🧩 アドオン管理</div>
+            <div style={{fontSize:12,color:'#64748b',marginBottom:16}}>{addonModal.storeName}</div>
+            <div style={{display:'grid',gap:10}}>
+              {ADDONS.map(a => {
+                const on = !!(storeAddons[addonModal.storeId]?.[a.key]);
+                return (
+                  <div key={a.key} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,background:'#fbfdf6'}}>
+                    <div style={{minWidth:0}}>
+                      <div style={{fontWeight:'bold',color:'#1e293b',fontSize:14}}>{a.icon} {a.label} {a.soon && <span style={{fontSize:10,fontWeight:'bold',color:'#b45309',background:'#fef3c7',borderRadius:4,padding:'1px 6px',marginLeft:4}}>準備中</span>}</div>
+                      <div style={{fontSize:11,color:'#64748b',marginTop:2}}>{a.desc}</div>
+                    </div>
+                    {a.soon ? (
+                      <span style={{flexShrink:0,fontSize:11,fontWeight:'bold',color:'#94a3b8',background:'#f1f5f9',borderRadius:999,padding:'6px 12px'}}>近日公開</span>
+                    ) : (
+                      <button onClick={()=>toggleStoreAddon(addonModal.storeId, a.key)} disabled={addonBusy===addonModal.storeId}
+                        style={{flexShrink:0,padding:'8px 16px',borderRadius:8,fontSize:13,fontWeight:'bold',cursor:addonBusy?'wait':'pointer',border:'none',color:'white',background:on?'#10b981':'#cbd5e1'}}>
+                        {addonBusy===addonModal.storeId ? '…' : on ? '✓ 有効' : '無効'}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{fontSize:10,color:'#94a3b8',marginTop:12}}>※ 変更は即時に店舗へ反映されます。</div>
+            <button onClick={()=>!addonBusy&&setAddonModal(null)} style={{width:'100%',marginTop:14,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+          </div>
+        </div>
+      )}
       {editStore && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}} onClick={()=>!editStore.loading&&setEditStore(null)}>
           <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
@@ -25891,10 +25963,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                   return (
                     <div key={a.key} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-200 bg-white">
                       <div className="min-w-0">
-                        <div className="font-bold text-slate-800 text-sm">{a.label}</div>
+                        <div className="font-bold text-slate-800 text-sm">{a.icon} {a.label} {a.soon && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded ml-1">準備中</span>}</div>
                         <div className="text-[11px] text-slate-500 mt-0.5">{a.desc}</div>
                       </div>
-                      {isSuperAdmin ? (
+                      {a.soon ? (
+                        <span className="shrink-0 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-400">近日公開</span>
+                      ) : isSuperAdmin ? (
                         <button type="button" onClick={()=>toggleAddon(a.key)}
                           className={`shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${on ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-600'}`}>
                           {on ? '✓ 有効' : '無効'}
@@ -28302,24 +28376,30 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     .sort((a,b) => (b.createdDate||'').localeCompare(a.createdDate||''));
 
   const _age = (bd) => { if(!bd) return ''; const d=new Date(bd), n=new Date(); let a=n.getFullYear()-d.getFullYear(); if(n.getMonth()<d.getMonth()||(n.getMonth()===d.getMonth()&&n.getDate()<d.getDate()))a--; return a; };
-  const blankProgram = () => ({ name:'', content:'', time:'', freq:'通所毎', person:'機能訓練指導員', point:'' });
+  const toReiwa = (iso) => { if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return iso; const r=d.getFullYear()-2018; return `令和${r}年${d.getMonth()+1}月${d.getDate()}日`; };
+  const JIRITSU_BODY = ['自立','J1','J2','A1','A2','B1','B2','C1','C2'];
+  const JIRITSU_DEM = ['自立','Ⅰ','Ⅱa','Ⅱb','Ⅲa','Ⅲb','Ⅳ','M'];
+  const blankProgram = () => ({ content:'', point:'', freqWeek:'', time:'', person:'機能訓練指導員' });
   const programsFromPlanned = () => {
     const pe = patient?.plannedExercises || {};
     const list = Object.entries(pe).filter(([k,v]) => v && v!=='ー' && String(v).trim()!=='')
-      .map(([k,v]) => { const it = exItems.find(i=>i.id===k); return { name: it?.name || k, content:'運動器機能向上', time:String(v), freq:'通所毎', person:'機能訓練指導員', point:'' }; });
-    return list.length ? list : [blankProgram()];
+      .map(([k,v]) => { const it = exItems.find(i=>i.id===k); const unit=it?.defaultUnit||''; const num=String(v).match(/[0-9０-９]/)?String(v):''; return { content:`${it?.name||k}（運動器機能の向上のために）`, point:'', freqWeek:'', time: num?`${v}${/分|回|往復/.test(String(v))?'':unit}`:String(v), person:'機能訓練指導員' }; });
+    return list.length ? list : [blankProgram(),blankProgram()];
   };
   const newRecord = () => ({
-    id: `kk_${pid}_${Date.now()}`, patientId: pid,
-    createdDate: new Date().toISOString().slice(0,10), createdAt: Date.now(),
-    author: '', planAuthor: '',
+    id: `kk_${pid}_${Date.now()}`, patientId: pid, createdAt: Date.now(),
+    createdDate: toReiwa(new Date().toISOString().slice(0,10)), prevDate: '', firstDate: '',
+    author: '', authorJob: '機能訓練指導員',
     jiritsuBody: '', jiritsuDementia: '',
-    honninKibou: '', kazokuKibou: '',
-    healthState: patient?.kiou || '', ishiShiji: '', ryuiten: patient?.ryui || '', shakaiSanka: '',
-    longGoal: '', longGoalPeriod: '6ヶ月', shortGoal: '', shortGoalPeriod: '3ヶ月',
-    programs: programsFromPlanned(),
-    appShintai: '', appAdl: '', appIadl: '', appNinchi: '', appSanka: '',
-    evalDate: '', evalContent: '', nextPlan: '',
+    honninKibou: '', kazokuKibou: '', shakaiSanka: '', kyotakuKankyo: '',
+    byomei: patient?.kiou || '', hasshoDate: '', nyuinDate: '', taiinDate: '',
+    chiryoKeika: '', gappei: '', ryuiPoint: patient?.ryui || '',
+    shortKinou: '', shortKatsudo: '', shortSanka: '', shortAchieve: '',
+    longKinou: '', longKatsudo: '', longSanka: '', longAchieve: '',
+    programs: programsFromPlanned(), programPlanner: '',
+    jikangaiJisshi: '', tokki: '',
+    henka: '', kadai: '',
+    setsumeiDate: '', setsumeisha: '',
   });
 
   const upd = (patch) => { setEditing(e => ({ ...e, ...patch })); markDirty(); };
@@ -28344,7 +28424,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     onSave({ ...appData, kinouKeikakuRecords: (appData.kinouKeikakuRecords||[]).filter(r=>r.id!==id) }, { manual:true, message:'削除しました' });
     if (editing?.id === id) setEditing(null);
   };
-  const dupRecord = (r) => { setEditing({ ...r, id:`kk_${pid}_${Date.now()}`, createdDate:new Date().toISOString().slice(0,10), createdAt:Date.now(), evalDate:'', evalContent:'', nextPlan:'' }); };
+  const dupRecord = (r) => { setEditing({ ...r, id:`kk_${pid}_${Date.now()}`, createdAt:Date.now(), prevDate: r.createdDate||'', createdDate: toReiwa(new Date().toISOString().slice(0,10)), shortAchieve:'', longAchieve:'', henka:'', kadai:'', setsumeiDate:'', setsumeisha:'' }); };
 
   // 印刷対象 (編集中 or 最新)
   const printRec = editing || records[0] || null;
@@ -28372,67 +28452,115 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             {/* 基本情報 */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様／{patient?.gender||''}／{_age(patient?.birthDate)}歳／{patient?.careLevel||''}）</div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <KKField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})}/>
-                <KKField label="計画作成者（機能訓練指導員）" value={editing.author} onChange={v=>upd({author:v})}/>
-                <KKField label="障害高齢者の日常生活自立度" value={editing.jiritsuBody} onChange={v=>upd({jiritsuBody:v})} ph="例: A2"/>
-                <KKField label="認知症高齢者の日常生活自立度" value={editing.jiritsuDementia} onChange={v=>upd({jiritsuDementia:v})} ph="例: IIa"/>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <KKField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})} ph="令和○年○月○日"/>
+                <KKField label="前回作成日" value={editing.prevDate} onChange={v=>upd({prevDate:v})} ph="（初回は空欄）"/>
+                <KKField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
+                <KKField label="計画作成者" value={editing.author} onChange={v=>upd({author:v})}/>
+                <KKField label="職種" value={editing.authorJob} onChange={v=>upd({authorJob:v})}/>
+                <div/>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">障害高齢者の日常生活自立度</label>
+                  <select value={editing.jiritsuBody} onChange={e=>upd({jiritsuBody:e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none">
+                    <option value="">選択</option>{JIRITSU_BODY.map(o=><option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">認知症高齢者の日常生活自立度</label>
+                  <select value={editing.jiritsuDementia} onChange={e=>upd({jiritsuDementia:e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none">
+                    <option value="">選択</option>{JIRITSU_DEM.map(o=><option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
-            {/* 希望・健康状態 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 grid md:grid-cols-2 gap-3">
-              <KKField label="本人の希望" value={editing.honninKibou} onChange={v=>upd({honninKibou:v})} rows={2}/>
-              <KKField label="家族の希望" value={editing.kazokuKibou} onChange={v=>upd({kazokuKibou:v})} rows={2}/>
-              <KKField label="健康状態・経過（既往等）" value={editing.healthState} onChange={v=>upd({healthState:v})} rows={2}/>
-              <KKField label="医師の指示・留意事項" value={editing.ishiShiji} onChange={v=>upd({ishiShiji:v})} rows={2}/>
-              <KKField label="リハ・運動の留意点" value={editing.ryuiten} onChange={v=>upd({ryuiten:v})} rows={2}/>
-              <KKField label="社会参加の状況" value={editing.shakaiSanka} onChange={v=>upd({shakaiSanka:v})} rows={2}/>
+            {/* Ⅰ 利用者の基本情報 */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-bold text-blue-700 mb-3">Ⅰ 利用者の基本情報</div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <KKField label="利用者本人の希望" value={editing.honninKibou} onChange={v=>upd({honninKibou:v})} rows={2}/>
+                <KKField label="家族の希望" value={editing.kazokuKibou} onChange={v=>upd({kazokuKibou:v})} rows={2}/>
+                <KKField label="利用者本人の社会参加の状況" value={editing.shakaiSanka} onChange={v=>upd({shakaiSanka:v})} rows={2}/>
+                <KKField label="利用者の居宅の環境（環境因子）" value={editing.kyotakuKankyo} onChange={v=>upd({kyotakuKankyo:v})} rows={2}/>
+              </div>
             </div>
-            {/* 目標 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 grid md:grid-cols-2 gap-3">
-              <KKField label="長期目標" value={editing.longGoal} onChange={v=>upd({longGoal:v})} rows={2}/>
-              <KKField label="長期目標 期間" value={editing.longGoalPeriod} onChange={v=>upd({longGoalPeriod:v})}/>
-              <KKField label="短期目標" value={editing.shortGoal} onChange={v=>upd({shortGoal:v})} rows={2}/>
-              <KKField label="短期目標 期間" value={editing.shortGoalPeriod} onChange={v=>upd({shortGoalPeriod:v})}/>
+            {/* 健康状態・経過 */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-bold text-blue-700 mb-3">健康状態・経過</div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <KKField label="病名" value={editing.byomei} onChange={v=>upd({byomei:v})}/>
+                <KKField label="発症日・受傷日" value={editing.hasshoDate} onChange={v=>upd({hasshoDate:v})}/>
+                <KKField label="直近の入院日" value={editing.nyuinDate} onChange={v=>upd({nyuinDate:v})}/>
+                <KKField label="直近の退院日" value={editing.taiinDate} onChange={v=>upd({taiinDate:v})}/>
+              </div>
+              <div className="grid md:grid-cols-1 gap-3">
+                <KKField label="治療経過（手術がある場合は手術日・術式等）" value={editing.chiryoKeika} onChange={v=>upd({chiryoKeika:v})} rows={2}/>
+                <KKField label="合併疾患・コントロール状態（高血圧・心疾患・呼吸器疾患・糖尿病等）" value={editing.gappei} onChange={v=>upd({gappei:v})} rows={2}/>
+                <KKField label="機能訓練実施上の留意事項（開始前・訓練中の留意事項、運動強度・負荷量等）" value={editing.ryuiPoint} onChange={v=>upd({ryuiPoint:v})} rows={2}/>
+              </div>
             </div>
-            {/* プログラム */}
+            {/* Ⅱ 目標 */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-bold text-blue-700 mb-3">Ⅱ 個別機能訓練の目標</div>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">短期目標（今後3ヶ月）</span>
+                    <select value={editing.shortAchieve} onChange={e=>upd({shortAchieve:e.target.value})} className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"><option value="">達成度</option><option>達成</option><option>一部</option><option>未達</option></select></div>
+                  <KKField label="（機能）" value={editing.shortKinou} onChange={v=>upd({shortKinou:v})} rows={2}/>
+                  <KKField label="（活動）" value={editing.shortKatsudo} onChange={v=>upd({shortKatsudo:v})} rows={2}/>
+                  <KKField label="（参加）" value={editing.shortSanka} onChange={v=>upd({shortSanka:v})} rows={2}/>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">長期目標</span>
+                    <select value={editing.longAchieve} onChange={e=>upd({longAchieve:e.target.value})} className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"><option value="">達成度</option><option>達成</option><option>一部</option><option>未達</option></select></div>
+                  <KKField label="（機能）" value={editing.longKinou} onChange={v=>upd({longKinou:v})} rows={2}/>
+                  <KKField label="（活動）" value={editing.longKatsudo} onChange={v=>upd({longKatsudo:v})} rows={2}/>
+                  <KKField label="（参加）" value={editing.longSanka} onChange={v=>upd({longSanka:v})} rows={2}/>
+                </div>
+              </div>
+            </div>
+            {/* 個別機能訓練項目 */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-bold text-blue-700">機能訓練プログラム</div>
+                <div className="text-sm font-bold text-blue-700">個別機能訓練項目</div>
                 <div className="flex gap-2">
                   <button onClick={()=>upd({programs:programsFromPlanned()})} className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-xs font-bold">運動メニューから取込</button>
                   <button onClick={addProg} className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-bold">＋ 行追加</button>
                 </div>
               </div>
+              <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-slate-400 px-1 mb-1">
+                <div className="col-span-4">プログラム内容（何を目的に〜する）</div><div className="col-span-3">留意点</div><div className="col-span-2">頻度(週○回)</div><div className="col-span-2">時間</div><div className="col-span-1"></div>
+              </div>
               <div className="space-y-2">
                 {editing.programs.map((pr,i)=>(
                   <div key={i} className="grid grid-cols-12 gap-2 items-start bg-slate-50 rounded-lg p-2">
-                    <input value={pr.name} onChange={e=>updProg(i,{name:e.target.value})} placeholder="項目" className="col-span-2 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
-                    <input value={pr.content} onChange={e=>updProg(i,{content:e.target.value})} placeholder="内容" className="col-span-3 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
-                    <input value={pr.time} onChange={e=>updProg(i,{time:e.target.value})} placeholder="時間/回数" className="col-span-2 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
-                    <input value={pr.freq} onChange={e=>updProg(i,{freq:e.target.value})} placeholder="頻度" className="col-span-2 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
-                    <input value={pr.point} onChange={e=>updProg(i,{point:e.target.value})} placeholder="留意点" className="col-span-2 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
+                    <input value={pr.content} onChange={e=>updProg(i,{content:e.target.value})} placeholder="○○のために△△する" className="col-span-4 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
+                    <input value={pr.point} onChange={e=>updProg(i,{point:e.target.value})} placeholder="留意点" className="col-span-3 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
+                    <input value={pr.freqWeek} onChange={e=>updProg(i,{freqWeek:e.target.value})} placeholder="週○回" className="col-span-2 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
+                    <input value={pr.time} onChange={e=>updProg(i,{time:e.target.value})} placeholder="○分" className="col-span-2 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
                     <button onClick={()=>delProg(i)} className="col-span-1 text-red-500 hover:text-red-700 text-xs font-bold py-1.5">削除</button>
+                    <input value={pr.person} onChange={e=>updProg(i,{person:e.target.value})} placeholder="主な実施者" className="col-span-11 px-2 py-1 bg-white border border-slate-200 rounded text-[11px] outline-none"/>
                   </div>
                 ))}
               </div>
-            </div>
-            {/* 5領域への働きかけ */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <div className="text-sm font-bold text-blue-700 mb-3">生活機能の5領域への働きかけ</div>
-              <div className="grid md:grid-cols-2 gap-3">
-                <KKField label="① 身体機能（関節可動域・筋力・バランス等）" value={editing.appShintai} onChange={v=>upd({appShintai:v})} rows={2}/>
-                <KKField label="② ADL（起居・移乗・歩行・入浴・排泄等）" value={editing.appAdl} onChange={v=>upd({appAdl:v})} rows={2}/>
-                <KKField label="③ IADL（調理・買い物・外出・家事等）" value={editing.appIadl} onChange={v=>upd({appIadl:v})} rows={2}/>
-                <KKField label="④ 認知機能・コミュニケーション" value={editing.appNinchi} onChange={v=>upd({appNinchi:v})} rows={2}/>
-                <KKField label="⑤ 社会参加（役割・交流・地域活動等）" value={editing.appSanka} onChange={v=>upd({appSanka:v})} rows={2}/>
+              <div className="mt-2"><KKField label="プログラム立案者" value={editing.programPlanner} onChange={v=>upd({programPlanner:v})}/></div>
+              <div className="grid md:grid-cols-2 gap-3 mt-3">
+                <KKField label="利用者本人・家族等がサービス利用時間以外に実施すること" value={editing.jikangaiJisshi} onChange={v=>upd({jikangaiJisshi:v})} rows={2}/>
+                <KKField label="特記事項" value={editing.tokki} onChange={v=>upd({tokki:v})} rows={2}/>
               </div>
             </div>
-            {/* 評価 */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 grid md:grid-cols-3 gap-3">
-              <KKField label="評価日" value={editing.evalDate} onChange={v=>upd({evalDate:v})}/>
-              <div className="md:col-span-2"><KKField label="評価内容" value={editing.evalContent} onChange={v=>upd({evalContent:v})} rows={2}/></div>
-              <div className="md:col-span-3"><KKField label="今後の方針（計画変更）" value={editing.nextPlan} onChange={v=>upd({nextPlan:v})} rows={2}/></div>
+            {/* Ⅲ 実施後の対応 */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-bold text-blue-700 mb-1">Ⅲ 個別機能訓練実施後の対応</div>
+              <div className="text-[10px] text-slate-400 mb-3">※ 初回作成時は記載不要</div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <KKField label="個別機能訓練の実施による変化" value={editing.henka} onChange={v=>upd({henka:v})} rows={2}/>
+                <KKField label="個別機能訓練実施における課題とその要因" value={editing.kadai} onChange={v=>upd({kadai:v})} rows={2}/>
+              </div>
+            </div>
+            {/* 説明 */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 gap-3">
+              <KKField label="説明日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})} ph="令和○年○月○日"/>
+              <KKField label="説明者" value={editing.setsumeisha} onChange={v=>upd({setsumeisha:v})}/>
             </div>
           </div>
         ) : (
@@ -28449,7 +28577,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                   <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-3">
                     <div>
                       <div className="font-bold text-slate-800">作成日: {r.createdDate}{r.author?`／作成者: ${r.author}`:''}</div>
-                      <div className="text-xs text-slate-500 mt-0.5 truncate" style={{maxWidth:420}}>短期目標: {r.shortGoal||'（未入力）'}</div>
+                      <div className="text-xs text-slate-500 mt-0.5 truncate" style={{maxWidth:420}}>短期目標(機能): {r.shortKinou||'（未入力）'}</div>
                     </div>
                     <div className="flex gap-2 shrink-0">
                       <button onClick={()=>setEditing(r)} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-bold">編集</button>
@@ -28464,65 +28592,85 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         )}
       </div>
 
-      {/* 印刷用 (非表示) */}
-      {printRec && (
-        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'28px',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',fontSize:'12px',lineHeight:1.5}}>
-          <div style={{textAlign:'center',fontSize:'18px',fontWeight:'bold',marginBottom:'4px'}}>個別機能訓練計画書</div>
-          <div style={{textAlign:'right',fontSize:'11px',marginBottom:'8px'}}>作成日: {printRec.createdDate}　事業所: {facility.name||''}</div>
-          {(() => {
-            const tdL={border:'1px solid #333',padding:'4px 6px',background:'#f1f5f9',fontWeight:'bold',whiteSpace:'nowrap',verticalAlign:'top'};
-            const tdV={border:'1px solid #333',padding:'4px 6px',verticalAlign:'top',whiteSpace:'pre-wrap'};
-            return (
-              <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px'}}>
-                <tbody>
-                  <tr><td style={tdL}>利用者名</td><td style={tdV} colSpan={3}>{patient?.name} 様（{patient?.gender||''}・{_age(patient?.birthDate)}歳）</td><td style={tdL}>要介護度</td><td style={tdV}>{patient?.careLevel||''}</td></tr>
-                  <tr><td style={tdL}>計画作成者</td><td style={tdV}>{printRec.author||''}</td><td style={tdL}>障害高齢者自立度</td><td style={tdV}>{printRec.jiritsuBody||''}</td><td style={tdL}>認知症自立度</td><td style={tdV}>{printRec.jiritsuDementia||''}</td></tr>
-                  <tr><td style={tdL}>本人の希望</td><td style={tdV} colSpan={5}>{printRec.honninKibou||''}</td></tr>
-                  <tr><td style={tdL}>家族の希望</td><td style={tdV} colSpan={5}>{printRec.kazokuKibou||''}</td></tr>
-                  <tr><td style={tdL}>健康状態・経過</td><td style={tdV} colSpan={5}>{printRec.healthState||''}</td></tr>
-                  <tr><td style={tdL}>医師の指示・留意</td><td style={tdV} colSpan={5}>{printRec.ishiShiji||''}　{printRec.ryuiten||''}</td></tr>
-                  <tr><td style={tdL}>社会参加の状況</td><td style={tdV} colSpan={5}>{printRec.shakaiSanka||''}</td></tr>
-                  <tr><td style={tdL}>長期目標</td><td style={tdV} colSpan={3}>{printRec.longGoal||''}</td><td style={tdL}>期間</td><td style={tdV}>{printRec.longGoalPeriod||''}</td></tr>
-                  <tr><td style={tdL}>短期目標</td><td style={tdV} colSpan={3}>{printRec.shortGoal||''}</td><td style={tdL}>期間</td><td style={tdV}>{printRec.shortGoalPeriod||''}</td></tr>
-                </tbody>
-              </table>
-            );
-          })()}
-          <div style={{fontWeight:'bold',margin:'10px 0 4px'}}>機能訓練プログラム</div>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px'}}>
-            <thead><tr>{['項目','内容','時間/回数','頻度','主な対応者','留意点'].map(h=><th key={h} style={{border:'1px solid #333',padding:'4px 6px',background:'#e2e8f0'}}>{h}</th>)}</tr></thead>
+      {/* 印刷用 (非表示) — 別紙様式3-3 に準拠 (A4) */}
+      {printRec && (() => {
+        const B='1px solid #000';
+        const cell={border:B,padding:'3px 5px',verticalAlign:'top',whiteSpace:'pre-wrap',fontSize:'10.5px'};
+        const lab={...cell,background:'#f3f4f6',fontWeight:'bold',whiteSpace:'nowrap'};
+        const sec={fontWeight:'bold',fontSize:'12px',margin:'8px 0 3px',borderBottom:'2px solid #000',paddingBottom:'1px'};
+        const scale=(opts,sel)=>opts.map(o=><span key={o} style={{marginRight:6,padding:sel===o?'0 3px':'0',fontWeight:sel===o?'bold':'normal',border:sel===o?'1.5px solid #000':'none',borderRadius:sel===o?'3px':0}}>{o}</span>);
+        const pr=printRec; const bd=patient?.birthDate?new Date(patient.birthDate):null;
+        return (
+        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'24px 26px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.4}}>
+          <div style={{fontSize:'10px'}}>別紙様式３－３</div>
+          <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={cell}>作成日：{pr.createdDate||'令和　年　月　日'}</td><td style={cell}>前回作成日：{pr.prevDate||'令和　年　月　日'}</td><td style={cell}>初回作成日：{pr.firstDate||'令和　年　月　日'}</td></tr>
+          </tbody></table>
+          <table style={{width:'100%',borderCollapse:'collapse',marginTop:'-1px'}}><tbody>
+            <tr>
+              <td style={{...cell,width:'34%'}}><div style={{fontSize:'8px'}}>ふりがな　{patient?.kana||''}</div><div style={{fontSize:'12px',fontWeight:'bold'}}>{patient?.name||''}</div></td>
+              <td style={{...cell,width:'10%'}}>性別<br/>{patient?.gender||''}</td>
+              <td style={{...cell,width:'24%'}}>{bd?`${bd.getFullYear()}年${bd.getMonth()+1}月${bd.getDate()}日生（${_age(patient?.birthDate)}歳）`:'　年　月　日生（　歳）'}</td>
+              <td style={{...cell,width:'12%'}}>要介護度<br/>{patient?.careLevel||''}</td>
+              <td style={cell}>計画作成者：{pr.author||''}<br/>職種：{pr.authorJob||''}</td>
+            </tr>
+            <tr><td style={cell} colSpan={5}><b>障害高齢者の日常生活自立度:</b> {scale(JIRITSU_BODY,pr.jiritsuBody)}　　<b>認知症高齢者の日常生活自立度:</b> {scale(JIRITSU_DEM,pr.jiritsuDementia)}</td></tr>
+          </tbody></table>
+
+          <div style={sec}>Ⅰ　利用者の基本情報</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={{...lab,width:'18%'}}>利用者本人の希望</td><td style={{...cell,width:'32%'}}>{pr.honninKibou}</td><td style={{...lab,width:'18%'}}>家族の希望</td><td style={cell}>{pr.kazokuKibou}</td></tr>
+            <tr><td style={lab}>本人の社会参加の状況</td><td style={cell}>{pr.shakaiSanka}</td><td style={lab}>居宅の環境（環境因子）</td><td style={cell}>{pr.kyotakuKankyo}</td></tr>
+          </tbody></table>
+
+          <div style={sec}>健康状態・経過</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={lab}>病名</td><td style={cell}>{pr.byomei}</td><td style={cell}>発症日・受傷日：{pr.hasshoDate}</td><td style={cell}>入院日：{pr.nyuinDate}</td><td style={cell}>退院日：{pr.taiinDate}</td></tr>
+            <tr><td style={lab}>治療経過</td><td style={cell} colSpan={4}>{pr.chiryoKeika}</td></tr>
+            <tr><td style={lab}>合併疾患・状態</td><td style={cell} colSpan={4}>{pr.gappei}</td></tr>
+            <tr><td style={lab}>実施上の留意事項</td><td style={cell} colSpan={4}>{pr.ryuiPoint}</td></tr>
+          </tbody></table>
+
+          <div style={sec}>Ⅱ　個別機能訓練の目標・個別機能訓練項目の設定</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={{...lab,width:'50%'}}>機能訓練の短期目標（今後3ヶ月）　達成度：{pr.shortAchieve||'（達成・一部・未達）'}</td><td style={lab}>機能訓練の長期目標　達成度：{pr.longAchieve||'（達成・一部・未達）'}</td></tr>
+            <tr><td style={cell}>（機能）{pr.shortKinou}</td><td style={cell}>（機能）{pr.longKinou}</td></tr>
+            <tr><td style={cell}>（活動）{pr.shortKatsudo}</td><td style={cell}>（活動）{pr.longKatsudo}</td></tr>
+            <tr><td style={cell}>（参加）{pr.shortSanka}</td><td style={cell}>（参加）{pr.longSanka}</td></tr>
+          </tbody></table>
+          <div style={{fontSize:'10px',fontWeight:'bold',margin:'5px 0 2px'}}>個別機能訓練項目</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead><tr>{['プログラム内容（何を目的に〜する）','留意点','頻度','時間','主な実施者'].map((h,i)=><th key={h} style={{...lab,textAlign:'center',width:i===0?'40%':i===1?'24%':'12%'}}>{h}</th>)}</tr></thead>
             <tbody>
-              {(printRec.programs||[]).map((pr,i)=>(
+              {(pr.programs||[]).map((p,i)=>(
                 <tr key={i}>
-                  <td style={{border:'1px solid #333',padding:'4px 6px'}}>{pr.name}</td>
-                  <td style={{border:'1px solid #333',padding:'4px 6px'}}>{pr.content}</td>
-                  <td style={{border:'1px solid #333',padding:'4px 6px',textAlign:'center'}}>{pr.time}</td>
-                  <td style={{border:'1px solid #333',padding:'4px 6px',textAlign:'center'}}>{pr.freq}</td>
-                  <td style={{border:'1px solid #333',padding:'4px 6px'}}>{pr.person}</td>
-                  <td style={{border:'1px solid #333',padding:'4px 6px'}}>{pr.point}</td>
+                  <td style={cell}>{['①','②','③','④','⑤','⑥','⑦','⑧'][i]||''} {p.content}</td>
+                  <td style={cell}>{p.point}</td>
+                  <td style={{...cell,textAlign:'center'}}>{p.freqWeek?`週${String(p.freqWeek).replace(/[週回]/g,'')}回`:'週　回'}</td>
+                  <td style={{...cell,textAlign:'center'}}>{p.time||'　分'}</td>
+                  <td style={cell}>{p.person}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          <div style={{fontWeight:'bold',margin:'10px 0 4px'}}>生活機能の5領域への働きかけ</div>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px'}}>
-            <tbody>
-              {[['① 身体機能',printRec.appShintai],['② ADL',printRec.appAdl],['③ IADL',printRec.appIadl],['④ 認知・コミュニケーション',printRec.appNinchi],['⑤ 社会参加',printRec.appSanka]].map(([l,v])=>(
-                <tr key={l}><td style={{border:'1px solid #333',padding:'4px 6px',background:'#f1f5f9',fontWeight:'bold',width:'160px'}}>{l}</td><td style={{border:'1px solid #333',padding:'4px 6px',whiteSpace:'pre-wrap'}}>{v||''}</td></tr>
-              ))}
-            </tbody>
-          </table>
-          <div style={{fontWeight:'bold',margin:'10px 0 4px'}}>評価・今後の方針</div>
-          <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px'}}>
-            <tbody>
-              <tr><td style={{border:'1px solid #333',padding:'4px 6px',background:'#f1f5f9',fontWeight:'bold',width:'120px'}}>評価日</td><td style={{border:'1px solid #333',padding:'4px 6px'}}>{printRec.evalDate||''}</td></tr>
-              <tr><td style={{border:'1px solid #333',padding:'4px 6px',background:'#f1f5f9',fontWeight:'bold'}}>評価内容</td><td style={{border:'1px solid #333',padding:'4px 6px',whiteSpace:'pre-wrap'}}>{printRec.evalContent||''}</td></tr>
-              <tr><td style={{border:'1px solid #333',padding:'4px 6px',background:'#f1f5f9',fontWeight:'bold'}}>今後の方針</td><td style={{border:'1px solid #333',padding:'4px 6px',whiteSpace:'pre-wrap'}}>{printRec.nextPlan||''}</td></tr>
-            </tbody>
-          </table>
-          <div style={{marginTop:'14px',fontSize:'11px'}}>説明・同意日: ________年___月___日　ご本人/ご家族 署名: ____________________</div>
+          <div style={{fontSize:'10px',textAlign:'right',margin:'1px 0 4px'}}>プログラム立案者：{pr.programPlanner||''}</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={{...lab,width:'40%'}}>利用者本人・家族等がサービス利用時間以外に実施すること</td><td style={cell}>{pr.jikangaiJisshi}</td><td style={{...lab,width:'14%'}}>特記事項</td><td style={cell}>{pr.tokki}</td></tr>
+          </tbody></table>
+
+          <div style={sec}>Ⅲ　個別機能訓練実施後の対応</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={{...lab,width:'50%',textAlign:'center'}}>個別機能訓練の実施による変化</td><td style={{...lab,textAlign:'center'}}>個別機能訓練実施における課題とその要因</td></tr>
+            <tr><td style={{...cell,height:'48px'}}>{pr.henka}</td><td style={cell}>{pr.kadai}</td></tr>
+          </tbody></table>
+
+          <table style={{width:'100%',borderCollapse:'collapse',marginTop:'6px'}}><tbody>
+            <tr><td style={cell}>（地域密着型）通所介護　{facility.name||'○○○'}　事業所No.{facility.jigyoshoNo||facility.officeNo||'000000000'}<br/>住所{facility.address||'○○○'}　電話番号{facility.phone||'○○○'}</td><td style={{...cell,width:'40%'}}>説明日：{pr.setsumeiDate||'令和　年　月　日'}<br/>説明者：{pr.setsumeisha||''}</td></tr>
+          </tbody></table>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
