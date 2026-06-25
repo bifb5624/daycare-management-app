@@ -945,6 +945,20 @@ const ADDONS = [
 ];
 const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
+
+// 利用者の予定運動メニューを「指定年月」時点の値で返す (月別バージョン対応)
+//   plannedExercisesHistory: [{from:'YYYY-MM', values:{itemId:val}}]（from の月以降に有効）。
+//   履歴が無ければ現在値 plannedExercises をそのまま返す。
+const getPlannedExercisesForMonth = (patient, year, month) => {
+  if (!patient) return {};
+  const hist = patient.plannedExercisesHistory;
+  if (!Array.isArray(hist) || hist.length === 0) return patient.plannedExercises || {};
+  const ym = `${year}-${String(month).padStart(2, '0')}`;
+  const sorted = hist.slice().sort((a, b) => String(a.from).localeCompare(String(b.from)));
+  let chosen = sorted[0];
+  for (const h of sorted) { if (String(h.from) <= ym) chosen = h; }
+  return (chosen && chosen.values) || patient.plannedExercises || {};
+};
 // 有効なアドオンのラベル配列 (チップ表示用)
 const activeAddonLabels = (addonsObj) => ADDONS.filter(a => addonsObj?.[a.key]).map(a => a.label);
 // record から年を取り出す (無ければ null)
@@ -21050,7 +21064,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
     if (!sp) return [];
     return generateMonthlySchedule([sp], tY, tM, appData.monthlyShifts, appData.ticketRecords || [], appData.holidays, (appData.systemSettings?.facilityInfo?.closedDays||[0])).sort((a, b) => a.dayNum - b.dayNum);
   }, [appData, sp, tY, tM]);
-  const PER_PAGE = 8;
+  const PER_PAGE = 7; // ★ 設定数値の行を足した分、8→7日表示に
   const pages = []; for (let i = 0; i < records.length; i += PER_PAGE) pages.push(records.slice(i, i + PER_PAGE));
   if (pages.length === 0) pages.push([]);
   const getDefTime = (p) => { if (!p?.scheduleAmPm) return fi.serviceTimeAM||""; const h=p.scheduleAmPm; if(h.some(s=>s==='1日')||(h.some(s=>s==='AM')&&h.some(s=>s==='PM'))) return fi.serviceTimeFullDay||""; if(h.some(s=>s==='PM')) return fi.serviceTimePM||""; return fi.serviceTimeAM||""; };
@@ -21058,6 +21072,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const getSchedText = (p) => { if(!p?.scheduleAmPm) return ''; const dn=['日','月','火','水','木','金','土']; return p.scheduleAmPm.map((v,i)=>v?`${dn[i]}(${v})`:'').filter(Boolean).join('　'); };
   if (!sp) return <div className="p-8 text-center text-slate-500 font-bold">利用者データなし</div>;
   const ex = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+  // ★ 設定数値(運動メニューの予定値・その月の値)。 数値だけなら単位を自動付与。
+  const plannedM = getPlannedExercisesForMonth(sp, tY, tM);
+  const _planUnit = (v, unit) => { const s = String(v ?? '').trim(); if (!s) return ''; return (/^[0-9０-９.]+$/.test(s) && unit) ? s + unit : s; };
   const tc = 6 + ex.length + 1;
 
 
@@ -21220,6 +21237,14 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       ));
                     })()}
                     <th className="border border-slate-600 py-1 text-[8px]" style={{width: ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42}}>介護整体</th>
+                  </tr>
+                  {/* ★ 設定数値の行 (運動メニューの予定値) */}
+                  <tr className="bg-amber-50 text-slate-700" style={{height:18}}>
+                    <td colSpan={6} className="border border-slate-400 px-1 text-right font-bold" style={{fontSize:9}}>設定数値 →</td>
+                    {ex.map(it => (
+                      <td key={it.id} className="border border-slate-400 text-center font-bold" style={{fontSize:8,lineHeight:1.1,wordBreak:'break-all'}}>{_planUnit(plannedM[it.id], it.defaultUnit)}</td>
+                    ))}
+                    <td className="border border-slate-400"></td>
                   </tr>
                 </thead>
                 <tbody>
@@ -22948,6 +22973,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // 月を切り替えたら保留はクリアして混乱を避ける。
   }, []);
   const [schedModal, setSchedModal] = useState(null); // {dayIndex, newVal, oldVal, applyFrom}
+  const [plannedExModal, setPlannedExModal] = useState(null); // {pat, next, fromY, fromM} 運動メニュー値変更の適用開始月
   const [keypad, setKeypad] = useState({ isOpen: false, field: null, exerciseId: null, value: "", isFirstInput: false, mode: 'exercise' });
   // ★ 重複利用者の統合 (記録は統合先へ引き継ぐ)
   const [mergeModal, setMergeModal] = useState(null); // {open:true}
@@ -23211,8 +23237,31 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
     next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
+    // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合は「何月から適用するか」を確認
+    const peChanged = JSON.stringify(prev.plannedExercises||{}) !== JSON.stringify(pat.plannedExercises||{});
+    const hasRecords = (appData.ticketRecords||[]).some(r => r.patientId === pat.id);
+    if (peChanged && hasRecords) {
+      const t = new Date();
+      setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], fromY: t.getFullYear(), fromM: t.getMonth()+1 });
+      return;
+    }
     // ★ manual:true でトースト表示
     onSave(next, { manual: true, message: '✓ 利用者マスタを保存しました' });
+  };
+  // 運動メニュー値の変更を「指定月以降」に適用 (それ以前の提供記録は旧値のまま)
+  const applyPlannedExChange = (fromY, fromM) => {
+    if (!plannedExModal) return;
+    const { pat, next, prevPlanned, prevHistory } = plannedExModal;
+    const ym = `${fromY}-${String(fromM).padStart(2,'0')}`;
+    let hist = (prevHistory && prevHistory.length) ? prevHistory.slice() : [{ from: '1900-01', values: prevPlanned }];
+    hist = hist.filter(h => String(h.from) !== ym); // 同月は置き換え
+    hist.push({ from: ym, values: pat.plannedExercises || {} });
+    hist.sort((a,b) => String(a.from).localeCompare(String(b.from)));
+    const pat2 = { ...pat, plannedExercisesHistory: hist };
+    const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
+    setLocalPatient(pat2);
+    setPlannedExModal(null);
+    onSave(next2, { manual: true, message: `✓ 保存しました（運動メニューは${fromY}年${fromM}月から適用）` });
   };
 
   const handleStatusChange = (val) => {
@@ -24331,6 +24380,28 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       </div>
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({ ...keypad, isOpen: false })} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
       {pauseModal.isOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"><div className="px-6 py-4 bg-orange-50 border-b border-orange-200 flex justify-between items-center"><h2 className="text-lg font-bold text-orange-800 flex items-center"><CalendarOff size={20} className="mr-2" />休止理由の登録</h2><button onClick={cancelPause} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20} /></button></div><div className="p-6 space-y-5">{localPatient?.pauseHistory?.length > 0 && (<div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs"><span className="font-bold text-slate-500">前回: </span><span className="font-bold text-slate-700">{latPause(localPatient)?.reason}</span><span className="text-slate-400 ml-2">{fD(latPause(localPatient)?.fromDate)}〜</span></div>)}<div><label className="text-xs font-bold text-slate-500 block mb-1">休止の理由</label><input type="text" value={pauseModal.reason} onChange={e => setPauseModal({ ...pauseModal, reason: e.target.value })} placeholder="例: 入院、自宅療養" className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div><div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label><input type="date" value={pauseModal.fromDate} onChange={e => setPauseModal({ ...pauseModal, fromDate: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div></div><div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3"><button onClick={cancelPause} className="px-5 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">キャンセル</button><button onClick={submitPause} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">確定</button></div></div></div>)}
+      {/* 運動メニュー(予定値)変更の適用開始月モーダル */}
+      {plannedExModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-bold text-slate-800 mb-1">運動メニューの変更を反映</h3>
+            <p className="text-xs text-slate-500 mb-4">運動メニューの設定値が変わりました。<b>何月から</b>適用しますか？選んだ月より前の提供記録は<b>変更前の値のまま</b>になります。</p>
+            <div className="flex items-center gap-2 mb-5">
+              <select value={plannedExModal.fromY} onChange={e=>setPlannedExModal(m=>({...m,fromY:Number(e.target.value)}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none">
+                {(()=>{const y=new Date().getFullYear();return [y-1,y,y+1].map(yy=><option key={yy} value={yy}>{yy}年</option>);})()}
+              </select>
+              <select value={plannedExModal.fromM} onChange={e=>setPlannedExModal(m=>({...m,fromM:Number(e.target.value)}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none">
+                {Array.from({length:12},(_,i)=>i+1).map(mm=><option key={mm} value={mm}>{mm}月</option>)}
+              </select>
+              <span className="text-sm text-slate-500">から適用</span>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="月を分けず、今の値で全期間に適用">月を分けない</button>
+              <button onClick={()=>applyPlannedExChange(plannedExModal.fromY, plannedExModal.fromM)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この月から適用</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 基本利用日変更モーダル */}
       {schedModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
