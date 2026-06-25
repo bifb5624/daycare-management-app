@@ -10917,7 +10917,8 @@ function FamilyView() {
         if (isSupabaseEnabled) {
           try {
             const staff = await supabaseStaffLogin({ username: loginForm.username.trim(), password: loginForm.password });
-            if (staff) {
+            // ★ プレビューは「本部(super_admin)」のみ許可。 各事業所スタッフでは不可。
+            if (staff && staff.role === 'super_admin') {
               const demo = buildDemoPreviewData();
               localStorage.setItem('daycareAppData_v3', JSON.stringify(demo));
               setData(demo);
