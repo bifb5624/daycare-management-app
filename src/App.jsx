@@ -15187,7 +15187,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           const targetDateStr2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
           const _selYear2 = new Date(selectedDate).getFullYear();
           const hasRecord = (appData.ticketRecords||[]).some(r=>r.patientId===p.id&&recMatchesDateYear(r, targetDateStr2, _selYear2));
-          if (!comingAM && !comingPM && !hasRecord) return false;
+          // ★ この日を「振替元」とする振替記録が他の日にあれば、欠席としてこの日に表示 (欠席記録が欠けていても出す)
+          const hasFurikaeFromHere = (appData.ticketRecords||[]).some(r=>r.patientId===p.id && r.status==='振替' && (r.tokki||'').includes(targetDateStr2) && (r.tokki||'').includes('振替'));
+          if (!comingAM && !comingPM && !hasRecord && !hasFurikaeFromHere) return false;
           return true;
       })
       .map(p => {
@@ -15232,6 +15234,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
              pData.massage = "";
              pData.tokki = ""; pData.exercises = {}; pData.kibunArrival = ""; pData.kibunArrivalReason = "";
              pData.kibunDeparture = ""; pData.kibunDepartureReason = ""; pData.done = false;
+             // ★ 欠席記録が欠けていても、この日を振替元とする振替記録があれば欠席として表示
+             const _furiFrom = (appData.ticketRecords || []).find(r => r.patientId === p.id && r.status === '振替' && (r.tokki||'').includes(targetDateStr) && (r.tokki||'').includes('振替'));
+             if (_furiFrom) {
+               pData.status = '欠席';
+               const _m = (_furiFrom.tokki||'').match(/(\d+)月(\d+)日/);
+               pData.tokki = _m ? `${_furiFrom.date||''}へ振替` : '振替';
+             }
          }
          const pauseInfo = getPauseReasonOnDate(p, selectedDate);
          if (pauseInfo) {
