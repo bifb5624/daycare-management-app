@@ -10529,6 +10529,8 @@ function FamilyView() {
   // ログイン状態 (sessionStorage で同一タブ内のみ保持)
   const [authPid, setAuthPid] = useState(()=> sessionStorage.getItem('familyAuthPid') || null);
   const [authAccId, setAuthAccId] = useState(()=> sessionStorage.getItem('familyAuthAccId') || null);
+  // ★ 事業所管理者プレビュー: 管理者ID/PWでログインすると、ご家族/ケアマネ画面をデモ確認できる
+  const [adminPreview, setAdminPreview] = useState(null); // null | { storeName }
   // ★ 家族側の店舗 ID (ログイン後に判明) → 店舗ごとの app_state を pull するため
   //   最優先は sessionStorage の familyAuthStoreId (ログイン時に必ず保存される)
   //   data.familyAccounts は遅れて反映されるので、 これだけだと「データ取得中」ループになる
@@ -10681,6 +10683,56 @@ function FamilyView() {
     return () => { window.removeEventListener('storage', reload); clearInterval(t); };
   }, []);
   const facility = data.systemSettings?.facilityInfo || {};
+  // ★ 事業所管理者プレビュー: 利用者を選んで「ご家族画面 / ケアマネ画面」をデモ確認
+  if (adminPreview && !authPid) {
+    const previewList = sortPatientsByKana((data.patients||[]).filter(p => p.status === '利用中' || p.status === '休止'));
+    const openPreview = (pid, kind) => {
+      const accId = `preview_${kind}_${pid}`;
+      setData(prev => {
+        const others = (prev.familyAccounts||[]).filter(a => !String(a.id).startsWith('preview_'));
+        const pat = (prev.patients||[]).find(p => String(p.id)===String(pid));
+        const synth = { id: accId, patientId: pid, storeId: prev._sbStoreId||null,
+          username: 'preview', kind, relation: kind==='caremanager'?'ケアマネージャー':'',
+          displayName: 'プレビュー', email: '', role: 'member', _preview: true,
+          patientName: pat?.name || '' };
+        return { ...prev, familyAccounts: [...others, synth] };
+      });
+      sessionStorage.setItem('familyAuthPid', String(pid));
+      sessionStorage.setItem('familyAuthAccId', String(accId));
+      setAuthPid(String(pid));
+      setAuthAccId(String(accId));
+    };
+    return (
+      <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#d4e7a5 0%,#f0f7e0 100%)',padding:24,boxSizing:'border-box',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <div style={{maxWidth:600,width:'100%',background:'white',borderRadius:24,padding:28,boxShadow:'0 12px 40px rgba(125,170,61,0.25)'}}>
+          <div style={{textAlign:'center',marginBottom:18}}>
+            <div style={{display:'inline-block',background:'#fef3c7',color:'#92400e',fontSize:11,fontWeight:'bold',padding:'4px 12px',borderRadius:999,marginBottom:10}}>🔧 管理者プレビュー{adminPreview.storeName?`（${adminPreview.storeName}）`:''}</div>
+            <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN',sans-serif"}}>ご家族・ケアマネ画面を確認</div>
+            <div style={{fontSize:11,color:'#5e8030',marginTop:4}}>利用者を選び、見たい画面のボタンを押してください（閲覧専用のデモ表示です）</div>
+          </div>
+          {previewList.length === 0 ? (
+            <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'20px 0'}}>利用者が登録されていません</div>
+          ) : (
+            <div style={{display:'grid',gap:8,maxHeight:'60vh',overflowY:'auto'}}>
+              {previewList.map(p => (
+                <div key={p.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'10px 14px',background:'#f4f8ed',border:'1px solid #cfe39f',borderRadius:12}}>
+                  <div style={{fontWeight:'bold',color:'#3d5021',fontSize:14}}>👤 {p.name} 様</div>
+                  <div style={{display:'flex',gap:6}}>
+                    <button onClick={()=>openPreview(p.id,'family')} style={{padding:'7px 12px',background:'#2563eb',color:'white',border:'none',borderRadius:9,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>👪 ご家族画面</button>
+                    <button onClick={()=>openPreview(p.id,'caremanager')} style={{padding:'7px 12px',background:'#0891b2',color:'white',border:'none',borderRadius:9,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>📋 ケアマネ画面</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <button onClick={()=>{ setAdminPreview(null); setLoginForm({username:'',password:'',error:'',showPw:false}); }}
+            style={{display:'block',width:'100%',padding:'11px',marginTop:16,background:'transparent',color:'#64748b',border:'1px solid #cbd5e1',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>
+            ← ログイン画面に戻る
+          </button>
+        </div>
+      </div>
+    );
+  }
   // 未ログイン → ログイン画面
   // ★ リンクアカウントが複数ある場合: 利用者選択画面
   if (!authPid && linkedFamilyAccounts && linkedFamilyAccounts.length > 1) {
@@ -10808,6 +10860,30 @@ function FamilyView() {
         a.password === loginForm.password
       );
       if (!acc) {
+        // ★ 事業所管理者ID/PWでのプレビューログイン: ご家族/ケアマネ画面をデモ確認
+        if (isSupabaseEnabled) {
+          try {
+            const staff = await supabaseStaffLogin({ username: loginForm.username.trim(), password: loginForm.password });
+            if (staff && staff.store_id) {
+              const row = await supabaseLoadStateForStore(staff.store_id);
+              const sd = row?.data || {};
+              const storeData = {
+                ...sd,
+                patients: sd.patients || [],
+                familyAccounts: sd.familyAccounts || [],
+                _sbStoreId: staff.store_id,
+              };
+              localStorage.setItem('daycareAppData_v3', JSON.stringify(storeData));
+              setData(storeData);
+              sessionStorage.setItem('familyAuthStoreId', String(staff.store_id));
+              setAdminPreview({ storeName: staff.stores?.name || '' });
+              setLoginForm(f=>({...f, error:'', password:''}));
+              return;
+            }
+          } catch (admErr) {
+            console.warn('[admin preview] login failed', admErr?.message);
+          }
+        }
         setLoginForm(f=>({...f, error: isSupabaseEnabled ? 'IDまたはパスワードが違います' : 'IDまたはパスワードが正しくありません'}));
         return;
       }
@@ -11458,8 +11534,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const patient = (data.patients||[]).find(p => p.id === pid || p.id === patientId);
   const facility = data.systemSettings?.facilityInfo || {};
   // ログイン中のアカウントが ケアマネ かどうか
+  // ★ 管理者プレビュー: accountId が preview_<kind>_<pid> の形式なら、その種別を優先 (データ再取得で synth が消えても保つ)
+  const _isPreview = String(accountId||'').startsWith('preview_');
+  const _previewKind = _isPreview ? String(accountId).split('_')[1] : null;
   const loggedAcc = (data.familyAccounts||[]).find(a => String(a.id) === String(accountId));
-  const isCmAccount = loggedAcc && (loggedAcc.kind === 'caremanager' || loggedAcc.relation === 'ケアマネージャー');
+  const isCmAccount = _isPreview ? (_previewKind === 'caremanager')
+    : (loggedAcc && (loggedAcc.kind === 'caremanager' || loggedAcc.relation === 'ケアマネージャー'));
   // ★ 親判定 (実行時計算): 同じ利用者 + 同じ kind の中で createdAt 最古の 1 人だけが「親」
   //   (= 招待可能。 過去データで全員 role='parent' になっていても、 ここで正しく 1 人に絞る)
   //   家族系 = kind='family' (デフォルト), 関係者系 = kind='caremanager' を独立に扱う
@@ -11577,7 +11657,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [inviteFamForm, setInviteFamForm] = useState({email:'', relation:'', createdUrl:''});
   // ★ 視聴者種別 (family=ご家族 / caremanager=ケアマネ / related=その他関係者) でお知らせを絞り込む。
   //   audience 未指定の旧データは全員に表示 (後方互換)。
-  const _viewerKind = (!loggedAcc?.kind || loggedAcc.kind === 'family') ? 'family'
+  const _viewerKind = _isPreview ? (_previewKind === 'caremanager' ? 'caremanager' : 'family')
+    : (!loggedAcc?.kind || loggedAcc.kind === 'family') ? 'family'
     : (loggedAcc.relation === 'ケアマネージャー' || loggedAcc.relation === 'ケアマネ') ? 'caremanager' : 'related';
   const _audOk = (a) => !a || !a.audience || !Array.isArray(a.audience) || a.audience.includes(_viewerKind);
   const announcements = (data.familyAnnouncements || []).filter(_audOk);
@@ -11657,6 +11738,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   };
   return (
     <div style={{minHeight:'100vh',background:'linear-gradient(180deg,#f8fafc 0%,#f1f5f9 100%)',fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","Noto Sans JP",sans-serif',color:'#1e293b'}}>
+      {_isPreview && (
+        <div style={{position:'sticky',top:0,zIndex:80,background:'#92400e',color:'white',fontSize:12,fontWeight:'bold',textAlign:'center',padding:'6px 12px',display:'flex',alignItems:'center',justifyContent:'center',gap:10}}>
+          🔧 管理者プレビュー（{isCmAccount?'ケアマネ画面':'ご家族画面'}）— 閲覧専用のデモ表示
+          <button onClick={onLogout} style={{background:'rgba(255,255,255,0.2)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:8,padding:'3px 10px',fontSize:11,fontWeight:'bold',cursor:'pointer'}}>切替/終了</button>
+        </div>
+      )}
       {/* iPhone / 狭画面向けレスポンシブ調整 */}
       <style>{`
         @media (max-width: 720px) {
