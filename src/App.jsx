@@ -9913,7 +9913,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
   );
 }
 
-// === 家族閲覧 管理画面 (事業所側) ===
+// === 家族関係者閲覧 管理画面 (事業所側) ===
 function FamilyAdminView({ appData, onSave }) {
   const [tab, setTab] = useState('post');
   // 統合フォーム: お知らせ + 写真を一画面で
@@ -11337,6 +11337,17 @@ function FamilyView() {
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
           )}
+          {/* ★ ご利用ガイド (ログイン前でも確認できるように) */}
+          <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'center',flexWrap:'wrap'}}>
+            <a href="/manual-kazoku.html" target="_blank" rel="noopener noreferrer"
+              style={{flex:'1 1 160px',maxWidth:240,textAlign:'center',padding:'11px 12px',background:'rgba(255,255,255,0.95)',color:'#2563eb',border:'2px solid #bfdbfe',borderRadius:12,fontSize:13,fontWeight:'bold',textDecoration:'none',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>
+              📖 ご家族向け<br/>ご利用ガイド
+            </a>
+            <a href="/manual-kankeisha.html" target="_blank" rel="noopener noreferrer"
+              style={{flex:'1 1 160px',maxWidth:240,textAlign:'center',padding:'11px 12px',background:'rgba(255,255,255,0.95)',color:'#0891b2',border:'2px solid #a5f3fc',borderRadius:12,fontSize:13,fontWeight:'bold',textDecoration:'none',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>
+              📖 ケアマネ・関係者向け<br/>ご利用ガイド
+            </a>
+          </div>
           <div style={{textAlign:'center',marginTop:20,fontSize:11,color:'rgba(255,255,255,0.85)'}}>
             お困りの場合はサポートまでお問い合わせください<br/>
             <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'inherit',textDecoration:'underline'}}>📧 support@ones-style.co.jp</a>
@@ -11791,6 +11802,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             </div>
           </div>
         )}
+      </div>
+      {/* ★ ご利用ガイド (種別に応じたマニュアル) */}
+      <div style={{maxWidth:720,margin:'0 auto',padding:'10px 16px 0',display:'flex',justifyContent:'center'}}>
+        <a href={isCmAccount ? '/manual-kankeisha.html' : '/manual-kazoku.html'} target="_blank" rel="noopener noreferrer"
+          style={{width:'100%',maxWidth:320,textAlign:'center',padding:'12px',background:isCmAccount?'#ecfeff':'#eff6ff',color:isCmAccount?'#0891b2':'#2563eb',border:`1px solid ${isCmAccount?'#a5f3fc':'#bfdbfe'}`,borderRadius:12,fontSize:13,fontWeight:'bold',textDecoration:'none',boxShadow:'0 2px 6px rgba(0,0,0,0.06)'}}>
+          📖 {isCmAccount ? 'ケアマネ・関係者向け' : 'ご家族向け'}ご利用ガイド
+        </a>
       </div>
       {/* ★ フッター: ログアウトはヘッダから外し、ここ (お知らせ/通所記録の一番下) に配置 */}
       <div style={{maxWidth:720,margin:'0 auto',padding:'8px 16px 4px',display:'flex',justifyContent:'center'}}>
@@ -14726,7 +14744,7 @@ export default function App() {
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
                 <SidebarItem icon={<BarChart3 size={18} />} label="分析（個人）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
                 <SidebarItem icon={<TrendingUp size={18} />} label="分析（稼働）" active={currentView === 'dash_operation'} onClick={() => navigateTo('dash_operation')} />
-                <SidebarItem icon={<QrCode size={18} />} label="家族閲覧 管理" active={currentView === 'family_admin'} onClick={() => navigateTo('family_admin')} />
+                <SidebarItem icon={<QrCode size={18} />} label="家族関係者閲覧 管理" active={currentView === 'family_admin'} onClick={() => navigateTo('family_admin')} />
                 <SidebarItem icon={<Settings size={18} />} label="各種設定" active={currentView === 'settings'} onClick={() => navigateTo('settings')} />
               </div>
             </div>
@@ -14749,7 +14767,7 @@ export default function App() {
                  currentView === 'master' ? '利用者マスタ管理' :
                  currentView === 'dash_personal' ? '分析（個人）' :
                  currentView === 'dash_operation' ? '分析（稼働）' :
-                 currentView === 'family_admin' ? '家族閲覧 管理' :
+                 currentView === 'family_admin' ? '家族関係者閲覧 管理' :
                  currentView === 'settings' ? '各種設定' : 'システム画面'}
               </h1>
             </div>
