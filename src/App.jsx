@@ -28675,16 +28675,16 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
 
           <div style={sec}>Ⅰ　利用者の基本情報<span style={{fontSize:'8px',fontWeight:'normal',marginLeft:8}}>※別紙様式3-1・3-2を別途活用すること</span></div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
-            <tr><td style={{...lab,width:'18%'}}>利用者本人の希望</td><td style={{...cell,width:'32%'}}>{pr.honninKibou}</td><td style={{...lab,width:'18%'}}>家族の希望</td><td style={cell}>{pr.kazokuKibou}</td></tr>
-            <tr><td style={lab}>本人の社会参加の状況</td><td style={cell}>{pr.shakaiSanka}</td><td style={lab}>居宅の環境（環境因子）</td><td style={cell}>{pr.kyotakuKankyo}</td></tr>
+            <tr><td style={{...lab,width:'18%'}}>利用者本人の希望</td><td style={{...cell,width:'32%',height:'46px'}}>{pr.honninKibou}</td><td style={{...lab,width:'18%'}}>家族の希望</td><td style={{...cell,height:'46px'}}>{pr.kazokuKibou}</td></tr>
+            <tr><td style={lab}>本人の社会参加の状況</td><td style={{...cell,height:'46px'}}>{pr.shakaiSanka}</td><td style={lab}>居宅の環境（環境因子）</td><td style={{...cell,height:'46px'}}>{pr.kyotakuKankyo}</td></tr>
           </tbody></table>
 
           <div style={sec}>健康状態・経過</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={lab}>病名</td><td style={cell}>{pr.byomei}</td><td style={cell}>発症日・受傷日：{pr.hasshoDate}</td><td style={cell}>入院日：{pr.nyuinDate}</td><td style={cell}>退院日：{pr.taiinDate}</td></tr>
-            <tr><td style={lab}>治療経過</td><td style={cell} colSpan={4}>{pr.chiryoKeika}</td></tr>
-            <tr><td style={lab}>合併疾患・状態</td><td style={cell} colSpan={4}>{pr.gappei}</td></tr>
-            <tr><td style={lab}>機能訓練実施上の留意事項</td><td style={cell} colSpan={4}>{pr.ryuiPoint}</td></tr>
+            <tr><td style={lab}>治療経過</td><td style={{...cell,height:'40px'}} colSpan={4}>{pr.chiryoKeika}</td></tr>
+            <tr><td style={lab}>合併疾患・状態</td><td style={{...cell,height:'40px'}} colSpan={4}>{pr.gappei}</td></tr>
+            <tr><td style={lab}>機能訓練実施上の留意事項</td><td style={{...cell,height:'40px'}} colSpan={4}>{pr.ryuiPoint}</td></tr>
           </tbody></table>
           <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※①〜⑤に加えて、介護支援専門員から、居宅サービス計画上の利用者本人等の意向、総合的な支援方針等について確認すること。</div>
 
@@ -28692,9 +28692,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           <div style={{fontSize:'10px',fontWeight:'bold',margin:'2px 0'}}>個別機能訓練の目標</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'50%'}}>機能訓練の短期目標（今後3ヶ月）　目標達成度（達成・一部・未達）：{pr.shortAchieve||''}</td><td style={lab}>機能訓練の長期目標　目標達成度（達成・一部・未達）：{pr.longAchieve||''}</td></tr>
-            <tr><td style={cell}>（機能）{pr.shortKinou}</td><td style={cell}>（機能）{pr.longKinou}</td></tr>
-            <tr><td style={cell}>（活動）{pr.shortKatsudo}</td><td style={cell}>（活動）{pr.longKatsudo}</td></tr>
-            <tr><td style={cell}>（参加）{pr.shortSanka}</td><td style={cell}>（参加）{pr.longSanka}</td></tr>
+            <tr><td style={{...cell,height:'44px'}}>（機能）{pr.shortKinou}</td><td style={{...cell,height:'44px'}}>（機能）{pr.longKinou}</td></tr>
+            <tr><td style={{...cell,height:'44px'}}>（活動）{pr.shortKatsudo}</td><td style={{...cell,height:'44px'}}>（活動）{pr.longKatsudo}</td></tr>
+            <tr><td style={{...cell,height:'44px'}}>（参加）{pr.shortSanka}</td><td style={{...cell,height:'44px'}}>（参加）{pr.longSanka}</td></tr>
           </tbody></table>
           <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※短期目標（長期目標を達成するために必要な行為）は、訓練実施期間内に達成を目指す項目のみを記載することとして差し支えない。目標達成の目安となる期間もあわせて記載すること。</div>
           <div style={{fontSize:'10px',fontWeight:'bold',margin:'5px 0 2px'}}>個別機能訓練項目</div>
@@ -28703,7 +28703,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             <tbody>
               {Array.from({length:Math.max(4,(pr.programs||[]).length)}).map((_,i)=>{ const p=(pr.programs||[])[i]||{}; return (
                 <tr key={i}>
-                  <td style={cell}>{['①','②','③','④','⑤','⑥','⑦','⑧'][i]||''} {p.content||''}</td>
+                  <td style={{...cell,height:'40px'}}>{['①','②','③','④','⑤','⑥','⑦','⑧'][i]||''} {p.content||''}</td>
                   <td style={cell}>{p.point||''}</td>
                   <td style={{...cell,textAlign:'center'}}>{p.freqWeek?`週${String(p.freqWeek).replace(/[週回]/g,'')}回`:'週　回'}</td>
                   <td style={{...cell,textAlign:'center'}}>{p.time||'　分'}</td>
@@ -28716,13 +28716,13 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             <tr><td style={{...cell,textAlign:'left',fontSize:'8px',color:'#333'}}>※短期目標で設定した目標を達成するために必要な行為に対応するよう、訓練項目を具体的に設定すること。</td><td style={{...cell,width:'30%',textAlign:'right'}}>プログラム立案者：{pr.programPlanner||''}</td></tr>
           </tbody></table>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
-            <tr><td style={{...lab,width:'40%'}}>利用者本人・家族等がサービス利用時間以外に実施すること</td><td style={cell}>{pr.jikangaiJisshi}</td><td style={{...lab,width:'14%'}}>特記事項</td><td style={cell}>{pr.tokki}</td></tr>
+            <tr><td style={{...lab,width:'40%'}}>利用者本人・家族等がサービス利用時間以外に実施すること</td><td style={{...cell,height:'40px'}}>{pr.jikangaiJisshi}</td><td style={{...lab,width:'14%'}}>特記事項</td><td style={{...cell,height:'40px'}}>{pr.tokki}</td></tr>
           </tbody></table>
 
           <div style={sec}>Ⅲ　個別機能訓練実施後の対応</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'50%',textAlign:'center'}}>個別機能訓練の実施による変化</td><td style={{...lab,textAlign:'center'}}>個別機能訓練実施における課題とその要因</td></tr>
-            <tr><td style={{...cell,height:'48px'}}>{pr.henka}</td><td style={cell}>{pr.kadai}</td></tr>
+            <tr><td style={{...cell,height:'110px'}}>{pr.henka}</td><td style={{...cell,height:'110px'}}>{pr.kadai}</td></tr>
           </tbody></table>
           <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※実施結果等をふまえ、目標の見直しや訓練項目の変更等を行った場合は計画書の再作成又は更新等を行うこと。初回作成時にはⅢについては記載不要である。</div>
 
