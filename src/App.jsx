@@ -10506,6 +10506,55 @@ function FamilyAdminView({ appData, onSave }) {
   );
 }
 
+// ★ 管理者プレビュー用の「架空」デモデータ (実在の利用者情報を一切含めない)
+function buildDemoPreviewData() {
+  const YEAR = 2026;
+  const dows = ['日','月','火','水','木','金','土'];
+  // 直近の通所日(架空)。 月日と年は記録形式に合わせる
+  const days = [2,4,6,9,11,13,16,18,20,23];
+  const moods = ['good','excellent','normal','good','bad','normal','good','excellent','normal','good'];
+  const moodsDep = ['excellent','good','good','normal','good','good','excellent','good','good','excellent'];
+  const temps = ['36.4','36.6','36.3','36.5','36.7','36.4','36.5','36.6','36.3','36.5'];
+  const bpUpS = [128,132,124,130,138,126,129,134,122,131], bpDnS=[78,80,74,79,84,76,77,81,73,79], plS=[68,72,66,70,75,67,69,73,65,71];
+  const bpUpE = [120,124,118,122,128,119,121,125,116,123], bpDnE=[72,75,70,73,78,71,72,76,69,74], plE=[64,68,62,66,70,63,65,69,61,67];
+  const PID = 990001;
+  const records = days.map((d,i) => ({
+    id: 9900000 + i, patientId: PID, name: '見本 太郎', kana: 'みほん たろう',
+    date: `${6}月${d}日`, year: YEAR, dayOfWeek: dows[new Date(YEAR,5,d).getDay()], status: '出席',
+    temp: temps[i], bpUpSt: String(bpUpS[i]), bpDnSt: String(bpDnS[i]), plSt: String(plS[i]),
+    bpUpEn: String(bpUpE[i]), bpDnEn: String(bpDnE[i]), plEn: String(plE[i]),
+    massage: '見本 職員', exercises: { u1:'10分', u2:'3分', u3:'3分', u4:'3分', u5:'3分', u6:'6分', heikobo:'10/20', fumidai:'15分', stepper:'50回' },
+    tokki: i===4 ? 'お変わりなくお過ごしです（見本）' : '', kibunArrival: moods[i], kibunDeparture: moodsDep[i],
+  }));
+  const patient = {
+    id: PID, name: '見本 太郎', kana: 'みほん たろう', status: '利用中', gender: '男性',
+    birthDate: '1945-05-15', careLevel: '要介護2', startDate: '2024-04-01', endDate: '',
+    scheduleAmPm: ['','','1日','','','1日',''], phone: '03-0000-0000',
+    cmOffice: '（見本）つむぎケアプランセンター', cmName: '見本 ケア子', cmPhone: '03-0000-0000', cmFax: '03-0000-0001',
+    plannedExercises: { u1:'10分', u2:'3分', u3:'3分', u4:'3分', u5:'3分', u6:'6分', heikobo:'10/20', fumidai:'15分', stepper:'50回' },
+    ryui: '※ これは管理者プレビュー用の架空（見本）データです。実在の利用者ではありません。',
+  };
+  return {
+    systemSettings: { facilityInfo: { name: 'つむぎ デイサービス（見本）', phone: '03-0000-0000', address: '東京都（見本）' } },
+    patients: [patient],
+    ticketRecords: records,
+    familyAnnouncements: [
+      { id: 9901, title: '夏祭りを開催します（見本）', body: 'これは管理者プレビュー用の架空のお知らせです。7月の夏祭りについてご案内します。', date: `${YEAR}-06-20`, postedAt: `${YEAR}-06-20T09:00:00.000Z`, audience: ['family','caremanager','related'], photos: [] },
+    ],
+    familyPersonalAnnouncements: [
+      { id: 9902, patientId: PID, title: 'お元気にお過ごしです（見本）', body: '見本 太郎 様は本日も笑顔で運動に取り組まれました。これは架空のお知らせです。', date: `${YEAR}-06-23`, postedAt: `${YEAR}-06-23T09:00:00.000Z`, audience: ['family','caremanager'], photos: [] },
+    ],
+    familyPhotos: [],
+    fitnessRecords: [],
+    monitoringRecords: [],
+    dailyLogs: [],
+    contactBooks: [],
+    familyAccounts: [],
+    _sbStoreId: null,
+    _isDemoPreview: true,
+  };
+}
+
 // === 家族用閲覧 - ログイン → 利用者ごとの画面 ===
 function FamilyView() {
   // データを localStorage から読み出し (写真は別キーに分離保存される場合があるのでマージ)
@@ -10548,6 +10597,7 @@ function FamilyView() {
   // ★ familyStoreId が null のとき、 全店舗を探索して patient_id がいる店舗を sessionStorage に保存
   //   (招待コードに store_id が無いケースの fallback。 「データ取得中」ループから脱出)
   useEffect(() => {
+    if (data._isDemoPreview) return; // ★ 管理者プレビュー(架空データ)中は実データ探索しない
     if (!isSupabaseEnabled || familyStoreId || !authPid) return;
     let cancelled = false;
     (async () => {
@@ -10675,6 +10725,8 @@ function FamilyView() {
   // データ更新を購読 (事業所側で更新されたら反映)
   useEffect(()=>{
     const reload = () => {
+      // ★ 管理者プレビュー(架空データ)中は実データで上書きしない
+      try { if (String(sessionStorage.getItem('familyAuthAccId')||'').startsWith('preview_')) return; } catch {}
       const merged = loadDataMerged();
       if (merged) setData(merged);
     };
@@ -10706,9 +10758,9 @@ function FamilyView() {
       <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#d4e7a5 0%,#f0f7e0 100%)',padding:24,boxSizing:'border-box',display:'flex',alignItems:'center',justifyContent:'center'}}>
         <div style={{maxWidth:600,width:'100%',background:'white',borderRadius:24,padding:28,boxShadow:'0 12px 40px rgba(125,170,61,0.25)'}}>
           <div style={{textAlign:'center',marginBottom:18}}>
-            <div style={{display:'inline-block',background:'#fef3c7',color:'#92400e',fontSize:11,fontWeight:'bold',padding:'4px 12px',borderRadius:999,marginBottom:10}}>🔧 管理者プレビュー{adminPreview.storeName?`（${adminPreview.storeName}）`:''}</div>
+            <div style={{display:'inline-block',background:'#fef3c7',color:'#92400e',fontSize:11,fontWeight:'bold',padding:'4px 12px',borderRadius:999,marginBottom:10}}>🔧 管理者プレビュー{adminPreview.adminName?`（${adminPreview.adminName} 様）`:''}</div>
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN',sans-serif"}}>ご家族・ケアマネ画面を確認</div>
-            <div style={{fontSize:11,color:'#5e8030',marginTop:4}}>利用者を選び、見たい画面のボタンを押してください（閲覧専用のデモ表示です）</div>
+            <div style={{fontSize:11,color:'#5e8030',marginTop:4}}>下の<b>架空（見本）の利用者</b>で、見たい画面のボタンを押してください（実在の利用者情報は表示しません）</div>
           </div>
           {previewList.length === 0 ? (
             <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'20px 0'}}>利用者が登録されていません</div>
@@ -10860,23 +10912,17 @@ function FamilyView() {
         a.password === loginForm.password
       );
       if (!acc) {
-        // ★ 事業所管理者ID/PWでのプレビューログイン: ご家族/ケアマネ画面をデモ確認
+        // ★ 管理者(本部/事業所)ID/PWでのプレビューログイン: ご家族/ケアマネ画面を「架空データ」でデモ確認
+        //   本部(super_admin)は store_id を持たないため store_id は要求しない。 個人情報保護のため実データは使わず架空データを表示。
         if (isSupabaseEnabled) {
           try {
             const staff = await supabaseStaffLogin({ username: loginForm.username.trim(), password: loginForm.password });
-            if (staff && staff.store_id) {
-              const row = await supabaseLoadStateForStore(staff.store_id);
-              const sd = row?.data || {};
-              const storeData = {
-                ...sd,
-                patients: sd.patients || [],
-                familyAccounts: sd.familyAccounts || [],
-                _sbStoreId: staff.store_id,
-              };
-              localStorage.setItem('daycareAppData_v3', JSON.stringify(storeData));
-              setData(storeData);
-              sessionStorage.setItem('familyAuthStoreId', String(staff.store_id));
-              setAdminPreview({ storeName: staff.stores?.name || '' });
+            if (staff) {
+              const demo = buildDemoPreviewData();
+              localStorage.setItem('daycareAppData_v3', JSON.stringify(demo));
+              setData(demo);
+              sessionStorage.removeItem('familyAuthStoreId');
+              setAdminPreview({ adminName: staff.display_name || staff.username || '' });
               setLoginForm(f=>({...f, error:'', password:''}));
               return;
             }
@@ -15943,6 +15989,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const statePM = shiftPM !== undefined ? shiftPM : (base==='PM'||base==='1日' ? '〇' : '空欄');
       const comingAM = stateAM==='〇'||stateAM==='出席'||stateAM.startsWith('振');
       const comingPM = statePM==='〇'||statePM==='出席'||statePM.startsWith('振');
+      // ★ 欠席/休業/休止 は時間帯フィルタ(AM/PM)で隠さない (誰が休んだか確認できるように)。
+      //   ここに無いと「振替=欠席」にした人が AM/PM 表示で消えてしまう。
+      if (p.status==='欠席'||p.status==='休業'||p.status==='休止'||stateAM==='欠席'||statePM==='欠席'||stateAM==='休業'||statePM==='休業') return true;
       if (timeFilter === 'AM') return comingAM;
       if (timeFilter === 'PM') return comingPM;
       return true;
