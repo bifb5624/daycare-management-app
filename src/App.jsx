@@ -16695,9 +16695,16 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   if (!selectedPatient) return <div className="p-8 text-center text-slate-500 font-bold">利用者データがありません</div>;
 
   const temps  = validRecs.filter(r=>r.temp).map(r=>Number(r.temp));
-  const bpUps  = validRecs.filter(r=>r.bpUpSt).map(r=>Number(r.bpUpSt));
-  const bpDns  = validRecs.filter(r=>r.bpDnSt).map(r=>Number(r.bpDnSt));
-  const pulses = validRecs.filter(r=>r.plSt).map(r=>Number(r.plSt));
+  // ★ 血圧・脈の平均/最高/最低は表示中フェーズに連動: 'start'通所時 / 'end'終了時 / 'both'両方(合算)
+  const _valsOf = (stField, enField) => {
+    let a=[];
+    if(vitalPhase!=='end') a=a.concat(validRecs.filter(r=>r[stField]).map(r=>Number(r[stField])));
+    if(vitalPhase!=='start' && enField) a=a.concat(validRecs.filter(r=>r[enField]).map(r=>Number(r[enField])));
+    return a;
+  };
+  const bpUps  = _valsOf('bpUpSt','bpUpEn');
+  const bpDns  = _valsOf('bpDnSt','bpDnEn');
+  const pulses = _valsOf('plSt','plEn');
   const avg    = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
   const avgTemp=avg(temps); const maxTemp=temps.length?Math.max(...temps):null; const minTemp=temps.length?Math.min(...temps):null;
   const avgBpUp=avg(bpUps); const maxBpUp=bpUps.length?Math.max(...bpUps):null; const minBpUp=bpUps.length?Math.min(...bpUps):null;
@@ -18162,23 +18169,24 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })();
           const showLabel=(i)=>dailyData.length<=8||i===0||i===dailyData.length-1||i%Math.ceil(dailyData.length/7)===0;
 
-          // Stats
-          const bpUpVals=dailyData.filter(d=>d.bpUp).map(d=>d.bpUp);
+          // Stats — ★ 血圧・脈は表示中フェーズに連動 (開始/終了/両方)。 temp は開始のみ。
+          const _arrOf=(sF,eF)=>{const out=[];dailyData.forEach(d=>{ if(vitalPhase!=='end' && d[sF]!=null) out.push({v:d[sF],date:d.date}); if(vitalPhase!=='start' && eF && d[eF]!=null) out.push({v:d[eF],date:d.date}); });return out;};
+          const bpUpA=_arrOf('bpUp','bpUpEn'); const bpUpVals=bpUpA.map(x=>x.v);
           const maxBpUp=bpUpVals.length?Math.max(...bpUpVals):null;
           const minBpUp=bpUpVals.length?Math.min(...bpUpVals):null;
-          const maxBpDate=maxBpUp?dailyData.find(d=>d.bpUp===maxBpUp)?.date:'';
-          const minBpDate=minBpUp?dailyData.find(d=>d.bpUp===minBpUp)?.date:'';
-          const bpDnVals=dailyData.filter(d=>d.bpDn).map(d=>d.bpDn);
+          const maxBpDate=maxBpUp!=null?bpUpA.find(x=>x.v===maxBpUp)?.date:'';
+          const minBpDate=minBpUp!=null?bpUpA.find(x=>x.v===minBpUp)?.date:'';
+          const bpDnA=_arrOf('bpDn','bpDnEn'); const bpDnVals=bpDnA.map(x=>x.v);
           const maxBpDnVal=bpDnVals.length?Math.max(...bpDnVals):null;
           const minBpDnVal=bpDnVals.length?Math.min(...bpDnVals):null;
-          const maxBpDnDate=maxBpDnVal?dailyData.find(d=>d.bpDn===maxBpDnVal)?.date:'';
-          const minBpDnDate=minBpDnVal?dailyData.find(d=>d.bpDn===minBpDnVal)?.date:'';
+          const maxBpDnDate=maxBpDnVal!=null?bpDnA.find(x=>x.v===maxBpDnVal)?.date:'';
+          const minBpDnDate=minBpDnVal!=null?bpDnA.find(x=>x.v===minBpDnVal)?.date:'';
           const tempVals=dailyData.filter(d=>d.temp).map(d=>d.temp);
           const maxTempDate=maxTemp?dailyData.find(d=>d.temp===maxTemp)?.date:'';
           const minTempDate=minTemp?dailyData.find(d=>d.temp===minTemp)?.date:'';
-          const pulseVals=dailyData.filter(d=>d.pulse).map(d=>d.pulse);
-          const maxPulseDate=maxPulse?dailyData.find(d=>d.pulse===maxPulse)?.date:'';
-          const minPulseDate=minPulse?dailyData.find(d=>d.pulse===minPulse)?.date:'';
+          const pulseA=_arrOf('pulse','pulseEn'); const pulseVals=pulseA.map(x=>x.v);
+          const maxPulseDate=maxPulse!=null?pulseA.find(x=>x.v===maxPulse)?.date:'';
+          const minPulseDate=minPulse!=null?pulseA.find(x=>x.v===minPulse)?.date:'';
 
           const isMonthly = dailyData.length<=12; const _STEP=isMonthly?60:(dailyData.length<=14?50:dailyData.length<=30?28:14); const PAD_X=20; const W=dailyData.length*_STEP+PAD_X*2,H=180,LW=110;
           const VitalChart = ({field,color1,color2,yMin,yMax,refLines,normalBand,title,legend1,legend2,unit}) => {
@@ -18383,7 +18391,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{background:'white',borderRadius:14,padding:'20px 22px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${bpWarn?'#fecaca':'#f1f5f9'}`,marginBottom:12}}>
                 {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ移動) */}
                 <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>血圧（日別）</div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>血圧（日別）{hasEndVital && <span style={{fontSize:11,fontWeight:'bold',color:'#2563eb',marginLeft:6}}>{vitalPhase==='end'?'終了時':vitalPhase==='both'?'通所時＋終了時':'通所時'}</span>}</div>
                   {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ */}
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
@@ -18446,7 +18454,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${pulseWarn?'#fecaca':'#f1f5f9'}`}}>
                 {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ) */}
                 <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>脈拍（日別）</div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>脈拍（日別）{hasEndVital && <span style={{fontSize:11,fontWeight:'bold',color:'#2563eb',marginLeft:6}}>{vitalPhase==='end'?'終了時':vitalPhase==='both'?'通所時＋終了時':'通所時'}</span>}</div>
                   {/* ★ 脈拍サマリー: 体温・血圧と統一サイズ */}
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {avgPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:90}}>
