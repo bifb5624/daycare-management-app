@@ -19726,6 +19726,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     const attended = recsAP.filter(r => r.status==='出席'||r.status==='振替');
     return {
       planned:planned.length, attended:attended.length,
+      shukseki:recsAP.filter(r=>r.status==='出席').length, // 純粋な出席(振替を除く)
+      furikae:recsAP.filter(r=>r.status==='振替').length,   // 振替(=出席扱い)
       absent:recsAP.filter(r=>r.status==='欠席'&&!(r.tokki||'').includes('へ振替')).length,
       kyushi:recsAP.filter(r=>r.status==='休止').length,
       kyugyo:recsAP.filter(r=>r.status==='休業').length,
@@ -20093,7 +20095,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 <span style={{fontSize:13,color:'#475569',whiteSpace:'nowrap'}}>{monthStats.attended}/{monthStats.planned}件</span>
               </div>
               <div data-print-id="rate-counts" style={{display:'flex',gap:16,flexWrap:'wrap'}}>
-                {[['出席','#3b82f6',monthStats.attended],['欠席','#ef4444',monthStats.absent],['休止','#f97316',monthStats.kyushi],['休業','#94a3b8',monthStats.kyugyo]].map(([l,col,v])=>(
+                {[['出席','#3b82f6',monthStats.shukseki],['振替','#22c55e',monthStats.furikae],['欠席','#ef4444',monthStats.absent],['休止','#f97316',monthStats.kyushi],['休業','#94a3b8',monthStats.kyugyo]].map(([l,col,v])=>(
                   <div key={l} style={{display:'flex',alignItems:'center',gap:4,fontSize:13}}>
                     <span style={{width:8,height:8,borderRadius:'50%',background:col,flexShrink:0}}/>
                     <span style={{color:'#475569',fontWeight:'bold'}}>{l}</span>
@@ -23245,9 +23247,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const destIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, destLabel, destYear));
     if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear };
     else ur.push({ id: Date.now() + Math.random() + 1, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {} });
-    setPendingShifts(ns);
-    setPendingTickets(ur);
-    markDirty();
+    // ★ 振替は下書きに留めず即クラウド保存(欠席記録/振替記録をすぐ反映 → 提供記録入力にも欠席者が出る)
+    setPendingShifts(null); setPendingTickets(null);
+    if (dirtyRef) dirtyRef.current = false;
+    onSave({ ...appData, monthlyShifts: ns, ticketRecords: ur }, { manual: true, message: '✓ 振替を保存しました' });
   };
   const skipFuri = () => {
     const dO = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), furikaeModal.day);
