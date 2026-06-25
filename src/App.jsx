@@ -15085,14 +15085,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const [kibunStep, setKibunStep] = useState('mood'); // 'mood' | 'reason'
   const [kibunTempMood, setKibunTempMood] = useState('');
   const [activeCell, setActiveCell] = useState(null); // "recordId-field"
-  const [massageHistPid, setMassageHistPid] = useState(null); // 介護整体の過去履歴ポップオーバーを開いている利用者id
-  // ポップオーバー外をタップしたら閉じる (開いた瞬間のクリックでは閉じないよう次tickで登録)
+  const [massageHist, setMassageHist] = useState(null); // {pid, cx, cy} 介護整体の過去履歴ポップオーバー (body へ portal + fixed で最前面表示)
+  // ポップオーバー外をタップ/スクロールしたら閉じる (開いた瞬間のクリックでは閉じないよう次tickで登録)
   React.useEffect(() => {
-    if (massageHistPid == null) return;
-    const close = () => setMassageHistPid(null);
+    if (!massageHist) return;
+    const close = () => setMassageHist(null);
     const t = setTimeout(() => { document.addEventListener('click', close); document.addEventListener('scroll', close, true); }, 0);
     return () => { clearTimeout(t); document.removeEventListener('click', close); document.removeEventListener('scroll', close, true); };
-  }, [massageHistPid]);
+  }, [massageHist]);
   const [unsavedModal, setUnsavedModal] = useState({ isOpen: false, onConfirm: null });
 
   // 未保存チェック: localPatientsがappDataのticketsと異なるか
@@ -16180,27 +16180,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             </button>
                           )}
                           {!isAbsent && !p.massage && (
-                            <button onClick={(e)=>{ e.stopPropagation(); setMassageHistPid(prev => prev===pid ? null : pid); }}
+                            <button onClick={(e)=>{ e.stopPropagation();
+                              if (massageHist && massageHist.pid===pid) { setMassageHist(null); return; }
+                              const btn=e.currentTarget; const r0=btn.getBoundingClientRect();
+                              const zoom=isFullscreen?1.2:1; const ratio=btn.offsetWidth?(r0.width/btn.offsetWidth):1;
+                              const corr=(zoom>1 && Math.abs(ratio-1)<0.08)?zoom:1; // 全画面zoomでgetBoundingClientRectがzoom未反映の端末を補正
+                              setMassageHist({ pid, cx:(r0.left+r0.width/2)*corr, cy:r0.top*corr });
+                            }}
                             style={{width:'100%',zIndex:10,fontSize:8,fontWeight:'bold',background:'rgba(254,243,199,0.95)',color:'#92400e',border:'1px solid #fcd34d',borderRadius:3,padding:'0 1px',lineHeight:1.4,cursor:'pointer',textAlign:'center',flexShrink:0}}
                             className="hover:bg-amber-200">📋 確認</button>
                           )}
-                          {/* ★ 介護整体の過去履歴ポップオーバー: 確認ボタンの親(position:relative)内に絶対配置 →
-                              zoom(全画面)に影響されず必ず確認ボタンの真上に表示される */}
-                          {massageHistPid === pid && (() => {
-                            const recs = prevRecords.slice(0,3);
-                            return (
-                              <div onClick={(e)=>{e.stopPropagation(); setMassageHistPid(null);}}
-                                style={{position:'absolute',bottom:'calc(100% + 6px)',left:'50%',transform:'translateX(-50%)',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 4px 16px rgba(0,0,0,0.4)',zIndex:100,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}>
-                                {recs.length===0 ? <div style={{padding:'4px 10px',fontSize:11}}>履歴なし</div> :
-                                  [...recs].reverse().map((r,ri)=>(
-                                    <div key={ri} style={{padding:'3px 12px',fontSize:11}}>
-                                      <span style={{color:'#94a3b8'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
-                                      <b style={{color:'white',marginLeft:6}}>{r.massage||''}</b>
-                                    </div>
-                                  ))}
-                              </div>
-                            );
-                          })()}
                           <select disabled={isAbsent || isPause} value={p.massage || ""}
                             onChange={(e) => { updateRecord(p.id, 'massage', e.target.value); if(p.done) updateRecord(p.id, 'done', false); }}
                             style={{appearance:'none',WebkitAppearance:'none',MozAppearance:'none',width:'100%',
@@ -16276,6 +16265,22 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </tbody>
         </table>
       </div>
+      {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
+      {massageHist && ReactDOM.createPortal((()=>{
+        const recs=(appData.ticketRecords||[]).filter(r=>r.patientId===massageHist.pid && r.massage).sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0)).slice(0,3);
+        return (
+          <div onClick={(e)=>{e.stopPropagation(); setMassageHist(null);}}
+            style={{position:'fixed',left:massageHist.cx,top:massageHist.cy-8,transform:'translate(-50%,-100%)',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 6px 20px rgba(0,0,0,0.45)',zIndex:99999,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}>
+            {recs.length===0 ? <div style={{padding:'4px 12px',fontSize:12}}>履歴なし</div> :
+              [...recs].reverse().map((r,ri)=>(
+                <div key={ri} style={{padding:'4px 14px',fontSize:12}}>
+                  <span style={{color:'#94a3b8'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
+                  <b style={{color:'white',marginLeft:8}}>{r.massage||''}</b>
+                </div>
+              ))}
+          </div>
+        );
+      })(), document.body)}
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
@@ -18391,7 +18396,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{background:'white',borderRadius:14,padding:'20px 22px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${bpWarn?'#fecaca':'#f1f5f9'}`,marginBottom:12}}>
                 {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ移動) */}
                 <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>血圧（日別）{hasEndVital && <span style={{fontSize:11,fontWeight:'bold',color:'#2563eb',marginLeft:6}}>{vitalPhase==='end'?'終了時':vitalPhase==='both'?'通所時＋終了時':'通所時'}</span>}</div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>血圧（日別）</div>
                   {/* ★ 血圧サマリー: 体温・脈拍と統一サイズ */}
                   <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                     <div style={{padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',textAlign:'center',minWidth:90}}>
@@ -18454,7 +18459,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:`1px solid ${pulseWarn?'#fecaca':'#f1f5f9'}`}}>
                 {/* ★ タイトル + 平均/最高/最低 を 1 行 (凡例はグラフ直上へ) */}
                 <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:10,flexWrap:'wrap',gap:14}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>脈拍（日別）{hasEndVital && <span style={{fontSize:11,fontWeight:'bold',color:'#2563eb',marginLeft:6}}>{vitalPhase==='end'?'終了時':vitalPhase==='both'?'通所時＋終了時':'通所時'}</span>}</div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>脈拍（日別）</div>
                   {/* ★ 脈拍サマリー: 体温・血圧と統一サイズ */}
                   <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
                     {avgPulse&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:90}}>
