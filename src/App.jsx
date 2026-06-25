@@ -27207,6 +27207,11 @@ function DiarySettingsPanel({ appData, dsRef, markDirty }) {
           ))}
           {dsRef.current.cars.length < 4 && <button onClick={()=>mutate({...dsRef.current,cars:[...dsRef.current.cars,{id:`car${Date.now()}`,name:`${dsRef.current.cars.length+1}号車`,type:''}]})} className="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1"><Plus size={14}/>車両を追加</button>}
         </div>
+        {/* ★ 送迎の1週間前自動コピー */}
+        <label className="flex items-start gap-2 mt-4 pt-3 border-t border-slate-200 cursor-pointer">
+          <input type="checkbox" checked={!!ds.autoCopySougei} onChange={e=>mutate({...dsRef.current, autoCopySougei: e.target.checked})} className="mt-0.5 accent-blue-600"/>
+          <span className="text-sm text-slate-700"><b>1週間前の送迎を自動コピー</b><br/><span className="text-xs text-slate-500">日誌を開いたとき、その日の送迎（迎え・送り・運転者・時間）が未入力なら、<b>7日前の同じ時間帯</b>の内容を自動で読み込みます。毎週同じ送迎体制の店舗向け（変わる場合はそのまま上書きできます）。</span></span>
+        </label>
       </SC>
       {['AM','PM'].map(ap=>(
         <SC key={ap} title={`スケジュール（${ap==='AM'?'午前':'午後'}）`}>
@@ -27297,9 +27302,24 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         prevAutoCheckIdRef.current = matched.id;
       }
     }
+    // ★ 送迎の1週間前自動コピー (設定ON かつ 当日の送迎データが空のとき、7日前の同時間帯から複写)
+    let _didAutoCopy = false;
+    const SOUGEI_FIELDS = ['pick','drop','pick_walk','drop_walk','driver','carTimes'];
+    if (appData.diarySettings?.autoCopySougei) {
+      const sougeiEmpty = !SOUGEI_FIELDS.some(f => loaded[f] && Object.keys(loaded[f]).length);
+      if (sougeiEmpty) {
+        const _d = new Date(selectedDate); _d.setDate(_d.getDate() - 7);
+        const prevKey = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}_${ampm}`;
+        const prevLog = (nextAppData.diaryLogs||{})[prevKey];
+        if (prevLog && SOUGEI_FIELDS.some(f => prevLog[f] && Object.keys(prevLog[f]).length)) {
+          SOUGEI_FIELDS.forEach(f => { if (prevLog[f]) loaded[f] = JSON.parse(JSON.stringify(prevLog[f])); });
+          _didAutoCopy = true;
+        }
+      }
+    }
     setLocalLog(loaded);
     logKeyRef.current = logKey;
-    if (dirtyRef) dirtyRef.current = false;
+    if (dirtyRef) dirtyRef.current = _didAutoCopy; // 自動コピー時は未保存扱い → 移動時に自動保存
   }, [logKey]); // eslint-disable-line
 
   // ★ スタッフ切替時の自動チェック切替: アクティブ記録者が変わったら、
