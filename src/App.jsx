@@ -11413,17 +11413,6 @@ function FamilyView() {
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
           )}
-          {/* ★ ご利用ガイド (ログイン前でも確認できるように) */}
-          <div style={{display:'flex',gap:8,marginTop:18,justifyContent:'center',flexWrap:'wrap'}}>
-            <a href="/manual-kazoku.html" target="_blank" rel="noopener noreferrer"
-              style={{flex:'1 1 160px',maxWidth:240,textAlign:'center',padding:'11px 12px',background:'rgba(255,255,255,0.95)',color:'#2563eb',border:'2px solid #bfdbfe',borderRadius:12,fontSize:13,fontWeight:'bold',textDecoration:'none',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>
-              📖 ご家族向け<br/>ご利用ガイド
-            </a>
-            <a href="/manual-kankeisha.html" target="_blank" rel="noopener noreferrer"
-              style={{flex:'1 1 160px',maxWidth:240,textAlign:'center',padding:'11px 12px',background:'rgba(255,255,255,0.95)',color:'#0891b2',border:'2px solid #a5f3fc',borderRadius:12,fontSize:13,fontWeight:'bold',textDecoration:'none',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>
-              📖 ケアマネ・関係者向け<br/>ご利用ガイド
-            </a>
-          </div>
           <div style={{textAlign:'center',marginTop:20,fontSize:11,color:'rgba(255,255,255,0.85)'}}>
             お困りの場合はサポートまでお問い合わせください<br/>
             <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'inherit',textDecoration:'underline'}}>📧 support@ones-style.co.jp</a>
@@ -15281,8 +15270,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           const targetDateStr2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
           const _selYear2 = new Date(selectedDate).getFullYear();
           const hasRecord = (appData.ticketRecords||[]).some(r=>r.patientId===p.id&&recMatchesDateYear(r, targetDateStr2, _selYear2));
-          // ★ この日を「振替元」とする振替記録が他の日にあれば、欠席としてこの日に表示 (欠席記録が欠けていても出す)
-          const hasFurikaeFromHere = (appData.ticketRecords||[]).some(r=>r.patientId===p.id && r.status==='振替' && (r.tokki||'').includes(targetDateStr2) && (r.tokki||'').includes('振替'));
+          // ★ この日を「振替元」とする振替が他の日にあれば、欠席としてこの日に表示 (欠席記録/欠席シフトが欠けていても確実に出す)
+          //   方法A: 振替記録 tokki「○月○日…分振替」から逆引き
+          //   方法B: シフト側の振替タグ から逆引き (スケジュール表はこのタグで振替を表示するため最も確実)
+          const _furiTag = `振(${new Date(selectedDate).getMonth()+1}/${new Date(selectedDate).getDate()})`;
+          const hasFurikaeFromHere = (appData.ticketRecords||[]).some(r=>r.patientId===p.id && r.status==='振替' && (r.tokki||'').includes(targetDateStr2) && (r.tokki||'').includes('振替'))
+            || Object.values(appData.monthlyShifts||{}).some(mo => Object.values((mo && mo[p.id]) || {}).some(v => v === _furiTag));
           if (!comingAM && !comingPM && !hasRecord && !hasFurikaeFromHere) return false;
           return true;
       })
@@ -15328,12 +15321,19 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
              pData.massage = "";
              pData.tokki = ""; pData.exercises = {}; pData.kibunArrival = ""; pData.kibunArrivalReason = "";
              pData.kibunDeparture = ""; pData.kibunDepartureReason = ""; pData.done = false;
-             // ★ 欠席記録が欠けていても、この日を振替元とする振替記録があれば欠席として表示
+             // ★ 欠席記録が欠けていても、この日を振替元とする振替(記録 or シフトタグ)があれば欠席として表示
              const _furiFrom = (appData.ticketRecords || []).find(r => r.patientId === p.id && r.status === '振替' && (r.tokki||'').includes(targetDateStr) && (r.tokki||'').includes('振替'));
-             if (_furiFrom) {
+             const _md0 = new Date(selectedDate);
+             const _furiTag0 = `振(${_md0.getMonth()+1}/${_md0.getDate()})`;
+             // 振替先(シフトタグ)が置かれている日付ラベルを探す → 「○月○日へ振替」と表示
+             let _furiDestLabel = '';
+             Object.values(appData.monthlyShifts||{}).forEach(mo => {
+               const dd = (mo && mo[p.id]) || {};
+               Object.keys(dd).forEach(k => { if (dd[k] === _furiTag0) { const dn = parseInt((k.split('_')[0])||'0'); if (dn) _furiDestLabel = `${_md0.getMonth()+1}月${dn}日`; } });
+             });
+             if (_furiFrom || _furiDestLabel) {
                pData.status = '欠席';
-               const _m = (_furiFrom.tokki||'').match(/(\d+)月(\d+)日/);
-               pData.tokki = _m ? `${_furiFrom.date||''}へ振替` : '振替';
+               pData.tokki = _furiFrom ? `${_furiFrom.date||''}へ振替` : (_furiDestLabel ? `${_furiDestLabel}へ振替` : '振替');
              }
          }
          const pauseInfo = getPauseReasonOnDate(p, selectedDate);
@@ -18057,7 +18057,29 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>}
         <div id="sec-kibun" data-sec="sec-kibun" style={{scrollMarginTop:170}}>
           <div style={{background:'white',borderRadius:12,border:'1px solid #fde68a',padding:'16px',marginTop:12}}>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#92400e',marginBottom:6}}>気分トレンド（通所時/帰宅時）</div>
+            {/* ★ タイトル + 最も多い気分(通所時/帰宅時) を1行 (体温などの平均/最高/最低と同じ箱型) */}
+            <div style={{display:'flex',justifyContent:'flex-start',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:12}}>
+              <div style={{fontSize:14,fontWeight:'bold',color:'#92400e'}}>気分トレンド（通所時/帰宅時）</div>
+              {(()=>{
+                const MD=[{key:'excellent',emoji:'🤩',label:'とても良い'},{key:'good',emoji:'😊',label:'良い'},{key:'normal',emoji:'😐',label:'普通'},{key:'bad',emoji:'😞',label:'イマイチ'},{key:'terrible',emoji:'😫',label:'とても悪い'}];
+                const modeOf=(field)=>{ const c={}; records.forEach(r=>{ const v=r[field]; if(v&&MD.some(m=>m.key===v)) c[v]=(c[v]||0)+1; }); let best=null,bn=0; MD.forEach(m=>{ if((c[m.key]||0)>bn){bn=c[m.key];best=m;} }); return best?{...best,n:bn}:null; };
+                const arrMode=modeOf('kibunArrival'); const depMode=modeOf('kibunDeparture');
+                return (
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                    <div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:96}}>
+                      <div style={{fontSize:12,color:'#2563eb',fontWeight:'normal',marginBottom:2}}>🏢 通所時 最多</div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{arrMode?`${arrMode.emoji} ${arrMode.label}`:'—'}</div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{arrMode?`${arrMode.n}回`:'—'}</div>
+                    </div>
+                    <div style={{textAlign:'center',padding:'6px 12px',background:'#fff7ed',borderRadius:10,border:'1px solid #fed7aa',minWidth:96}}>
+                      <div style={{fontSize:12,color:'#ea580c',fontWeight:'normal',marginBottom:2}}>🏠 帰宅時 最多</div>
+                      <div style={{fontSize:16,fontWeight:'bold',color:'#c2410c',lineHeight:1}}>{depMode?`${depMode.emoji} ${depMode.label}`:'—'}</div>
+                      <div style={{fontSize:10,color:'#334155',marginTop:2}}>{depMode?`${depMode.n}回`:'—'}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
             {/* ★ 凡例をグラフ直上に表示 (旧グラフ下から移動) */}
             <div style={{display:'flex',gap:16,marginBottom:8,paddingTop:6,paddingBottom:6,borderTop:'1px solid #fde68a',borderBottom:'1px solid #fde68a',fontSize:12,color:'#475569'}}>
               <span style={{display:'flex',alignItems:'center',gap:4}}><span style={{display:'inline-block',width:20,height:2,background:'#3b82f6',borderRadius:2}}/>通所時</span>
