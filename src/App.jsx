@@ -9181,7 +9181,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
 // === 共通コンポーネント ===
 
-function DigitalKeypad({ isOpen, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons }) {
+function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons }) {
   const keypadRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
 
@@ -9230,6 +9230,32 @@ function DigitalKeypad({ isOpen, value, isFirstInput, onInput, onEnter, onTab, o
     vv.addEventListener('scroll', adjust);
     return () => { vv.removeEventListener('resize', adjust); vv.removeEventListener('scroll', adjust); };
   }, [vv, padW, padH]);
+
+  // ★ タップ/移動したセル(アクティブセル=.ring-blue-300)にキーパッドが「かぶる」ときだけ、
+  //   反対側の隅へ自動で逃がす。 かぶっていなければ動かさない(無用な移動を避ける)。
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const t = setTimeout(() => {
+      const cells = document.querySelectorAll('.ring-blue-300');
+      const cell = cells[cells.length - 1]; // 最後=最新のアクティブセル
+      if (!cell) return;
+      const r = cell.getBoundingClientRect();
+      if (!r.width && !r.height) return;
+      const ol = vv?.offsetLeft || 0, ot = vv?.offsetTop || 0;
+      const vw = vv?.width || window.innerWidth, vh = vv?.height || window.innerHeight;
+      setPos(prev => {
+        const overlap = !(r.right < prev.x || r.left > prev.x + padW || r.bottom < prev.y || r.top > prev.y + padH);
+        if (!overlap) return prev; // かぶっていない → そのまま
+        const cellMidY = r.top + r.height / 2, cellMidX = r.left + r.width / 2;
+        let y = cellMidY > ot + vh / 2 ? ot + 8 : ot + vh - padH - 16;      // セルが下半分→上へ
+        let x = cellMidX > ol + vw / 2 ? ol + 8 : ol + vw - padW - 16;      // セルが右半分→左へ
+        x = Math.max(ol + 8, Math.min(x, ol + vw - padW - 8));
+        y = Math.max(ot + 8, Math.min(y, ot + vh - padH - 8));
+        return { x, y };
+      });
+    }, 40);
+    return () => clearTimeout(t);
+  }, [isOpen, anchorKey, padW, padH]);
 
   // ドラッグ開始
   const onDragStart = (e) => {
@@ -15900,9 +15926,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               const isPause = masterData.status === '休止';
               const nameParts = (p.name || "").split(/[\s　]+/);
               const config = getStatusConfig(p.status);
-              
+              // ★ 選択中セルの利用者を明示ハイライト (iPadのタッチで:hoverが残り前の人が光る問題対策)
+              const isActiveRow = !!activeCell && String(activeCell).startsWith(`${p.id}-`);
+
               return (
-                <tr key={`${filterMode}-${p.id}`} className={`group transition-colors ${(isAbsent || isPause) ? 'text-slate-400' : 'hover:bg-blue-50/50'} ${isReadOnly ? 'readonly-row' : ''}`} style={{
+                <tr key={`${filterMode}-${p.id}`} className={`group transition-colors ${(isAbsent || isPause) ? 'text-slate-400' : isActiveRow ? 'bg-blue-50' : 'hover:bg-blue-50/50'} ${isReadOnly ? 'readonly-row' : ''}`} style={{
                   // ★ 全画面時: ビューポートを直接基準にして 10 名ぴったり
                   //   100vh - 80px (title bar + scrollbar の最小) / 10
                   //   minHeight も同じ式で「行が縮まない」よう強制
@@ -15914,9 +15942,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     : 48,
                 }}>
                   {filterMode === 'month' && (
-                    <td className={`px-2 py-2 font-bold text-center border border-slate-300 sticky left-0 z-30 whitespace-nowrap text-xs ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white group-hover:bg-blue-50'}`}>{p.date}</td>
+                    <td className={`px-2 py-2 font-bold text-center border border-slate-300 sticky left-0 z-30 whitespace-nowrap text-xs ${(isAbsent || isPause) ? 'bg-slate-100' : isActiveRow ? 'bg-blue-100' : 'bg-white group-hover:bg-blue-50'}`}>{p.date}</td>
                   )}
-                  <td className={`font-bold sticky z-30 ${filterMode === 'month' ? 'left-[80px]' : 'left-0'} ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white group-hover:bg-blue-50'}`} style={{padding:'4px 6px',height:64,verticalAlign:'middle',borderTop:'1px solid #cbd5e1',borderBottom:'1px solid #cbd5e1',borderRight:'1px solid #cbd5e1',borderLeft:filterMode==='month'?'none':'1px solid #cbd5e1'}}>
+                  <td className={`font-bold sticky z-30 ${filterMode === 'month' ? 'left-[80px]' : 'left-0'} ${(isAbsent || isPause) ? 'bg-slate-100' : isActiveRow ? 'bg-blue-100' : 'bg-white group-hover:bg-blue-50'}`} style={{padding:'4px 6px',height:64,verticalAlign:'middle',borderTop:'1px solid #cbd5e1',borderBottom:'1px solid #cbd5e1',borderRight:'1px solid #cbd5e1',borderLeft:isActiveRow?'3px solid #2563eb':(filterMode==='month'?'none':'1px solid #cbd5e1')}}>
                     {(()=>{
                       const _fr = (appData.fitnessRecords||[]).filter(r=>r.patientId===masterData.id).sort((a,b)=>b.date.localeCompare(a.date));
                       const _cycle = appData.systemSettings?.fitnessCycle;
@@ -16243,7 +16271,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </tbody>
         </table>
       </div>
-      <DigitalKeypad isOpen={keypad.isOpen} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
       {statusModal.isOpen && ReactDOM.createPortal(
@@ -21358,7 +21386,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </div>
       </div>
       
-      <DigitalKeypad isOpen={keypad.isOpen} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { handleOverrideBlur(keypad.recordId, keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { handleOverrideBlur(keypad.recordId, keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
       {isConfigOpen && <ContactBookConfigModal config={appData.contactBookConfig} exerciseItems={appData.systemSettings?.exerciseItems || appSettings.exerciseItems} onClose={() => setIsConfigOpen(false)} onSave={handleSaveConfig} />}
     </div>
   );
@@ -23822,7 +23850,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           </div></div>
         </>) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">左から利用者を選択してください</div>)}
       </div>
-      <DigitalKeypad isOpen={keypad.isOpen} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({ ...keypad, isOpen: false })} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({ ...keypad, isOpen: false })} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
       {pauseModal.isOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"><div className="px-6 py-4 bg-orange-50 border-b border-orange-200 flex justify-between items-center"><h2 className="text-lg font-bold text-orange-800 flex items-center"><CalendarOff size={20} className="mr-2" />休止理由の登録</h2><button onClick={cancelPause} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20} /></button></div><div className="p-6 space-y-5">{localPatient?.pauseHistory?.length > 0 && (<div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs"><span className="font-bold text-slate-500">前回: </span><span className="font-bold text-slate-700">{latPause(localPatient)?.reason}</span><span className="text-slate-400 ml-2">{fD(latPause(localPatient)?.fromDate)}〜</span></div>)}<div><label className="text-xs font-bold text-slate-500 block mb-1">休止の理由</label><input type="text" value={pauseModal.reason} onChange={e => setPauseModal({ ...pauseModal, reason: e.target.value })} placeholder="例: 入院、自宅療養" className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div><div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label><input type="date" value={pauseModal.fromDate} onChange={e => setPauseModal({ ...pauseModal, fromDate: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div></div><div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3"><button onClick={cancelPause} className="px-5 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">キャンセル</button><button onClick={submitPause} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">確定</button></div></div></div>)}
       {/* 基本利用日変更モーダル */}
       {schedModal && (
