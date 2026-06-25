@@ -15270,13 +15270,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           const targetDateStr2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
           const _selYear2 = new Date(selectedDate).getFullYear();
           const hasRecord = (appData.ticketRecords||[]).some(r=>r.patientId===p.id&&recMatchesDateYear(r, targetDateStr2, _selYear2));
-          // ★ この日を「振替元」とする振替が他の日にあれば、欠席としてこの日に表示 (欠席記録/欠席シフトが欠けていても確実に出す)
+          // ★ この日に「欠席/振替」がシフトにあれば確実に表示 (AM/PM以外のキー= 全日「24_1日」等 も拾う)
+          //   comingAM/PM は 24_AM・24_PM しか見ないため、全日利用の欠席シフト等を取りこぼすのを防ぐ。
+          const _dayShifts = appData.monthlyShifts?.[monthKey]?.[p.id] || {};
+          const hasAbsentOrFuriThisDay = Object.keys(_dayShifts).some(k => k.startsWith(`${dayNum}_`) && (_dayShifts[k]==='欠席' || _dayShifts[k]==='振替' || _dayShifts[k]==='休業' || (typeof _dayShifts[k]==='string' && _dayShifts[k].startsWith('振'))));
+          // ★ この日を「振替元」とする振替が他の日にあれば、欠席としてこの日に表示 (欠席記録/欠席シフトが欠けていても出す)
           //   方法A: 振替記録 tokki「○月○日…分振替」から逆引き
-          //   方法B: シフト側の振替タグ から逆引き (スケジュール表はこのタグで振替を表示するため最も確実)
+          //   方法B: シフト側の振替タグ「振(M/D)」から逆引き (スケジュール表はこのタグで振替を表示するため最も確実)
           const _furiTag = `振(${new Date(selectedDate).getMonth()+1}/${new Date(selectedDate).getDate()})`;
           const hasFurikaeFromHere = (appData.ticketRecords||[]).some(r=>r.patientId===p.id && r.status==='振替' && (r.tokki||'').includes(targetDateStr2) && (r.tokki||'').includes('振替'))
             || Object.values(appData.monthlyShifts||{}).some(mo => Object.values((mo && mo[p.id]) || {}).some(v => v === _furiTag));
-          if (!comingAM && !comingPM && !hasRecord && !hasFurikaeFromHere) return false;
+          if (!comingAM && !comingPM && !hasRecord && !hasFurikaeFromHere && !hasAbsentOrFuriThisDay) return false;
           return true;
       })
       .map(p => {
@@ -15334,6 +15338,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
              if (_furiFrom || _furiDestLabel) {
                pData.status = '欠席';
                pData.tokki = _furiFrom ? `${_furiFrom.date||''}へ振替` : (_furiDestLabel ? `${_furiDestLabel}へ振替` : '振替');
+             } else {
+               // この日のシフトに欠席/休業が入っていれば反映 (記録が無くてもステータスを合わせる)
+               const _ds = appData.monthlyShifts?.[monthKey]?.[p.id] || {};
+               const _absKey = Object.keys(_ds).find(k => k.startsWith(`${dayNum}_`) && (_ds[k]==='欠席' || _ds[k]==='休業'));
+               if (_absKey) pData.status = _ds[_absKey];
              }
          }
          const pauseInfo = getPauseReasonOnDate(p, selectedDate);
