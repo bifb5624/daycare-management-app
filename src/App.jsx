@@ -28653,7 +28653,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         const scale=(opts,sel)=>opts.map(o=><span key={o} style={{marginRight:6,padding:sel===o?'0 3px':'0',fontWeight:sel===o?'bold':'normal',border:sel===o?'1.5px solid #000':'none',borderRadius:sel===o?'3px':0}}>{o}</span>);
         const pr=printRec; const bd=patient?.birthDate?new Date(patient.birthDate):null;
         return (
-        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'16px 34px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
           <style>{`#kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere} #kk-print-area *{max-width:100%}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－３</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
@@ -28692,9 +28692,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           <div style={{fontSize:'10px',fontWeight:'bold',margin:'2px 0'}}>個別機能訓練の目標</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'50%'}}>機能訓練の短期目標（今後3ヶ月）　目標達成度（達成・一部・未達）：{pr.shortAchieve||''}</td><td style={lab}>機能訓練の長期目標　目標達成度（達成・一部・未達）：{pr.longAchieve||''}</td></tr>
-            <tr><td style={{...cell,height:'44px'}}>（機能）{pr.shortKinou}</td><td style={{...cell,height:'44px'}}>（機能）{pr.longKinou}</td></tr>
-            <tr><td style={{...cell,height:'44px'}}>（活動）{pr.shortKatsudo}</td><td style={{...cell,height:'44px'}}>（活動）{pr.longKatsudo}</td></tr>
-            <tr><td style={{...cell,height:'44px'}}>（参加）{pr.shortSanka}</td><td style={{...cell,height:'44px'}}>（参加）{pr.longSanka}</td></tr>
+            <tr><td style={{...cell,height:'36px'}}>（機能）{pr.shortKinou}</td><td style={{...cell,height:'36px'}}>（機能）{pr.longKinou}</td></tr>
+            <tr><td style={{...cell,height:'36px'}}>（活動）{pr.shortKatsudo}</td><td style={{...cell,height:'36px'}}>（活動）{pr.longKatsudo}</td></tr>
+            <tr><td style={{...cell,height:'36px'}}>（参加）{pr.shortSanka}</td><td style={{...cell,height:'36px'}}>（参加）{pr.longSanka}</td></tr>
           </tbody></table>
           <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※短期目標（長期目標を達成するために必要な行為）は、訓練実施期間内に達成を目指す項目のみを記載することとして差し支えない。目標達成の目安となる期間もあわせて記載すること。</div>
           <div style={{fontSize:'10px',fontWeight:'bold',margin:'5px 0 2px'}}>個別機能訓練項目</div>
@@ -28722,7 +28722,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           <div style={sec}>Ⅲ　個別機能訓練実施後の対応</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'50%',textAlign:'center'}}>個別機能訓練の実施による変化</td><td style={{...lab,textAlign:'center'}}>個別機能訓練実施における課題とその要因</td></tr>
-            <tr><td style={{...cell,height:'110px'}}>{pr.henka}</td><td style={{...cell,height:'110px'}}>{pr.kadai}</td></tr>
+            <tr><td style={{...cell,height:'92px'}}>{pr.henka}</td><td style={{...cell,height:'92px'}}>{pr.kadai}</td></tr>
           </tbody></table>
           <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※実施結果等をふまえ、目標の見直しや訓練項目の変更等を行った場合は計画書の再作成又は更新等を行うこと。初回作成時にはⅢについては記載不要である。</div>
 
