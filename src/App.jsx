@@ -18188,14 +18188,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{display:'flex',alignItems:'stretch'}}>
                 {/* Y軸ラベル列（固定） — ★ 体温は小数 1 桁で表示 (38.0 / 36.5 等) */}
                 {/* ★ 太字 → 細字 (normal) で圧迫感を軽減 */}
-                <div style={{flexShrink:0,width: field==='temp'?38:32,position:'relative',height:H+14}}>
+                <div style={{flexShrink:0,width: field==='temp'?38:32,position:'relative',height:H+22}}>
                   {yTicks.map(v=>(
                     <div key={v} style={{position:'absolute',right:4,top:yP(v)-6,fontSize:12,color:'#64748b',fontWeight:'normal',lineHeight:1,textAlign:'right',whiteSpace:'nowrap'}}>{field==='temp' ? Number(v).toFixed(1) : v}</div>
                   ))}
                 </div>
                 {/* グラフ本体（横スクロール） */}
                 <div className="vital-scroll" style={{flex:1,minWidth:0,overflowX:'auto'}}>
-                <svg width={W+LW} height={H+14} style={{display:'block'}}>
+                <svg width={W+LW} height={H+22} style={{display:'block'}}>
                   {/* Y軸目盛グリッド線のみ */}
                   {yTicks.map(v=>(
                     <g key={v}>
@@ -18213,14 +18213,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {normalBand && <rect x={0} y={yP(normalBand.max)} width={W} height={yP(normalBand.min)-yP(normalBand.max)} fill={normalBand.color||'#bfdbfe'} opacity={0.25}/>}
                   {normalBand?.min2!=null && <rect x={0} y={yP(normalBand.max2)} width={W} height={yP(normalBand.min2)-yP(normalBand.max2)} fill={normalBand.color2||'#fda4af'} opacity={0.2}/>}
                   <line x1={0} y1={4} x2={0} y2={H-4} stroke="#e2e8f0" strokeWidth={1}/>
-                  {pts2.length>0&&<polyline points={pts2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.7}/>}
-                  <polyline points={pts1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
+                  {pts2.length>0&&<polyline points={pts2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={0.85}/>}
+                  <polyline points={pts1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={3.8} strokeLinecap="round" strokeLinejoin="round"/>
                   {/* max/min ハイライト輪郭（pts1） */}
-                  {maxP1&&<circle cx={xPV(maxP1.i)} cy={yP(maxP1.v)} r={7} fill="none" stroke="#ef4444" strokeWidth={2} opacity={0.4}/>}
-                  {minP1&&<circle cx={xPV(minP1.i)} cy={yP(minP1.v)} r={7} fill="none" stroke="#3b82f6" strokeWidth={2} opacity={0.4}/>}
+                  {maxP1&&<circle cx={xPV(maxP1.i)} cy={yP(maxP1.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45}/>}
+                  {minP1&&<circle cx={xPV(minP1.i)} cy={yP(minP1.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45}/>}
                   {/* max/min ハイライト輪郭（pts2） */}
-                  {maxP2&&<circle cx={xPV(maxP2.i)} cy={yP(maxP2.v)} r={7} fill="none" stroke="#ef4444" strokeWidth={2} opacity={0.4}/>}
-                  {minP2&&<circle cx={xPV(minP2.i)} cy={yP(minP2.v)} r={7} fill="none" stroke="#3b82f6" strokeWidth={2} opacity={0.4}/>}
+                  {maxP2&&<circle cx={xPV(maxP2.i)} cy={yP(maxP2.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45}/>}
+                  {minP2&&<circle cx={xPV(minP2.i)} cy={yP(minP2.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45}/>}
                   {/* max ラベル（pts1） */}
                   {maxP1&&<g>
                     <rect x={xPV(maxP1.i)-20} y={yP(maxP1.v)-22} width={40} height={14} rx={3} fill="#ef4444" opacity={0.85}/>
@@ -18241,49 +18241,54 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     <rect x={xPV(minP2.i)-20} y={yP(minP2.v)+8} width={40} height={14} rx={3} fill="#3b82f6" opacity={0.6}/>
                     <text x={xPV(minP2.i)} y={yP(minP2.v)+18} textAnchor="middle" fontSize={8} fill="white" fontWeight="bold">最低</text>
                   </g>}
-                  {/* 通常ドット（pts1） */}
+                  {/* 通常ドット（pts1）— 大きく + 広いタップ領域(透明r13) + タップでツールチップ開閉 */}
                   {pts1.map(p=>{
                     const warn=refLines&&refLines.some(r=>p.v>=r.v&&r.warn);
                     const isMax=p===maxP1, isMin=p===minP1;
+                    const show=()=>setVitalTooltip({x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:pts2.find(q=>q.i===p.i)});
                     return (
-                      <circle key={p.i} cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?3.5:2.5}
-                        fill={isMax?'#ef4444':isMin?'#3b82f6':warn?'#f97316':color1}
-                        stroke="white" strokeWidth={isMax||isMin?1.5:1}
-                        style={{cursor:'pointer'}}
-                        onMouseEnter={()=>setVitalTooltip({x:xPV(p.i),y:yP(p.v),d:p.d,field,pts2:pts2.find(q=>q.i===p.i)})}
-                        onMouseLeave={()=>setVitalTooltip(null)}/>
+                      <g key={p.i}>
+                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={14} fill="transparent" style={{cursor:'pointer'}}
+                          onClick={()=>setVitalTooltip(prev=>(prev&&prev.field===field&&prev.i===p.i)?null:{x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:pts2.find(q=>q.i===p.i)})}
+                          onMouseEnter={show} onMouseLeave={()=>setVitalTooltip(null)}/>
+                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?7:5}
+                          fill={isMax?'#ef4444':isMin?'#3b82f6':warn?'#f97316':color1}
+                          stroke="white" strokeWidth={isMax||isMin?2:1.5} pointerEvents="none"/>
+                      </g>
                     );
                   })}
                   {/* 通常ドット（pts2） */}
                   {pts2.map(p=>{
                     const isMax=p===maxP2, isMin=p===minP2;
                     return (
-                      <circle key={'d'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?3.5:2.5}
-                        fill={isMax?'#ef4444':isMin?'#3b82f6':color2}
-                        stroke="white" strokeWidth={isMax||isMin?1.5:1}
-                        style={{cursor:'pointer'}}
-                        onMouseEnter={()=>setVitalTooltip({x:xPV(p.i),y:yP(p.v),d:p.d,field,pts2:p})}
-                        onMouseLeave={()=>setVitalTooltip(null)}/>
+                      <g key={'d'+p.i}>
+                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={14} fill="transparent" style={{cursor:'pointer'}}
+                          onClick={()=>setVitalTooltip(prev=>(prev&&prev.field===field&&prev.i===p.i)?null:{x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:p})}
+                          onMouseEnter={()=>setVitalTooltip({x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:p})} onMouseLeave={()=>setVitalTooltip(null)}/>
+                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?7:5}
+                          fill={isMax?'#ef4444':isMin?'#3b82f6':color2}
+                          stroke="white" strokeWidth={isMax||isMin?2:1.5} pointerEvents="none"/>
+                      </g>
                     );
                   })}
                   {/* ツールチップ */}
                   {vitalTooltip&&vitalTooltip.field===field&&(()=>{
-                    const tx=Math.min(vitalTooltip.x+8,W-100), ty=Math.max(vitalTooltip.y-48,4);
+                    const tx=Math.min(vitalTooltip.x+8,W-155), ty=Math.max(vitalTooltip.y-58,4);
                     const d=vitalTooltip.d;
                     const lines=[d.date];
                     if(field==='bpUp') { lines.push(`収縮期: ${d.bpUp} mmHg`); if(d.bpDn) lines.push(`拡張期: ${d.bpDn} mmHg`); }
                     else if(field==='temp') lines.push(`体温: ${d.temp}℃`);
                     else if(field==='pulse') lines.push(`脈拍: ${d.pulse} 回/分`);
-                    const bh=lines.length*14+10;
+                    const bh=lines.length*18+12;
                     return (
                       <g>
-                        <rect x={tx} y={ty} width={120} height={bh} rx={4} fill="#1e293b" opacity={0.9}/>
-                        {lines.map((l,li)=><text key={li} x={tx+8} y={ty+14+li*14} fontSize={9.5} fill="white" fontWeight="bold">{l}</text>)}
+                        <rect x={tx} y={ty} width={150} height={bh} rx={5} fill="#1e293b" opacity={0.92}/>
+                        {lines.map((l,li)=><text key={li} x={tx+10} y={ty+18+li*18} fontSize={13} fill="white" fontWeight="bold">{l}</text>)}
                       </g>
                     );
                   })()}
                   {/* X軸日付ラベル */}
-                  {dailyData.map((d,i)=>showLabel(i)?<text key={i} x={xPV(i)} y={H+11} textAnchor="middle" fontSize={8} fill="#000" fontWeight="bold">{d.label}</text>:null)}
+                  {dailyData.map((d,i)=>showLabel(i)?<text key={i} x={xPV(i)} y={H+12} textAnchor="middle" fontSize={11} fill="#000" fontWeight="bold">{d.label}</text>:null)}
                 </svg>
                 </div>
               </div>
