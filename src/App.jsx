@@ -16575,6 +16575,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
+  const [vitalPhase, setVitalPhase] = useState('start'); // 血圧・脈グラフの表示: 'start'(通所時) / 'end'(終了時) / 'both'(両方)
   const [selExId, setSelExId] = useState(null);
   const [selFitId, setSelFitId] = useState(null);
   const [collapsedSecs, setCollapsedSecs] = useState({});
@@ -18103,19 +18104,27 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             bpUp:r.bpUpSt?Number(r.bpUpSt):null,
             bpDn:r.bpDnSt?Number(r.bpDnSt):null,
             pulse:r.plSt?Number(r.plSt):null,
+            bpUpEn:r.bpUpEn?Number(r.bpUpEn):null,
+            bpDnEn:r.bpDnEn?Number(r.bpDnEn):null,
+            pulseEn:r.plEn?Number(r.plEn):null,
             kibunArrival:r.kibunArrival||null,
             kibunDeparture:r.kibunDeparture||null,
           }));
+          // 終了時(運動後)の血圧・脈データが1件でもあるか (無い店舗では終了/両方を出さない)
+          const hasEndVital = rawData.some(d=>d.bpUpEn!=null || d.pulseEn!=null);
           const dailyData = (displayMode==='daily' || (period !== 'all' && parseInt(period,10) < 6)) ? rawData : (()=>{
             const monthMap = {};
             rawData.forEach(d=>{
               const m = d.date.match(/(\d+)月/);
               const key = m ? m[1].padStart(2,'0') : '?';
-              if(!monthMap[key]) monthMap[key]={key, temps:[],bpUps:[],bpDns:[],pulses:[]};
+              if(!monthMap[key]) monthMap[key]={key, temps:[],bpUps:[],bpDns:[],pulses:[],bpUpsEn:[],bpDnsEn:[],pulsesEn:[]};
               if(d.temp!=null) monthMap[key].temps.push(d.temp);
               if(d.bpUp!=null) monthMap[key].bpUps.push(d.bpUp);
               if(d.bpDn!=null) monthMap[key].bpDns.push(d.bpDn);
               if(d.pulse!=null) monthMap[key].pulses.push(d.pulse);
+              if(d.bpUpEn!=null) monthMap[key].bpUpsEn.push(d.bpUpEn);
+              if(d.bpDnEn!=null) monthMap[key].bpDnsEn.push(d.bpDnEn);
+              if(d.pulseEn!=null) monthMap[key].pulsesEn.push(d.pulseEn);
             });
             const avg = arr => arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length*10)/10 : null;
             // 12ヶ月分を必ず生成
@@ -18133,6 +18142,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               bpUp: mv?avg(mv.bpUps):null,
               bpDn: mv?avg(mv.bpDns):null,
               pulse: mv?avg(mv.pulses):null,
+              bpUpEn: mv?avg(mv.bpUpsEn):null,
+              bpDnEn: mv?avg(mv.bpDnsEn):null,
+              pulseEn: mv?avg(mv.pulsesEn):null,
               kibunArrival: null,
               kibunDeparture: null,
             });
@@ -18163,7 +18175,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const VitalChart = ({field,color1,color2,yMin,yMax,refLines,normalBand,title,legend1,legend2,unit}) => {
             const pts1=dailyData.map((d,i)=>({v:d[field],i,d})).filter(p=>p.v!==null);
             const pts2=color2?dailyData.map((d,i)=>({v:d.bpDn,i,d})).filter(p=>p.v!==null):[];
-            if(!pts1.length) return <div style={{height:H+30,display:'flex',alignItems:'center',justifyContent:'center',color:'#e2e8f0',fontSize:13}}>データなし</div>;
+            // ★ 終了時(運動後)シリーズ — vitalPhase==='both' のときだけ点線で重ねる (血圧・脈のみ)
+            const _isBpPulse = field==='bpUp' || field==='pulse';
+            const showEnd = vitalPhase==='both' && _isBpPulse;
+            const _eF1 = field==='bpUp' ? 'bpUpEn' : 'pulseEn';
+            const _eF2 = field==='bpUp' ? 'bpDnEn' : null;
+            const ptsE1 = showEnd ? dailyData.map((d,i)=>({v:d[_eF1],i,d})).filter(p=>p.v!==null) : [];
+            const ptsE2 = (showEnd && _eF2) ? dailyData.map((d,i)=>({v:d[_eF2],i,d})).filter(p=>p.v!==null) : [];
+            if(!pts1.length && !ptsE1.length) return <div style={{height:H+30,display:'flex',alignItems:'center',justifyContent:'center',color:'#e2e8f0',fontSize:13}}>データなし</div>;
             const mn=yMin, mx=yMax, rng=mx-mn;
             // ★ Y 軸の真上に重ならないよう半ステップ右にずらして開始 (運動トレンドと統一)
             const xPV=(i)=>PAD_X + _STEP/2 + i*_STEP;
@@ -18215,6 +18234,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   <line x1={0} y1={4} x2={0} y2={H-4} stroke="#e2e8f0" strokeWidth={1}/>
                   {pts2.length>0&&<polyline points={pts2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" opacity={0.85}/>}
                   <polyline points={pts1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={3.8} strokeLinecap="round" strokeLinejoin="round"/>
+                  {/* ★ 終了時(点線): 運動後の血圧・脈。 通所時(実線)と区別 */}
+                  {ptsE2.length>0&&<polyline points={ptsE2.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color2} strokeWidth={2.5} strokeDasharray="7,5" strokeLinecap="round" strokeLinejoin="round" opacity={0.75}/>}
+                  {ptsE1.length>0&&<polyline points={ptsE1.map(p=>`${xPV(p.i)},${yP(p.v)}`).join(' ')} fill="none" stroke={color1} strokeWidth={3} strokeDasharray="7,5" strokeLinecap="round" strokeLinejoin="round" opacity={0.8}/>}
+                  {ptsE1.map(p=>(<circle key={'e1'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={4.5} fill="white" stroke={color1} strokeWidth={2.2} pointerEvents="none"/>))}
+                  {ptsE2.map(p=>(<circle key={'e2'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={4.5} fill="white" stroke={color2} strokeWidth={2.2} pointerEvents="none"/>))}
                   {/* max/min ハイライト輪郭（pts1） */}
                   {maxP1&&<circle cx={xPV(maxP1.i)} cy={yP(maxP1.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45}/>}
                   {minP1&&<circle cx={xPV(minP1.i)} cy={yP(minP1.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45}/>}
@@ -18276,9 +18300,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     const tx=Math.min(vitalTooltip.x+8,W-155), ty=Math.max(vitalTooltip.y-58,4);
                     const d=vitalTooltip.d;
                     const lines=[d.date];
-                    if(field==='bpUp') { lines.push(`収縮期: ${d.bpUp} mmHg`); if(d.bpDn) lines.push(`拡張期: ${d.bpDn} mmHg`); }
+                    if(field==='bpUp') {
+                      if(d.bpUp!=null) lines.push(`通所時: ${d.bpUp}/${d.bpDn??'-'} mmHg`);
+                      if(d.bpUpEn!=null) lines.push(`終了時: ${d.bpUpEn}/${d.bpDnEn??'-'} mmHg`);
+                    }
                     else if(field==='temp') lines.push(`体温: ${d.temp}℃`);
-                    else if(field==='pulse') lines.push(`脈拍: ${d.pulse} 回/分`);
+                    else if(field==='pulse') {
+                      if(d.pulse!=null) lines.push(`通所時: ${d.pulse} 回/分`);
+                      if(d.pulseEn!=null) lines.push(`終了時: ${d.pulseEn} 回/分`);
+                    }
                     const bh=lines.length*18+12;
                     return (
                       <g>
@@ -18371,12 +18401,20 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                   </div>
                 </div>
-                {/* ★ 凡例をグラフ直上に移動 */}
+                {/* ★ 凡例をグラフ直上に移動 + 終了時(運動後)の表示切替 */}
+                {hasEndVital && (
+                  <div style={{display:'inline-flex',gap:4,background:'#f1f5f9',borderRadius:10,padding:3,marginBottom:8}}>
+                    {[['start','通所時のみ'],['both','通所時＋終了時(運動後)']].map(([k,label])=>(
+                      <button key={k} onClick={()=>setVitalPhase(k)} style={{padding:'5px 12px',borderRadius:8,border:'none',fontSize:12,fontWeight:'bold',cursor:'pointer',background:vitalPhase===k?'#2563eb':'transparent',color:vitalPhase===k?'#fff':'#64748b'}}>{label}</button>
+                    ))}
+                  </div>
+                )}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期</span>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#bfdbfe',opacity:0.7,display:'inline-block',borderRadius:2}}/>収縮期 正常 (100-129)</span>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期</span>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#fbcfe8',opacity:0.7,display:'inline-block',borderRadius:2}}/>拡張期 正常 (60-84)</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期(通所時)</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期(通所時)</span>
+                  {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #3b82f6',display:'inline-block'}}/>終了時(運動後・点線)</span>}
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#bfdbfe',opacity:0.7,display:'inline-block',borderRadius:2}}/>正常 収縮100-129</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#fbcfe8',opacity:0.7,display:'inline-block',borderRadius:2}}/>正常 拡張60-84</span>
                 </div>
                 <VitalChart field="bpUp" color1={bpWarn?'#ef4444':'#3b82f6'} color2={'#f87171'} yMin={40} yMax={180}
                   refLines={[
@@ -18411,9 +18449,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>}
                   </div>
                 </div>
-                {/* ★ 凡例をグラフ直上に移動 */}
+                {/* ★ 凡例 + 終了時(運動後)の表示切替 */}
+                {hasEndVital && (
+                  <div style={{display:'inline-flex',gap:4,background:'#f1f5f9',borderRadius:10,padding:3,marginBottom:8}}>
+                    {[['start','通所時のみ'],['both','通所時＋終了時(運動後)']].map(([k,label])=>(
+                      <button key={k} onClick={()=>setVitalPhase(k)} style={{padding:'5px 12px',borderRadius:8,border:'none',fontSize:12,fontWeight:'bold',cursor:'pointer',background:vitalPhase===k?'#2563eb':'transparent',color:vitalPhase===k?'#fff':'#64748b'}}>{label}</button>
+                    ))}
+                  </div>
+                )}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（回/分）</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（通所時）</span>
+                  {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #22c55e',display:'inline-block'}}/>終了時(運動後・点線)</span>}
                 </div>
                 <VitalChart field="pulse" color1={pulseWarn?'#ef4444':'#22c55e'} yMin={40} yMax={130}
                   refLines={[
