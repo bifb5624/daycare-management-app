@@ -25371,6 +25371,35 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
   const [newPerson, setNewPerson] = useState({ office: "", name: "", phone: "" });
+  // ★ ケアマネ事業所/担当者の編集モーダル。 編集確定で各利用者マスタの担当ケアマネも自動更新する。
+  const [cmEditModal, setCmEditModal] = useState(null); // {kind:'office'|'person', orig:{...}, form:{...}}
+  const saveCmEdit = () => {
+    if (!cmEditModal) return;
+    const { kind, orig, form } = cmEditModal;
+    if (kind === 'office') {
+      const newName = (form.name||'').trim();
+      if (!newName) { alert('事業所名を入力してください'); return; }
+      const newOffices = cmOffices.map(o => o===orig ? { ...o, name:newName, phone:formatJpPhone(form.phone), fax:formatJpPhone(form.fax) } : o);
+      // 担当者の所属事業所名・FAXも更新
+      const newPersons = cmPersons.map(c => c.office===orig.name ? { ...c, office:newName, fax:formatJpPhone(form.fax) } : c);
+      // 各利用者マスタの担当ケアマネ事業所・FAXを更新
+      const newPatients = (appData.patients||[]).map(p => p.cmOffice===orig.name ? { ...p, cmOffice:newName, cmFax:formatJpPhone(form.fax) } : p);
+      setCmOffices(newOffices); setCmPersons(newPersons);
+      onSave({ ...appData, patients:newPatients, systemSettings:{ ...appData.systemSettings, cmOffices:newOffices, careManagers:newPersons } }, { manual:true, message:'✓ ケアマネ事業所を更新しました' });
+    } else {
+      const newName = (form.name||'').trim();
+      if (!form.office || !newName) { alert('事業所と担当者名を入力してください'); return; }
+      const dir = formatJpPhone(form.phone);
+      const offFax = cmOffices.find(o=>o.name===form.office)?.fax || orig.fax || '';
+      const offPhone = cmOffices.find(o=>o.name===form.office)?.phone || '';
+      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, phone:dir, phoneDirect:dir, fax:offFax } : c);
+      // 各利用者マスタの担当ケアマネ(旧 office+name 一致)を更新
+      const newPatients = (appData.patients||[]).map(p => (p.cmOffice===orig.office && p.cmName===orig.name) ? { ...p, cmOffice:form.office, cmName:newName, cmPhone:offPhone||p.cmPhone, cmFax:offFax } : p);
+      setCmPersons(newPersons);
+      onSave({ ...appData, patients:newPatients, systemSettings:{ ...appData.systemSettings, careManagers:newPersons } }, { manual:true, message:'✓ 担当ケアマネを更新しました' });
+    }
+    setCmEditModal(null);
+  };
   const [officeSearch, setOfficeSearch] = useState('');   // ★ ケアマネ事業所の検索
   const [managerSearch, setManagerSearch] = useState(''); // ★ 担当ケアマネの検索
   const [facilityInfo, setFacilityInfo] = useState(appData.systemSettings?.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" });
@@ -25464,6 +25493,43 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
 
   return (
     <div className="h-full overflow-hidden flex flex-col bg-slate-100">
+      {/* ★ ケアマネ事業所/担当者の編集モーダル (確定で各利用者マスタの担当ケアマネも自動更新) */}
+      {cmEditModal && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={()=>setCmEditModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
+            <div className="text-base font-bold text-slate-800 mb-1">{cmEditModal.kind==='office'?'🏢 ケアマネ事業所を編集':'👤 担当ケアマネを編集'}</div>
+            <div className="text-[11px] text-slate-400 mb-4">変更すると、この事業所/担当者を設定している<b>全利用者の担当ケアマネ情報も自動で更新</b>されます。</div>
+            {cmEditModal.kind==='office' ? (
+              <div className="space-y-3">
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">事業所名</label>
+                  <input value={cmEditModal.form.name} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,name:e.target.value}}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号</label>
+                    <input value={cmEditModal.form.phone} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,phone:e.target.value}}))} onBlur={()=>setCmEditModal(m=>({...m,form:{...m.form,phone:formatJpPhone(m.form.phone)}}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">FAX</label>
+                    <input value={cmEditModal.form.fax} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,fax:e.target.value}}))} onBlur={()=>setCmEditModal(m=>({...m,form:{...m.form,fax:formatJpPhone(m.form.fax)}}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">所属事業所</label>
+                  <select value={cmEditModal.form.office} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,office:e.target.value}}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400">
+                    <option value="">所属事業所を選択...</option>
+                    {cmOffices.map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
+                  </select></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">担当者名</label>
+                  <input value={cmEditModal.form.name} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,name:e.target.value}}))} placeholder="例: 鈴木 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号（直通）</label>
+                  <input value={cmEditModal.form.phone} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,phone:e.target.value}}))} onBlur={()=>setCmEditModal(m=>({...m,form:{...m.form,phone:formatJpPhone(m.form.phone)}}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+              </div>
+            )}
+            <div className="flex gap-3 mt-5">
+              <button onClick={()=>setCmEditModal(null)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
+              <button onClick={saveCmEdit} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">💾 更新</button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 上部タブナビ（横）+ 右側に保存ボタン */}
       <div className="bg-white border-b border-slate-200 px-4 pt-3 shrink-0 flex items-center gap-3">
         <div className="flex gap-1 overflow-x-auto pb-0 flex-nowrap flex-1 min-w-0">
@@ -25985,7 +26051,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                                 <div className="font-bold text-sm text-slate-800 truncate">{o.name}</div>
                                 <div className="text-[11px] text-slate-500 truncate">{o.phone||'-'} / FAX {o.fax||'-'}</div>
                               </div>
-                              <button type="button" onClick={(e)=>{e.stopPropagation(); setCmOffices(cmOffices.filter((_,j)=>j!==o.origIdx)); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-2 shrink-0"><Trash2 size={14}/></button>
+                              <button type="button" onClick={(e)=>{e.stopPropagation(); setCmEditModal({kind:'office', orig:o, form:{name:o.name||'', phone:o.phone||'', fax:o.fax||''}});}} className="text-slate-300 hover:text-blue-500 p-1 ml-1 shrink-0" title="編集"><Edit3 size={14}/></button>
+                              <button type="button" onClick={(e)=>{e.stopPropagation(); setCmOffices(cmOffices.filter((_,j)=>j!==o.origIdx)); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                             </div>
                           );
                         })}</div>
@@ -26050,7 +26117,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                                 e.target.value='';
                               }}/>
                             </label>
-                            <button type="button" onClick={()=>setCmPersons(cmPersons.filter((_,j)=>j!==origIdx))} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0"><Trash2 size={14}/></button>
+                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
+                            <button type="button" onClick={()=>setCmPersons(cmPersons.filter((_,j)=>j!==origIdx))} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                           </div>
                           {cards.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1.5 pl-1">
