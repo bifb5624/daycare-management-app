@@ -16137,9 +16137,19 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                                 const isOpen=el.style.display==='block';
                                 const closeEl=()=>{el.style.display='none';document.removeEventListener('click',closeEl,true);document.removeEventListener('scroll',closeEl,true);};
                                 if(isOpen){el.style.display='none';}else{
-                                  el.style.display='block';
-                                  el.style.top=(rect.top-10)+'px';el.style.left=(rect.left+rect.width/2)+'px';el.style.transform='translate(-50%,-100%)';
+                                  // ★ 内容を先に入れてから実寸で中央寄せ＋画面内クランプ（iPadで左にズレるのを防ぐ）
                                   el.innerHTML=recs.length===0?'<div style="padding:4px 8px;font-size:11px">履歴なし</div>':[...recs].reverse().map(r=>'<div style="padding:3px 10px;font-size:11px"><span style="color:#94a3b8">'+(r.date||'').replace(/^\d{4}-/,'').replace('-','/')+'</span><b style="color:white;margin-left:6px">'+(r.massage||'')+'</b></div>').join('');
+                                  el.style.transform='none';
+                                  el.style.visibility='hidden';
+                                  el.style.display='block';
+                                  const tw=el.offsetWidth||120, th=el.offsetHeight||30;
+                                  let left=rect.left+rect.width/2-tw/2;
+                                  left=Math.max(6, Math.min(left, window.innerWidth-tw-6));
+                                  let top=rect.top-th-8;
+                                  if(top<6) top=rect.bottom+8; // 上に入らなければ下に
+                                  el.style.left=left+'px';
+                                  el.style.top=top+'px';
+                                  el.style.visibility='visible';
                                   setTimeout(()=>{document.addEventListener('click',closeEl,true);document.addEventListener('scroll',closeEl,true);},50);
                                 }
                               }
