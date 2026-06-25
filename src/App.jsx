@@ -10983,8 +10983,9 @@ function FamilyView() {
                         inviteFallback: { patientId: invite.patientId, storeId: invite.storeId || invite.store_id || null, expiresAt: invite.expiresAt },
                       });
                       _sbStoreId = _sbResult?.account?.store_id || _sbResult?.invite?.store_id || null;
-                      // ★ 緊急連絡先を Supabase 側の patient にも反映 (staff 側からも見えるように)
-                      const _storeId = invite.storeId || invite.store_id || null;
+                      // ★ 緊急連絡先を Supabase 側の patient にも反映 (staff 側からも見えるように)。
+                      //   invite に storeId が無いケースがあるため、Supabaseが返す確実な店舗ID(_sbStoreId)を最優先。
+                      const _storeId = _sbStoreId || invite.storeId || invite.store_id || null;
                       if (_storeId) {
                         const patchedPatient = (updated.patients||[]).find(p => p.id === invite.patientId);
                         if (patchedPatient) {
@@ -13454,10 +13455,11 @@ export default function App() {
       try {
         const photos = appData.familyPhotos || [];
         localStorage.setItem('daycareAppData_v3', JSON.stringify({...appData, familyPhotos: []}));
-        try { localStorage.setItem('daycarePhotos_v1', JSON.stringify(photos)); } catch(_e){ console.error('写真保存も失敗', _e); }
+        try { localStorage.setItem('daycarePhotos_v1', JSON.stringify(photos)); } catch(_e){ console.warn('写真のローカル保存をスキップ', _e); }
       } catch(e2) {
-        console.error('再保存も失敗。データを保存できませんでした', e2);
-        alert('データ保存容量を超えました。写真の数を減らすか、古い記録を整理してください。');
+        // ★ スマホの内蔵ブラウザ等はlocalStorage容量が極小で、ログイン画面でもここに来る。
+        //   クラウド(Supabase)が正データなのでローカル保存失敗は致命的でない → アラートは出さず静かにログのみ。
+        console.warn('localStorageへの保存に失敗(クラウド同期は継続)', e2);
       }
     }
     // ★ Supabase 同期 (debounce 1.5秒 - 店舗ごとに保存)
@@ -28966,7 +28968,8 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   return { ...r, tokki: newTokki };
                 });
               });
-              onSave({...appData, faxDataStore: {...(appData.faxDataStore||{}), ...faxData}, ticketRecords: newTickets});
+              if (dirtyRef) dirtyRef.current = false;
+              onSave({...appData, faxDataStore: {...(appData.faxDataStore||{}), ...faxData}, ticketRecords: newTickets}, { manual: true, message: '✓ 休み連絡を保存しました' });
             }} style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
               <Save size={13}/> 保存
             </button>
