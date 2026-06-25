@@ -1306,6 +1306,8 @@ function createBlankAppData(storeRecord, staffSession) {
     contactBooks: [],
     initialReports: [],
     kinouKeikakuRecords: [],
+    seikatsuKinouRecords: [],
+    kyomiKanshinRecords: [],
     systemSettings: {
       facilityInfo: facility,
       // 運動メニュー: 初期は空 (事業所ごとに追加してもらう)
@@ -14182,6 +14184,10 @@ export default function App() {
   const generalFaxSaveFnRef = React.useRef(null);
   const kinouKeikakuDirtyRef = React.useRef(false);
   const kinouKeikakuSaveFnRef = React.useRef(null);
+  const seikatsuKinouDirtyRef = React.useRef(false);
+  const seikatsuKinouSaveFnRef = React.useRef(null);
+  const kyomiKanshinDirtyRef = React.useRef(false);
+  const kyomiKanshinSaveFnRef = React.useRef(null);
   // ★ データ消失対策: アプリ切替/タブ離脱/スリープ移行時に、開いている入力画面の未保存データを自動保存。
   //   入力画面は「保存」を押すまでローカル保持のため、押さずに離れると消える。 これを背景化時に拾う。
   useEffect(() => {
@@ -14192,6 +14198,8 @@ export default function App() {
       monitoring: [monitoringDirtyRef, monitoringSaveFnRef], ticket: [ticketDirtyRef, ticketSaveFnRef],
       absence_fax: [absenceDirtyRef, absenceSaveFnRef], general_fax: [generalFaxDirtyRef, generalFaxSaveFnRef],
       kinou_keikaku: [kinouKeikakuDirtyRef, kinouKeikakuSaveFnRef],
+      seikatsu_kinou: [seikatsuKinouDirtyRef, seikatsuKinouSaveFnRef],
+      kyomi_kanshin: [kyomiKanshinDirtyRef, kyomiKanshinSaveFnRef],
     };
     // 現在の画面のみ保存 (他画面の古い ref を呼ぶと過去状態で上書きしてしまうため)
     const flushCurrent = () => {
@@ -14382,7 +14390,9 @@ export default function App() {
                    (currentView === 'ticket' && ticketDirtyRef.current) ||
                    (currentView === 'absence_fax' && absenceDirtyRef.current) ||
                    (currentView === 'general_fax' && generalFaxDirtyRef.current) ||
-                   (currentView === 'kinou_keikaku' && kinouKeikakuDirtyRef.current);
+                   (currentView === 'kinou_keikaku' && kinouKeikakuDirtyRef.current) ||
+                   (currentView === 'seikatsu_kinou' && seikatsuKinouDirtyRef.current) ||
+                   (currentView === 'kyomi_kanshin' && kyomiKanshinDirtyRef.current);
     if (isDirty && view !== currentView) {
       setNavConfirm({ view, patientId });
       return;
@@ -15051,6 +15061,8 @@ export default function App() {
                  currentView === 'general_fax' ? '各種連絡' :
                  currentView === 'monitoring' ? 'モニタリング' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
+                 currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
+                 currentView === 'kyomi_kanshin' ? '興味・関心チェックシート' :
                  currentView === 'master' ? '利用者マスタ管理' :
                  currentView === 'dash_personal' ? '分析（個人）' :
                  currentView === 'dash_operation' ? '分析（稼働）' :
@@ -15105,7 +15117,9 @@ export default function App() {
              currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'fitness' ? <FitnessView appData={appData} onSave={handleSaveToCloud} selectedDate={selectedDate} sharedAmpm={sharedAmpm} navigateTo={navigateTo} targetPatientId={targetPatientId} onPatientChange={setTargetPatientId} dirtyRef={fitnessDirtyRef} saveFnRef={fitnessSaveFnRef} /> :
              currentView === 'monitoring' ? <MonitoringView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={monitoringDirtyRef} saveFnRef={monitoringSaveFnRef} /> :
-             currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
+             currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
+             currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
+             currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
              currentView === 'dash_operation' ? <OperationDashboardView appData={appData} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} setAppData={setAppData} /> :
              <div className="flex h-full items-center justify-center text-slate-400 font-bold">開発中</div>}
           </div></div></main>
@@ -28363,8 +28377,34 @@ function KKField({ label, value, onChange, rows, ph }) {
   );
 }
 
+// 個別機能訓練 関連書類のタブ帯 (計画書3-3 / 生活機能チェック3-2 / 興味関心3-1 を相互リンク)
+const KEIKAKU_DOCS = [['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)']];
+function KeikakuTabs({ current, navigateTo }) {
+  if (!navigateTo) return null;
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {KEIKAKU_DOCS.map(([v,l]) => (
+        <button key={v} onClick={()=>navigateTo(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${current===v?'bg-blue-600 text-white':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{l}</button>
+      ))}
+    </div>
+  );
+}
+// 状態選択セル (生活機能チェック用)
+const KKSelect = ({ value, onChange, opts }) => (
+  <select value={value||''} onChange={e=>onChange(e.target.value)} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none">
+    <option value="">―</option>{opts.map(o=><option key={o} value={o}>{o}</option>)}
+  </select>
+);
+const KK_STATUS = ['自立','見守り','一部介助','全介助'];
+const KK_SHINSHIN = ['なし','軽度','中等度','重度'];
+const SEIKATSU_ADL = ['食事','移乗','整容','トイレ動作','入浴','歩行','階段昇降','更衣','排便管理','排尿管理'];
+const SEIKATSU_KIKYO = ['寝返り','起き上がり','座位保持','立ち上がり','立位保持'];
+const SEIKATSU_IADL = ['調理','掃除','洗濯','買い物','交通機関の利用','服薬管理','金銭管理','電話の使用'];
+const SEIKATSU_SHINSHIN = ['麻痺','関節拘縮','筋力低下','関節痛','バランス低下','嚥下障害','視力低下','聴力低下'];
+const KYOMI_DEFAULT = ['自分でトイレに行く','一人でお風呂に入る','自分で服を着る','自分で食べる','歯磨きをする','身だしなみを整える','好きなときに眠る','掃除・整理整頓','料理を作る','買い物','散歩','友人とのおしゃべり','家族・親戚との団らん','趣味の活動','スポーツ','旅行・外出','庭いじり・園芸','読書','俳句・川柳','書道','絵を描く','写真','音楽を聴く','歌・カラオケ','楽器の演奏','将棋・囲碁・麻雀','編み物・手芸','針仕事','テレビ・映画','パソコン・スマホ','賃金を伴う仕事','ボランティア活動','地域の行事・活動','子や孫の世話','動物の世話','お参り・信仰'];
+
 // === 個別機能訓練計画書 (アドオン: kinou_keikaku) ===
-function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview }) {
+function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
   const [pid, setPid] = React.useState(patients[0]?.id ?? null);
@@ -28433,7 +28473,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     <div className="flex flex-col h-full">
       {/* ヘッダ */}
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
-        <h2 className="text-base font-bold text-slate-800">📝 個別機能訓練計画書</h2>
+        <KeikakuTabs current="kinou_keikaku" navigateTo={navigateTo}/>
         <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
@@ -28671,6 +28711,233 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         </div>
         );
       })()}
+    </div>
+  );
+}
+
+// === 生活機能チェックシート (別紙様式3-2 / アドオン: kinou_keikaku) ===
+function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo }) {
+  const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
+  const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
+  const [pid, setPid] = React.useState(patients[0]?.id ?? null);
+  const [editing, setEditing] = React.useState(null);
+  const patient = (appData.patients||[]).find(p => p.id === pid);
+  const facility = appData.systemSettings?.facilityInfo || {};
+  const toReiwa = (iso) => { if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return iso; return `令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`; };
+  const records = (appData.seikatsuKinouRecords||[]).filter(r => r.patientId === pid).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const newRecord = () => ({ id:`sk_${pid}_${Date.now()}`, patientId:pid, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10)), recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:patient?.ryui||'', bikou:'' });
+  const upd = (patch) => { setEditing(e=>({...e,...patch})); markDirty(); };
+  const updMap = (group,key,val) => { setEditing(e=>({...e,[group]:{...(e[group]||{}),[key]:val}})); markDirty(); };
+  const saveRecord = () => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message:'✓ 生活機能チェックシートを保存しました'}); if(dirtyRef)dirtyRef.current=false; setEditing(null); };
+  React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
+  const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,seikatsuKinouRecords:(appData.seikatsuKinouRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
+  const dupRecord = (r) => setEditing({...r, id:`sk_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
+  const printRec = editing || records[0] || null;
+  const grpForm = (title, group, items, opts) => (
+    <div className="bg-white rounded-xl border border-slate-200 p-4">
+      <div className="text-sm font-bold text-blue-700 mb-2">{title}</div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {items.map(it => (
+          <div key={it} className="flex items-center gap-2">
+            <span className="text-xs text-slate-600 w-24 shrink-0">{it}</span>
+            <KKSelect value={editing[group]?.[it]} onChange={v=>updMap(group,it,v)} opts={opts}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  const cellB={border:'1px solid #000',padding:'3px 6px',fontSize:'10.5px',verticalAlign:'top'};
+  const labB={...cellB,background:'#f3f4f6',fontWeight:'bold',whiteSpace:'nowrap'};
+  return (
+    <div className="flex flex-col h-full">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <KeikakuTabs current="seikatsu_kinou" navigateTo={navigateTo}/>
+        <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
+          {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <div className="flex-1"/>
+        {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
+        {editing && <>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef)dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={saveRecord} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">💾 保存</button>
+        </>}
+        {printRec && <button onClick={()=>onShowPrintPreview('生活機能チェックシート','A4','sk-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">🖨 印刷/PDF</button>}
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+        {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : editing ? (
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様）</div>
+              <div className="grid grid-cols-2 gap-3">
+                <KKField label="作成日" value={editing.recordDate} onChange={v=>upd({recordDate:v})} ph="令和○年○月○日"/>
+                <KKField label="記入者" value={editing.recorder} onChange={v=>upd({recorder:v})}/>
+              </div>
+            </div>
+            {grpForm('起居動作','kikyo',SEIKATSU_KIKYO,KK_STATUS)}
+            {grpForm('ADL（日常生活動作）','adl',SEIKATSU_ADL,KK_STATUS)}
+            {grpForm('IADL（手段的日常生活動作）','iadl',SEIKATSU_IADL,KK_STATUS)}
+            {grpForm('心身機能・構造（程度）','shinshin',SEIKATSU_SHINSHIN,KK_SHINSHIN)}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 grid md:grid-cols-1 gap-3">
+              <KKField label="認知機能・コミュニケーション" value={editing.ninchi} onChange={v=>upd({ninchi:v})} rows={2}/>
+              <KKField label="生活上の課題・背景因子" value={editing.kadai} onChange={v=>upd({kadai:v})} rows={2}/>
+              <KKField label="備考" value={editing.bikou} onChange={v=>upd({bikou:v})} rows={2}/>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto">
+            {records.length === 0 ? (
+              <div className="text-center text-slate-400 py-16"><div className="font-bold mb-2">{patient?.name} 様の生活機能チェックシートはまだありません</div><button onClick={()=>setEditing(newRecord())} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow">＋ 新規作成</button></div>
+            ) : (
+              <div className="space-y-2">{records.map(r=>(
+                <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-3">
+                  <div className="font-bold text-slate-800">作成日: {r.recordDate}{r.recorder?`／記入者: ${r.recorder}`:''}</div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={()=>setEditing(r)} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-bold">編集</button>
+                    <button onClick={()=>dupRecord(r)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">複製</button>
+                    <button onClick={()=>delRecord(r.id)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold">削除</button>
+                  </div>
+                </div>
+              ))}</div>
+            )}
+          </div>
+        )}
+      </div>
+      {printRec && (
+        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'24px 26px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.4}}>
+          <div style={{fontSize:'10px'}}>別紙様式３－２</div>
+          <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【生活機能チェックシート】</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+            <tr><td style={labB}>氏名</td><td style={cellB}>{patient?.name} 様</td><td style={labB}>作成日</td><td style={cellB}>{printRec.recordDate}</td><td style={labB}>記入者</td><td style={cellB}>{printRec.recorder}</td></tr>
+          </tbody></table>
+          {[['起居動作',SEIKATSU_KIKYO,'kikyo'],['ADL（日常生活動作）',SEIKATSU_ADL,'adl'],['IADL（手段的日常生活動作）',SEIKATSU_IADL,'iadl'],['心身機能・構造',SEIKATSU_SHINSHIN,'shinshin']].map(([title,items,grp])=>(
+            <div key={grp}>
+              <div style={{fontWeight:'bold',fontSize:'11px',margin:'6px 0 2px'}}>{title}</div>
+              <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+                {Array.from({length:Math.ceil(items.length/2)}).map((_,r)=>(
+                  <tr key={r}>{[0,1].map(c=>{ const it=items[r*2+c]; return it?(<React.Fragment key={c}><td style={{...labB,width:'22%'}}>{it}</td><td style={{...cellB,width:'28%'}}>{printRec[grp]?.[it]||''}</td></React.Fragment>):<React.Fragment key={c}><td style={cellB}></td><td style={cellB}></td></React.Fragment>; })}</tr>
+                ))}
+              </tbody></table>
+            </div>
+          ))}
+          <table style={{width:'100%',borderCollapse:'collapse',marginTop:'6px'}}><tbody>
+            <tr><td style={labB}>認知・コミュニケーション</td><td style={cellB}>{printRec.ninchi}</td></tr>
+            <tr><td style={labB}>生活上の課題・背景因子</td><td style={cellB}>{printRec.kadai}</td></tr>
+            <tr><td style={labB}>備考</td><td style={cellB}>{printRec.bikou}</td></tr>
+          </tbody></table>
+          <div style={{fontSize:'10px',marginTop:'6px'}}>{facility.name||''}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// === 興味・関心チェックシート (別紙様式3-1 / アドオン: kinou_keikaku) ===
+function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo }) {
+  const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
+  const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
+  const [pid, setPid] = React.useState(patients[0]?.id ?? null);
+  const [editing, setEditing] = React.useState(null);
+  const [newItem, setNewItem] = React.useState('');
+  const patient = (appData.patients||[]).find(p => p.id === pid);
+  const facility = appData.systemSettings?.facilityInfo || {};
+  const toReiwa = (iso) => { if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return iso; return `令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`; };
+  const records = (appData.kyomiKanshinRecords||[]).filter(r => r.patientId === pid).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  const newRecord = () => ({ id:`ki_${pid}_${Date.now()}`, patientId:pid, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10)), recorder:'', items:{}, custom:[], bikou:'' });
+  const upd = (patch) => { setEditing(e=>({...e,...patch})); markDirty(); };
+  const toggle = (name,key) => { setEditing(e=>{ const cur=e.items?.[name]||{}; return {...e, items:{...e.items,[name]:{...cur,[key]:!cur[key]}}}; }); markDirty(); };
+  const toggleCustom = (i,key) => { setEditing(e=>({...e, custom:e.custom.map((c,idx)=>idx===i?{...c,[key]:!c[key]}:c)})); markDirty(); };
+  const addCustom = () => { if(!newItem.trim()) return; setEditing(e=>({...e, custom:[...(e.custom||[]), {name:newItem.trim()}]})); setNewItem(''); markDirty(); };
+  const delCustom = (i) => { setEditing(e=>({...e, custom:e.custom.filter((_,idx)=>idx!==i)})); markDirty(); };
+  const saveRecord = () => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message:'✓ 興味・関心チェックシートを保存しました'}); if(dirtyRef)dirtyRef.current=false; setEditing(null); };
+  React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
+  const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,kyomiKanshinRecords:(appData.kyomiKanshinRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
+  const dupRecord = (r) => setEditing({...r, id:`ki_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
+  const printRec = editing || records[0] || null;
+  const COLS = [['shiteiru','している'],['shitemitai','してみたい'],['kyomi','興味がある']];
+  const row3 = (name, vals, onTog) => (
+    <div className="flex items-center gap-2 py-1 border-b border-slate-100">
+      <span className="text-xs text-slate-700 flex-1 min-w-0">{name}</span>
+      {COLS.map(([k,l])=>(
+        <label key={k} className="flex items-center gap-1 text-[10px] text-slate-500 w-16 justify-center shrink-0">
+          <input type="checkbox" checked={!!vals?.[k]} onChange={()=>onTog(k)} className="accent-blue-500"/>{l}
+        </label>
+      ))}
+    </div>
+  );
+  const cellB={border:'1px solid #000',padding:'2px 5px',fontSize:'10px',textAlign:'center'};
+  return (
+    <div className="flex flex-col h-full">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <KeikakuTabs current="kyomi_kanshin" navigateTo={navigateTo}/>
+        <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
+          {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <div className="flex-1"/>
+        {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
+        {editing && <>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef)dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={saveRecord} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">💾 保存</button>
+        </>}
+        {printRec && <button onClick={()=>onShowPrintPreview('興味・関心チェックシート','A4','ki-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">🖨 印刷/PDF</button>}
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+        {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : editing ? (
+          <div className="max-w-3xl mx-auto space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 gap-3">
+              <KKField label="作成日" value={editing.recordDate} onChange={v=>upd({recordDate:v})} ph="令和○年○月○日"/>
+              <KKField label="記入者" value={editing.recorder} onChange={v=>upd({recorder:v})}/>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="text-sm font-bold text-blue-700 mb-2">興味・関心（あてはまるものにチェック）</div>
+              {KYOMI_DEFAULT.map(name => row3(name, editing.items?.[name], (k)=>toggle(name,k)))}
+              {(editing.custom||[]).map((c,i)=>(
+                <div key={i} className="flex items-center gap-1">
+                  <div className="flex-1">{row3(c.name, c, (k)=>toggleCustom(i,k))}</div>
+                  <button onClick={()=>delCustom(i)} className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
+                </div>
+              ))}
+              <div className="flex gap-2 mt-3">
+                <input value={newItem} onChange={e=>setNewItem(e.target.value)} placeholder="項目を追加（例：陶芸）" className="flex-1 px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs outline-none"/>
+                <button onClick={addCustom} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-bold">＋ 追加</button>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4"><KKField label="備考（具体的な希望・エピソード等）" value={editing.bikou} onChange={v=>upd({bikou:v})} rows={2}/></div>
+          </div>
+        ) : (
+          <div className="max-w-3xl mx-auto">
+            {records.length === 0 ? (
+              <div className="text-center text-slate-400 py-16"><div className="font-bold mb-2">{patient?.name} 様の興味・関心チェックシートはまだありません</div><button onClick={()=>setEditing(newRecord())} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow">＋ 新規作成</button></div>
+            ) : (
+              <div className="space-y-2">{records.map(r=>(
+                <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-3">
+                  <div className="font-bold text-slate-800">作成日: {r.recordDate}{r.recorder?`／記入者: ${r.recorder}`:''}</div>
+                  <div className="flex gap-2 shrink-0">
+                    <button onClick={()=>setEditing(r)} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-bold">編集</button>
+                    <button onClick={()=>dupRecord(r)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">複製</button>
+                    <button onClick={()=>delRecord(r.id)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold">削除</button>
+                  </div>
+                </div>
+              ))}</div>
+            )}
+          </div>
+        )}
+      </div>
+      {printRec && (
+        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'24px 26px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+          <div style={{fontSize:'10px'}}>別紙様式３－１</div>
+          <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【興味・関心チェックシート】</div>
+          <div style={{fontSize:'10.5px',marginBottom:'4px'}}>氏名：{patient?.name} 様　　作成日：{printRec.recordDate}　　記入者：{printRec.recorder}</div>
+          <table style={{width:'100%',borderCollapse:'collapse'}}>
+            <thead><tr><th style={{...cellB,background:'#f3f4f6',width:'52%',textAlign:'left'}}>生活行為</th><th style={{...cellB,background:'#f3f4f6'}}>している</th><th style={{...cellB,background:'#f3f4f6'}}>してみたい</th><th style={{...cellB,background:'#f3f4f6'}}>興味がある</th></tr></thead>
+            <tbody>
+              {[...KYOMI_DEFAULT.map(n=>({name:n,v:printRec.items?.[n]})), ...(printRec.custom||[]).map(c=>({name:c.name,v:c}))].map((row,i)=>(
+                <tr key={i}><td style={{...cellB,textAlign:'left'}}>{row.name}</td><td style={cellB}>{row.v?.shiteiru?'○':''}</td><td style={cellB}>{row.v?.shitemitai?'○':''}</td><td style={cellB}>{row.v?.kyomi?'○':''}</td></tr>
+              ))}
+            </tbody>
+          </table>
+          {printRec.bikou && <div style={{fontSize:'10.5px',marginTop:'6px'}}>備考：{printRec.bikou}</div>}
+        </div>
+      )}
     </div>
   );
 }
