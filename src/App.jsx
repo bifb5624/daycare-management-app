@@ -9181,7 +9181,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
 // === 共通コンポーネント ===
 
-function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons }) {
+function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons, zoom = 1 }) {
   const keypadRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
 
@@ -9239,8 +9239,13 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
       const cells = document.querySelectorAll('.ring-blue-300');
       const cell = cells[cells.length - 1]; // 最後=最新のアクティブセル
       if (!cell) return;
-      const r = cell.getBoundingClientRect();
-      if (!r.width && !r.height) return;
+      const r0 = cell.getBoundingClientRect();
+      if (!r0.width && !r0.height) return;
+      // ★ 全画面の zoom 補正: iOS Safari は getBoundingClientRect が zoom を含まないことがあり、
+      //   body直下(fixed)のキーパッド座標と食い違う。 rect幅が layout幅(offsetWidth)と一致(=zoom未反映)なら zoom倍する。
+      const ratio = cell.offsetWidth ? (r0.width / cell.offsetWidth) : 1;
+      const corr = (zoom > 1 && Math.abs(ratio - 1) < 0.08) ? zoom : 1;
+      const r = { left:r0.left*corr, top:r0.top*corr, right:r0.right*corr, bottom:r0.bottom*corr, width:r0.width*corr, height:r0.height*corr };
       const ol = vv?.offsetLeft || 0, ot = vv?.offsetTop || 0;
       const vw = vv?.width || window.innerWidth, vh = vv?.height || window.innerHeight;
       setPos(prev => {
@@ -9255,7 +9260,7 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
       });
     }, 40);
     return () => clearTimeout(t);
-  }, [isOpen, anchorKey, padW, padH]);
+  }, [isOpen, anchorKey, padW, padH, zoom]);
 
   // ドラッグ開始
   const onDragStart = (e) => {
@@ -15078,6 +15083,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const [kibunStep, setKibunStep] = useState('mood'); // 'mood' | 'reason'
   const [kibunTempMood, setKibunTempMood] = useState('');
   const [activeCell, setActiveCell] = useState(null); // "recordId-field"
+  const [massageHistPid, setMassageHistPid] = useState(null); // 介護整体の過去履歴ポップオーバーを開いている利用者id
+  // ポップオーバー外をタップしたら閉じる (開いた瞬間のクリックでは閉じないよう次tickで登録)
+  React.useEffect(() => {
+    if (massageHistPid == null) return;
+    const close = () => setMassageHistPid(null);
+    const t = setTimeout(() => { document.addEventListener('click', close); document.addEventListener('scroll', close, true); }, 0);
+    return () => { clearTimeout(t); document.removeEventListener('click', close); document.removeEventListener('scroll', close, true); };
+  }, [massageHistPid]);
   const [unsavedModal, setUnsavedModal] = useState({ isOpen: false, onConfirm: null });
 
   // 未保存チェック: localPatientsがappDataのticketsと異なるか
@@ -16165,37 +16178,27 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             </button>
                           )}
                           {!isAbsent && !p.massage && (
-                            <button onClick={(e)=>{
-                              e.stopPropagation();
-                              const rect=e.currentTarget.getBoundingClientRect();
-                              // 日付に年情報が無いため、追加順（≒時系列）を表す id 降順で並べる方が
-                              // 年をまたいでも正確（12月→1月 などのケースが崩れない）
-                              const recs=(appData.ticketRecords||[]).filter(r=>r.patientId===(p.patientId||p.id)&&r.massage).sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0)).slice(0,3);
-                              const el=document.getElementById('massage-tooltip');
-                              if(el){
-                                const isOpen=el.style.display==='block';
-                                const closeEl=()=>{el.style.display='none';document.removeEventListener('click',closeEl,true);document.removeEventListener('scroll',closeEl,true);};
-                                if(isOpen){el.style.display='none';}else{
-                                  // ★ 内容を先に入れてから実寸で中央寄せ＋画面内クランプ（iPadで左にズレるのを防ぐ）
-                                  el.innerHTML=recs.length===0?'<div style="padding:4px 8px;font-size:11px">履歴なし</div>':[...recs].reverse().map(r=>'<div style="padding:3px 10px;font-size:11px"><span style="color:#94a3b8">'+(r.date||'').replace(/^\d{4}-/,'').replace('-','/')+'</span><b style="color:white;margin-left:6px">'+(r.massage||'')+'</b></div>').join('');
-                                  el.style.transform='none';
-                                  el.style.visibility='hidden';
-                                  el.style.display='block';
-                                  const tw=el.offsetWidth||120, th=el.offsetHeight||30;
-                                  let left=rect.left+rect.width/2-tw/2;
-                                  left=Math.max(6, Math.min(left, window.innerWidth-tw-6));
-                                  let top=rect.top-th-8;
-                                  if(top<6) top=rect.bottom+8; // 上に入らなければ下に
-                                  el.style.left=left+'px';
-                                  el.style.top=top+'px';
-                                  el.style.visibility='visible';
-                                  setTimeout(()=>{document.addEventListener('click',closeEl,true);document.addEventListener('scroll',closeEl,true);},50);
-                                }
-                              }
-                            }}
+                            <button onClick={(e)=>{ e.stopPropagation(); setMassageHistPid(prev => prev===pid ? null : pid); }}
                             style={{width:'100%',zIndex:10,fontSize:8,fontWeight:'bold',background:'rgba(254,243,199,0.95)',color:'#92400e',border:'1px solid #fcd34d',borderRadius:3,padding:'0 1px',lineHeight:1.4,cursor:'pointer',textAlign:'center',flexShrink:0}}
                             className="hover:bg-amber-200">📋 確認</button>
                           )}
+                          {/* ★ 介護整体の過去履歴ポップオーバー: 確認ボタンの親(position:relative)内に絶対配置 →
+                              zoom(全画面)に影響されず必ず確認ボタンの真上に表示される */}
+                          {massageHistPid === pid && (() => {
+                            const recs = prevRecords.slice(0,3);
+                            return (
+                              <div onClick={(e)=>{e.stopPropagation(); setMassageHistPid(null);}}
+                                style={{position:'absolute',bottom:'calc(100% + 6px)',left:'50%',transform:'translateX(-50%)',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 4px 16px rgba(0,0,0,0.4)',zIndex:100,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}>
+                                {recs.length===0 ? <div style={{padding:'4px 10px',fontSize:11}}>履歴なし</div> :
+                                  [...recs].reverse().map((r,ri)=>(
+                                    <div key={ri} style={{padding:'3px 12px',fontSize:11}}>
+                                      <span style={{color:'#94a3b8'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
+                                      <b style={{color:'white',marginLeft:6}}>{r.massage||''}</b>
+                                    </div>
+                                  ))}
+                              </div>
+                            );
+                          })()}
                           <select disabled={isAbsent || isPause} value={p.massage || ""}
                             onChange={(e) => { updateRecord(p.id, 'massage', e.target.value); if(p.done) updateRecord(p.id, 'done', false); }}
                             style={{appearance:'none',WebkitAppearance:'none',MozAppearance:'none',width:'100%',
@@ -16271,7 +16274,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </tbody>
         </table>
       </div>
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
       {statusModal.isOpen && ReactDOM.createPortal(
@@ -16483,13 +16486,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         </div>,
         document.body
       )}
-      {/* 介護整体確認ツールチップ（固定位置）。 ★ body へポータルして、祖先の transform 等の影響で
-          position:fixed の基準がズレる(iPadで中央や表の背面に出る)のを防ぐ */}
-      {ReactDOM.createPortal(
-        <div id="massage-tooltip" onClick={()=>{const el=document.getElementById('massage-tooltip');if(el)el.style.display='none';}}
-          style={{display:'none',position:'fixed',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 4px 16px rgba(0,0,0,0.4)',zIndex:99999,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}/>,
-        document.body
-      )}
+      {/* (介護整体の過去履歴は各セル内の絶対配置ポップオーバーに変更したため、固定ツールチップは廃止) */}
       {/* 利用者情報ポップアップ */}
       {patientInfoModal && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setPatientInfoModal(null)}>
@@ -23450,7 +23447,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     </select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{localPatient.cmPhone||'ー'}</div></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{localPatient.cmFax||'ー'}</div></div></div>
+                {(() => {
+                  const _off = (appData.systemSettings?.cmOffices||[]).find(o=>o.name===localPatient.cmOffice);
+                  const _cm = (appData.systemSettings?.careManagers||[]).find(c=>c.office===localPatient.cmOffice && c.name===localPatient.cmName);
+                  const officePhone = _off?.phone || localPatient.cmPhone || '';
+                  const directPhone = _cm?.phoneDirect || '';
+                  return (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所電話</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{officePhone||'ー'}</div></div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-1.5">担当者 直通電話</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{directPhone||'ー'}</div></div>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{localPatient.cmFax||'ー'}</div></div>
+                    </div>
+                  );
+                })()}
 
                 {/* ケアマネ担当者の名刺 (各種設定で登録した内容を参照表示) */}
                 {(() => {
@@ -25844,10 +25853,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 space-y-2">
                     <input type="text" value={newOffice.name} onChange={e=>setNewOffice({...newOffice,name:e.target.value})} placeholder="事業所名" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     <div className="grid grid-cols-2 gap-2">
-                      <input type="tel" value={newOffice.phone} onChange={e=>setNewOffice({...newOffice,phone:e.target.value})} placeholder="電話番号" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                      <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                      <input type="tel" value={newOffice.phone} onChange={e=>setNewOffice({...newOffice,phone:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                      <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,fax:formatJpPhone(o.fax)}))} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
-                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice}]); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
+                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax)}]); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
                     {/* ★ CSV取り込み (他社事業所情報。 Shift-JIS自動判定・ゆるいヘッダー一致・会社名/法人名は除外・住所分割) */}
                     <label className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center cursor-pointer">
                       <CloudUpload size={14} className="mr-1"/>CSVから一括取り込み
@@ -25937,8 +25946,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                         <input type="text" value={sp.gn} onChange={e=>setNewPerson({...newPerson,name:_jn(sp.sn,e.target.value.replace(/[\s　]/g,''))})} placeholder="名 例: 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                       </div>);
                     })()}
-                    <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -26062,9 +26071,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                       </div>);
                     })()}
                   </div>
-                  <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（直通）</label><input type="tel" value={newPerson.phone} onChange={e => setNewPerson({...newPerson, phone: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
+                  <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（直通）</label><input type="tel" value={newPerson.phone} onChange={e => setNewPerson({...newPerson, phone: e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 </div>
-                <button type="button" onClick={() => { if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:"",name:"",phone:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
+                <button type="button" onClick={() => { if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:"",name:"",phone:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
               </div>
               {cmPersons.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
                 <div className="space-y-2">{cmPersons.map((p, i) => (
