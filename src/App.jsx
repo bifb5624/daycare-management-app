@@ -18176,15 +18176,20 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
           const isMonthly = dailyData.length<=12; const _STEP=isMonthly?60:(dailyData.length<=14?50:dailyData.length<=30?28:14); const PAD_X=20; const W=dailyData.length*_STEP+PAD_X*2,H=180,LW=110;
           const VitalChart = ({field,color1,color2,yMin,yMax,refLines,normalBand,title,legend1,legend2,unit}) => {
-            const pts1=dailyData.map((d,i)=>({v:d[field],i,d})).filter(p=>p.v!==null);
-            const pts2=color2?dailyData.map((d,i)=>({v:d.bpDn,i,d})).filter(p=>p.v!==null):[];
-            // ★ 終了時(運動後)シリーズ — vitalPhase==='both' のときだけ点線で重ねる (血圧・脈のみ)
+            let pts1=dailyData.map((d,i)=>({v:d[field],i,d})).filter(p=>p.v!==null);
+            let pts2=color2?dailyData.map((d,i)=>({v:d.bpDn,i,d})).filter(p=>p.v!==null):[];
+            // ★ 終了時(運動後)シリーズ (血圧・脈のみ)。 vitalPhase: 'start'通所時のみ / 'end'終了時のみ / 'both'両方
             const _isBpPulse = field==='bpUp' || field==='pulse';
-            const showEnd = vitalPhase==='both' && _isBpPulse;
             const _eF1 = field==='bpUp' ? 'bpUpEn' : 'pulseEn';
             const _eF2 = field==='bpUp' ? 'bpDnEn' : null;
-            const ptsE1 = showEnd ? dailyData.map((d,i)=>({v:d[_eF1],i,d})).filter(p=>p.v!==null) : [];
-            const ptsE2 = (showEnd && _eF2) ? dailyData.map((d,i)=>({v:d[_eF2],i,d})).filter(p=>p.v!==null) : [];
+            const _phase = _isBpPulse ? vitalPhase : 'start';
+            const ptsE1all = _isBpPulse ? dailyData.map((d,i)=>({v:d[_eF1],i,d})).filter(p=>p.v!==null) : [];
+            const ptsE2all = (_isBpPulse && _eF2) ? dailyData.map((d,i)=>({v:d[_eF2],i,d})).filter(p=>p.v!==null) : [];
+            // 終了時のみ → 主シリーズ(実線/ドット/最高最低)を終了時に差し替え
+            if(_phase==='end'){ pts1=ptsE1all; pts2=ptsE2all; }
+            // 両方 → 終了時を点線で重ねる
+            const ptsE1 = (_phase==='both') ? ptsE1all : [];
+            const ptsE2 = (_phase==='both') ? ptsE2all : [];
             if(!pts1.length && !ptsE1.length) return <div style={{height:H+30,display:'flex',alignItems:'center',justifyContent:'center',color:'#e2e8f0',fontSize:13}}>データなし</div>;
             const mn=yMin, mx=yMax, rng=mx-mn;
             // ★ Y 軸の真上に重ならないよう半ステップ右にずらして開始 (運動トレンドと統一)
@@ -18298,9 +18303,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </g>
                     );
                   })}
-                  {/* ツールチップ */}
+                  {/* ツールチップ — ★ ドットに被らないよう上(無理なら下)へギャップを空けて配置 + 幅を広げ単位の見切れ防止 */}
                   {vitalTooltip&&vitalTooltip.field===field&&(()=>{
-                    const tx=Math.min(vitalTooltip.x+8,W-155), ty=Math.max(vitalTooltip.y-58,4);
                     const d=vitalTooltip.d;
                     const lines=[d.date];
                     if(field==='bpUp') {
@@ -18312,11 +18316,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       if(d.pulse!=null) lines.push(`通所時: ${d.pulse} 回/分`);
                       if(d.pulseEn!=null) lines.push(`終了時: ${d.pulseEn} 回/分`);
                     }
-                    const bh=lines.length*18+12;
+                    const bw=200, bh=lines.length*19+12;
+                    let tx=vitalTooltip.x - bw/2;                       // ドットの真上に中央寄せ
+                    tx=Math.max(2, Math.min(tx, W+LW - bw - 2));        // 描画域内にクランプ
+                    let ty=vitalTooltip.y - bh - 16;                    // ドットの16px上(被らない)
+                    if(ty<2) ty=vitalTooltip.y + 18;                    // 上に入らなければ下へ
                     return (
                       <g>
-                        <rect x={tx} y={ty} width={150} height={bh} rx={5} fill="#1e293b" opacity={0.92}/>
-                        {lines.map((l,li)=><text key={li} x={tx+10} y={ty+18+li*18} fontSize={13} fill="white" fontWeight="bold">{l}</text>)}
+                        <rect x={tx} y={ty} width={bw} height={bh} rx={6} fill="#1e293b" opacity={0.95}/>
+                        {lines.map((l,li)=><text key={li} x={tx+11} y={ty+19+li*19} fontSize={13} fill="white" fontWeight="bold">{l}</text>)}
                       </g>
                     );
                   })()}
@@ -18406,15 +18414,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
                 {/* ★ 凡例をグラフ直上に移動 + 終了時(運動後)の表示切替 */}
                 {hasEndVital && (
-                  <div style={{display:'inline-flex',gap:4,background:'#f1f5f9',borderRadius:10,padding:3,marginBottom:8}}>
-                    {[['start','通所時のみ'],['both','通所時＋終了時(運動後)']].map(([k,label])=>(
+                  <div style={{display:'inline-flex',gap:4,background:'#f1f5f9',borderRadius:10,padding:3,marginBottom:8,flexWrap:'wrap'}}>
+                    {[['start','通所時のみ'],['end','終了時のみ'],['both','通所時＋終了時']].map(([k,label])=>(
                       <button key={k} onClick={()=>setVitalPhase(k)} style={{padding:'5px 12px',borderRadius:8,border:'none',fontSize:12,fontWeight:'bold',cursor:'pointer',background:vitalPhase===k?'#2563eb':'transparent',color:vitalPhase===k?'#fff':'#64748b'}}>{label}</button>
                     ))}
                   </div>
                 )}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期(通所時)</span>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期(通所時)</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期({vitalPhase==='end'?'終了時':'通所時'})</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期({vitalPhase==='end'?'終了時':'通所時'})</span>
                   {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #3b82f6',display:'inline-block'}}/>終了時(運動後・点線)</span>}
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#bfdbfe',opacity:0.7,display:'inline-block',borderRadius:2}}/>正常 収縮100-129</span>
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#fbcfe8',opacity:0.7,display:'inline-block',borderRadius:2}}/>正常 拡張60-84</span>
@@ -18454,14 +18462,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
                 {/* ★ 凡例 + 終了時(運動後)の表示切替 */}
                 {hasEndVital && (
-                  <div style={{display:'inline-flex',gap:4,background:'#f1f5f9',borderRadius:10,padding:3,marginBottom:8}}>
-                    {[['start','通所時のみ'],['both','通所時＋終了時(運動後)']].map(([k,label])=>(
+                  <div style={{display:'inline-flex',gap:4,background:'#f1f5f9',borderRadius:10,padding:3,marginBottom:8,flexWrap:'wrap'}}>
+                    {[['start','通所時のみ'],['end','終了時のみ'],['both','通所時＋終了時']].map(([k,label])=>(
                       <button key={k} onClick={()=>setVitalPhase(k)} style={{padding:'5px 12px',borderRadius:8,border:'none',fontSize:12,fontWeight:'bold',cursor:'pointer',background:vitalPhase===k?'#2563eb':'transparent',color:vitalPhase===k?'#fff':'#64748b'}}>{label}</button>
                     ))}
                   </div>
                 )}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（通所時）</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（{vitalPhase==='end'?'終了時':'通所時'}）</span>
                   {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #22c55e',display:'inline-block'}}/>終了時(運動後・点線)</span>}
                 </div>
                 <VitalChart field="pulse" color1={pulseWarn?'#ef4444':'#22c55e'} yMin={40} yMax={130}
