@@ -9884,7 +9884,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
 function FamilyAdminView({ appData, onSave }) {
   const [tab, setTab] = useState('post');
   // 統合フォーム: お知らせ + 写真を一画面で
-  const [postForm, setPostForm] = useState({ scope:'all', patientIds:[], title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass:'', files:[], filePreview:[] });
+  const [postForm, setPostForm] = useState({ scope:'all', patientIds:[], audience:['family','caremanager','related'], title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass:'', files:[], filePreview:[] });
   const [patientFilter, setPatientFilter] = useState({ days:[], ampm:'' });
   const [photoFilter, setPhotoFilter] = useState('');
   const [historyFilter, setHistoryFilter] = useState({ year:'', month:'', kind:'all' });
@@ -9974,6 +9974,7 @@ function FamilyAdminView({ appData, onSave }) {
     const hasPhotos = postForm.files.length > 0;
     if (!hasText && !hasPhotos) { alert('タイトルまたは写真のどちらかを入力してください'); return; }
     if (postForm.scope === 'specific' && postForm.patientIds.length === 0) { alert('対象の利用者を1人以上選択してください'); return; }
+    if (!postForm.audience || postForm.audience.length === 0) { alert('送付先（ご家族／ケアマネ／その他関係者）を1つ以上選択してください'); return; }
     // ★ 写真/PDFを Supabase Storage(非公開) へアップロードし、storagePath のみ保持。
     //   未接続/失敗時は従来どおり base64(url) にフォールバック。
     let uploadedPhotos = postForm.files.map(it => ({ url: it.url, name: it.name }));
@@ -10011,7 +10012,7 @@ function FamilyAdminView({ appData, onSave }) {
       }));
       if (postForm.scope === 'all') {
         const annId = `news_${ts}`;
-        const item = { id: annId, title: postForm.title.trim(), body: postForm.body, date: postForm.date, postedAt: nowIso, photos: buildPhotos(annId) };
+        const item = { id: annId, title: postForm.title.trim(), body: postForm.body, date: postForm.date, postedAt: nowIso, audience: postForm.audience, photos: buildPhotos(annId) };
         newData = { ...newData, familyAnnouncements: [item, ...allAnnouncements] };
       } else {
         const newItems = postForm.patientIds.map(pid => {
@@ -10023,6 +10024,7 @@ function FamilyAdminView({ appData, onSave }) {
             body: postForm.body,
             date: postForm.date,
             postedAt: nowIso,
+            audience: postForm.audience,
             photos: buildPhotos(annId),
           };
         });
@@ -10039,21 +10041,21 @@ function FamilyAdminView({ appData, onSave }) {
       }));
       if (postForm.scope === 'all') {
         const annId = `news_${ts}`;
-        const item = { id: annId, title: '', body: '', date: postForm.date, postedAt: nowIso, photos: buildPhotos(annId) };
+        const item = { id: annId, title: '', body: '', date: postForm.date, postedAt: nowIso, audience: postForm.audience, photos: buildPhotos(annId) };
         newData = { ...newData, familyAnnouncements: [item, ...allAnnouncements] };
       } else {
         const newItems = postForm.patientIds.map(pid => {
           const annId = `news_${ts}_${pid}`;
           return {
             id: annId, patientId: pid, title: '', body: '', date: postForm.date,
-            postedAt: nowIso, photos: buildPhotos(annId),
+            postedAt: nowIso, audience: postForm.audience, photos: buildPhotos(annId),
           };
         });
         newData = { ...newData, familyPersonalAnnouncements: [...newItems, ...personalAnnouncements] };
       }
     }
     onSave(newData);
-    setPostForm({ scope:'all', patientIds:[], title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass: postForm.eventClass, files:[], filePreview:[] });
+    setPostForm({ scope:'all', patientIds:[], audience: postForm.audience, title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass: postForm.eventClass, files:[], filePreview:[] });
   };
   const deletePhoto = (id) => {
     if (!window.confirm('この写真を削除しますか？\n（ゴミ箱に移動し、7日間は復元できます）')) return;
@@ -10151,6 +10153,23 @@ function FamilyAdminView({ appData, onSave }) {
               <label className={`flex-1 px-4 py-2.5 rounded-xl border-2 cursor-pointer text-center font-bold text-sm ${postForm.scope==='specific'?'bg-emerald-50 border-emerald-400 text-emerald-700':'bg-white border-slate-200 text-slate-500'}`}>
                 <input type="radio" checked={postForm.scope==='specific'} onChange={()=>setPostForm(f=>({...f,scope:'specific'}))} className="hidden"/>👥 個別に表示 (複数選択可)
               </label>
+            </div>
+            {/* ★ 送付先(視聴者種別)の選択: ご家族/ケアマネ/その他関係者を個別トグル + 全員ボタン */}
+            <div>
+              <div className="text-[11px] font-bold text-slate-500 mb-1.5">送付先（このお知らせを見られる人）</div>
+              <div className="flex gap-2 flex-wrap items-center">
+                {[['family','👪 ご家族'],['caremanager','📋 ケアマネ'],['related','🤝 その他関係者']].map(([k,label])=>{
+                  const on = (postForm.audience||[]).includes(k);
+                  return (
+                    <button key={k} type="button" onClick={()=>setPostForm(f=>{ const cur=f.audience||[]; return {...f, audience: cur.includes(k) ? cur.filter(x=>x!==k) : [...cur,k]}; })}
+                      className={`px-3 py-2 rounded-xl border-2 font-bold text-sm ${on?'bg-emerald-50 border-emerald-400 text-emerald-700':'bg-white border-slate-200 text-slate-400'}`}>
+                      {on?'☑':'☐'} {label}
+                    </button>
+                  );
+                })}
+                <button type="button" onClick={()=>setPostForm(f=>({...f, audience:['family','caremanager','related']}))} className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs">全員に送る</button>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">例：イベントは「ご家族・ケアマネ」のみ、その他関係者には送らない 等。未選択の種別の方には表示されません。</div>
             </div>
             {postForm.scope === 'specific' && (
               <div className="space-y-2">
@@ -11435,8 +11454,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
     });
   }, [myInfoOpen, loggedAcc?.id, patient?.id]);
   const [inviteFamForm, setInviteFamForm] = useState({email:'', relation:'', createdUrl:''});
-  const announcements = data.familyAnnouncements || [];
-  const personalAnnouncements = (data.familyPersonalAnnouncements||[]).filter(a => a.patientId === pid || a.patientId === patientId);
+  // ★ 視聴者種別 (family=ご家族 / caremanager=ケアマネ / related=その他関係者) でお知らせを絞り込む。
+  //   audience 未指定の旧データは全員に表示 (後方互換)。
+  const _viewerKind = (!loggedAcc?.kind || loggedAcc.kind === 'family') ? 'family'
+    : (loggedAcc.relation === 'ケアマネージャー' || loggedAcc.relation === 'ケアマネ') ? 'caremanager' : 'related';
+  const _audOk = (a) => !a || !a.audience || !Array.isArray(a.audience) || a.audience.includes(_viewerKind);
+  const announcements = (data.familyAnnouncements || []).filter(_audOk);
+  const personalAnnouncements = (data.familyPersonalAnnouncements||[]).filter(a => (a.patientId === pid || a.patientId === patientId) && _audOk(a));
   const photos = (data.familyPhotos||[]).filter(ph => ph.patientId == null || ph.patientId === pid || ph.patientId === patientId);
   // 未読お知らせ管理: localStorage に最終既読時刻を保存
   const readKey = `familyReadAt_${patientId}`;
