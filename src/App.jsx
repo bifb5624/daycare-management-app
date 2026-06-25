@@ -1103,6 +1103,8 @@ const getFitnessItemsForPatient = (appData, patient, fallbackItems) => {
 };
 
 // 日本の電話番号フォーマッタ: ハイフン無しの数字 → 自動でハイフン付与
+// ★ 稼働率/出席率の「予定(分母)」判定。 振替=出席扱い。 振替済みの欠席(tokkiに「へ振替」)は相殺で分母から除外。
+const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
 const formatJpPhone = (s) => {
   const digits = (s || '').replace(/[^0-9]/g, '');
   if (!digits) return '';
@@ -16653,11 +16655,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
   const validRecs  = records.filter(r => r.status==='出席'||r.status==='振替');
   const tusho      = records.filter(r=>r.status==='出席').length;
+  const furikaeAtt = records.filter(r=>r.status==='振替').length; // 振替=出席扱い
   const kesseki    = records.filter(r=>r.status==='欠席'&&!(r.tokki||'').includes('へ振替')).length;
   const kyugyo     = records.filter(r=>r.status==='休業').length;
   const kyushi     = records.filter(r=>r.status==='休止').length;
   const kyushiRate = records.length>0?Math.round(kyushi/records.length*100):0;
-  const attendance = (tusho+kesseki+kyushi)>0?Math.round(tusho/(tusho+kesseki+kyushi)*100):0;
+  // ★ 出席率 = (出席+振替) / (出席+振替+欠席(振替済みは相殺で除外)+休止)
+  const attendance = (tusho+furikaeAtt+kesseki+kyushi)>0?Math.round((tusho+furikaeAtt)/(tusho+furikaeAtt+kesseki+kyushi)*100):0;
 
 
   // 月別集計
@@ -16667,9 +16671,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       const mM=r.date?r.date.match(/(\d+)月/):null; if(!mM) return;
       const m=parseInt(mM[1],10);
       if(!map[m]) map[m]={month:m,tusho:0,kesseki:0,kyugyo:0,furikae:0,kyushi:0,temps:[],bpUps:[],bpDns:[],pulses:[]};
+      // ★ 振替=出席扱い(別行で表示)、振替済みの欠席(tokkiに「へ振替」)は相殺してカウントしない
       if(r.status==='出席') map[m].tusho++;
-      if(r.tokki&&r.tokki.includes('振替')) map[m].furikae++;
-      else if(r.status==='欠席') map[m].kesseki++;
+      else if(r.status==='振替') map[m].furikae++;
+      else if(r.status==='欠席'){ if(!(r.tokki||'').includes('へ振替')) map[m].kesseki++; }
       else if(r.status==='休業') map[m].kyugyo++;
       else if(r.status==='休止') map[m].kyushi++;
       if(r.temp) map[m].temps.push(Number(r.temp));
@@ -17690,7 +17695,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           <div style={{display:'flex',flexDirection: compactMode ? 'column' : 'row', gap:10,alignItems:'stretch',flexWrap:'wrap'}}>
             {/* 通所率 */}
             {(()=>{
-              const furikaeCount=records.filter(r=>r.tokki&&r.tokki.includes('振替')).length;
+              const furikaeCount=furikaeAtt; // 振替=出席扱い(status==='振替')
               const slices=[
                 {label:'出席',count:tusho,color:'#60a5fa'},
                 {label:'欠席',count:kesseki,color:'#f87171'},
@@ -17882,8 +17887,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                             <tr style={{borderBottom:'1px solid #f1f5f9'}}>
                               <td style={{padding:'3px 10px 3px 0',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>出席率</td>
                               {monthlyData.map(m=>{
-                                const tot=m.tusho+m.kesseki+(m.kyushi||0);
-                                const rate=tot>0?Math.round(m.tusho/tot*100):0;
+                                const att=m.tusho+(m.furikae||0); // 振替は出席扱い
+                                const tot=att+m.kesseki+(m.kyushi||0);
+                                const rate=tot>0?Math.round(att/tot*100):0;
                                 return <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:rate>=80?'#16a34a':rate>=60?'#d97706':'#dc2626',width:80,minWidth:80}}>{rate}%</td>;
                               })}
                             </tr>
@@ -19679,7 +19685,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         const m2 = r.date?.match(/(\d+)月/);
         return m2 && parseInt(m2[1]) === mo;
       });
-      const pl = mRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
+      // ★ 振替=出席扱い。 振替済みの欠席(tokkiに「へ振替」)は相殺で分母から除外
+      const pl = mRecs.filter(r=> r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
       const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
       return { rate: pl.length?Math.round(at.length/pl.length*100):0, attended:at.length, planned:pl.length };
     };
@@ -19702,11 +19709,11 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
   // 1. 月全体稼働率
   const monthStats = React.useMemo(() => {
-    const planned  = recsAP.filter(r => ['出席','欠席','振替','休止'].includes(r.status));
+    const planned  = recsAP.filter(r => r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
     const attended = recsAP.filter(r => r.status==='出席'||r.status==='振替');
     return {
       planned:planned.length, attended:attended.length,
-      absent:recsAP.filter(r=>r.status==='欠席').length,
+      absent:recsAP.filter(r=>r.status==='欠席'&&!(r.tokki||'').includes('へ振替')).length,
       kyushi:recsAP.filter(r=>r.status==='休止').length,
       kyugyo:recsAP.filter(r=>r.status==='休業').length,
       rate: planned.length ? Math.round(attended.length/planned.length*100) : 0
@@ -19721,7 +19728,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         const m = r.date?.match(/(\d+)月/);
         return m && months.includes(parseInt(m[1]));
       });
-      const pl = mRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
+      const pl = mRecs.filter(r=>isPlannedRec(r));
       const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
       return pl.length ? Math.round(at.length/pl.length*100) : null;
     };
@@ -19782,7 +19789,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           : ap === 'PM' ? dayRecs.filter(r => r.amPm === 'PM' || r.amPm === '1日')
           : null; // null = all (合計は別計算)
         if (!sub) return null;
-        const pl = sub.filter(r => ['出席','欠席','振替','休止'].includes(r.status));
+        const pl = sub.filter(r => isPlannedRec(r));
         const at = sub.filter(r => r.status==='出席'||r.status==='振替');
         return { planned:pl.length, attended:at.length, rate: pl.length ? Math.round(at.length/pl.length*100) : null };
       };
@@ -19802,12 +19809,12 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         const fallbackToAM = !inAM && !inPM; // amPm が ''/それ以外 の場合は AM 扱い
         if (inAM || fallbackToAM) {
           if (!amPats[r.patientId]) amPats[r.patientId] = { planned:0, att:0 };
-          if (['出席','欠席','振替','休止'].includes(r.status)) amPats[r.patientId].planned++;
+          if (isPlannedRec(r)) amPats[r.patientId].planned++;
           if (r.status==='出席'||r.status==='振替') amPats[r.patientId].att++;
         }
         if (inPM) {
           if (!pmPats[r.patientId]) pmPats[r.patientId] = { planned:0, att:0 };
-          if (['出席','欠席','振替','休止'].includes(r.status)) pmPats[r.patientId].planned++;
+          if (isPlannedRec(r)) pmPats[r.patientId].planned++;
           if (r.status==='出席'||r.status==='振替') pmPats[r.patientId].att++;
         }
       });
@@ -19850,7 +19857,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     const byPat = {};
     recsAP.forEach(r => {
       if (!byPat[r.patientId]) byPat[r.patientId] = { planned:0, att:0 };
-      if (['出席','欠席','振替','休止'].includes(r.status)) byPat[r.patientId].planned++;
+      if (isPlannedRec(r)) byPat[r.patientId].planned++;
       if (r.status==='出席'||r.status==='振替') byPat[r.patientId].att++;
     });
     return Object.entries(byPat)
@@ -19868,7 +19875,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     const att = {}, total = {};
     recsAP.forEach(r => {
       if (isFurikaeAbs(r)) return; // 振替済み欠席は除外
-      if (['出席','欠席','振替','休止'].includes(r.status)) total[r.patientId]=(total[r.patientId]||0)+1;
+      if (isPlannedRec(r)) total[r.patientId]=(total[r.patientId]||0)+1;
       if (r.status==='出席'||r.status==='振替') att[r.patientId]=(att[r.patientId]||0)+1;
     });
     return Object.entries(total).filter(([id,t])=>t>0&&patMap[id]).map(([id,t])=>{
@@ -19882,7 +19889,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     const abs = {}, total = {};
     recsAP.forEach(r => {
       if (isFurikaeAbs(r)) return; // 振替済み欠席は除外
-      if (['出席','欠席','振替','休止'].includes(r.status)) total[r.patientId]=(total[r.patientId]||0)+1;
+      if (isPlannedRec(r)) total[r.patientId]=(total[r.patientId]||0)+1;
       if (r.status==='欠席') abs[r.patientId]=(abs[r.patientId]||0)+1;
     });
     return Object.entries(total).filter(([id,t])=>t>0&&patMap[id]&&abs[id]).map(([id,t])=>{
@@ -20119,7 +20126,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 const m2 = r.date?.match(/(\d+)月/);
                 return m2 && parseInt(m2[1]) === mo;
               });
-              const pl = mRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
+              const pl = mRecs.filter(r=>isPlannedRec(r));
               const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
               const rate = pl.length ? Math.round(at.length/pl.length*100) : 0;
               // 営業日数（その月の平日数）
@@ -20138,7 +20145,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                   return false;
                 });
                 if (prevMRecs.length === 0) return null;
-                const prevPl = prevMRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
+                const prevPl = prevMRecs.filter(r=>isPlannedRec(r));
                 const prevAt = prevMRecs.filter(r=>r.status==='出席'||r.status==='振替');
                 return prevPl.length ? Math.round(prevAt.length/prevPl.length*100) : null;
               })();
@@ -20153,7 +20160,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 const m2 = r.date?.match(/(\d+)月/);
                 return m2 && parseInt(m2[1]) === pmM;
               });
-              const pmPl = pmRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
+              const pmPl = pmRecs.filter(r=>isPlannedRec(r));
               const pmAt = pmRecs.filter(r=>r.status==='出席'||r.status==='振替');
               const prevMonthRate = pmPl.length ? Math.round(pmAt.length/pmPl.length*100) : null;
               return {
@@ -28078,7 +28085,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       return r.patientId === patient.id && m && parseInt(m[1]) === prevM;
     });
     const prevAttended = prevRecs.filter(r=>r.status==='出席'||r.status==='振替');
-    const prevPlanned  = prevRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
+    const prevPlanned  = prevRecs.filter(r=>isPlannedRec(r));
     const prevRate = prevPlanned.length ? Math.round(prevAttended.length/prevPlanned.length*100) : null;
     const prevBpVals = prevAttended.filter(r=>r.bpUpSt).map(r=>parseInt(r.bpUpSt));
     const prevAvgBp  = prevBpVals.length ? Math.round(prevBpVals.reduce((a,b)=>a+b,0)/prevBpVals.length) : null;
