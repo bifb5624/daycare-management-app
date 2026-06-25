@@ -15117,9 +15117,9 @@ export default function App() {
              currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'fitness' ? <FitnessView appData={appData} onSave={handleSaveToCloud} selectedDate={selectedDate} sharedAmpm={sharedAmpm} navigateTo={navigateTo} targetPatientId={targetPatientId} onPatientChange={setTargetPatientId} dirtyRef={fitnessDirtyRef} saveFnRef={fitnessSaveFnRef} /> :
              currentView === 'monitoring' ? <MonitoringView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={monitoringDirtyRef} saveFnRef={monitoringSaveFnRef} /> :
-             currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
-             currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
-             currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
+             currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
+             currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
+             currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
              currentView === 'dash_operation' ? <OperationDashboardView appData={appData} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} setAppData={setAppData} /> :
              <div className="flex h-full items-center justify-center text-slate-400 font-bold">開発中</div>}
           </div></div></main>
@@ -24716,6 +24716,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           appData={appData}
           onSave={(updated)=>{ onSave(updated); }}
           onClose={()=>setPersonalFileModal(null)}
+          navigateTo={navigateTo}
+          onPatientChange={onPatientChange}
         />
       )}
       {familyShareModal && (() => {
@@ -25098,7 +25100,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             plannedExercises:{u1:'',u2:'',u3:'',u4:'',u5:'',u6:'',heikobo:'',fumidai:'',stepper:'',okugai:'',onyoku:''},
             careLevel:'', gender:'', birthDate:'', phone:''
           };
-          onSave({...appData, patients:[...(appData.patients||[]), newPat]});
+          // ★ 個別機能訓練アドオンが有効なら、必要書類(計画書3-3/生活機能3-2/興味関心3-1)を自動作成し、入力可能な状態にしておく
+          const _extra = {};
+          if (hasAddon(appData, 'kinou_keikaku')) {
+            const _st = Date.now();
+            const _r = new Date(); const _reiwa = `令和${_r.getFullYear()-2018}年${_r.getMonth()+1}月${_r.getDate()}日`;
+            const _blankProg = () => ({ content:'', point:'', freqWeek:'', time:'', person:'機能訓練指導員' });
+            _extra.kinouKeikakuRecords = [...(appData.kinouKeikakuRecords||[]), { id:`kk_${newId}_${_st}`, patientId:newId, createdAt:_st, createdDate:_reiwa, prevDate:'', firstDate:_reiwa, author:'', authorJob:'機能訓練指導員', jiritsuBody:'', jiritsuDementia:'', honninKibou:'', kazokuKibou:'', shakaiSanka:'', kyotakuKankyo:'', byomei:'', hasshoDate:'', nyuinDate:'', taiinDate:'', chiryoKeika:'', gappei:'', ryuiPoint:'', shortKinou:'', shortKatsudo:'', shortSanka:'', shortAchieve:'', longKinou:'', longKatsudo:'', longSanka:'', longAchieve:'', programs:[_blankProg(),_blankProg()], programPlanner:'', jikangaiJisshi:'', tokki:'', henka:'', kadai:'', setsumeiDate:'', setsumeisha:'', _auto:true }];
+            _extra.seikatsuKinouRecords = [...(appData.seikatsuKinouRecords||[]), { id:`sk_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:'', bikou:'', _auto:true }];
+            _extra.kyomiKanshinRecords = [...(appData.kyomiKanshinRecords||[]), { id:`ki_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', items:{}, custom:[], bikou:'', _auto:true }];
+          }
+          onSave({...appData, patients:[...(appData.patients||[]), newPat], ..._extra});
           setEditingPatientId(newId);
           setPatientStatusFilter('利用中');
           setNewPatientModal(false);
@@ -28404,10 +28416,10 @@ const SEIKATSU_SHINSHIN = ['麻痺','関節拘縮','筋力低下','関節痛','�
 const KYOMI_DEFAULT = ['自分でトイレに行く','一人でお風呂に入る','自分で服を着る','自分で食べる','歯磨きをする','身だしなみを整える','好きなときに眠る','掃除・整理整頓','料理を作る','買い物','散歩','友人とのおしゃべり','家族・親戚との団らん','趣味の活動','スポーツ','旅行・外出','庭いじり・園芸','読書','俳句・川柳','書道','絵を描く','写真','音楽を聴く','歌・カラオケ','楽器の演奏','将棋・囲碁・麻雀','編み物・手芸','針仕事','テレビ・映画','パソコン・スマホ','賃金を伴う仕事','ボランティア活動','地域の行事・活動','子や孫の世話','動物の世話','お参り・信仰'];
 
 // === 個別機能訓練計画書 (アドオン: kinou_keikaku) ===
-function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo }) {
+function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo, targetPatientId }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
-  const [pid, setPid] = React.useState(patients[0]?.id ?? null);
+  const [pid, setPid] = React.useState((targetPatientId!=null && (appData.patients||[]).some(p=>p.id===targetPatientId)) ? targetPatientId : (patients[0]?.id ?? null));
   const [editing, setEditing] = React.useState(null); // 編集中レコード or null
   const patient = (appData.patients||[]).find(p => p.id === pid);
   const exItems = appData.systemSettings?.exerciseItems || [];
@@ -28635,13 +28647,14 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
       {/* 印刷用 (非表示) — 別紙様式3-3 に準拠 (A4) */}
       {printRec && (() => {
         const B='1px solid #000';
-        const cell={border:B,padding:'3px 5px',verticalAlign:'top',whiteSpace:'pre-wrap',fontSize:'10.5px'};
-        const lab={...cell,background:'#f3f4f6',fontWeight:'bold',whiteSpace:'nowrap'};
+        const cell={border:B,padding:'3px 5px',verticalAlign:'top',whiteSpace:'pre-wrap',fontSize:'10px',wordBreak:'break-word'};
+        const lab={...cell,background:'#f3f4f6',fontWeight:'bold'};
         const sec={fontWeight:'bold',fontSize:'12px',margin:'8px 0 3px',borderBottom:'2px solid #000',paddingBottom:'1px'};
         const scale=(opts,sel)=>opts.map(o=><span key={o} style={{marginRight:6,padding:sel===o?'0 3px':'0',fontWeight:sel===o?'bold':'normal',border:sel===o?'1.5px solid #000':'none',borderRadius:sel===o?'3px':0}}>{o}</span>);
         const pr=printRec; const bd=patient?.birthDate?new Date(patient.birthDate):null;
         return (
-        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'24px 26px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.4}}>
+        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'20px 22px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.35}}>
+          <style>{`#kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse} #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－３</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
@@ -28716,10 +28729,10 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
 }
 
 // === 生活機能チェックシート (別紙様式3-2 / アドオン: kinou_keikaku) ===
-function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo }) {
+function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo, targetPatientId }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
-  const [pid, setPid] = React.useState(patients[0]?.id ?? null);
+  const [pid, setPid] = React.useState((targetPatientId!=null && (appData.patients||[]).some(p=>p.id===targetPatientId)) ? targetPatientId : (patients[0]?.id ?? null));
   const [editing, setEditing] = React.useState(null);
   const patient = (appData.patients||[]).find(p => p.id === pid);
   const facility = appData.systemSettings?.facilityInfo || {};
@@ -28746,8 +28759,8 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
       </div>
     </div>
   );
-  const cellB={border:'1px solid #000',padding:'3px 6px',fontSize:'10.5px',verticalAlign:'top'};
-  const labB={...cellB,background:'#f3f4f6',fontWeight:'bold',whiteSpace:'nowrap'};
+  const cellB={border:'1px solid #000',padding:'3px 6px',fontSize:'10px',verticalAlign:'top',wordBreak:'break-word'};
+  const labB={...cellB,background:'#f3f4f6',fontWeight:'bold'};
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
@@ -28803,7 +28816,8 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         )}
       </div>
       {printRec && (
-        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'24px 26px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.4}}>
+        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'20px 22px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.35}}>
+          <style>{`#sk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse} #sk-print-area td,#sk-print-area th{word-break:break-word;overflow-wrap:anywhere}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－２</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【生活機能チェックシート】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
@@ -28832,10 +28846,10 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
 }
 
 // === 興味・関心チェックシート (別紙様式3-1 / アドオン: kinou_keikaku) ===
-function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo }) {
+function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo, targetPatientId }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
-  const [pid, setPid] = React.useState(patients[0]?.id ?? null);
+  const [pid, setPid] = React.useState((targetPatientId!=null && (appData.patients||[]).some(p=>p.id===targetPatientId)) ? targetPatientId : (patients[0]?.id ?? null));
   const [editing, setEditing] = React.useState(null);
   const [newItem, setNewItem] = React.useState('');
   const patient = (appData.patients||[]).find(p => p.id === pid);
@@ -28923,7 +28937,8 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         )}
       </div>
       {printRec && (
-        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'24px 26px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'20px 22px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+          <style>{`#ki-print-area table{table-layout:fixed;width:100%;border-collapse:collapse} #ki-print-area td,#ki-print-area th{word-break:break-word;overflow-wrap:anywhere}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－１</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【興味・関心チェックシート】</div>
           <div style={{fontSize:'10.5px',marginBottom:'4px'}}>氏名：{patient?.name} 様　　作成日：{printRec.recordDate}　　記入者：{printRec.recorder}</div>
@@ -30996,7 +31011,7 @@ const DEFAULT_PF_CATEGORIES = [
     note: '初回通所時のケアマネ向け報告 (バイタル・ご利用の様子)' },
 ];
 
-function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
+function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange }) {
   // ★ 常に最新の appData から利用者を取得する。
   //   patientProp はモーダルを開いた時点のスナップショットで、保存(updatePatient → onSave → setAppData)後も
   //   更新されない。そのため担当者会議などを保存しても画面に反映されず、再度開いても出ず
@@ -31263,6 +31278,16 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose }) {
                 })}
               </div>
             )}
+          </div>
+        )}
+        {/* 個別機能訓練 書類 (アドオン有効時) — 計画書/生活機能/興味関心 をここから開ける */}
+        {hasAddon(appData,'kinou_keikaku') && navigateTo && (
+          <div className="shrink-0 px-4 py-2 bg-cyan-50 border-b border-cyan-100 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-cyan-800">🧩 個別機能訓練 書類:</span>
+            {[['kinou_keikaku','計画書(3-3)','kinouKeikakuRecords'],['seikatsu_kinou','生活機能チェック(3-2)','seikatsuKinouRecords'],['kyomi_kanshin','興味・関心(3-1)','kyomiKanshinRecords']].map(([view,label,key])=>{
+              const cnt=(appData[key]||[]).filter(r=>r.patientId===patient.id).length;
+              return <button key={view} onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo(view); }} className="px-3 py-1 bg-white border border-cyan-200 rounded-lg text-[11px] font-bold text-cyan-700 hover:bg-cyan-100">{label}（{cnt}件）→</button>;
+            })}
           </div>
         )}
         {/* タブ */}
