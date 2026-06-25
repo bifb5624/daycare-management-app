@@ -14780,11 +14780,12 @@ export default function App() {
                 if (!staffAddForm.role) { alert('役職を選択してください'); return; }
                 const fullName = `${last} ${first}`;
                 const _normFull = normalizeName(fullName).trim();
-                // ★ 重複チェック: 既存スタッフ (店舗メンバー + 日誌スタッフ) に同名+同役職があれば登録しない
+                // ★ 重複チェック: スタッフ切替(店舗メンバー)に同名+同役職があれば登録しない。
+                //   日誌にだけ居る人はスタッフ切替に居ないので追加を許可する(日誌へは重複追加しない)。
                 const dupStore = (appData.storeMembers || []).some(m => normalizeName(m.name).trim() === _normFull && (m.roleLabel||'') === staffAddForm.role);
                 const dupDiary = (appData.diarySettings?.staff || []).some(s => normalizeName(s.name).trim() === _normFull && (s.role||'') === staffAddForm.role);
-                if (dupStore || dupDiary) {
-                  alert(`「${fullName} (${staffAddForm.role})」は既に登録されています`);
+                if (dupStore) {
+                  alert(`「${fullName} (${staffAddForm.role})」はスタッフ切替に既に登録されています`);
                   return;
                 }
                 const newMember = {
