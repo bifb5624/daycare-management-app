@@ -16391,12 +16391,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           // ★ zIndex は全画面オーバーレイ(9999)より上に。 全画面時に気分モーダルが裏に隠れて反応しないのを防ぐ
           <div className="fixed inset-0 flex flex-col bg-white" style={{zIndex:10000}}>
             <div className="flex items-center justify-between px-6 py-4 bg-slate-100 border-b border-slate-200">
-              <div className="text-slate-800 font-bold text-lg">{timing==='arrival'?'🏢 通所時の気分':'🏠 帰宅時の気分'}{kibunStep==='reason'&&` — ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.emoji} ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.label}`}</div>
+              <div className="text-slate-800 font-bold text-lg">{currentRec?.name && <span className="text-blue-700">{currentRec.name} さん｜</span>}{timing==='arrival'?'🏢 通所時の気分':'🏠 帰宅時の気分'}{kibunStep==='reason'&&` — ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.emoji} ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.label}`}</div>
               <button onClick={closeKibunModal} className="text-slate-400 hover:text-slate-700 text-2xl font-bold px-2">✕</button>
             </div>
             {kibunStep === 'mood' ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
-                <div className="text-slate-700 text-2xl font-bold mb-2">{timing==='arrival'?'通所時の気分を選んでください':'帰宅時の気分を選んでください'}</div>
+                <div className="text-center mb-2">
+                  {currentRec?.name && <div className="text-blue-700 text-2xl font-bold">{currentRec.name} さん</div>}
+                  <div className="text-slate-700 text-xl font-bold mt-1">{timing==='arrival'?'通所時の気分を選んでください':'帰宅時の気分を選んでください'}</div>
+                </div>
                 <div className="grid grid-cols-5 gap-4 w-full max-w-2xl">
                   {KIBUN_MOODS.map(mood => (
                     <button key={mood.key} onClick={() => { setKibunTempMood(mood.key); setKibunStep('reason'); }}
@@ -18965,11 +18968,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <td style={{padding:'8px 10px',textAlign:'center'}}>
                         <span style={{fontSize:14,fontWeight:'bold',padding:'2px 6px',borderRadius:5,whiteSpace:'nowrap',display:'inline-block',backgroundColor:r.status==='出席'?'#dbeafe':r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='出席'?'#1d4ed8':r.status==='欠席'?'#dc2626':'#64748b'}}>{r.status}</span>
                       </td>
-                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,whiteSpace:'nowrap'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunArrival]||'-';})()} {r.kibunArrivalReason&&<span style={{fontSize:13,color:'#334155'}}>({r.kibunArrivalReason})</span>}
+                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,maxWidth:170,verticalAlign:'middle'}}>
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunArrival]||'-';})()} {r.kibunArrivalReason&&<span title={r.kibunArrivalReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:140,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunArrivalReason})</span>}
                       </td>
-                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,whiteSpace:'nowrap'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunDeparture]||'-';})()} {r.kibunDepartureReason&&<span style={{fontSize:13,color:'#334155'}}>({r.kibunDepartureReason})</span>}
+                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,maxWidth:170,verticalAlign:'middle'}}>
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunDeparture]||'-';})()} {r.kibunDepartureReason&&<span title={r.kibunDepartureReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:140,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunDepartureReason})</span>}
                       </td>
                       <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:tempW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
                         {r.temp?`${r.temp}℃`:'-'}{tempW&&'⚠'}
@@ -25426,7 +25429,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
     const newMassageStaff = massageStaffInput.split(/[、,]+/).map(s => s.trim()).filter(s => s);
     if (dirtyRef) dirtyRef.current = false;
     const diarySettings = diarySettingsRef.current || appData.diarySettings;
-    onSave({ ...appData, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } });
+    onSave({ ...appData, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -25998,7 +26001,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                       </div>);
                     })()}
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -26124,7 +26127,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef }) {
                   </div>
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（直通）</label><input type="tel" value={newPerson.phone} onChange={e => setNewPerson({...newPerson, phone: e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 </div>
-                <button type="button" onClick={() => { if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:"",name:"",phone:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
+                <button type="button" onClick={() => { if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:"",name:"",phone:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
               </div>
               {cmPersons.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
                 <div className="space-y-2">{cmPersons.map((p, i) => (
