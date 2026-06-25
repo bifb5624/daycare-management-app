@@ -9924,6 +9924,7 @@ function FamilyAdminView({ appData, onSave }) {
   const [historyDetail, setHistoryDetail] = useState(null);
   const [previewPid, setPreviewPid] = useState(null); // プレビュータブで選択中の利用者
   const [copied, setCopied] = useState(false);
+  const [postCmOffice, setPostCmOffice] = useState(''); // 個別(ケアマネ): 選択中の事業所
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status === '利用中'));
   const allAnnouncements = appData.familyAnnouncements || [];
   const personalAnnouncements = appData.familyPersonalAnnouncements || [];
@@ -9942,6 +9943,30 @@ function FamilyAdminView({ appData, onSave }) {
   const togglePatient = (form, setForm, pid) => {
     const has = form.patientIds.includes(pid);
     setForm({ ...form, patientIds: has ? form.patientIds.filter(x=>x!==pid) : [...form.patientIds, pid] });
+  };
+  // ★ 個別対象を「送付先」に応じて選ぶためのデータ・ヘルパー
+  const cmOfficesList = (appData.systemSettings?.cmOffices || []);
+  const careManagersList = (appData.systemSettings?.careManagers || []);
+  // master + 利用者の担当事業所を合わせて一覧化 (master 未登録の事業所も拾う)
+  const cmOfficeNames = Array.from(new Set([...cmOfficesList.map(o=>o.name), ...patients.map(p=>p.cmOffice).filter(Boolean)])).filter(Boolean);
+  // その他関係者一覧 (利用者の relatedParties から name+office で一意に集約)
+  const relatedPartiesAll = (() => {
+    const m = new Map();
+    patients.forEach(p => (p.relatedParties || []).forEach(rp => {
+      const k = `${rp.name||''}|${rp.office||''}`;
+      if (rp.name && !m.has(k)) m.set(k, { name: rp.name, office: rp.office||'', relation: rp.relation||'' });
+    }));
+    return [...m.values()];
+  })();
+  const _pidsOfCm = (office, name) => patients.filter(p => (p.cmOffice||'')===office && (p.cmName||'')===name).map(p=>p.id);
+  const _pidsOfRelated = (name, office) => patients.filter(p => (p.relatedParties||[]).some(x => (x.name||'')===name && (x.office||'')===office)).map(p=>p.id);
+  // グループ(ケアマネ/関係者)の担当利用者をまとめて選択/解除
+  const _toggleGroup = (pids) => {
+    if (!pids.length) return;
+    setPostForm(f => {
+      const allIn = pids.every(id => f.patientIds.includes(id));
+      return { ...f, patientIds: allIn ? f.patientIds.filter(id=>!pids.includes(id)) : Array.from(new Set([...f.patientIds, ...pids])) };
+    });
   };
   const checkAllFiltered = (form, setForm) => {
     const pids = matchedByFilter.map(p => p.id);
@@ -10205,25 +10230,76 @@ function FamilyAdminView({ appData, onSave }) {
               <div className="text-[10px] text-slate-400 mt-1">例：イベントは「ご家族・ケアマネ」のみ、その他関係者には送らない 等。未選択の種別の方には表示されません。</div>
             </div>
             {postForm.scope === 'specific' && (
-              <div className="space-y-2">
-                <FilterPanel/>
-                <div className="border border-slate-200 rounded-xl p-2 max-h-56 overflow-auto bg-white">
-                  <div className="flex items-center justify-between mb-2 px-2">
-                    <span className="text-[11px] font-bold text-slate-500">対象を選択 (チェック {postForm.patientIds.length}名)</span>
-                    <div className="flex gap-1">
-                      <button onClick={()=>checkAllFiltered(postForm, setPostForm)} className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded">該当を全選択</button>
-                      <button onClick={()=>uncheckAll(postForm, setPostForm)} className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 rounded">クリア</button>
+              <div className="space-y-3">
+                {/* 👪 ご家族: 利用者名で選択 */}
+                {(postForm.audience||[]).includes('family') && (
+                  <div className="border-2 border-blue-100 rounded-xl p-2 bg-blue-50/40">
+                    <div className="flex items-center justify-between mb-1.5 px-1">
+                      <span className="text-[11px] font-bold text-blue-700">👪 ご家族に送る利用者を選択（{matchedByFilter.filter(p=>postForm.patientIds.includes(p.id)).length}名）</span>
+                      <div className="flex gap-1">
+                        <button onClick={()=>checkAllFiltered(postForm, setPostForm)} className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded">該当を全選択</button>
+                        <button onClick={()=>uncheckAll(postForm, setPostForm)} className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 rounded">クリア</button>
+                      </div>
+                    </div>
+                    <FilterPanel/>
+                    <div className="grid grid-cols-3 gap-1 max-h-44 overflow-auto mt-1">
+                      {matchedByFilter.map(p => (
+                        <label key={p.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer text-xs ${postForm.patientIds.includes(p.id) ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-white text-slate-600'}`}>
+                          <input type="checkbox" checked={postForm.patientIds.includes(p.id)} onChange={()=>togglePatient(postForm, setPostForm, p.id)} className="accent-emerald-500"/>
+                          <span className="truncate">{p.name}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    {matchedByFilter.map(p => (
-                      <label key={p.id} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer text-xs ${postForm.patientIds.includes(p.id) ? 'bg-emerald-100 text-emerald-700 font-bold' : 'hover:bg-slate-50 text-slate-600'}`}>
-                        <input type="checkbox" checked={postForm.patientIds.includes(p.id)} onChange={()=>togglePatient(postForm, setPostForm, p.id)} className="accent-emerald-500"/>
-                        <span className="truncate">{p.name}</span>
-                      </label>
-                    ))}
+                )}
+                {/* 📋 ケアマネ: 事業所 → 担当者 */}
+                {(postForm.audience||[]).includes('caremanager') && (
+                  <div className="border-2 border-amber-100 rounded-xl p-2 bg-amber-50/40">
+                    <div className="text-[11px] font-bold text-amber-700 mb-1.5 px-1">📋 ケアマネを選択（事業所 → 担当者）</div>
+                    <select value={postCmOffice} onChange={e=>setPostCmOffice(e.target.value)} className="w-full px-3 py-2 bg-white border border-amber-200 rounded-lg font-bold text-xs outline-none">
+                      <option value="">事業所を選択してください</option>
+                      {cmOfficeNames.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    {postCmOffice ? (() => {
+                      const mgrs = careManagersList.filter(c => c.office === postCmOffice);
+                      return mgrs.length ? (
+                        <div className="grid grid-cols-2 gap-1 mt-2 max-h-40 overflow-auto">
+                          {mgrs.map((c,i) => {
+                            const pids = _pidsOfCm(c.office, c.name);
+                            const checked = pids.length>0 && pids.every(id=>postForm.patientIds.includes(id));
+                            return (
+                              <label key={i} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${!pids.length?'opacity-40 cursor-not-allowed':'cursor-pointer'} ${checked ? 'bg-amber-200 text-amber-800 font-bold' : 'hover:bg-white text-slate-600'}`}>
+                                <input type="checkbox" checked={checked} disabled={!pids.length} onChange={()=>_toggleGroup(pids)} className="accent-amber-500"/>
+                                <span className="truncate">{c.name}<span className="text-[9px] text-slate-400 ml-1">({pids.length}名)</span></span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      ) : <div className="text-[10px] text-slate-400 mt-2 px-1">この事業所の担当者が登録されていません</div>;
+                    })() : <div className="text-[10px] text-slate-400 mt-1.5 px-1">まず事業所を選択してください</div>}
                   </div>
-                </div>
+                )}
+                {/* 🤝 その他関係者: 一覧から選択 */}
+                {(postForm.audience||[]).includes('related') && (
+                  <div className="border-2 border-cyan-100 rounded-xl p-2 bg-cyan-50/40">
+                    <div className="text-[11px] font-bold text-cyan-700 mb-1.5 px-1">🤝 その他関係者を選択</div>
+                    {relatedPartiesAll.length ? (
+                      <div className="grid grid-cols-2 gap-1 max-h-40 overflow-auto">
+                        {relatedPartiesAll.map((rp,i) => {
+                          const pids = _pidsOfRelated(rp.name, rp.office);
+                          const checked = pids.length>0 && pids.every(id=>postForm.patientIds.includes(id));
+                          return (
+                            <label key={i} className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs ${!pids.length?'opacity-40 cursor-not-allowed':'cursor-pointer'} ${checked ? 'bg-cyan-200 text-cyan-800 font-bold' : 'hover:bg-white text-slate-600'}`}>
+                              <input type="checkbox" checked={checked} disabled={!pids.length} onChange={()=>_toggleGroup(pids)} className="accent-cyan-500"/>
+                              <span className="truncate">{rp.name}{rp.relation?`（${rp.relation}）`:''}<span className="text-[9px] text-slate-400 ml-1">({pids.length}名)</span></span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : <div className="text-[10px] text-slate-400 px-1">その他関係者が登録されていません</div>}
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-400 px-1">選択中: 合計 {postForm.patientIds.length}名の利用者に届きます（送付先の種別の方のみ閲覧できます）</div>
               </div>
             )}
             <div className="grid grid-cols-12 gap-3">
