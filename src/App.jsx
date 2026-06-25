@@ -28653,8 +28653,8 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         const scale=(opts,sel)=>opts.map(o=><span key={o} style={{marginRight:6,padding:sel===o?'0 3px':'0',fontWeight:sel===o?'bold':'normal',border:sel===o?'1.5px solid #000':'none',borderRadius:sel===o?'3px':0}}>{o}</span>);
         const pr=printRec; const bd=patient?.birthDate?new Date(patient.birthDate):null;
         return (
-        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'20px 22px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.35}}>
-          <style>{`#kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse} #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere}`}</style>
+        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+          <style>{`#kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere} #kk-print-area *{max-width:100%}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－３</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
@@ -28712,8 +28712,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
               ); })}
             </tbody>
           </table>
-          <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※短期目標で設定した目標を達成するために必要な行為に対応するよう、訓練項目を具体的に設定すること。</div>
-          <div style={{fontSize:'10px',textAlign:'right',margin:'1px 0 4px'}}>プログラム立案者：{pr.programPlanner||''}</div>
+          <table style={{width:'100%',borderCollapse:'collapse',marginTop:'-1px'}}><tbody>
+            <tr><td style={{...cell,textAlign:'left',fontSize:'8px',color:'#333'}}>※短期目標で設定した目標を達成するために必要な行為に対応するよう、訓練項目を具体的に設定すること。</td><td style={{...cell,width:'30%',textAlign:'right'}}>プログラム立案者：{pr.programPlanner||''}</td></tr>
+          </tbody></table>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'40%'}}>利用者本人・家族等がサービス利用時間以外に実施すること</td><td style={cell}>{pr.jikangaiJisshi}</td><td style={{...lab,width:'14%'}}>特記事項</td><td style={cell}>{pr.tokki}</td></tr>
           </tbody></table>
@@ -28823,8 +28824,8 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         )}
       </div>
       {printRec && (
-        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'20px 22px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.35}}>
-          <style>{`#sk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse} #sk-print-area td,#sk-print-area th{word-break:break-word;overflow-wrap:anywhere}`}</style>
+        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+          <style>{`#sk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #sk-print-area td,#sk-print-area th{word-break:break-word;overflow-wrap:anywhere} #sk-print-area *{max-width:100%}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－２</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【生活機能チェックシート】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
@@ -28944,8 +28945,8 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         )}
       </div>
       {printRec && (
-        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'20px 22px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
-          <style>{`#ki-print-area table{table-layout:fixed;width:100%;border-collapse:collapse} #ki-print-area td,#ki-print-area th{word-break:break-word;overflow-wrap:anywhere}`}</style>
+        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.25}}>
+          <style>{`#ki-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #ki-print-area td,#ki-print-area th{word-break:break-word;overflow-wrap:anywhere} #ki-print-area *{max-width:100%}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－１</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【興味・関心チェックシート】</div>
           <div style={{fontSize:'10.5px',marginBottom:'4px'}}>氏名：{patient?.name} 様　　作成日：{printRec.recordDate}　　記入者：{printRec.recorder}</div>
