@@ -15525,7 +15525,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (_exItm) {
       const _unit = _exItm.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(_exItm.name))?.defaultUnit || '';
       let toSave = formatted;
-      if (toSave && _unit && !String(toSave).endsWith(_unit)) toSave = `${toSave}${_unit}`;
+      if (toSave && _unit && /[0-9０-９]/.test(String(toSave)) && !String(toSave).endsWith(_unit)) toSave = `${toSave}${_unit}`;
       updateExercise(keypad.recordId, keypad.field, toSave);
     } else {
       updateRecord(keypad.recordId, keypad.field, formatted);
@@ -16129,7 +16129,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     //   内部値は数値のみのまま、 表示時のみ単位付加 (連動先で値が空にならない安全な実装)
                     const _unit = item.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(item.name))?.defaultUnit || '';
                     const _vstr = String(val ?? '');
-                    const displayVal = (_vstr !== '' && _unit && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
+                    // ★ 数字を含む値のときだけ単位を付ける (×・ー・○ 等の記号には単位を付けない)
+                    const displayVal = (_vstr !== '' && _unit && /[0-9０-９]/.test(_vstr) && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
                     return (
                     <td key={item.id} className={`px-0.5 py-2 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
@@ -16149,7 +16150,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             // ★ 内部値も単位込みで保存 (空でなく defaultUnit があるとき末尾に補完)
                             //   既に末尾が unit ならそのまま (重複防止)
                             let v = e.target.value.trim();
-                            if (v && _unit && !v.endsWith(_unit)) v = `${v}${_unit}`;
+                            if (v && _unit && /[0-9０-９]/.test(v) && !v.endsWith(_unit)) v = `${v}${_unit}`;
                             updateExercise(p.id, item.id, v);
                           }}
                           style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14, fontWeight:'bold'}}
@@ -17636,7 +17637,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                               const pv = prevExVals[it.id];
                               const unit = it.defaultUnit || '';
                               const vStr = String(v ?? '');
-                              const disp = (unit && !vStr.endsWith(unit) && !/[×x✕*]/.test(vStr)) ? `${vStr}${unit}` : vStr;
+                              const disp = (unit && /[0-9０-９]/.test(vStr) && !vStr.endsWith(unit)) ? `${vStr}${unit}` : vStr;
                               // 前回比 (主数値で比較)
                               const cur = parseExerciseDuo(v)?.primary;
                               const prev = pv ? parseExerciseDuo(pv)?.primary : null;
@@ -19014,7 +19015,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         const rawV = r.exercises?.[ex.id];
                         const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(ex.name))?.defaultUnit || '';
                         const vStr = String(rawV ?? '');
-                        const disp = (vStr && rawV !== 'ー' && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
+                        const disp = (vStr && /[0-9０-９]/.test(vStr) && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
                         return (
                         <td key={ex.id} style={{padding:'8px 10px',textAlign:'center',fontSize:14,color:rawV&&rawV!=='ー'?'#1d4ed8':'#cbd5e1',fontWeight:'bold'}}>
                           {disp||'-'}
@@ -21602,7 +21603,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
         || appSettings.exerciseItems.find(it => _normalizeName(it.name) === _normalizeName(item.label||''))?.defaultUnit
         || '';
       const rawStr = String(raw);
-      return (unit && !rawStr.endsWith(unit)) ? `${rawStr}${unit}` : rawStr;
+      return (unit && /[0-9０-９]/.test(rawStr) && !rawStr.endsWith(unit)) ? `${rawStr}${unit}` : rawStr;
     }
     // fixed: 利用者ごと設定があれば優先、なければ全体の値
     if (item.perPatient && Object.prototype.hasOwnProperty.call(patientValues, item.id)) return patientValues[item.id];
