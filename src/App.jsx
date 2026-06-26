@@ -946,6 +946,23 @@ const ADDONS = [
 const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
 
+// セル幅に収まる最大フォントで表示し、はみ出す場合は自動縮小する (折り返さない)
+function AutoFitText({ text, max = 13, min = 6, bold, color }) {
+  const ref = React.useRef(null);
+  React.useLayoutEffect(() => {
+    const el = ref.current; if (!el) return;
+    const parent = el.parentElement; if (!parent) return;
+    let size = max;
+    el.style.fontSize = size + 'px';
+    let guard = 0;
+    // 親セルの内寸より広ければ 0.5px ずつ縮小
+    while (size > min && el.scrollWidth > (parent.clientWidth - 2) && guard < 40) {
+      size -= 0.5; el.style.fontSize = size + 'px'; guard++;
+    }
+  });
+  return <span ref={ref} style={{ display: 'inline-block', whiteSpace: 'nowrap', fontWeight: bold ? 'bold' : 'normal', color: color || 'inherit', fontSize: max, lineHeight: 1.05 }}>{text}</span>;
+}
+
 // 利用者の予定運動メニューを「指定年月」時点の値で返す (月別バージョン対応)
 //   plannedExercisesHistory: [{from:'YYYY-MM', values:{itemId:val}}]（from の月以降に有効）。
 //   履歴が無ければ現在値 plannedExercises をそのまま返す。
@@ -21201,13 +21218,13 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 {ex.map(it=><col key={it.id}/>)}
               </colgroup>
               <tbody>
-                <tr style={{height:18}}>
-                  <th className="border border-slate-600 px-0 text-center" style={{background:'#f1f5f9',color:'#000',fontSize:9,lineHeight:1.05}}>運動メニュー</th>
-                  {ex.map(it=>(<th key={it.id} className="border border-slate-600 px-0 text-center" style={{background:'#f8fafc',color:'#000',fontSize:8,lineHeight:1.05,wordBreak:'break-all',fontWeight:'bold'}}>{it.name}</th>))}
+                <tr style={{height:30}} className="bg-slate-700 text-white">
+                  <th className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#334155',color:'#fff'}}><AutoFitText text="運動メニュー" max={11} bold color="#fff"/></th>
+                  {ex.map(it=>(<th key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#334155',color:'#fff'}}><AutoFitText text={it.name} max={12} bold color="#fff"/></th>))}
                 </tr>
                 <tr style={{height:36}}>
-                  <td className="border border-slate-600 px-0 text-center font-bold" style={{fontSize:9,lineHeight:1.05}}>設定数値</td>
-                  {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 text-center font-bold" style={{fontSize:11,lineHeight:1.1,wordBreak:'break-all'}}>{_planUnit(plannedM[it.id], it.defaultUnit)}</td>))}
+                  <td className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#f1f5f9'}}><AutoFitText text="設定数値" max={11} bold/></td>
+                  {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden"><AutoFitText text={_planUnit(plannedM[it.id], it.defaultUnit)} max={13} bold/></td>))}
                 </tr>
               </tbody>
             </table>
@@ -21253,10 +21270,10 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       // 運動メニュー項目数に応じて統一列幅を計算 (個別運動も介護整体も同じ幅)
                       const unifiedW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42;
                       return ex.map(it => (
-                        <th key={it.id} className="border border-slate-600 py-1 text-[7px] leading-tight px-0" style={{width: unifiedW}}>{it.name}</th>
+                        <th key={it.id} className="border border-slate-600 py-1 leading-tight px-0 overflow-hidden" style={{width: unifiedW}}><AutoFitText text={it.name} max={11} bold color="#fff"/></th>
                       ));
                     })()}
-                    <th className="border border-slate-600 py-1 text-[8px]" style={{width: ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42}}>介護整体</th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width: ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42}}><AutoFitText text="介護整体" max={11} bold color="#fff"/></th>
                   </tr>
                 </thead>
                 <tbody>
