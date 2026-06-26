@@ -21259,13 +21259,13 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               `}</style>
               <table className="w-full border-collapse" style={{tableLayout:'fixed',width:'100%'}}>
                 <thead className="shrink-0">
-                  <tr className="bg-slate-800 text-white text-[10px]">
-                    <th className="border border-slate-600 py-1" style={{width:50}}>日付</th>
-                    <th className="border border-slate-600 py-1" style={{width:34}}>状態</th>
-                    <th className="border border-slate-600 py-1 text-[8px]" style={{width:60}}>気分</th>
-                    <th className="border border-slate-600 py-1" style={{width:48}}>体温</th>
-                    <th className="border border-slate-600 py-1" style={{width:58}}>開始 血圧（脈）</th>
-                    <th className="border border-slate-600 py-1" style={{width:58}}>終了 血圧（脈）</th>
+                  <tr className="bg-slate-800 text-white text-[10px]" style={{height:30}}>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:50}}><AutoFitText text="日付" max={13} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:34}}><AutoFitText text="状態" max={13} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:60}}><AutoFitText text="気分" max={13} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:48}}><AutoFitText text="体温" max={13} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text="開始 血圧（脈）" max={11} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text="終了 血圧（脈）" max={11} bold color="#fff"/></th>
                     {(()=>{
                       // 運動メニュー項目数に応じて統一列幅を計算 (個別運動も介護整体も同じ幅)
                       const unifiedW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42;
