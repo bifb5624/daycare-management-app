@@ -21193,19 +21193,28 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               );
             })()}
 
-            {/* ★ 運動メニュー（設定数値）独立表 — 黒ヘッダーの上に配置 */}
-            <table className="w-full border-collapse border border-slate-600 text-[10px] mb-1 shrink-0" style={{tableLayout:'fixed'}}>
+            {/* ★ 運動メニュー（設定数値）独立表 — 黒ヘッダーの上に配置。 列幅は下の主表に合わせる */}
+            {(() => { const uW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42; return (
+            <table className="w-full border-collapse border border-slate-600 mb-1 shrink-0" style={{tableLayout:'fixed',width:'100%'}}>
+              <colgroup>
+                <col style={{width:50}}/><col style={{width:34}}/><col style={{width:60}}/><col style={{width:48}}/><col style={{width:58}}/><col style={{width:58}}/>
+                {ex.map(it=><col key={it.id} style={{width:uW}}/>)}
+                <col style={{width:uW}}/>
+              </colgroup>
               <tbody>
-                <tr>
-                  <th className="border border-slate-600 px-1 py-0.5 text-center" style={{background:'#f1f5f9',color:'#000',fontSize:9,width:62,lineHeight:1.1}}>運動メニュー</th>
-                  {ex.map(it=>(<th key={it.id} className="border border-slate-600 px-0 py-0.5 text-center" style={{background:'#f8fafc',color:'#000',fontSize:8,lineHeight:1.05,wordBreak:'break-all',fontWeight:'bold'}}>{it.name}</th>))}
+                <tr style={{height:36}}>
+                  <th colSpan={6} className="border border-slate-600 px-1 text-center" style={{background:'#f1f5f9',color:'#000',fontSize:11,lineHeight:1.1}}>運動メニュー</th>
+                  {ex.map(it=>(<th key={it.id} className="border border-slate-600 px-0 text-center" style={{background:'#f8fafc',color:'#000',fontSize:8,lineHeight:1.05,wordBreak:'break-all',fontWeight:'bold'}}>{it.name}</th>))}
+                  <th className="border border-slate-600" style={{background:'#f1f5f9'}}></th>
                 </tr>
-                <tr>
-                  <td className="border border-slate-600 px-1 py-0.5 text-center font-bold" style={{fontSize:9,lineHeight:1.1}}>設定数値</td>
-                  {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 py-0.5 text-center font-bold" style={{fontSize:9,lineHeight:1.1,wordBreak:'break-all'}}>{_planUnit(plannedM[it.id], it.defaultUnit)}</td>))}
+                <tr style={{height:36}}>
+                  <td colSpan={6} className="border border-slate-600 px-2 text-right font-bold" style={{fontSize:11,lineHeight:1.1}}>設定数値 →</td>
+                  {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 text-center font-bold" style={{fontSize:11,lineHeight:1.1,wordBreak:'break-all'}}>{_planUnit(plannedM[it.id], it.defaultUnit)}</td>))}
+                  <td className="border border-slate-600"></td>
                 </tr>
               </tbody>
             </table>
+            ); })()}
 
             {/* メインテーブル: print 時の flex 計算問題を避けるためフロー配置 */}
             <div className="flex flex-col" style={{overflowX:'auto'}}>
