@@ -21193,10 +21193,11 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               );
             })()}
 
-            {/* ★ 運動メニュー（設定数値）独立表 — 黒ヘッダーの上。 ラベルは日付幅、運動名は残り幅を均等割り */}
+            {/* ★ 運動メニュー（設定数値）独立表 — 黒ヘッダーの上。 ラベルは日付列と同比率、運動名は残り幅を均等割り */}
+            {(() => { const _uW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42; const _mainTotal = 308 + (ex.length+1)*_uW; const _labelPct = (50/_mainTotal*100); return (
             <table className="w-full border-collapse border border-slate-600 mb-1 shrink-0" style={{tableLayout:'fixed',width:'100%'}}>
               <colgroup>
-                <col style={{width:50}}/>
+                <col style={{width:`${_labelPct}%`}}/>
                 {ex.map(it=><col key={it.id}/>)}
               </colgroup>
               <tbody>
@@ -21210,6 +21211,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 </tr>
               </tbody>
             </table>
+            ); })()}
 
             {/* メインテーブル: print 時の flex 計算問題を避けるためフロー配置 */}
             <div className="flex flex-col" style={{overflowX:'auto'}}>
