@@ -21200,8 +21200,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                         const fkey=si.id==='massage'?'massageNeed':si.id==='onyoku'?'onyokuDenryo':`svc_${si.id}`;
                         const _opts0=(si.options||'').split(/[、,]+/).map(s=>s.trim()).filter(Boolean)[0]||'';
                         return(<React.Fragment key={si.id}>
-                          <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:10,wordBreak:'break-all',lineHeight:1.1,fontWeight:'normal'}}>{si.label}</th>
-                          <td className="border border-slate-600 px-1.5 py-0 font-bold" style={{fontSize:11,lineHeight:1.2,wordBreak:'break-all',overflow:'hidden',height:'18px'}}>{sp[fkey]||_opts0||'ー'}</td>
+                          <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:11,wordBreak:'break-all',lineHeight:1.1,fontWeight:'bold',height:'30px'}}>{si.label}</th>
+                          <td className="border border-slate-600 px-1.5 py-0 font-bold" style={{fontSize:12,lineHeight:1.2,wordBreak:'break-all',overflow:'hidden',height:'30px'}}>{sp[fkey]||_opts0||'ー'}</td>
                         </React.Fragment>);
                       })}
                     </tr>
@@ -21218,11 +21218,11 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 {ex.map(it=><col key={it.id}/>)}
               </colgroup>
               <tbody>
-                <tr style={{height:30}} className="bg-slate-700 text-white">
+                <tr style={{height:25}} className="bg-slate-700 text-white">
                   <th className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#334155',color:'#fff'}}><AutoFitText text="運動メニュー" max={11} bold color="#fff"/></th>
                   {ex.map(it=>(<th key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#334155',color:'#fff'}}><AutoFitText text={it.name} max={12} bold color="#fff"/></th>))}
                 </tr>
-                <tr style={{height:36}}>
+                <tr style={{height:30}}>
                   <td className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#f1f5f9'}}><AutoFitText text="設定数値" max={11} bold/></td>
                   {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden"><AutoFitText text={_planUnit(plannedM[it.id], it.defaultUnit)} max={13} bold/></td>))}
                 </tr>
