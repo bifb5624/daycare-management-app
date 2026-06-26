@@ -21200,7 +21200,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                         const fkey=si.id==='massage'?'massageNeed':si.id==='onyoku'?'onyokuDenryo':`svc_${si.id}`;
                         const _opts0=(si.options||'').split(/[、,]+/).map(s=>s.trim()).filter(Boolean)[0]||'';
                         return(<React.Fragment key={si.id}>
-                          <th className="border border-slate-600 px-0 py-0 text-center overflow-hidden" style={{background:'white',color:'black',height:'30px'}}><AutoFitText text={si.label} max={12} bold/></th>
+                          <th className="border border-slate-600 px-0 py-0 text-center overflow-hidden" style={{background:'white',color:'black',height:'30px'}}><AutoFitText text={si.label} max={12}/></th>
                           <td className="border border-slate-600 px-1.5 py-0 font-bold" style={{fontSize:12,lineHeight:1.2,wordBreak:'break-all',overflow:'hidden',height:'30px'}}>{sp[fkey]||_opts0||'ー'}</td>
                         </React.Fragment>);
                       })}
