@@ -17893,6 +17893,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })()}
         </div>
 
+        {/* ★ 今回の様子＋今回の記録 を1つの枠で囲む (ご家族にわかりやすいよう枠色を変える)。 順序: 様子 → 記録 */}
+        {records.length > 0 && (
+        <div style={{border:'2.5px solid #60a5fa',borderRadius:18,padding:'14px 16px 4px',marginBottom:16,background:'#f5f9ff',boxShadow:'0 2px 8px rgba(59,130,246,0.12)'}}>
         {/* ★ 今回の様子 (家族・ケアマネ・事業所 共通): 特記事項を一目でわかるように大きく表示。
             「今回の記録」内の特記と重複するため、特記はこちらに集約し下側からは削除 */}
         {(() => {
@@ -18146,6 +18149,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </div>
           );
         })()}
+        </div>
+        )}
 
         {/* ★ 基本指標 (sec-kpi): 事業所では非表示 (月別通所状況と重複)。 家族では簡易表示として残す */}
         {familyMode && <div id="sec-kpi" style={{marginBottom:16,scrollMarginTop:170}}>
