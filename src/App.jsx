@@ -17450,11 +17450,21 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         const exSec = perClone.querySelector('#sec-exercise');
                         if(exSec){
                           const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
-                          const parseExVal = (v)=>{ if(!v||v==='○'||v==='ー') return null; const n=parseFloat(String(v).replace(/[^\d.]/g,'')); return isNaN(n)?null:n; };
+                          // ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー=除外
+                          const resolveExVal = (r, exItem)=>{
+                            let raw = r.exercises?.[exItem.id];
+                            if (raw==null||raw===''||raw==='×'||raw==='✕'||raw==='x'||raw==='ー'||raw==='-') return null;
+                            if (raw==='○'||raw==='◯') {
+                              const mm=(r.date||'').match(/(\d+)月/); const ry=r.year||new Date().getFullYear();
+                              raw=getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[exItem.id];
+                              if(!raw||raw==='ー') return null;
+                            }
+                            const n=parseFloat(String(raw).replace(/[^\d.]/g,'')); return isNaN(n)?null:n;
+                          };
                           const buildExHtml = (items, headerText) => {
                             let html=`<div style="font-size:14px;font-weight:bold;color:#475569;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;">${headerText}</div>`;
                             items.forEach(exItem=>{
-                              const dailyData = cValid.map(r=>({date:r.date, val:parseExVal(r.exercises?.[exItem.id])})).filter(d=>d.val!==null);
+                              const dailyData = cValid.map(r=>({date:r.date, val:resolveExVal(r, exItem)})).filter(d=>d.val!==null);
                               if(dailyData.length===0){
                                 html+=`<div style="background:white;border-radius:8px;padding:6px 12px;border:1px solid #e2e8f0;margin-bottom:5px;font-size:11px;color:#94a3b8;"><b style="color:#475569;font-size:12px;">${exItem.name}</b>　記録なし</div>`;
                                 return;
@@ -18060,11 +18070,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     {(() => {
                       const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
                       const exVals = latest.exercises || {};
-                      // 値が入っている項目だけ
-                      const doneEx = exItems.filter(it => {
-                        const v = exVals[it.id];
-                        return v && v !== 'ー' && v !== '×' && v !== '○' && String(v).trim() !== '';
-                      });
+                      // ◯=その月の設定数値 / 数値=そのまま / ×・ー・空=表示しない
+                      const resolveEx = (rec, it) => {
+                        let v = rec?.exercises?.[it.id];
+                        if (v==null||v===''||v==='×'||v==='✕'||v==='x'||v==='ー'||v==='-') return null;
+                        if (v==='○'||v==='◯') { const mm=(rec.date||'').match(/(\d+)月/); const ry=rec.year||new Date().getFullYear(); v=getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[it.id]; if(!v||v==='ー') return null; }
+                        return v;
+                      };
+                      const doneEx = exItems.filter(it => resolveEx(latest, it) != null);
                       if (doneEx.length === 0) return null;
                       // 前回値: 最新を除いた直近の出席記録から同 id の値を引く
                       const prevRec = withDates.slice(1).find(x => (x.r?.exercises||{}) && Object.keys(x.r?.exercises||{}).length > 0);
@@ -18075,8 +18088,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                           <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>🏋️ 今回の運動メニュー</span>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'6px 14px',marginTop:6}}>
                             {doneEx.map(it => {
-                              const v = exVals[it.id];
-                              const pv = prevExVals[it.id];
+                              const v = resolveEx(latest, it);
+                              const pv = resolveEx(prevRec?.r, it);
                               const unit = it.defaultUnit || '';
                               const vStr = String(v ?? '');
                               const disp = (unit && /[0-9０-９]/.test(vStr) && !vStr.endsWith(unit)) ? `${vStr}${unit}` : vStr;
