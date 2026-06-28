@@ -21558,9 +21558,10 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
   const patient = (appData.patients||[]).find(p => p.id === patientId);
   const a0 = cfg.renrakuAll || {}; const p0 = patient?.contactBookRenraku || {};
-  const [all, setAll] = React.useState({ html: renrakuToHtml(a0), until:a0.until||'' });
-  const [pat, setPat] = React.useState({ html: renrakuToHtml(p0), until:p0.until||'' });
+  const [all, setAll] = React.useState({ html: renrakuToHtml(a0), from:a0.from||'', until:a0.until||'' });
+  const [pat, setPat] = React.useState({ html: renrakuToHtml(p0), from:p0.from||'', until:p0.until||'' });
   const _addDays = (n) => { const d = new Date(); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+  const _today = _addDays(0);
   const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
   const [warn, setWarn] = React.useState('');
   const measureRef = React.useRef(null);
@@ -21571,7 +21572,7 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
     setWarn(el.scrollHeight > 150 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
   }, [all.html, pat.html]);
   const save = () => {
-    const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', until: o.until||'' });
+    const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o.from||'', until: o.until||'' });
     const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t!=null) };
     const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: clean(pat) } : p);
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients });
@@ -21582,14 +21583,34 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
     <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
       <div className="text-sm font-bold text-slate-700 mb-2">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>
       <RichEditor initialHtml={st.html} templates={templates} onChange={(html)=>set(s=>({...s,html}))}/>
-      <div className="flex items-center gap-2 mt-2 flex-wrap">
-        <span className="text-[10px] font-bold text-slate-400">表示期間</span>
-        <button type="button" onClick={()=>set(s=>({...s,until:''}))} className={`px-2 py-1 rounded text-xs font-bold border ${!st.until?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>期限なし</button>
-        <button type="button" onClick={()=>set(s=>({...s,until:_addDays(7)}))} className="px-2 py-1 rounded text-xs font-bold border bg-white text-slate-600 border-slate-300 hover:bg-slate-50">1週間</button>
-        <button type="button" onClick={()=>set(s=>({...s,until:_addDays(30)}))} className="px-2 py-1 rounded text-xs font-bold border bg-white text-slate-600 border-slate-300 hover:bg-slate-50">1ヶ月</button>
-        <input type="date" value={st.until||''} onChange={e=>set(s=>({...s,until:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="表示終了日"/>
-        {st.until && <span className="text-[10px] text-slate-500 font-bold">〜{st.until} まで表示</span>}
-      </div>
+      {(() => {
+        const isNone = !st.from && !st.until;
+        const isToday = st.from===_today && st.until===_today;
+        const isWeek = st.from===_today && st.until===_addDays(6);
+        const isCustom = !isNone && !isToday && !isWeek;
+        const pbtn = (active) => `px-2 py-1 rounded text-xs font-bold border ${active?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`;
+        return (
+        <div className="mt-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-slate-400">表示期間</span>
+            <button type="button" onClick={()=>set(s=>({...s,from:'',until:''}))} className={pbtn(isNone)}>期限なし</button>
+            <button type="button" onClick={()=>set(s=>({...s,from:_today,until:_today}))} className={pbtn(isToday)}>本日のみ</button>
+            <button type="button" onClick={()=>set(s=>({...s,from:_today,until:_addDays(6)}))} className={pbtn(isWeek)}>1週間</button>
+            <button type="button" onClick={()=>set(s=>({...s,from:s.from||_today,until:s.until||_addDays(6)}))} className={pbtn(isCustom)}>期間選択</button>
+          </div>
+          {(isCustom || (!isNone && !isToday && !isWeek)) ? (
+            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <input type="date" value={st.from||''} onChange={e=>set(s=>({...s,from:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="開始日"/>
+              <span className="text-xs text-slate-400">〜</span>
+              <input type="date" value={st.until||''} onChange={e=>set(s=>({...s,until:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="終了日"/>
+              <span className="text-[10px] text-slate-500 font-bold">の期間に表示</span>
+            </div>
+          ) : (!isNone && (
+            <div className="text-[10px] text-slate-500 font-bold mt-1">{isToday?'本日（'+_today+'）のみ表示':'本日〜'+st.until+' まで表示'}</div>
+          ))}
+        </div>
+        );
+      })()}
     </div>
   );
   return (
@@ -22373,9 +22394,10 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
           {/* 連絡事項 — 全員共通＋個別。 クリックで編集 */}
           {(() => {
             const _all = config?.renrakuAll; const _pat = patient?.contactBookRenraku;
-            // 表示期間(until)を過ぎたものは表示しない (selectedDate は YYYY-MM-DD)
-            const _showAll = renrakuHasText(_all) && (!_all.until || _all.until >= selectedDate);
-            const _showPat = renrakuHasText(_pat) && (!_pat.until || _pat.until >= selectedDate);
+            // 表示期間(from〜until)外は表示しない (selectedDate は YYYY-MM-DD)
+            const _inRange = (o) => (!o.from || selectedDate >= o.from) && (!o.until || selectedDate <= o.until);
+            const _showAll = renrakuHasText(_all) && _inRange(_all);
+            const _showPat = renrakuHasText(_pat) && _inRange(_pat);
             return (
             <div className="shrink-0 mb-2">
               <div className="font-bold text-slate-800" style={{fontSize:15,marginBottom:3}}>連絡事項</div>
