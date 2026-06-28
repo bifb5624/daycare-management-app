@@ -18965,8 +18965,21 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const selEx = allExItems.find(e=>e.id===_selExId);
             if(!selEx) return null;
 
+            // ★ 値の解決: ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー・空=反映しない('')
+            const _exMonthVal = (r) => {
+              const raw = r.exercises?.[selEx.id];
+              if (raw == null || raw === '' || raw === '×' || raw === '✕' || raw === 'x' || raw === 'ー' || raw === '-') return '';
+              if (raw === '○' || raw === '◯') {
+                const mm = (r.date||'').match(/(\d+)月/);
+                const ry = r.year || new Date().getFullYear();
+                const pv = getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[selEx.id];
+                return (pv && pv !== 'ー') ? pv : '';
+              }
+              return raw;
+            };
+
             const parseVal = v => { if(!v||v==='○'||v==='ー') return null; const n=parseFloat(v.replace(/[^\d.]/g,'')); return isNaN(n)?null:n; };
-            const allVals = validRecs.map(r=>r.exercises?.[selEx.id]||'').filter(Boolean);
+            const allVals = validRecs.map(r=>_exMonthVal(r)).filter(Boolean);
             const detectUnit = (vals) => {
               const v=vals.find(Boolean)||'';
               if(!v||v==='○'||v==='ー') return 'toggle';
@@ -19004,7 +19017,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             // ★ グラフタイプ解決: 'single' (折れ線のみ) または 'weight_reps' (棒+折れ線)
             const graphType = resolveGraphType(selEx, allVals);
             const dailyEx = validRecs.map(r=>{
-              const raw = r.exercises?.[selEx.id];
+              const raw = _exMonthVal(r);
               const parsed = parseExerciseDuo(raw);
               return {
                 date:r.date, label:r.date.replace(/(\d+)月(\d+)日/,'$1/$2'),
@@ -19016,8 +19029,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
             const monthlyEx = monthlyData.map(d=>{
               const recs=validRecs.filter(r=>{const mm=r.date.match(/(\d+)月/);return mm&&+mm[1]===d.month;});
-              const nums=recs.map(r=>toNum(r.exercises?.[selEx.id])).filter(v=>v!==null);
-              const dens=recs.map(r=>toDen(r.exercises?.[selEx.id])).filter(v=>v!==null);
+              const nums=recs.map(r=>toNum(_exMonthVal(r))).filter(v=>v!==null);
+              const dens=recs.map(r=>toDen(_exMonthVal(r))).filter(v=>v!==null);
               return {month:d.month,avg:nums.length?nums.reduce((a,b)=>a+b,0)/nums.length:null,max:nums.length?Math.max(...nums):null,min:nums.length?Math.min(...nums):null,denAvg:dens.length?dens.reduce((a,b)=>a+b,0)/dens.length:null,count:nums.length,hasData:nums.length>0};
             });
 
@@ -19034,8 +19047,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 {tabs}
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 記録一覧</div>
-                  {validRecs.filter(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー').slice(0,20).map((r,i)=>{
-                    const rawV = r.exercises[selEx.id];
+                  {validRecs.filter(r=>_exMonthVal(r)).slice(0,20).map((r,i)=>{
+                    const rawV = _exMonthVal(r);
                     const vStr = String(rawV ?? '');
                     // ★ 単位を後ろに付与 (unitLabel = selEx.defaultUnit 等)
                     const disp = (vStr && unitLabel && !vStr.endsWith(unitLabel)) ? `${vStr}${unitLabel}` : vStr;
@@ -19046,7 +19059,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                     );
                   })}
-                  {!validRecs.some(r=>r.exercises?.[selEx.id]&&r.exercises[selEx.id]!=='ー')&&<div style={{color:'#000',textAlign:'center',padding:24}}>記録なし</div>}
+                  {!validRecs.some(r=>_exMonthVal(r))&&<div style={{color:'#000',textAlign:'center',padding:24}}>記録なし</div>}
                 </div>
               </div>
             );
@@ -22065,6 +22078,20 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
               if (rawVal) break;
             }
           }
+        }
+      }
+      // ★ 連絡帳: ×・ー・空は空欄。 ◯ はその月の設定数値を表示。 数値はそのまま。
+      {
+        const _rt = String(rawVal ?? '').trim();
+        if (_rt==='×'||_rt==='✕'||_rt==='x'||_rt==='ー'||_rt==='-'||_rt==='') return '';
+        if (_rt==='○'||_rt==='◯') {
+          const _mm=(record.date||'').match(/(\d+)月/);
+          const _ry=record.year||new Date().getFullYear();
+          let _li = exerciseItemMap[item.linkedField];
+          if (!_li && item.label) { const lk=_normalizeName(item.label); _li=_exItems.find(it=>_normalizeName(it.name)===lk); }
+          const _pv = _li ? getPlannedExercisesForMonth(patient, _ry, _mm?+_mm[1]:1)[_li.id] : '';
+          if (!_pv || _pv==='ー') return '';
+          rawVal = _pv;
         }
       }
       const raw = dispEx(rawVal);
