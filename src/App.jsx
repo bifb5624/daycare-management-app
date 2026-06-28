@@ -13269,8 +13269,8 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         {/* ヘッダー */}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24,flexWrap:'wrap',gap:12}}>
           <div>
-            <div style={{fontSize:11,fontWeight:'bold',color:'#5e8030',letterSpacing:2}}>TSUMUGI 本部管理</div>
-            <div style={{fontSize:22,fontWeight:'bold',color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN',sans-serif"}}>こんにちは、{staffSession.displayName || '管理者'} 様</div>
+            <div style={{fontSize:11,fontWeight:'bold',color:'#5e8030',letterSpacing:2}}>TSUMUGI 管理局</div>
+            <div style={{fontSize:22,fontWeight:'bold',color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN',sans-serif"}}>こんにちは、つむぎ管理局 様</div>
           </div>
           <button onClick={onLogout} style={{padding:'8px 16px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>ログアウト</button>
         </div>
@@ -13718,6 +13718,18 @@ export default function App() {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
+  // ★ つむぎ管理局(super_admin)が店舗に入ったら、記録者は本部名ではなく「その店舗の管理者」を自動選択
+  //   (本部は確認用で記録には使わないため。 管理者が居なければ未選択のまま=選択画面)
+  React.useEffect(() => {
+    if (staffSession?.role !== 'super_admin' || !staffSession?.storeId) return;
+    if (activeRecorder && !activeRecorder.isSuperAdmin) return; // 既に店舗担当者を選択済みなら触らない
+    const staff = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
+    if (!staff.length) return; // 店舗データ未読込/スタッフ未登録 → 選択画面に任せる
+    const mgr = staff.find(s => s.role === '管理者') || staff[0];
+    const r = { id: `rec_${mgr.id}`, name: mgr.name, roleLabel: mgr.role || '' };
+    try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(r)); } catch {}
+    setActiveRecorder(r);
+  }, [staffSession?.role, staffSession?.storeId, appData?.diarySettings?.staff, activeRecorder]);
   const handleStaffLogout = () => {
     sessionStorage.removeItem('tsumugiStaffSession');
     sessionStorage.removeItem('tsumugiActiveRecorder');
@@ -14163,7 +14175,7 @@ export default function App() {
   // ── ログイン状態 ──────────────────────────
   // staffSession (Supabase 由来) を主とし、session は既存コード互換のため派生させる
   const [session, setSession] = useState(() => {
-    if (staffSession) return { mode:'staff', storeName: staffSession.storeName || staffSession.storeShortName || '本部', storeId: staffSession.storeId, role: staffSession.role };
+    if (staffSession) return { mode:'staff', storeName: staffSession.storeName || staffSession.storeShortName || 'つむぎ管理局', storeId: staffSession.storeId, role: staffSession.role };
     return null;
   });
   const [loginForm, setLoginForm] = useState({id:'', pass:'', error:''});
@@ -14171,7 +14183,7 @@ export default function App() {
   // staffSession 変化時に session を同期 (家族ログインのような既存コードが session を参照するため)
   useEffect(() => {
     if (staffSession) {
-      setSession({ mode:'staff', storeName: staffSession.storeName || staffSession.storeShortName || '本部', storeId: staffSession.storeId, role: staffSession.role });
+      setSession({ mode:'staff', storeName: staffSession.storeName || staffSession.storeShortName || 'つむぎ管理局', storeId: staffSession.storeId, role: staffSession.role });
     } else {
       setSession(null);
     }
@@ -14462,10 +14474,9 @@ export default function App() {
         const updated = { ...staffSession, storeId: store.id, storeName: store.name, storeShortName: store.short_name || store.name };
         sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
         setStaffSession(updated);
-        // super_admin は記録者を自動で「本部」に
-        const recorder = { id: `recorder_honbu_${staffSession.staffId}`, name: '本部 ' + (staffSession.displayName || '管理者'), roleLabel: '本部管理', isSuperAdmin: true };
-        sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(recorder));
-        setActiveRecorder(recorder);
+        // ★ super_admin(つむぎ管理局)は記録に本部名を入れない。 一旦クリアし、店舗データ読込後に店舗の管理者を自動選択
+        sessionStorage.removeItem('tsumugiActiveRecorder');
+        setActiveRecorder(null);
       }}
       onLogout={handleLogout}
     />;
@@ -14929,10 +14940,9 @@ export default function App() {
                                 try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
                                 try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
                                 setStaffSession(updated);
-                                // 本部管理者は自動で「本部」recorder に
-                                const recorder = { id: `recorder_honbu_${staffSession.staffId}`, name: '本部 ' + (staffSession.displayName || '管理者'), roleLabel: '本部管理', isSuperAdmin: true };
-                                sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(recorder));
-                                setActiveRecorder(recorder);
+                                // ★ つむぎ管理局は記録に本部名を入れない。 クリアし店舗の管理者を自動選択(下のeffect)
+                                sessionStorage.removeItem('tsumugiActiveRecorder');
+                                setActiveRecorder(null);
                                 setAppData({
                                   patients: [], ticketRecords: [], familyAnnouncements: [],
                                   familyPersonalAnnouncements: [], familyPhotos: [],
