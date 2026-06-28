@@ -21502,53 +21502,86 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   );
 }
 // === ContactBookView (完全版) ===
-// 連絡帳の連絡事項 編集モーダル (全員共通／個別・色・太字・文字サイズ・定型文)
+// 旧データ(text/color/bold/size)を表示用HTMLへ変換。 html があればそのまま使う
+function renrakuToHtml(o) {
+  if (!o) return '';
+  if (o.html != null) return o.html;
+  if (o.text) {
+    const sz = o.size==='large'?'font-size:18px;':o.size==='small'?'font-size:12px;':'';
+    const esc = String(o.text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    return `<span style="color:${o.color||'#000'};font-weight:${o.bold?'bold':'normal'};${sz}">${esc}</span>`;
+  }
+  return '';
+}
+const renrakuHasText = (o) => !!(renrakuToHtml(o).replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').trim());
+
+// リッチ入力エディタ (文字を選択して 太字/色/サイズ を部分的に適用)。 contentEditable は非制御 (初回のみ innerHTML を設定しカーソルを保持)
+function RichEditor({ initialHtml, onChange, templates }) {
+  const ref = React.useRef(null);
+  const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
+  React.useEffect(() => { if (ref.current && ref.current.innerHTML !== (initialHtml||'')) ref.current.innerHTML = initialHtml || ''; }, []); // 初回のみ
+  const emit = () => { if (ref.current) onChange(ref.current.innerHTML); };
+  const exec = (cmd, val) => { ref.current?.focus(); try { document.execCommand('styleWithCSS', false, true); } catch(e){} document.execCommand(cmd, false, val); emit(); };
+  const insertText = (t) => { ref.current?.focus(); document.execCommand('insertText', false, t); emit(); };
+  const btn = "px-2.5 py-1 rounded text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50";
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 flex-wrap mb-1.5 p-1.5 bg-slate-100 rounded-lg">
+        <span className="text-[10px] font-bold text-slate-400">選択して→</span>
+        <button type="button" onMouseDown={e=>{e.preventDefault(); exec('bold');}} className={btn} style={{fontWeight:900}}>太字</button>
+        <button type="button" onMouseDown={e=>{e.preventDefault(); exec('underline');}} className={btn} style={{textDecoration:'underline'}}>下線</button>
+        <span className="w-px h-5 bg-slate-300"/>
+        <span className="text-[10px] font-bold text-slate-400">色</span>
+        {COLORS.map(([c,l])=>(<button key={c} type="button" onMouseDown={e=>{e.preventDefault(); exec('foreColor', c);}} className="w-6 h-6 rounded-full border-2 border-white shadow" style={{background:c}} title={l}/>))}
+        <label className="w-6 h-6 rounded-full border border-slate-300 cursor-pointer relative overflow-hidden shadow" title="自由な色" style={{background:'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)'}}>
+          <input type="color" onChange={e=>exec('foreColor', e.target.value)} className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"/>
+        </label>
+        <span className="w-px h-5 bg-slate-300"/>
+        <span className="text-[10px] font-bold text-slate-400">大きさ</span>
+        {[['2','小'],['3','中'],['5','大']].map(([v,l])=>(<button key={v} type="button" onMouseDown={e=>{e.preventDefault(); exec('fontSize', v);}} className={btn}>{l}</button>))}
+      </div>
+      <div ref={ref} contentEditable suppressContentEditableWarning onInput={emit}
+        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none renraku-editor"
+        style={{minHeight:'4.5rem',lineHeight:1.6,whiteSpace:'pre-wrap',wordBreak:'break-word'}}/>
+      {templates && templates.filter(t=>t&&t.trim()).length>0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          <span className="text-[10px] font-bold text-slate-400 self-center">定型文:</span>
+          {templates.filter(t=>t&&t.trim()).map((t,i)=>(<button key={i} type="button" onMouseDown={e=>{e.preventDefault(); insertText(t);}} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.split('\n')[0].slice(0,16)}{(t.length>16||t.includes('\n'))?'…':''}</button>))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 連絡帳の連絡事項 編集モーダル (全員共通／個別・リッチ入力・表示期間・定型文)
 function RenrakuModal({ appData, patientId, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
   const patient = (appData.patients||[]).find(p => p.id === patientId);
   const a0 = cfg.renrakuAll || {}; const p0 = patient?.contactBookRenraku || {};
-  const [all, setAll] = React.useState({ text:a0.text||'', color:a0.color||'#000000', bold:!!a0.bold, size:a0.size||'normal', until:a0.until||'' });
-  const [pat, setPat] = React.useState({ text:p0.text||'', color:p0.color||'#000000', bold:!!p0.bold, size:p0.size||'normal', until:p0.until||'' });
+  const [all, setAll] = React.useState({ html: renrakuToHtml(a0), until:a0.until||'' });
+  const [pat, setPat] = React.useState({ html: renrakuToHtml(p0), until:p0.until||'' });
   const _addDays = (n) => { const d = new Date(); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
   const [warn, setWarn] = React.useState('');
-  const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
-  const SIZES = [['small','小'],['normal','中'],['large','大']];
-  // ★ 連絡帳の連絡事項欄(高さ10rem=160px,内側余白16px → 約144px)に収まるか判定し、見切れる入力(改行・サイズ拡大)を防ぐ
-  const BOX_H = 144;
-  const _lineH = (sz) => (sz==='large'?18:sz==='small'?12:15) * 1.5;
-  const _cpl = (sz) => (sz==='large'?22:sz==='small'?34:27); // 1行あたり概算文字数(折返し考慮)
-  const _visualLines = (text, sz) => (text||'').split('\n').reduce((s,ln)=> s + Math.max(1, Math.ceil((ln.length||1)/_cpl(sz))), 0);
-  const _totalH = (a,p) => _visualLines(a.text,a.size)*_lineH(a.size) + (a.text?6:0) + _visualLines(p.text,p.size)*_lineH(p.size);
-  const tryUpdate = (which, patch) => {
-    const na = which==='all' ? {...all,...patch} : all;
-    const np = which==='pat' ? {...pat,...patch} : pat;
-    if (_totalH(na,np) > BOX_H) { setWarn('これ以上は連絡帳で見切れてしまうため入力できません。改行を減らすか、文字サイズを小さくしてください。'); return; }
-    setWarn('');
-    if (which==='all') setAll(na); else setPat(np);
-  };
+  const measureRef = React.useRef(null);
+  // 連絡帳欄(高さ10rem≒144px)に収まるか実測 (約420px幅で折返しも考慮)。 はみ出すと警告
+  React.useEffect(() => {
+    const el = measureRef.current; if (!el) return;
+    el.innerHTML = (all.html||'') + ((all.html&&pat.html)?'<div style="height:6px"></div>':'') + (pat.html||'');
+    setWarn(el.scrollHeight > 150 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
+  }, [all.html, pat.html]);
   const save = () => {
-    const nextCfg = { ...cfg, renrakuAll: { ...all, text: all.text.trim() }, renrakuTemplates: templates.filter(t=>t!=null) };
-    const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: { ...pat, text: pat.text.trim() } } : p);
+    const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', until: o.until||'' });
+    const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t!=null) };
+    const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: clean(pat) } : p);
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients });
     onClose();
   };
-  // 1セクション分の編集UI (text/color/bold/size + 定型文挿入)。 ★ <Section/>で描画すると入力毎に再マウントされフォーカスが外れるため、関数として呼び出す
+  // 1セクション分の編集UI。 ★ <Section/>で描画すると再マウントしカーソルが飛ぶため関数として呼び出す
   const renderSection = ({ title, sub, st, set, which }) => (
     <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
       <div className="text-sm font-bold text-slate-700 mb-2">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>
-      <textarea value={st.text} onChange={e=>tryUpdate(which,{text:e.target.value})} rows={3} placeholder="連絡事項を入力（改行可）"
-        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-y"
-        style={{color:st.color, fontWeight:st.bold?'bold':'normal', fontSize:st.size==='large'?17:st.size==='small'?12:14}}/>
-      <div className="flex items-center gap-2 mt-2 flex-wrap">
-        <span className="text-[10px] font-bold text-slate-400">色</span>
-        {COLORS.map(([c,l])=>(<button key={c} type="button" onClick={()=>set(s=>({...s,color:c}))} className={`w-6 h-6 rounded-full border-2 ${st.color===c?'border-slate-800 ring-2 ring-slate-300':'border-white'}`} style={{background:c}} title={l}/>))}
-        <input type="color" value={st.color} onChange={e=>set(s=>({...s,color:e.target.value}))} className="w-7 h-7 rounded cursor-pointer border border-slate-300" title="自由な色"/>
-        <span className="w-px h-5 bg-slate-200 mx-1"/>
-        <button type="button" onClick={()=>set(s=>({...s,bold:!s.bold}))} className={`px-2.5 py-1 rounded text-xs font-bold border ${st.bold?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>太字</button>
-        <span className="text-[10px] font-bold text-slate-400 ml-1">サイズ</span>
-        {SIZES.map(([v,l])=>(<button key={v} type="button" onClick={()=>tryUpdate(which,{size:v})} className={`px-2 py-1 rounded text-xs font-bold border ${st.size===v?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300'}`}>{l}</button>))}
-      </div>
+      <RichEditor initialHtml={st.html} templates={templates} onChange={(html)=>set(s=>({...s,html}))}/>
       <div className="flex items-center gap-2 mt-2 flex-wrap">
         <span className="text-[10px] font-bold text-slate-400">表示期間</span>
         <button type="button" onClick={()=>set(s=>({...s,until:''}))} className={`px-2 py-1 rounded text-xs font-bold border ${!st.until?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>期限なし</button>
@@ -21557,17 +21590,13 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
         <input type="date" value={st.until||''} onChange={e=>set(s=>({...s,until:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="表示終了日"/>
         {st.until && <span className="text-[10px] text-slate-500 font-bold">〜{st.until} まで表示</span>}
       </div>
-      {templates.filter(t=>t&&t.trim()).length>0 && (
-        <div className="flex flex-wrap gap-1 mt-2">
-          <span className="text-[10px] font-bold text-slate-400 self-center">定型文:</span>
-          {templates.filter(t=>t&&t.trim()).map((t,i)=>(<button key={i} type="button" onClick={()=>tryUpdate(which,{text:st.text?st.text+'\n'+t:t})} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.split('\n')[0].slice(0,16)}{(t.length>16||t.includes('\n'))?'…':''}</button>))}
-        </div>
-      )}
     </div>
   );
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-[80] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-5">
+        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:420,padding:'8px 10px',lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:15,visibility:'hidden',pointerEvents:'none'}}/>
+        <style>{`.renraku-editor:empty:before{content:'連絡事項を入力（文字を選んで色・太字・大きさ）';color:#94a3b8;}`}</style>
         <div className="flex items-center justify-between mb-3">
           <div className="text-lg font-bold text-slate-800">連絡事項の編集</div>
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none px-2">✕</button>
@@ -22345,14 +22374,14 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
           {(() => {
             const _all = config?.renrakuAll; const _pat = patient?.contactBookRenraku;
             // 表示期間(until)を過ぎたものは表示しない (selectedDate は YYYY-MM-DD)
-            const _showAll = _all?.text && (!_all.until || _all.until >= selectedDate);
-            const _showPat = _pat?.text && (!_pat.until || _pat.until >= selectedDate);
+            const _showAll = renrakuHasText(_all) && (!_all.until || _all.until >= selectedDate);
+            const _showPat = renrakuHasText(_pat) && (!_pat.until || _pat.until >= selectedDate);
             return (
             <div className="shrink-0 mb-2">
               <div className="font-bold text-slate-800" style={{fontSize:15,marginBottom:3}}>連絡事項</div>
-              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'10rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',lineHeight:1.5,boxSizing:'border-box'}}>
-                {_showAll && <div style={{color:_all.color||'#000',fontWeight:_all.bold?'bold':'normal',fontSize:_all.size==='large'?18:_all.size==='small'?12:15,marginBottom:6}}>{_all.text}</div>}
-                {_showPat && <div style={{color:_pat.color||'#000',fontWeight:_pat.bold?'bold':'normal',fontSize:_pat.size==='large'?18:_pat.size==='small'?12:15}}>{_pat.text}</div>}
+              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'10rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:15,lineHeight:1.5,boxSizing:'border-box'}}>
+                {_showAll && <div style={{marginBottom:6}} dangerouslySetInnerHTML={{__html: renrakuToHtml(_all)}}/>}
+                {_showPat && <div dangerouslySetInnerHTML={{__html: renrakuToHtml(_pat)}}/>}
               </div>
             </div>
             );
