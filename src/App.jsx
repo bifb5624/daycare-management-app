@@ -104,7 +104,10 @@ const AutoFitLine = ({ children, style }) => {
       if (!textRef.current || !containerRef.current) return;
       const tw = textRef.current.scrollWidth;
       const cw = containerRef.current.clientWidth;
-      setScale((tw > cw && cw > 0) ? cw / tw : 1);
+      if (cw > 0) { setScale(tw > cw ? cw / tw : 1); return; }
+      // ★ 非表示(印刷用 display:none 等)で幅を測れない時は、文字数でフォールバック縮小して見切れを防ぐ
+      const len = String(children ?? '').length;
+      setScale(len > 12 ? Math.max(0.55, 12 / len) : 1);
     };
     measure();
     let ro;
@@ -30962,7 +30965,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
               <div style={{marginBottom:10,fontSize:17,borderBottom:'1px solid black',paddingBottom:5,display:'flex',alignItems:'flex-end',gap:8}}>
                 <input type="text" value={recipientOffice} onChange={e=>setRecipientOffice(e.target.value)}
                        placeholder="(送付先名)" className="fax-inline-input"
-                       style={{flex:1,minWidth:0,fontSize:17,border:'none',outline:'none',background:'transparent',padding:'2px 4px',fontFamily:'inherit'}}/>
+                       style={{flex:1,minWidth:0,fontSize:(recipientOffice||'').length>22?12:(recipientOffice||'').length>16?14:17,border:'none',outline:'none',background:'transparent',padding:'2px 4px',fontFamily:'inherit'}}/>
                 <span style={{fontWeight:'bold',flexShrink:0,whiteSpace:'nowrap',display:'inline-block',width:'2.5em',textAlign:'left'}}>御中</span>
               </div>
               <div style={{marginBottom:10,fontSize:17,borderBottom:'1px solid black',paddingBottom:5,display:'flex',alignItems:'flex-end',gap:8}}>
