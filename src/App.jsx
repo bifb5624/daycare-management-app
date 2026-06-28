@@ -31185,6 +31185,8 @@ const DEFAULT_PF_CATEGORIES = [
     note: '日々の介護記録・経過記録 / サービス提供実績' },
   { id: 'cat_7', name: '7. 初回ご利用報告', emoji: '📢', isDefault: true,
     note: '初回通所時のケアマネ向け報告 (バイタル・ご利用の様子)' },
+  { id: 'cat_8', name: '8. 連絡・体力測定の記録', emoji: '🗒️', isDefault: true,
+    note: '休み連絡 / 各種連絡 の送付履歴 / 体力測定の記録' },
 ];
 
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange }) {
@@ -31301,6 +31303,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const isCMTab = activeCat === 'cat_3';
   const isServiceTab = activeCat === 'cat_6'; // ★ サービス提供記録は cat_6 へ移動
   const isInitialReportTab = activeCat === 'cat_7'; // ★ 初回ご利用報告
+  const isRecordsTab = activeCat === 'cat_8'; // ★ 連絡・体力測定の記録
   const activeCategory = allCategories.find(c => c.id === activeCat) || allCategories[0];
   // ★ 初回ご利用報告: 初回通所記録を検出し、バイタルを自動取得
   const _irKey = (t) => { const d=String(t.date||''); if(/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0,10); const m=d.match(/(\d+)月(\d+)日/); if(m&&t.year) return `${t.year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; return null; };
@@ -31578,6 +31581,66 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               </div>
             </div>
           )}
+          {/* 連絡・体力測定の記録 (読み取り) */}
+          {isRecordsTab && (() => {
+            const fitItems = appData.systemSettings?.fitnessItems || [];
+            const fitRecs = (appData.fitnessRecords||[]).filter(r => r.patientId === patient.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+            const faxOf = (type) => (appData.faxHistory||[]).filter(h => h.type === type && (h.patientName||'') === (patient.name||'')).sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
+            const absHist = faxOf('absence'); const genHist = faxOf('general');
+            const _ts = (t) => { try { return new Date(t).toLocaleDateString('ja-JP'); } catch { return t||''; } };
+            const faxList = (title, list, view) => (
+              <div className="bg-white rounded-xl border border-slate-200 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-bold text-sm text-slate-700">{title}（{list.length}件）</div>
+                  {navigateTo && <button onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo(view); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">作成・出力へ →</button>}
+                </div>
+                {list.length===0 ? <div className="text-xs text-slate-400 py-2">履歴なし</div> : (
+                  <div className="divide-y divide-slate-100">
+                    {list.map(h => (
+                      <div key={h.id} className="py-1.5 flex items-center justify-between gap-2 text-xs">
+                        <div className="min-w-0"><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}</div>
+                        <span className="text-slate-400 shrink-0">{_ts(h.timestamp)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+            return (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">この利用者の<b>休み連絡・各種連絡の送付履歴</b>と<b>体力測定の記録</b>をまとめて確認できます。連絡は「作成・出力へ」から書類を作成・印刷できます。</div>
+                {faxList('休み連絡', absHist, 'absence_fax')}
+                {faxList('各種連絡', genHist, 'general_fax')}
+                {/* 体力測定 (表) */}
+                <div className="bg-white rounded-xl border border-slate-200 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-bold text-sm text-slate-700">体力測定（{fitRecs.length}件）</div>
+                    {navigateTo && <button onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo('fitness'); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">測定・入力へ →</button>}
+                  </div>
+                  {fitRecs.length===0 ? <div className="text-xs text-slate-400 py-2">記録なし</div> : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse">
+                        <thead><tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="px-3 py-2 text-left font-bold text-slate-500 whitespace-nowrap">日付</th>
+                          <th className="px-3 py-2 text-left font-bold text-slate-500 whitespace-nowrap">担当</th>
+                          {fitItems.map(it=><th key={it.id} className="px-3 py-2 text-center font-bold text-slate-500 whitespace-nowrap">{it.name}<br/><span className="font-normal text-slate-400">（{it.unit}）</span></th>)}
+                        </tr></thead>
+                        <tbody>
+                          {fitRecs.map((r,ri)=>(
+                            <tr key={r.id} className={ri%2?'bg-slate-50':'bg-white'}>
+                              <td className="px-3 py-1.5 font-bold text-slate-600 whitespace-nowrap">{r.date}</td>
+                              <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.recorder||'—'}</td>
+                              {fitItems.map(it=>{ const v=r.values?.[it.id]; return <td key={it.id} className="px-3 py-1.5 text-center">{(v!==''&&v!=null)?<span className="font-bold text-slate-700">{v}</span>:<span className="text-slate-300">—</span>}</td>; })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {/* サービス提供記録タブのみ: 月次スナップショット */}
           {isInitialReportTab && (
             <div className="space-y-4">
