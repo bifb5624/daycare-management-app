@@ -31207,6 +31207,19 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const defaultManagerName = (_activeInList?.name) || (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
   const [selectedManager, setSelectedManager] = React.useState(draft.selectedManager || defaultManagerName);
 
+  // ★ 個人ファイルの履歴から「その各種連絡を開く」ディープリンク (保存済み内容を復元)
+  React.useEffect(() => {
+    let o; try { o = JSON.parse(sessionStorage.getItem('tsumugiOpenGeneralFax')||'null'); } catch {}
+    if (!o) return;
+    sessionStorage.removeItem('tsumugiOpenGeneralFax');
+    if (o.subject!=null) setSubject(o.subject);
+    if (o.memo!=null) setMemo(o.memo);
+    if (o.recipientOffice!=null) setRecipientOffice(o.recipientOffice);
+    if (o.recipientName!=null) setRecipientName(o.recipientName);
+    const pat = (appData.patients||[]).find(p=>p.name===o.patientName);
+    if (pat) setSelectedPatientId(pat.id); else if (o.patientName) setCustomPatientName(o.patientName);
+  }, []);
+
   // 任意のフォーム値が変わったら dirty を立てる (初回 mount はスキップ)
   const _firstRef = React.useRef(true);
   React.useEffect(() => {
@@ -32100,9 +32113,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 {list.length===0 ? <div className="text-xs text-slate-400 py-2">履歴なし</div> : (
                   <div className="divide-y divide-slate-100">
                     {list.map(h => {
-                      const canOpen = navigateTo && view==='absence_fax' && h.patientId!=null && h.dateIso;
+                      const canOpen = !!navigateTo && ((view==='absence_fax' && h.patientId!=null && h.dateIso) || view==='general_fax');
                       const openDoc = () => {
-                        if (canOpen) { try { sessionStorage.setItem('tsumugiOpenFax', JSON.stringify({type:'absence', patientId:h.patientId, date:h.dateIso})); } catch {} }
+                        if (view==='absence_fax' && h.patientId!=null && h.dateIso) { try { sessionStorage.setItem('tsumugiOpenFax', JSON.stringify({type:'absence', patientId:h.patientId, date:h.dateIso})); } catch {} }
+                        else if (view==='general_fax') { try { sessionStorage.setItem('tsumugiOpenGeneralFax', JSON.stringify({subject:h.subject||'', memo:h.memo||'', recipientOffice:h.recipientOffice||'', recipientName:h.recipientName||'', patientName:h.patientName||patient.name||''})); } catch {} }
                         onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo(view);
                       };
                       const expanded = expandedFaxId === h.id;
@@ -32216,17 +32230,20 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             (appData.ticketRecords||[]).forEach(r => { if(r.patientId!==patient.id) return; const m=(r.date||'').match(/(\d+)月/); if(!m) return; let y=r.year; if(!y){ y=(typeof r.id==='number'&&r.id>1e12)?new Date(r.id).getFullYear():new Date().getFullYear(); } _set.add(`${y}-${String(+m[1]).padStart(2,'0')}`); });
             const _months = [...(_set)].sort((a,b)=>b.localeCompare(a));
             const _open = (ym) => { try{ sessionStorage.setItem('tsumugiOpenTicket', JSON.stringify({patientId: patient.id, month: ym})); }catch{} onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo('ticket'); };
+            // ★ その月の最終通所が済んだ(=過ぎた)月は「確定（保管済み）」。 都度描画なので保管操作は不要
+            const _todayD = new Date(); _todayD.setHours(0,0,0,0);
+            const _isArchived = (ym) => { const [y,m]=ym.split('-').map(Number); if (_todayD > new Date(y, m, 0)) return true; try { const sch = generateMonthlySchedule([patient], y, m, appData.monthlyShifts, appData.ticketRecords||[], appData.holidays, appData.systemSettings?.facilityInfo?.closedDays||[0]); if(!sch.length) return false; return new Date(y, m-1, Math.max(...sch.map(r=>r.dayNum))) < _todayD; } catch { return false; } };
             return (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-bold text-blue-900">提供記録を年月で開く（画面そのまま出力）</div>
                 {navigateTo && <button onClick={()=>_open('')} className="text-[11px] font-bold text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">入力画面へ →</button>}
               </div>
-              <div className="text-[11px] text-blue-700 mb-2">年月を選ぶと提供記録の表で開きます。そのまま「プレビュー」で印刷／PDF保存（期間出力でまとめて出力も可）。</div>
+              <div className="text-[11px] text-blue-700 mb-2">年月を選ぶと提供記録の表で開きます。そのまま「プレビュー」で印刷／PDF保存（期間出力でまとめて出力も可）。<br/><b className="text-emerald-700">✓ 確定</b> = その月の最終通所が済んだ月（自動で保管済み。保存操作は不要です）。</div>
               {_months.length===0 ? <div className="text-xs text-slate-500 italic">まだ記録がありません。</div> : (
                 <div className="flex flex-wrap gap-1.5">
-                  {_months.map(ym => { const [y,m]=ym.split('-'); return (
-                    <button key={ym} onClick={()=>_open(ym)} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors">{y}年{+m}月</button>
+                  {_months.map(ym => { const [y,m]=ym.split('-'); const arch=_isArchived(ym); return (
+                    <button key={ym} onClick={()=>_open(ym)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border ${arch?'bg-white border-emerald-300 text-emerald-800 hover:bg-emerald-600 hover:text-white':'bg-white border-blue-300 text-blue-800 hover:bg-blue-600 hover:text-white'}`}>{y}年{+m}月{arch && <span className="ml-1 text-emerald-600">✓</span>}</button>
                   ); })}
                 </div>
               )}
