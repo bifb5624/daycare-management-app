@@ -17867,7 +17867,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {label:'経過日数', value: elapsedLabel},
                 ];
             return (
-              <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
+              <div style={{background:'white',borderRadius:12,padding:'14px 18px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0'}}>
                 {/* ★ ご家族/ケアマネはスマホ縦型対応で 1 列縦並び、 事業所は auto-fit grid */}
                 <div style={{display:'grid',gridTemplateColumns: compactMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
                   {items.map(({label,value})=>(
@@ -18218,7 +18218,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               const arrList = records.map(r=>r.kibunArrival).filter(v=>v && MOOD_DEF.some(m=>m.key===v));
               const depList = records.map(r=>r.kibunDeparture).filter(v=>v && MOOD_DEF.some(m=>m.key===v));
               if (arrList.length === 0 && depList.length === 0) return (
-                <div style={{background:'white',borderRadius:12,padding:'14px 16px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{background:'white',borderRadius:12,padding:'14px 16px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0',display:'flex',flexDirection:'column',gap:8}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
                   <div style={{fontSize:13,color:'#94a3b8',textAlign:'center',padding:'20px 0'}}>記録なし</div>
                 </div>
@@ -18277,7 +18277,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 );
               };
               return (
-                <div style={{background:'white',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',display:'flex',flexDirection:'column',gap:8,flex:1,minWidth:160}}>
+                <div style={{background:'white',borderRadius:12,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0',display:'flex',flexDirection:'column',gap:8,flex:1,minWidth:160}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
                   {/* ★ 上: 横一列の凡例 */}
                   <div style={{display:'flex',flexWrap:'wrap',gap:'2px 8px'}}>
@@ -18306,7 +18306,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
 
                 {/* 月別通所状況 */}
-                <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
+                <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>月別通所状況</div>
                   {(()=>{
                     const maxBar=Math.max(...monthlyData.map(m=>m.tusho+m.kesseki+(m.kyushi||0)),1);
@@ -18352,7 +18352,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                                 <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:'#475569',width:80,minWidth:80}}>{m.month}月</td>
                               ))}
                             </tr>
-                            <tr style={{borderBottom:'1px solid #f1f5f9'}}>
+                            <tr style={{borderBottom:'1px solid #e2e8f0'}}>
                               <td style={{padding:'3px 10px 3px 0',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>出席率</td>
                               {monthlyData.map(m=>{
                                 const att=m.tusho+(m.furikae||0); // 振替は出席扱い
@@ -18361,25 +18361,25 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                                 return <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:rate>=80?'#16a34a':rate>=60?'#d97706':'#dc2626',width:80,minWidth:80}}>{rate}%</td>;
                               })}
                             </tr>
-                            <tr style={{borderBottom:'1px solid #f1f5f9'}}>
+                            <tr style={{borderBottom:'1px solid #e2e8f0'}}>
                               <td style={{padding:'3px 10px 3px 0',fontWeight:'bold',color:'#2563eb',whiteSpace:'nowrap'}}>出席</td>
                               {monthlyData.map(m=>(
                                 <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:'#2563eb',width:80,minWidth:80}}>{m.tusho}</td>
                               ))}
                             </tr>
-                            <tr style={{borderBottom:'1px solid #f1f5f9'}}>
+                            <tr style={{borderBottom:'1px solid #e2e8f0'}}>
                               <td style={{padding:'3px 10px 3px 0',fontWeight:'bold',color:'#dc2626',whiteSpace:'nowrap'}}>欠席</td>
                               {monthlyData.map(m=>(
                                 <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:'#dc2626',width:80,minWidth:80}}>{m.kesseki}</td>
                               ))}
                             </tr>
-                            <tr style={{borderBottom:'1px solid #f1f5f9'}}>
+                            <tr style={{borderBottom:'1px solid #e2e8f0'}}>
                               <td style={{padding:'3px 10px 3px 0',fontWeight:'bold',color:'#64748b',whiteSpace:'nowrap'}}>休業</td>
                               {monthlyData.map(m=>(
                                 <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:'#64748b',width:80,minWidth:80}}>{m.kyugyo||0}</td>
                               ))}
                             </tr>
-                            <tr style={{borderBottom:'1px solid #f1f5f9'}}>
+                            <tr style={{borderBottom:'1px solid #e2e8f0'}}>
                               <td style={{padding:'3px 10px 3px 0',fontWeight:'bold',color:'#65a30d',whiteSpace:'nowrap'}}>振替</td>
                               {monthlyData.map(m=>(
                                 <td key={m.month} style={{textAlign:'center',padding:'4px 14px',fontWeight:'bold',color:'#65a30d',width:80,minWidth:80}}>{m.furikae||0}</td>
@@ -18570,7 +18570,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </div>
           );
           return (
-            <div style={{background:'white',borderRadius:14,padding:'16px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',marginBottom:16}}>
+            <div style={{background:'white',borderRadius:14,padding:'16px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0',marginBottom:16}}>
               <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:14,borderBottom:'2px solid #e0f2fe',paddingBottom:6}}>気分割合</div>
               <div style={{display:'flex',flexDirection:'column',gap:12}}>
                 <div>
@@ -18861,7 +18861,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                   </div>
                   {/* ★ 凡例をグラフ直上に移動 */}
-                  <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #e2e8f0'}}>
                     <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:tempWarn?'#ef4444':'#f97316',display:'inline-block',borderRadius:1}}/>体温（℃）</span>
                   </div>
                   <VitalChart field="temp" color1={tempWarn?'#ef4444':'#f97316'} yMin={35.5} yMax={38.5}
@@ -18917,7 +18917,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     ))}
                   </div>
                 )}
-                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #e2e8f0'}}>
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期({vitalPhase==='end'?'終了時':'通所時'})</span>
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期({vitalPhase==='end'?'終了時':'通所時'})</span>
                   {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #3b82f6',display:'inline-block'}}/>終了時(運動後・点線)</span>}
@@ -18965,7 +18965,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     ))}
                   </div>
                 )}
-                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #f1f5f9'}}>
+                <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #e2e8f0'}}>
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（{vitalPhase==='end'?'終了時':'通所時'}）</span>
                   {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #22c55e',display:'inline-block'}}/>終了時(運動後・点線)</span>}
                 </div>
@@ -19068,7 +19068,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             if(unit==='text'||dailyEx.length===0) return (
               <div>
                 {tabs}
-                <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
+                <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 記録一覧</div>
                   {validRecs.filter(r=>_exMonthVal(r)).slice(0,20).map((r,i)=>{
                     const rawV = _exMonthVal(r);
@@ -19090,7 +19090,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             if(unit==='toggle') return (
               <div>
                 {tabs}
-                <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
+                <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 月別実施率</div>
                   <div style={{display:'flex',gap:8,alignItems:'flex-end',height:100}}>
                     {monthlyEx.map(d=>{const rate=d.hasData?Math.round(d.avg*100):0;return(
@@ -19160,7 +19160,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   </>)}
                 </div>
                 <div style={{display:'flex',flexDirection:'column',gap:12}}>
-                  <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
+                  <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{selEx.name} — 日別推移</div>
                       {trend!==0&&<div style={{fontSize:13,fontWeight:'bold',color:trend>0?'#22c55e':'#ef4444',background:trend>0?'#f0fdf4':'#fef2f2',padding:'3px 8px',borderRadius:8}}>{trend>0?'↑':'↓'}{Math.abs(trend).toFixed(1)}{unitLabel}</div>}
@@ -19275,11 +19275,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   ))}
                 </div>
                 {dailyFit.length === 0 ? (
-                  <div style={{background:'white',borderRadius:14,padding:'40px',textAlign:'center',color:'#94a3b8',fontSize:14,fontWeight:'bold',border:'1px solid #f1f5f9'}}>
+                  <div style={{background:'white',borderRadius:14,padding:'40px',textAlign:'center',color:'#94a3b8',fontSize:14,fontWeight:'bold',border:'1px solid #e2e8f0'}}>
                     {selFitItem?.name}の記録がありません
                   </div>
                 ) : (
-                  <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9'}}>
+                  <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0'}}>
                     <div style={{display:'flex',justifyContent:'flex-start',alignItems:'flex-end',marginBottom:20,flexWrap:'wrap',gap:16}}>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{selFitItem?.name}（{selFitItem?.unit}）</div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
@@ -19456,8 +19456,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             return `${sy}年${sm}月 〜 ${bY3}年${bM3}月`;
           })();
           return (
-        <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #f1f5f9',overflow:'hidden'}}>
-          <div style={{padding:'12px 20px',borderBottom:'1px solid #f1f5f9',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
+        <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #e2e8f0',overflow:'hidden'}}>
+          <div style={{padding:'12px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
             <div style={{fontSize:13,fontWeight:'bold',color:'#475569',display:'flex',alignItems:'center',gap:6}}><ClipboardList size={15}/>日々の詳細記録</div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
               <span style={{fontSize:12,color:'#64748b',fontWeight:'bold'}}>{_periodLabel}</span>
@@ -19729,8 +19729,8 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
 // === OpsCard (分析稼働用カード) ===
 function OpsCard({title, accent='#3b82f6', children}) {
   return (
-    <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.07)',border:'1px solid #f1f5f9',overflow:'hidden',marginBottom:16}}>
-      <div style={{padding:'10px 16px',borderBottom:'1px solid #f1f5f9',background:'#fafafa',display:'flex',alignItems:'center',gap:8}}>
+    <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.07)',border:'1px solid #e2e8f0',overflow:'hidden',marginBottom:16}}>
+      <div style={{padding:'10px 16px',borderBottom:'1px solid #e2e8f0',background:'#fafafa',display:'flex',alignItems:'center',gap:8}}>
         <div style={{width:4,height:14,background:accent,borderRadius:2}}/>
         <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{title}</span>
       </div>
@@ -20448,7 +20448,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         {cols.map((col, ci) => (
           <div key={ci} style={{display:'flex',flexDirection:'column'}}>
             {col.map(({patient,days,idx}) => (
-              <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f1f5f9'}}>
+              <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #e2e8f0'}}>
                 <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
                 <span style={{fontSize:12,fontWeight:'bold',color:'#000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',width:'7em',flexShrink:0}}>{patient.name}</span>
                 <span style={{fontSize:12,fontWeight:'bold',color:'#000',whiteSpace:'nowrap',flexShrink:0,marginLeft:2}}>{days}日</span>
@@ -20697,7 +20697,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
             });
             
             return (
-              <div data-print-id="rate-chart-section" style={{marginTop:14,borderTop:'1px solid #f1f5f9',paddingTop:12}}>
+              <div data-print-id="rate-chart-section" style={{marginTop:14,borderTop:'1px solid #e2e8f0',paddingTop:12}}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
                   <div style={{fontSize:13,fontWeight:'bold',color:'#64748b'}}>月別稼働率・売上</div>
                   <button 
