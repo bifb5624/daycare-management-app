@@ -15105,7 +15105,7 @@ export default function App() {
                 }).length;
                 return <SidebarItem icon={<Activity size={18} />} label="体力測定" active={currentView === 'fitness'} onClick={() => navigateTo('fitness')} badge={_fitnessBadge||null} />;
               })()}
-              <SidebarItem icon={<FileText size={18} />} label="サービス提供記録" active={currentView === 'ticket'} onClick={() => navigateTo('ticket')} />
+              {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
               <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} />
               <SidebarItem icon={<FileText size={18} />} label="休み連絡" active={currentView === 'absence_fax'} onClick={() => navigateTo('absence_fax')} />
               <SidebarItem icon={<FileText size={18} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
@@ -21242,6 +21242,18 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const [patDropOpen, setPatDropOpen] = useState(false);
   const [patSearch, setPatSearch] = useState('');
   const [showFaxHist, setShowFaxHist] = useState(false);
+  // ★ 個人ファイルから「年月を選んで開く」ディープリンク (sessionStorage 経由でその月を表示)
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('tsumugiOpenTicket');
+      if (raw) {
+        sessionStorage.removeItem('tsumugiOpenTicket');
+        const o = JSON.parse(raw);
+        if (o && o.month) setCurMonth(o.month);
+        if (o && o.patientId != null) setSelId(o.patientId);
+      }
+    } catch {}
+  }, []);
   const ticketHistory = (appData.faxHistory||[]).filter(h => h.type === 'ticket');
   const deleteFaxHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
   const sp = (appData.patients||[]).find(p => p.id === selId) || (appData.patients||[])[0];
@@ -32198,7 +32210,30 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               </div>
             </div>
           )}
-          {isServiceTab && (
+          {isServiceTab && (() => {
+            // ★ この利用者の記録がある年月を新しい順に。 クリックで画面そのまま(提供記録の表)で開く
+            const _set = new Set();
+            (appData.ticketRecords||[]).forEach(r => { if(r.patientId!==patient.id) return; const m=(r.date||'').match(/(\d+)月/); if(!m) return; let y=r.year; if(!y){ y=(typeof r.id==='number'&&r.id>1e12)?new Date(r.id).getFullYear():new Date().getFullYear(); } _set.add(`${y}-${String(+m[1]).padStart(2,'0')}`); });
+            const _months = [...(_set)].sort((a,b)=>b.localeCompare(a));
+            const _open = (ym) => { try{ sessionStorage.setItem('tsumugiOpenTicket', JSON.stringify({patientId: patient.id, month: ym})); }catch{} onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo('ticket'); };
+            return (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-bold text-blue-900">提供記録を年月で開く（画面そのまま出力）</div>
+                {navigateTo && <button onClick={()=>_open('')} className="text-[11px] font-bold text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">入力画面へ →</button>}
+              </div>
+              <div className="text-[11px] text-blue-700 mb-2">年月を選ぶと提供記録の表で開きます。そのまま「プレビュー」で印刷／PDF保存（期間出力でまとめて出力も可）。</div>
+              {_months.length===0 ? <div className="text-xs text-slate-500 italic">まだ記録がありません。</div> : (
+                <div className="flex flex-wrap gap-1.5">
+                  {_months.map(ym => { const [y,m]=ym.split('-'); return (
+                    <button key={ym} onClick={()=>_open(ym)} className="px-3 py-1.5 bg-white border border-blue-300 text-blue-800 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition-colors">{y}年{+m}月</button>
+                  ); })}
+                </div>
+              )}
+            </div>
+            );
+          })()}
+          {isServiceTab && false && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-bold text-emerald-900">サービス提供記録</div>
