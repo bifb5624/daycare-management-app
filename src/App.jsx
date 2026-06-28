@@ -10485,11 +10485,11 @@ function FamilyAdminView({ appData, onSave }) {
               )}
             </div>
             {historyDetail && (
-              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setHistoryDetail(null)}>
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                 <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-auto" onClick={ev=>ev.stopPropagation()}>
                   <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 sticky top-0 bg-white">
                     <h3 className="text-sm font-bold text-slate-700">投稿の詳細</h3>
-                    <button onClick={()=>setHistoryDetail(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">✕</button>
+                    <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">✕</button>
                   </div>
                   <div className="p-5">
                     <div className="text-[11px] text-slate-400 mb-2">{historyDetail.item.date}</div>
@@ -16941,7 +16941,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       {/* (介護整体の過去履歴は各セル内の絶対配置ポップオーバーに変更したため、固定ツールチップは廃止) */}
       {/* 利用者情報ポップアップ */}
       {patientInfoModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setPatientInfoModal(null)}>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -16949,7 +16949,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="text-xl font-bold text-slate-800">{patientInfoModal.name} <span className="text-base text-slate-400">様</span></div>
                 {patientInfoModal.careLevel && <div className="text-xs font-bold text-blue-600 mt-0.5">{patientInfoModal.careLevel}</div>}
               </div>
-              <button onClick={()=>setPatientInfoModal(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"><X size={18}/></button>
+              <button className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"><X size={18}/></button>
             </div>
             <div className="space-y-3">
               <div className="bg-slate-50 rounded-xl p-3">
@@ -21497,67 +21497,73 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   );
 }
 // === ContactBookView (完全版) ===
-// 連絡帳の連絡事項 編集モーダル (全員共通／個別・色・定型文)
+// 連絡帳の連絡事項 編集モーダル (全員共通／個別・色・太字・文字サイズ・定型文)
 function RenrakuModal({ appData, patientId, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
   const patient = (appData.patients||[]).find(p => p.id === patientId);
-  const [allText, setAllText] = React.useState(cfg.renrakuAll?.text || '');
-  const [allColor, setAllColor] = React.useState(cfg.renrakuAll?.color || '#000000');
-  const [patText, setPatText] = React.useState(patient?.contactBookRenraku?.text || '');
-  const [patColor, setPatColor] = React.useState(patient?.contactBookRenraku?.color || '#000000');
+  const a0 = cfg.renrakuAll || {}; const p0 = patient?.contactBookRenraku || {};
+  const [all, setAll] = React.useState({ text:a0.text||'', color:a0.color||'#000000', bold:!!a0.bold, size:a0.size||'normal' });
+  const [pat, setPat] = React.useState({ text:p0.text||'', color:p0.color||'#000000', bold:!!p0.bold, size:p0.size||'normal' });
   const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
   const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
+  const SIZES = [['small','小'],['normal','中'],['large','大']];
   const save = () => {
-    const nextCfg = { ...cfg, renrakuAll: { text: allText.trim(), color: allColor }, renrakuTemplates: templates };
-    const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: { text: patText.trim(), color: patColor } } : p);
+    const nextCfg = { ...cfg, renrakuAll: { ...all, text: all.text.trim() }, renrakuTemplates: templates.filter(t=>t!=null) };
+    const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: { ...pat, text: pat.text.trim() } } : p);
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients });
     onClose();
   };
-  const ColorRow = ({ value, onChange }) => (
-    <div className="flex items-center gap-1.5 mt-1">
-      {COLORS.map(([c,l])=>(<button key={c} type="button" onClick={()=>onChange(c)} className={`px-2 py-1 rounded text-xs font-bold border-2 ${value===c?'border-slate-800 bg-slate-50':'border-slate-200'}`} style={{color:c}}>{l}</button>))}
-      <input type="color" value={value} onChange={e=>onChange(e.target.value)} className="w-8 h-8 rounded cursor-pointer border border-slate-300" title="自由に色を選ぶ"/>
+  // 1セクション分の編集UI (text/color/bold/size + 定型文挿入)。 ★ <Section/>で描画すると入力毎に再マウントされフォーカスが外れるため、関数として呼び出す
+  const renderSection = ({ title, sub, st, set }) => (
+    <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
+      <div className="text-sm font-bold text-slate-700 mb-2">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>
+      <textarea value={st.text} onChange={e=>set(s=>({...s,text:e.target.value}))} rows={3} placeholder="連絡事項を入力（改行可）"
+        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-y"
+        style={{color:st.color, fontWeight:st.bold?'bold':'normal', fontSize:st.size==='large'?17:st.size==='small'?12:14}}/>
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        <span className="text-[10px] font-bold text-slate-400">色</span>
+        {COLORS.map(([c,l])=>(<button key={c} type="button" onClick={()=>set(s=>({...s,color:c}))} className={`w-6 h-6 rounded-full border-2 ${st.color===c?'border-slate-800 ring-2 ring-slate-300':'border-white'}`} style={{background:c}} title={l}/>))}
+        <input type="color" value={st.color} onChange={e=>set(s=>({...s,color:e.target.value}))} className="w-7 h-7 rounded cursor-pointer border border-slate-300" title="自由な色"/>
+        <span className="w-px h-5 bg-slate-200 mx-1"/>
+        <button type="button" onClick={()=>set(s=>({...s,bold:!s.bold}))} className={`px-2.5 py-1 rounded text-xs font-bold border ${st.bold?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>太字</button>
+        <span className="text-[10px] font-bold text-slate-400 ml-1">サイズ</span>
+        {SIZES.map(([v,l])=>(<button key={v} type="button" onClick={()=>set(s=>({...s,size:v}))} className={`px-2 py-1 rounded text-xs font-bold border ${st.size===v?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300'}`}>{l}</button>))}
+      </div>
+      {templates.filter(t=>t&&t.trim()).length>0 && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          <span className="text-[10px] font-bold text-slate-400 self-center">定型文:</span>
+          {templates.filter(t=>t&&t.trim()).map((t,i)=>(<button key={i} type="button" onClick={()=>set(s=>({...s,text:s.text?s.text+'\n'+t:t}))} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.split('\n')[0].slice(0,16)}{(t.length>16||t.includes('\n'))?'…':''}</button>))}
+        </div>
+      )}
     </div>
   );
-  const TmplBar = ({ onInsert }) => (templates.length>0 && (
-    <div className="flex flex-wrap gap-1 mt-1">
-      {templates.map((t,i)=>(<button key={i} type="button" onClick={()=>onInsert(t)} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.length>14?t.slice(0,14)+'…':t}</button>))}
-    </div>
-  ));
   return (
-    <div className="fixed inset-0 bg-slate-900/60 z-[80] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-5" onClick={e=>e.stopPropagation()}>
-        <div className="text-lg font-bold text-slate-800 mb-3">連絡事項の編集</div>
-        {/* 全員 */}
-        <div className="mb-4">
-          <div className="text-sm font-bold text-slate-700 mb-1">👥 全員への連絡事項<span className="text-[10px] text-slate-400 font-normal ml-2">全利用者の連絡帳に表示</span></div>
-          <textarea value={allText} onChange={e=>setAllText(e.target.value)} rows={2} placeholder="例: 負担割合証のご提出をお願いします" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-none"/>
-          <ColorRow value={allColor} onChange={setAllColor}/>
-          <TmplBar onInsert={(t)=>setAllText(v=>v?v+'\n'+t:t)}/>
+    <div className="fixed inset-0 bg-slate-900/60 z-[80] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-lg font-bold text-slate-800">連絡事項の編集</div>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none px-2">✕</button>
         </div>
-        {/* 個別 */}
-        <div className="mb-4">
-          <div className="text-sm font-bold text-slate-700 mb-1">👤 {patient?.name} 様 への連絡事項<span className="text-[10px] text-slate-400 font-normal ml-2">この方のみ</span></div>
-          <textarea value={patText} onChange={e=>setPatText(e.target.value)} rows={2} placeholder="この利用者だけの連絡事項" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-none"/>
-          <ColorRow value={patColor} onChange={setPatColor}/>
-          <TmplBar onInsert={(t)=>setPatText(v=>v?v+'\n'+t:t)}/>
-        </div>
-        {/* 定型文(署名)管理 */}
-        <div className="mb-4 border-t border-slate-200 pt-3">
-          <div className="text-sm font-bold text-slate-700 mb-1">📝 定型文（よく使う文を登録）</div>
-          <div className="space-y-1">
-            {templates.map((t,i)=>(
-              <div key={i} className="flex items-center gap-2">
-                <input value={t} onChange={e=>setTemplates(ts=>ts.map((x,j)=>j===i?e.target.value:x))} className="flex-1 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none"/>
-                <button type="button" onClick={()=>setTemplates(ts=>ts.filter((_,j)=>j!==i))} className="text-red-400 hover:text-red-600 text-xs font-bold px-1">削除</button>
-              </div>
-            ))}
-            <button type="button" onClick={()=>setTemplates(ts=>[...ts,''])} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded hover:bg-blue-100">＋ 定型文を追加</button>
+        <div className="space-y-3">
+          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll })}
+          {renderSection({ title:`👤 ${patient?.name||''} 様（個別）`, sub:"この方の連絡帳のみ", st:pat, set:setPat })}
+          {/* 定型文の管理 */}
+          <div className="rounded-xl border border-slate-200 p-3">
+            <div className="text-sm font-bold text-slate-700 mb-2">📝 定型文の登録<span className="text-[10px] text-slate-400 font-normal ml-2">改行も登録できます</span></div>
+            <div className="space-y-2">
+              {templates.map((t,i)=>(
+                <div key={i} className="flex items-start gap-2">
+                  <textarea value={t} onChange={e=>setTemplates(ts=>ts.map((x,j)=>j===i?e.target.value:x))} rows={2} placeholder="よく使う文（改行可）" className="flex-1 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none resize-y"/>
+                  <button type="button" onClick={()=>setTemplates(ts=>ts.filter((_,j)=>j!==i))} className="text-red-400 hover:text-red-600 text-xs font-bold px-1 py-2 shrink-0">削除</button>
+                </div>
+              ))}
+              <button type="button" onClick={()=>setTemplates(ts=>[...ts,''])} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100">＋ 定型文を追加</button>
+            </div>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-200">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg font-bold text-slate-500 hover:bg-slate-100 text-sm">キャンセル</button>
-          <button type="button" onClick={save} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow text-sm">保存</button>
+          <button type="button" onClick={save} className="px-7 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow text-sm">保存</button>
         </div>
       </div>
     </div>
@@ -21998,7 +22004,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         {patientValueModal && (() => {
           const pat = (appData.patients||[]).find(p => p.id === patientValueModal.patientId);
           return ReactDOM.createPortal(
-          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-start justify-center p-4 pt-20" onClick={()=>setPatientValueModal(null)}>
+          <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-start justify-center p-4 pt-20">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e=>e.stopPropagation()}>
               <div className="font-bold text-slate-800 text-base mb-1">利用者ごとの値を設定</div>
               <div className="text-xs text-slate-500 mb-4">
@@ -22015,7 +22021,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                   <button onClick={resetPatientValue} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs">既定値に戻す</button>
                 )}
                 <div className="flex-1"/>
-                <button onClick={()=>setPatientValueModal(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm">キャンセル</button>
+                <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm">キャンセル</button>
                 <button onClick={savePatientValue} className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold text-sm shadow">保存</button>
               </div>
             </div>
@@ -22312,9 +22318,9 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
             return (
             <div className="shrink-0 mb-2">
               <div className="font-bold text-slate-800" style={{fontSize:15,marginBottom:3}}>連絡事項</div>
-              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'10rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',fontSize:14,lineHeight:1.5,boxSizing:'border-box'}}>
-                {_all?.text && <div style={{color:_all.color||'#000',fontWeight:'bold',marginBottom:6}}>{_all.text}</div>}
-                {_pat?.text && <div style={{color:_pat.color||'#000'}}>{_pat.text}</div>}
+              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'10rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',lineHeight:1.5,boxSizing:'border-box'}}>
+                {_all?.text && <div style={{color:_all.color||'#000',fontWeight:_all.bold?'bold':'normal',fontSize:_all.size==='large'?18:_all.size==='small'?12:15,marginBottom:6}}>{_all.text}</div>}
+                {_pat?.text && <div style={{color:_pat.color||'#000',fontWeight:_pat.bold?'bold':'normal',fontSize:_pat.size==='large'?18:_pat.size==='small'?12:15}}>{_pat.text}</div>}
               </div>
             </div>
             );
@@ -25106,11 +25112,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           w.document.close();
         };
         return (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setFamilyShareModal(null)}>
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto" onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2"><QrCode size={18} className="text-violet-600"/>家族・関係者アカウント発行・管理</h2>
-                <button onClick={()=>setFamilyShareModal(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+                <button className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
               <div className="p-6 space-y-5">
                 <div className="text-center">
@@ -26250,7 +26256,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
     <div className="h-full overflow-hidden flex flex-col bg-slate-100">
       {/* ★ ケアマネ事業所/担当者の編集モーダル (確定で各利用者マスタの担当ケアマネも自動更新) */}
       {cmEditModal && (
-        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={()=>setCmEditModal(null)}>
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
             <div className="text-base font-bold text-slate-800 mb-1">{cmEditModal.kind==='office'?'🏢 ケアマネ事業所を編集':'👤 担当ケアマネを編集'}</div>
             <div className="text-[11px] text-slate-400 mb-4">変更すると、この事業所/担当者を設定している<b>全利用者の担当ケアマネ情報も自動で更新</b>されます。</div>
@@ -26279,7 +26285,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               </div>
             )}
             <div className="flex gap-3 mt-5">
-              <button onClick={()=>setCmEditModal(null)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
+              <button className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
               <button onClick={saveCmEdit} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">💾 更新</button>
             </div>
           </div>
@@ -31617,7 +31623,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
         {/* ヘッダー */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
@@ -32146,7 +32152,7 @@ function MeetingRecordForm({ patient, meeting, onSave, onClose }) {
     });
   };
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
           <div className="text-base font-bold text-slate-800">サービス担当者会議記録表 (担会)</div>
@@ -32558,7 +32564,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
   const textareaCls = inputCls + ' resize-y';
 
   return (
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl h-[92vh] flex flex-col" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
           <div className="text-base font-bold text-slate-800">フェイスシート ({patient.name} 様)</div>
