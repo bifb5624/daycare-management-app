@@ -14079,6 +14079,32 @@ export default function App() {
     // 1回だけ実行 (起動時)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // ★ 退所利用者の自動削除 (利用終了日 + 設定年数(2/5年)を過ぎたら起動時に削除)
+  useEffect(() => {
+    const pats = appData.patients || [];
+    const now = new Date();
+    const expired = pats.filter(p => {
+      const ay = p.autoDeleteYears != null ? p.autoDeleteYears : (p.autoDeleteAfter5Years ? 5 : 0);
+      if (!ay || !p.endDate) return false;
+      const d = new Date(p.endDate); if (isNaN(d.getTime())) return false;
+      d.setFullYear(d.getFullYear() + ay);
+      return d <= now;
+    });
+    if (!expired.length) return;
+    const ids = new Set(expired.map(p => p.id));
+    console.log(`[自動削除] 退所後の保存期間を過ぎた利用者 ${expired.length} 名を削除しました`);
+    setAppData(prev => ({
+      ...prev,
+      patients: (prev.patients||[]).filter(p => !ids.has(p.id)),
+      ticketRecords: (prev.ticketRecords||[]).filter(r => !ids.has(r.patientId)),
+      fitnessRecords: (prev.fitnessRecords||[]).filter(r => !ids.has(r.patientId)),
+      monitoringRecords: (prev.monitoringRecords||[]).filter(r => !ids.has(r.patientId)),
+      kinouKeikakuRecords: (prev.kinouKeikakuRecords||[]).filter(r => !ids.has(r.patientId)),
+      seikatsuKinouRecords: (prev.seikatsuKinouRecords||[]).filter(r => !ids.has(r.patientId)),
+      kyomiKanshinRecords: (prev.kyomiKanshinRecords||[]).filter(r => !ids.has(r.patientId)),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 家族側 (別タブの /family) で familyAccounts / familyInvites / 利用者の緊急連絡先が
   // 更新されたら事業所側にも自動反映 (cross-tab 同期)
   useEffect(() => {
@@ -23876,7 +23902,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               .master-detail-content [style*="gridTemplateColumns"] { grid-template-columns: minmax(0,1fr) !important; }
             }
           `}</style>
-            {isResigned && (<div className={`rounded-xl border-2 p-4 flex items-center justify-between ${isEditingResigned ? 'border-blue-300 bg-blue-50' : 'border-slate-300 bg-slate-100'}`}><div className="flex items-center gap-3"><CalendarOff size={20} className="text-slate-500" /><div><div className="text-sm font-bold text-slate-700">退所日: {fD(localPatient.endDate)}</div><div className="text-xs text-slate-500">{dTxt(dBtw(localPatient.endDate, new Date()))}経過</div></div></div><label className="flex items-center text-xs font-bold text-slate-600 cursor-pointer gap-2"><input type="checkbox" checked={localPatient.autoDeleteAfter5Years || false} onChange={e => updateLP('autoDeleteAfter5Years', e.target.checked)} disabled={isOff} className="w-4 h-4 rounded" />5年後自動削除</label></div>)}
+            {isResigned && (()=>{ const _ay = localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0); const _del = (()=>{ if(!_ay||!localPatient.endDate) return null; const d=new Date(localPatient.endDate); d.setFullYear(d.getFullYear()+_ay); return d; })(); return (<div className={`rounded-xl border-2 p-4 flex items-center justify-between flex-wrap gap-3 ${isEditingResigned ? 'border-blue-300 bg-blue-50' : 'border-slate-300 bg-slate-100'}`}><div className="flex items-center gap-3"><CalendarOff size={20} className="text-slate-500" /><div><div className="text-sm font-bold text-slate-700">退所日: {fD(localPatient.endDate)}</div><div className="text-xs text-slate-500">{dTxt(dBtw(localPatient.endDate, new Date()))}経過{_del && `／自動削除予定: ${fD(_del.toISOString().slice(0,10))}`}</div></div></div><div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">退所後の自動削除</span><select value={_ay} disabled={isOff} onChange={e=>{ const v=Number(e.target.value); updateLP('autoDeleteYears', v); updateLP('autoDeleteAfter5Years', v===5); }} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60"><option value={0}>削除しない</option><option value={2}>2年後に自動削除</option><option value={5}>5年後に自動削除</option></select></div></div>); })()}
 
             {activeDetailTab === 'basic' && (<>
               {/* ① 状態・利用開始日・利用終了日 */}
