@@ -5,7 +5,7 @@ import {
   Printer, CheckCircle2, CloudUpload, Loader2, Plus, Trash2, X, FileText, BarChart3, TrendingUp,
   ArrowLeft, ArrowRight, Menu, BookOpen, Lock, Unlock, QrCode, MoveUp, MoveDown,
   ChevronLeft, ChevronRight, Save, UserPlus, Clock, CalendarOff, CalendarRange, PenTool, History,
-  ChevronDown, ChevronUp, Thermometer, Heart, Copy, Edit3, Edit2
+  ChevronDown, ChevronUp, Thermometer, Heart, Copy, Edit3, Edit2, MessageSquare
 } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import {
@@ -21556,10 +21556,20 @@ function RichEditor({ initialHtml, onChange, templates }) {
 // 連絡帳の連絡事項 編集モーダル (全員共通／個別・リッチ入力・表示期間・定型文)
 function RenrakuModal({ appData, patientId, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
-  const patient = (appData.patients||[]).find(p => p.id === patientId);
-  const a0 = cfg.renrakuAll || {}; const p0 = patient?.contactBookRenraku || {};
+  // 個別編集できる利用者一覧 (削除予定/終了は除外しない: 連絡事項は誰にでも)
+  const patientList = (appData.patients||[]).filter(p => p && p.name);
+  const a0 = cfg.renrakuAll || {};
   const [all, setAll] = React.useState({ html: renrakuToHtml(a0), from:a0.from||'', until:a0.until||'' });
-  const [pat, setPat] = React.useState({ html: renrakuToHtml(p0), from:p0.from||'', until:p0.until||'' });
+  // 全利用者の個別連絡事項をまとめて保持 (プルダウンで切替えても編集内容を保持)
+  const [patMap, setPatMap] = React.useState(() => {
+    const m = {};
+    patientList.forEach(p => { const o = p.contactBookRenraku||{}; m[p.id] = { html: renrakuToHtml(o), from:o.from||'', until:o.until||'' }; });
+    return m;
+  });
+  const [curPid, setCurPid] = React.useState(patientId || patientList[0]?.id || null);
+  const pat = curPid ? (patMap[curPid] || { html:'', from:'', until:'' }) : null;
+  const setPat = (updater) => setPatMap(m => ({ ...m, [curPid]: typeof updater==='function' ? updater(m[curPid]||{html:'',from:'',until:''}) : updater }));
+  const curPatient = patientList.find(p => p.id === curPid);
   const _addDays = (n) => { const d = new Date(); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const _today = _addDays(0);
   const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
@@ -21568,21 +21578,22 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
   // 連絡帳欄(高さ10rem≒144px)に収まるか実測 (約420px幅で折返しも考慮)。 はみ出すと警告
   React.useEffect(() => {
     const el = measureRef.current; if (!el) return;
-    el.innerHTML = (all.html||'') + ((all.html&&pat.html)?'<div style="height:6px"></div>':'') + (pat.html||'');
+    const ph = pat?.html || '';
+    el.innerHTML = (all.html||'') + ((all.html&&ph)?'<div style="height:6px"></div>':'') + ph;
     setWarn(el.scrollHeight > 150 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
-  }, [all.html, pat.html]);
+  }, [all.html, pat?.html]);
   const save = () => {
-    const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o.from||'', until: o.until||'' });
+    const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
     const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t!=null) };
-    const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: clean(pat) } : p);
+    const nextPatients = (appData.patients||[]).map(p => patMap[p.id] ? { ...p, contactBookRenraku: clean(patMap[p.id]) } : p);
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients });
     onClose();
   };
   // 1セクション分の編集UI。 ★ <Section/>で描画すると再マウントしカーソルが飛ぶため関数として呼び出す
-  const renderSection = ({ title, sub, st, set, which }) => (
+  const renderSection = ({ title, sub, st, set, editorKey, headerExtra }) => (
     <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
-      <div className="text-sm font-bold text-slate-700 mb-2">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>
-      <RichEditor initialHtml={st.html} templates={templates} onChange={(html)=>set(s=>({...s,html}))}/>
+      <div className="flex items-center gap-2 mb-2 flex-wrap"><div className="text-sm font-bold text-slate-700">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>{headerExtra}</div>
+      <RichEditor key={editorKey} initialHtml={st.html} templates={templates} onChange={(html)=>set(s=>({...s,html}))}/>
       {(() => {
         const isNone = !st.from && !st.until;
         const isToday = st.from===_today && st.until===_today;
@@ -21593,7 +21604,6 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
         <div className="mt-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold text-slate-400">表示期間</span>
-            <button type="button" onClick={()=>set(s=>({...s,from:'',until:''}))} className={pbtn(isNone)}>期限なし</button>
             <button type="button" onClick={()=>set(s=>({...s,from:_today,until:_today}))} className={pbtn(isToday)}>本日のみ</button>
             <button type="button" onClick={()=>set(s=>({...s,from:_today,until:_addDays(6)}))} className={pbtn(isWeek)}>1週間</button>
             <button type="button" onClick={()=>set(s=>({...s,from:s.from||_today,until:s.until||_addDays(6)}))} className={pbtn(isCustom)}>期間選択</button>
@@ -21623,8 +21633,15 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none px-2">✕</button>
         </div>
         <div className="space-y-3">
-          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll, which:'all' })}
-          {renderSection({ title:`👤 ${patient?.name||''} 様（個別）`, sub:"この方の連絡帳のみ", st:pat, set:setPat, which:'pat' })}
+          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll, editorKey:'all' })}
+          {curPid && pat && renderSection({
+            title:"👤 個別の連絡事項", sub:"選んだ方の連絡帳のみ", st:pat, set:setPat, editorKey:curPid,
+            headerExtra: (
+              <select value={curPid} onChange={e=>setCurPid(Number(e.target.value)||e.target.value)} className="ml-auto px-2 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 outline-none bg-white cursor-pointer max-w-[180px]">
+                {patientList.map(p => <option key={p.id} value={p.id}>{p.name}{renrakuHasText(patMap[p.id])?' ●':''}</option>)}
+              </select>
+            )
+          })}
           {warn && <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {warn}</div>}
           {/* 定型文の管理 */}
           <div className="rounded-xl border border-slate-200 p-3">
@@ -21922,11 +21939,14 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           <Users size={15} /> {displayRecords.length} 名
         </div>
         <div className="flex-1" />
+        <button onClick={() => setRenrakuModal({ patientId: null })} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-blue-600 border-blue-600 hover:bg-blue-700 text-white">
+          <MessageSquare size={16} className="mr-1.5" /> 連絡事項
+        </button>
         <button onClick={() => setIsScheduleModalOpen(true)} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-white border-slate-300 hover:bg-slate-50 text-slate-700">
-          <Clock size={16} className="mr-1.5" /> 次回予定 変更
+          <Clock size={16} className="mr-1.5" /> 次回予定
         </button>
         <button onClick={() => setIsConfigOpen(true)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
-          <Settings size={16} className="mr-1.5" /> 項目 設定
+          <Settings size={16} className="mr-1.5" /> 項目
         </button>
         {/* ★ 用紙の向き: 横(B5)＝B6非対応の複合機向け / 縦(B6)＝B6対応機向け。 連絡帳の中身は常に縦。 */}
         <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
