@@ -9461,7 +9461,17 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
         })}
       </div>
       {mode === 'exercise' && (
-        <div style={{display:'flex',gap:6,marginTop:10,paddingTop:10,borderTop:'1px solid #e2e8f0',flexWrap:'wrap'}}>
+        <div style={{display:'flex',gap:6,marginTop:10,paddingTop:10,borderTop:'1px solid #e2e8f0'}}>
+          {[['○','#f0fdf4','#15803d','#86efac'],['×','#fef2f2','#dc2626','#fecaca'],['ー','#f1f5f9','#475569','#cbd5e1']].map(([s,bg,fg,bd])=>(
+            <button key={s} onClick={()=>{ if(onInput) onInput(s,false); }}
+              style={{flex:1,height:btnSize*0.8,background:bg,color:fg,border:`1.5px solid ${bd}`,borderRadius:10,fontSize:fontSize*0.95,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+      {mode === 'exercise' && (
+        <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>
           {(quickButtons&&quickButtons.length>0?quickButtons:['分','回','kg']).map((btn,i)=>(
             <button key={i} onClick={()=>appendText(btn)}
               style={{flex:1,minWidth:60,height:btnSize*0.7,background:'#eff6ff',color:'#1d4ed8',
