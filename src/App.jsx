@@ -1241,6 +1241,16 @@ const normalizeInviteCode = (raw) => {
 };
 
 // 日付文字列 ("4月15日" 等) を YYYY-MM に正規化。年が無いものは currentYear で補完
+// ★ 動画ファイル判定 (容量対策のため動画アップロードは不可。 写真・PDFのみ許可)
+const isVideoFile = (f) => !!f && (((f.type||'').toLowerCase().startsWith('video/')) || /\.(mp4|mov|avi|mkv|webm|m4v|3gp|3g2|wmv|flv|mpe?g|mts|m2ts|ts|hevc|ogv)$/i.test(f.name||''));
+// 動画が含まれていれば除外し、必要なら警告。 返り値: 動画を除いた配列
+const rejectVideos = (files) => {
+  const arr = Array.from(files || []);
+  const vids = arr.filter(isVideoFile);
+  if (vids.length > 0) { try { alert('動画はアップロードできません（容量の都合により、現在は写真とPDFのみ対応しています）。\n対象外: ' + vids.map(v=>v.name).join('、')); } catch {} }
+  return arr.filter(f => !isVideoFile(f));
+};
+
 const normalizeRecordMonth = (dateStr, currentYear) => {
   if (!dateStr) return null;
   const isoM = dateStr.match(/^(\d{4})-(\d{2})/);
@@ -10070,8 +10080,8 @@ function FamilyAdminView({ appData, onSave }) {
     reader.readAsDataURL(file);
   });
   const handleFilesPicked = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+    const files = rejectVideos(e.target.files);
+    if (files.length === 0) { e.target.value=''; return; }
     Promise.all(files.map(async f => {
       const compressed = await compressImage(f);
       return { url: compressed || '', name: f.name };
@@ -24634,7 +24644,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                           <label className="flex items-center gap-1.5 cursor-pointer px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-200">
                             📷 追加
                             <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e=>{
-                              const files=Array.from(e.target.files);
+                              const files=rejectVideos(e.target.files);
+                              if(files.length===0){e.target.value='';return;}
                               const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
                               const cur=[...(localPatient[key]||[])];
                               let loaded=0;
@@ -27183,7 +27194,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                             <label className="flex items-center gap-1 cursor-pointer px-2 py-1 bg-slate-100 border border-slate-200 rounded text-[10px] font-bold text-slate-600 hover:bg-slate-200 mr-1 shrink-0">
                               📷 名刺
                               <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={e=>{
-                                const files=Array.from(e.target.files);
+                                const files=rejectVideos(e.target.files);
+                                if(files.length===0){e.target.value='';return;}
                                 const today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
                                 const cur=[...(p.businessCard||[])];
                                 let loaded=0;
@@ -30346,6 +30358,7 @@ function InsuranceOcrModal({ onApply, onClose }) {
   const onFileChange = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    if (isVideoFile(f)) { alert('動画はアップロードできません（写真・PDFのみ対応）。'); e.target.value=''; return; }
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
     setRawText(''); setFields({}); setError(''); setProgress(0);
@@ -31725,8 +31738,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   };
 
   const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+    const files = rejectVideos(e.target.files);
+    if (files.length === 0) { e.target.value=''; return; }
     const newFiles = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
@@ -32019,8 +32032,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       <label className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
                         <CloudUpload size={12}/> 追加
                         <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={async (e)=>{
-                          const files = Array.from(e.target.files || []);
-                          if (files.length === 0) return;
+                          const files = rejectVideos(e.target.files);
+                          if (files.length === 0) { e.target.value=''; return; }
                           const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
                           const cur = [...(patient[key]||[])];
                           for (const f of files) {
@@ -32848,8 +32861,9 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
   const handleSubmit = () => { onSave(fs, removedAtts); };
   // ★ 添付ファイルの追加 (画像/PDF を base64 で保持)
   const addAttach = async (key, e) => {
-    const files = Array.from(e.target.files || []);
+    const files = rejectVideos(e.target.files);
     e.target.value = '';
+    if (files.length === 0) return;
     const added = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
