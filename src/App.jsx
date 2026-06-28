@@ -949,19 +949,19 @@ const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
 // セル幅に収まる最大フォントで表示し、はみ出す場合は自動縮小する (折り返さない)
 function AutoFitText({ text, max = 13, min = 6, bold, color }) {
   const ref = React.useRef(null);
-  // ★ 毎レンダリングでの再計算は重く UI を固めるため、内容/サイズが変わった時だけ調整する
+  const [fs, setFs] = React.useState(max);
+  // ★ 内容/サイズが変わった時だけ計測してフォントを確定 (状態保持。 毎レンダリングでは再計算しない=UIを固めない)
   React.useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
     const parent = el.parentElement; if (!parent) return;
-    let size = max;
-    el.style.fontSize = size + 'px';
+    let size = max; el.style.fontSize = size + 'px';
     let guard = 0;
-    // 親セルの内寸より広ければ 0.5px ずつ縮小
     while (size > min && el.scrollWidth > (parent.clientWidth - 2) && guard < 40) {
       size -= 0.5; el.style.fontSize = size + 'px'; guard++;
     }
+    setFs(size);
   }, [text, max, min]);
-  return <span ref={ref} style={{ display: 'inline-block', whiteSpace: 'nowrap', fontWeight: bold ? 'bold' : 'normal', color: color || 'inherit', fontSize: max, lineHeight: 1.05 }}>{text}</span>;
+  return <span ref={ref} style={{ display: 'inline-block', whiteSpace: 'nowrap', fontWeight: bold ? 'bold' : 'normal', color: color || 'inherit', fontSize: fs, lineHeight: 1.05 }}>{text}</span>;
 }
 
 // 利用者の予定運動メニューを「指定年月」時点の値で返す (月別バージョン対応)
@@ -22883,6 +22883,11 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
   );
 }
 
+// ★ 日付などの入力。 モジュールレベルで定義(コンポーネント内に置くと毎レンダリングで作り直され、
+//   入力中に再マウントされて日付ピッカーが開けない/クリックできない原因になる)
+function LabelInput({ label, disabled, value, onChange, type = "text", placeholder = "" }) {
+  return (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
+}
 function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
   const [localPatient, setLocalPatient] = useState(null);
@@ -23726,7 +23731,6 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     setFurikaeModal({ isOpen: false, day: null, ampm: "", fromDate: "", reason: "", mode: 'forward' });
   };
 
-  const LabelInput = ({ label, disabled, value, onChange, type = "text", placeholder = "" }) => (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 
   return (
     <div className="flex h-full min-h-0 w-full max-w-[1800px] mx-auto gap-4 relative">
