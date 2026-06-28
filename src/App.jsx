@@ -23059,6 +23059,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   }, []);
   const [schedModal, setSchedModal] = useState(null); // {dayIndex, newVal, oldVal, applyFrom}
   const [plannedExModal, setPlannedExModal] = useState(null); // {pat, next, fromY, fromM} 運動メニュー値変更の適用開始月
+  const [autoDeleteModal, setAutoDeleteModal] = useState(null); // {endDate, years} 利用終了日設定時の自動削除選択
   const [keypad, setKeypad] = useState({ isOpen: false, field: null, exerciseId: null, value: "", isFirstInput: false, mode: 'exercise' });
   // ★ 重複利用者の統合 (記録は統合先へ引き継ぐ)
   const [mergeModal, setMergeModal] = useState(null); // {open:true}
@@ -23906,7 +23907,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
             {activeDetailTab === 'basic' && (<>
               {/* ① 状態・利用開始日・利用終了日 */}
-              <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => updateLP('endDate', e.target.value)} /></div>
+              <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => { const v = e.target.value; updateLP('endDate', v); if (v) setAutoDeleteModal({ endDate: v, years: (localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0)) }); }} /></div>
 
               {/* ② 氏名・フリガナ・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
               {(() => {
@@ -24475,6 +24476,31 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       }} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
       {pauseModal.isOpen && (<div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"><div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"><div className="px-6 py-4 bg-orange-50 border-b border-orange-200 flex justify-between items-center"><h2 className="text-lg font-bold text-orange-800 flex items-center"><CalendarOff size={20} className="mr-2" />休止理由の登録</h2><button onClick={cancelPause} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20} /></button></div><div className="p-6 space-y-5">{localPatient?.pauseHistory?.length > 0 && (<div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs"><span className="font-bold text-slate-500">前回: </span><span className="font-bold text-slate-700">{latPause(localPatient)?.reason}</span><span className="text-slate-400 ml-2">{fD(latPause(localPatient)?.fromDate)}〜</span></div>)}<div><label className="text-xs font-bold text-slate-500 block mb-1">休止の理由</label><input type="text" value={pauseModal.reason} onChange={e => setPauseModal({ ...pauseModal, reason: e.target.value })} placeholder="例: 入院、自宅療養" className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div><div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label><input type="date" value={pauseModal.fromDate} onChange={e => setPauseModal({ ...pauseModal, fromDate: e.target.value })} className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none" /></div></div><div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3"><button onClick={cancelPause} className="px-5 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">キャンセル</button><button onClick={submitPause} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">確定</button></div></div></div>)}
       {/* 運動メニュー(予定値)変更の適用開始月モーダル */}
+      {/* 利用終了日 設定時: 自動削除の選択ポップアップ */}
+      {autoDeleteModal && (() => {
+        const predict = (y) => { if(!y||!autoDeleteModal.endDate) return null; const d=new Date(autoDeleteModal.endDate); d.setFullYear(d.getFullYear()+y); return d; };
+        const apply = (y) => { updateLP('autoDeleteYears', y); updateLP('autoDeleteAfter5Years', y===5); setAutoDeleteModal(null); };
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+              <h3 className="text-base font-bold text-slate-800 mb-1">退所後の自動削除</h3>
+              <p className="text-xs text-slate-500 mb-4">利用終了日（{fD(autoDeleteModal.endDate)}）から何年後にこの利用者の記録を<b>自動削除</b>しますか？（元に戻せません）</p>
+              <div className="space-y-2">
+                {[[0,'削除しない'],[2,'2年後に自動削除'],[5,'5年後に自動削除']].map(([y,label])=>{
+                  const dt = predict(y); const on = autoDeleteModal.years === y;
+                  return (
+                    <button key={y} onClick={()=>apply(y)} className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 text-sm font-bold ${on?'border-blue-500 bg-blue-50 text-blue-700':'border-slate-200 hover:bg-slate-50 text-slate-700'}`}>
+                      <span>{label}</span>
+                      {dt && <span className="text-[11px] font-normal text-slate-400">削除予定: {fD(dt.toISOString().slice(0,10))}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+              <button onClick={()=>setAutoDeleteModal(null)} className="w-full mt-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-100 rounded-lg">あとで（変更しない）</button>
+            </div>
+          </div>
+        );
+      })()}
       {plannedExModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
