@@ -30240,6 +30240,20 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const patients = appData.patients || [];
   const tickets = appData.ticketRecords || [];
 
+  // ★ 個人ファイルから「この休み連絡を開く」で来たとき、該当の送付状を直接開く
+  React.useEffect(() => {
+    let t; try { t = JSON.parse(sessionStorage.getItem('tsumugiOpenFax')||'null'); } catch {}
+    if (!t || t.type !== 'absence') return;
+    sessionStorage.removeItem('tsumugiOpenFax');
+    const pat = (appData.patients||[]).find(p => String(p.id) === String(t.patientId));
+    if (!pat || !t.date) return;
+    const dd = new Date(t.date);
+    const dstr = `${dd.getMonth()+1}月${dd.getDate()}日`;
+    const rec = (appData.ticketRecords||[]).find(r => r.patientId === pat.id && r.date === dstr && r.status === '欠席');
+    setCurrentMonth(new Date(dd.getFullYear(), dd.getMonth(), 1));
+    setSelectedEntry({ date: t.date, patient: pat, tokki: rec?.tokki || '' });
+  }, []);
+
   const maskName = (name) => {
     if (!name) return '●●';
     // 各単語（姓・名）を個別にマスキング
@@ -30370,6 +30384,8 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 timestamp: new Date().toISOString(),
                 subject: `休み連絡 (${absDate})`,
                 patientName: selectedEntry?.patient?.name || '',
+                patientId: selectedEntry?.patient?.id ?? null,
+                dateIso: selectedEntry?.date || '',
                 recipientName: selectedEntry?.patient?.cmName || '',
                 recipientFax: selectedEntry?.patient?.cmFax || '',
                 recipientOffice: selectedEntry?.patient?.cmOffice || '',
@@ -31596,12 +31612,19 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 </div>
                 {list.length===0 ? <div className="text-xs text-slate-400 py-2">履歴なし</div> : (
                   <div className="divide-y divide-slate-100">
-                    {list.map(h => (
-                      <div key={h.id} className="py-1.5 flex items-center justify-between gap-2 text-xs">
-                        <div className="min-w-0"><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}</div>
+                    {list.map(h => {
+                      const canOpen = navigateTo && view==='absence_fax' && h.patientId!=null && h.dateIso;
+                      const openDoc = () => {
+                        if (canOpen) { try { sessionStorage.setItem('tsumugiOpenFax', JSON.stringify({type:'absence', patientId:h.patientId, date:h.dateIso})); } catch {} }
+                        onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo(view);
+                      };
+                      return (
+                      <button key={h.id} onClick={openDoc} className="w-full py-1.5 flex items-center justify-between gap-2 text-xs text-left hover:bg-slate-50 rounded px-1">
+                        <div className="min-w-0"><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}{canOpen && <span className="text-blue-500 ml-2 font-bold">書類を開く →</span>}</div>
                         <span className="text-slate-400 shrink-0">{_ts(h.timestamp)}</span>
-                      </div>
-                    ))}
+                      </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
