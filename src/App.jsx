@@ -949,6 +949,7 @@ const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
 // セル幅に収まる最大フォントで表示し、はみ出す場合は自動縮小する (折り返さない)
 function AutoFitText({ text, max = 13, min = 6, bold, color }) {
   const ref = React.useRef(null);
+  // ★ 毎レンダリングでの再計算は重く UI を固めるため、内容/サイズが変わった時だけ調整する
   React.useLayoutEffect(() => {
     const el = ref.current; if (!el) return;
     const parent = el.parentElement; if (!parent) return;
@@ -959,7 +960,7 @@ function AutoFitText({ text, max = 13, min = 6, bold, color }) {
     while (size > min && el.scrollWidth > (parent.clientWidth - 2) && guard < 40) {
       size -= 0.5; el.style.fontSize = size + 'px'; guard++;
     }
-  });
+  }, [text, max, min]);
   return <span ref={ref} style={{ display: 'inline-block', whiteSpace: 'nowrap', fontWeight: bold ? 'bold' : 'normal', color: color || 'inherit', fontSize: max, lineHeight: 1.05 }}>{text}</span>;
 }
 
