@@ -22374,11 +22374,14 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   const activeSonoTa = sonoTaMonth ?? 2; // default to 2 months out
 
   // Determine which month offset to use for grouping by last fitness record
+  // 記録に実数値が入っているか (空の記録は「未実施」扱いにして次回予定に影響させない)
+  const _hasFitVals = (r) => !!(r && r.values && Object.values(r.values).some(v => v !== '' && v != null && !isNaN(Number(v))));
   const getPatientMonthOffset = (p) => {
     const cycle2 = appData.systemSettings?.fitnessCycle;
+    if (cycle2?.unit === '実施しない' || cycle2?.disabled) return -1; // 実施しない → 予定に出さない
     const cycleNum2 = parseInt(cycle2?.jigyo || '3');
     const unit2 = cycle2?.unit || 'ヶ月';
-    const patRecs = records.filter(r => r.patientId === p.id).sort((a,b)=>b.date.localeCompare(a.date));
+    const patRecs = records.filter(r => r.patientId === p.id && _hasFitVals(r)).sort((a,b)=>b.date.localeCompare(a.date));
     let baseDate;
     if (!patRecs.length) {
       if (!p.startDate) return 0;
@@ -22422,9 +22425,9 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
     const existing = records.find(r => r.patientId === selectedPatientId && r.date === date);
     let newRecords;
     if (existing) {
-      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder } : r);
+      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder, _savedAt: Date.now() } : r);
     } else {
-      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName }];
+      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName, _savedAt: Date.now() }];
     }
     markClean(); onSave({ ...appData, fitnessRecords: newRecords });
     setValues({});
@@ -22438,9 +22441,9 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
     const existing = records.find(r => r.patientId === selectedPatientId && r.date === date);
     let newRecords;
     if (existing) {
-      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder } : r);
+      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder, _savedAt: Date.now() } : r);
     } else {
-      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName }];
+      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName, _savedAt: Date.now() }];
     }
     markClean(); onSave({ ...appData, fitnessRecords: newRecords });
   };
@@ -22524,7 +22527,8 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                 return nd;
               };
               const getNextDue = (p) => {
-                const patRecs = records.filter(r=>r.patientId===p.id).sort((a,b)=>b.date.localeCompare(a.date));
+                if (unit === '実施しない' || cycle?.disabled) return null;
+                const patRecs = records.filter(r=>r.patientId===p.id && _hasFitVals(r)).sort((a,b)=>b.date.localeCompare(a.date));
                 if (!patRecs.length) {
                   // 初回: 利用開始日 + 周期
                   if (!p.startDate) return null;
@@ -22532,7 +22536,7 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                 }
                 return addCycle(new Date(patRecs[0].date));
               };
-              const isFirst = (p) => records.filter(r=>r.patientId===p.id).length === 0;
+              const isFirst = (p) => records.filter(r=>r.patientId===p.id && _hasFitVals(r)).length === 0;
               const now2 = new Date(); now2.setHours(0,0,0,0);
               // 当日出席者IDセット
               const _sd = selectedDate ? new Date(selectedDate) : now2;
@@ -22685,6 +22689,7 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                         {fitnessItems.map(item => (
                           <th key={item.id} className="px-3 py-2 text-center font-bold text-slate-500 whitespace-nowrap">{item.name}<br/><span className="text-slate-400 font-normal">（{item.unit}）</span></th>
                         ))}
+                        {editPast && <th className="px-2 py-2 text-center font-bold text-slate-500 whitespace-nowrap">削除</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -22716,6 +22721,12 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                               </td>
                             );
                           })}
+                          {editPast && (
+                            <td className="px-2 py-1 text-center">
+                              <button onClick={() => { if(!window.confirm(`${r.date} の記録を削除します。よろしいですか？`)) return; onSave({...appData, fitnessRecords: records.filter(rr => rr.id !== r.id)}); }}
+                                className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-bold whitespace-nowrap">削除</button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -26815,10 +26826,16 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <h3 className="text-base font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">測定周期設定</h3>
                 <div className="space-y-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  {/* ★ 体力測定を実施しない */}
+                  <label className="flex items-start gap-2 cursor-pointer p-3 rounded-xl bg-amber-50 border border-amber-200">
+                    <input type="checkbox" checked={!!fitnessCycle.disabled} onChange={e => saveCycle({...fitnessCycle, disabled: e.target.checked})} className="w-4 h-4 rounded mt-0.5" />
+                    <span className="text-sm text-slate-700"><b>体力測定を実施しない</b><br/><span className="text-xs text-slate-500">身長・体重などの測定を行いません。測定予定（当月・来月）にも表示されなくなります。</span></span>
+                  </label>
+                  {!fitnessCycle.disabled && <label className="flex items-center gap-2 cursor-pointer">
                     <input type="checkbox" checked={fitnessCycle.sameForAll} onChange={e => saveCycle({...fitnessCycle, sameForAll: e.target.checked})} className="w-4 h-4 rounded" />
                     <span className="text-sm font-bold text-slate-700">事業対象・要支援と要介護で同じ周期にする</span>
-                  </label>
+                  </label>}
+                  {!fitnessCycle.disabled && (<>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">{fitnessCycle.sameForAll ? '測定周期' : '事業対象・要支援'}</label>
@@ -26858,6 +26875,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                   {fitnessCycle.sameForAll && (
                     <p className="text-xs text-slate-400">事業対象・要支援・要介護すべて同じ周期：{fitnessCycle.jigyo}{fitnessCycle.unit}ごと</p>
                   )}
+                  </>)}
                 </div>
               </div>
 
