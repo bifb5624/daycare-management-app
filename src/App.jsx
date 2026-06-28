@@ -24567,11 +24567,21 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       )}
       {csvModal.isOpen && (() => {
         // ★ テンプレート/出力の列 (店舗独自=介護整体/温浴は含めない。住所は都道府県/市区町村/町名番地/建物名に分割)
-        const HEADERS = ['利用者ID','氏名','フリガナ','性別','生年月日','郵便番号','都道府県','市区町村','町名番地','建物名','電話番号','携帯電話番号','緊急連絡先氏名','続柄','緊急連絡先電話','被保険者番号','介護度','利用開始日','利用終了日','状態','既往歴','留意点','かかりつけ医','メールアドレス','認定有効期間（開始）','認定有効期間（終了）','負担割合','ケアマネ事業所','担当ケアマネ','ケアマネ電話','ケアマネFAX'];
+        const HEADERS = ['利用者ID','氏名','フリガナ','性別','生年月日','郵便番号','都道府県','市区町村','町名番地','建物名','電話番号','携帯電話番号','緊急連絡先氏名','続柄','緊急連絡先電話','緊急連絡先電話（携帯）','緊急連絡先メール','被保険者番号','介護度','利用開始日','利用終了日','状態','既往歴','留意点','かかりつけ医','メールアドレス','認定有効期間（開始）','認定有効期間（終了）','負担割合','ケアマネ事業所','ケアマネ事業所電話','ケアマネ事業所FAX','担当ケアマネ','担当ケアマネ電話'];
         const escCell = (v) => { const s = String(v??''); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; };
         // 利用者 → CSV 1行
         const patientToRow = (p) => {
+          // 緊急連絡先(主要)は family* に保存。 無ければ「追加の緊急連絡先」先頭で補完
           const ec = (p.emergencyContacts||[])[0] || {};
+          const ecName = p.familyName || ec.name || '';
+          const ecRel  = p.familyRelation || ec.relation || '';
+          const ecTel  = p.familyPhone || ec.phone || '';
+          const ecMob  = p.familyPhoneMobile || ec.phoneMobile || '';
+          const ecMail = p.familyEmail || ec.email || '';
+          // ケアマネ事業所電話/FAX は cmOffices マスタから引く (無ければ patient 値)
+          const _off = (appData.systemSettings?.cmOffices||[]).find(o=>o.name===p.cmOffice);
+          const cmOfficeTel = _off?.phone || p.cmOfficePhone || '';
+          const cmOfficeFax = _off?.fax || p.cmFax || '';
           return [
             p.id ?? '',
             p.name || `${p.lastName||''} ${p.firstName||''}`.trim(),
@@ -24579,11 +24589,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             p.gender||'', p.birthDate||'', p.zipCode||'',
             p.prefecture||'', p.city||'', (p.addressLine||p.address||''), p.building||'',
             p.phone||'', p.phoneMobile||'',
-            ec.name||p.familyName||'', ec.relation||p.familyRelation||'', ec.phone||ec.phoneMobile||p.familyPhone||'',
+            ecName, ecRel, ecTel, ecMob, ecMail,
             p.insuranceNo||'', p.careLevel||'', p.startDate||'', p.endDate||'', p.status||'',
             p.kiou||'', p.ryui||'', (p.personalFile?.faceSheet?.chronicDiseases)||'',
             p.email||'', p.careLevelFrom||'', p.careLevelTo||'', p.costBurden||'',
-            p.cmOffice||'', p.cmName||'', p.cmPhone||'', p.cmFax||'',
+            p.cmOffice||'', cmOfficeTel, cmOfficeFax, p.cmName||'', p.cmPhone||'',
           ];
         };
         const buildCsv = () => [HEADERS.join(','), ...(appData.patients||[]).map(p => patientToRow(p).map(escCell).join(','))].join('\n');
@@ -24595,7 +24605,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           URL.revokeObjectURL(url);
         };
         const downloadTemplate = () => {
-          const sample = ['','田中 太郎','たなか たろう','男性','1940-05-15','135-0011','東京都','江東区','扇橋1-2-3','メゾン白子101','03-1234-5678','090-1234-5678','田中 花子','長女','090-2222-3333','0123456789','要介護2','2024-06-01','','利用中','高血圧','歩行時見守り','〇〇クリニック 田中医師','tanaka@example.com','2024-04-01','2027-03-31','1割','ひかり居宅介護支援','鈴木 一郎','03-1111-2222','03-1111-2223'];
+          const sample = ['','田中 太郎','たなか たろう','男性','1940-05-15','135-0011','東京都','江東区','扇橋1-2-3','メゾン白子101','03-1234-5678','090-1234-5678','田中 花子','長女','03-9999-8888','090-2222-3333','hanako@example.com','0123456789','要介護2','2024-06-01','','利用中','高血圧','歩行時見守り','〇〇クリニック 田中医師','tanaka@example.com','2024-04-01','2027-03-31','1割','ひかり居宅介護支援','03-1111-2222','03-1111-2223','鈴木 一郎','090-5555-6666'];
           const csv = '﻿' + HEADERS.join(',') + '\n' + sample.map(escCell).join(',');
           const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
           const url = URL.createObjectURL(blob);
