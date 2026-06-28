@@ -13718,18 +13718,6 @@ export default function App() {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
-  // ★ つむぎ管理局(super_admin)が店舗に入ったら、記録者は本部名ではなく「その店舗の管理者」を自動選択
-  //   (本部は確認用で記録には使わないため。 管理者が居なければ未選択のまま=選択画面)
-  React.useEffect(() => {
-    if (staffSession?.role !== 'super_admin' || !staffSession?.storeId) return;
-    if (activeRecorder && !activeRecorder.isSuperAdmin) return; // 既に店舗担当者を選択済みなら触らない
-    const staff = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
-    if (!staff.length) return; // 店舗データ未読込/スタッフ未登録 → 選択画面に任せる
-    const mgr = staff.find(s => s.role === '管理者') || staff[0];
-    const r = { id: `rec_${mgr.id}`, name: mgr.name, roleLabel: mgr.role || '' };
-    try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(r)); } catch {}
-    setActiveRecorder(r);
-  }, [staffSession?.role, staffSession?.storeId, appData?.diarySettings?.staff, activeRecorder]);
   const handleStaffLogout = () => {
     sessionStorage.removeItem('tsumugiStaffSession');
     sessionStorage.removeItem('tsumugiActiveRecorder');
@@ -13775,6 +13763,18 @@ export default function App() {
   });
   // ★ ローカル編集タイムスタンプ (Supabase pull の race condition 防止)
   const lastLocalEditRef = React.useRef(0);
+  // ★ つむぎ管理局(super_admin)が店舗に入ったら、記録者は本部名ではなく「その店舗の管理者」を自動選択
+  //   (本部は確認用で記録には使わないため。 管理者が居なければ未選択のまま=選択画面)
+  React.useEffect(() => {
+    if (staffSession?.role !== 'super_admin' || !staffSession?.storeId) return;
+    if (activeRecorder && !activeRecorder.isSuperAdmin) return; // 既に店舗担当者を選択済みなら触らない
+    const staff = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
+    if (!staff.length) return; // 店舗データ未読込/スタッフ未登録 → 選択画面に任せる
+    const mgr = staff.find(s => s.role === '管理者') || staff[0];
+    const r = { id: `rec_${mgr.id}`, name: mgr.name, roleLabel: mgr.role || '' };
+    try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(r)); } catch {}
+    setActiveRecorder(r);
+  }, [staffSession?.role, staffSession?.storeId, appData?.diarySettings?.staff, activeRecorder]);
   // ★ 本部管理者用 店舗リスト (サイドバーで切替するため)
   const [adminStoresList, setAdminStoresList] = React.useState([]);
   const [adminStoreDropdownOpen, setAdminStoreDropdownOpen] = React.useState(false);
