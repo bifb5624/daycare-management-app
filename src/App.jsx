@@ -21140,6 +21140,96 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
 // patientInfoModal is rendered outside try-catch at top level of RecordView return
 
+// 全期間の提供記録を1つの印刷用HTML(複数ページ)で生成 → 別タブで開いて一括PDF化。
+// ★ 各月は「その月に有効だった運動項目」で描画 (項目変更があっても過去月が崩れない)
+function buildAllPeriodTicketHtml(appData, patient) {
+  const facility = appData.systemSettings?.facilityInfo || {};
+  const dowJp = ['日','月','火','水','木','金','土'];
+  const moodLabel = { excellent:'🤩', good:'😊', normal:'😐', bad:'😞', terrible:'😫' };
+  const closedDays = appData.systemSettings?.facilityInfo?.closedDays || [0];
+  // 対象月を収集 (患者の ticketRecords から)
+  const monthSet = new Set();
+  (appData.ticketRecords||[]).forEach(r => {
+    if (r.patientId !== patient.id) return;
+    const m = (r.date||'').match(/(\d+)月/); if (!m) return;
+    let y = r.year; if (!y) { y = (typeof r.id==='number' && r.id>1e12) ? new Date(r.id).getFullYear() : new Date().getFullYear(); }
+    monthSet.add(`${y}-${String(+m[1]).padStart(2,'0')}`);
+  });
+  const months = [...monthSet].map(k=>{const [y,m]=k.split('-').map(Number);return {y,m};}).sort((a,b)=>(a.y-b.y)||(a.m-b.m));
+  if (months.length === 0) return null;
+  const schedText = (patient.scheduleAmPm||[]).map((v,i) => v?`${dowJp[i]}(${v})`:'').filter(Boolean).join(' ');
+  const hasAM = (patient.scheduleAmPm||[]).some(s => s === 'AM' || s === '1日');
+  const hasPM = (patient.scheduleAmPm||[]).some(s => s === 'PM' || s === '1日');
+  const jisshiTime = (hasAM && hasPM) ? `${facility.serviceTimeAM||'—'}／${facility.serviceTimePM||'—'}` : hasPM ? (facility.serviceTimePM||'—') : (facility.serviceTimeAM||'—');
+  let allPages = '';
+  months.forEach(({y:tY, m:tM}) => {
+    const exerciseItems = getExerciseItemsForDate(appData.systemSettings, `${tY}-${String(tM).padStart(2,'0')}-01`, tY) || [];
+    const dayRecords = generateMonthlySchedule([patient], tY, tM, appData.monthlyShifts, appData.ticketRecords || [], appData.holidays, closedDays).sort((a,b)=>a.dayNum-b.dayNum);
+    if (dayRecords.length === 0) return;
+    const PER_PAGE = 8;
+    const pageGroups = []; for (let i=0;i<dayRecords.length;i+=PER_PAGE) pageGroups.push(dayRecords.slice(i,i+PER_PAGE));
+    if (pageGroups.length===0) pageGroups.push([]);
+    const renderPage = (rows) => {
+      const tableRows = rows.map(r => {
+        const isA = r.status==='欠席' || r.status==='休業' || r.status==='休止';
+        const isF = (() => { try { return new Date(tY, tM-1, r.dayNum) > new Date(); } catch { return false; } })();
+        const mt = isF && r.status==='出席';
+        const v = (x) => (isA||mt) ? '' : (x||'');
+        const sl = isF ? (r.status==='出席'?'予定':r.status) : r.status;
+        const slColor = sl==='出席'?'#1d4ed8':sl==='予定'?'#94a3b8':sl==='欠席'?'#dc2626':sl==='振替'?'#7c3aed':sl==='臨時'?'#0e7490':'#64748b';
+        const slWeight = (sl==='出席'||sl==='欠席'||sl==='振替'||sl==='臨時')?'bold':'normal';
+        const rowBg = isA ? '#f8fafc' : 'white';
+        const exCells = exerciseItems.map(it => {
+          const raw = r.exercises?.[it.id]; let display = '';
+          if (it.type === 'individual' && typeof raw === 'object' && raw) {
+            const allInd = appData.systemSettings?.individualExerciseItems || [];
+            const sel = allInd.find(ii => ii.id === raw.itemId);
+            if (sel && raw.value) display = `${sel.name}<br/>${raw.value}${sel.defaultUnit||''}`; else if (sel) display = sel.name;
+          } else if (typeof raw !== 'object') { display = v(raw); }
+          return `<td style="border:1px solid #94a3b8;text-align:center;font-size:10px;font-weight:bold;padding:1px;background:${rowBg};line-height:1.15;">${isA||mt?'':display}</td>`;
+        }).join('');
+        const kibunHtml = (() => {
+          const arr = v(r.kibunArrival); const dep = v(r.kibunDeparture);
+          if (!arr && !dep) return '';
+          let out = ''; if (arr) out += `<div style="font-size:11px;line-height:1.1;">通${moodLabel[arr]||arr}</div>`; if (dep) out += `<div style="font-size:11px;line-height:1.1;">帰${moodLabel[dep]||dep}</div>`; return out;
+        })();
+        return `<tr style="height:38px;background:${rowBg};">
+            <td rowspan="2" style="border:1px solid #475569;text-align:center;vertical-align:middle;background:#f8fafc;padding:2px;height:74px;"><div style="font-size:22px;font-weight:bold;line-height:1;">${r.dayNum}</div><div style="font-size:11px;color:#475569;margin-top:2px;">（${r.dayOfWeek}）</div></td>
+            <td style="border:1px solid #94a3b8;text-align:center;font-size:11px;font-weight:${slWeight};color:${slColor};padding:1px;">${sl}</td>
+            <td style="border:1px solid #94a3b8;text-align:center;padding:1px;">${kibunHtml}</td>
+            <td style="border:1px solid #94a3b8;text-align:center;font-size:12px;font-weight:bold;padding:1px;">${v(r.temp) ? `${r.temp}℃` : ''}</td>
+            <td style="border:1px solid #94a3b8;text-align:center;font-size:11px;font-weight:bold;padding:1px;line-height:1.15;">${v(r.bpUpSt) ? `${r.bpUpSt}/${r.bpDnSt}${v(r.plSt)?`<br/><span style='color:#475569;font-size:10px;'>(${r.plSt})</span>`:''}` : ''}</td>
+            <td style="border:1px solid #94a3b8;text-align:center;font-size:11px;font-weight:bold;padding:1px;line-height:1.15;">${v(r.bpUpEn) ? `${r.bpUpEn}/${r.bpDnEn}${v(r.plEn)?`<br/><span style='color:#475569;font-size:10px;'>(${r.plEn})</span>`:''}` : ''}</td>
+            ${exCells}
+            <td style="border:1px solid #94a3b8;text-align:center;font-size:11px;font-weight:bold;padding:1px;">${v(r.massage)}</td>
+          </tr>
+          <tr style="height:30px;background:${rowBg};"><td style="border:1px solid #94a3b8;background:#f1f5f9;text-align:center;font-size:10px;font-weight:bold;color:#64748b;padding:1px;">特記</td><td colspan="${5 + exerciseItems.length + 1}" style="border:1px solid #94a3b8;text-align:left;font-size:10px;color:#1e293b;padding:1px 4px;background:${rowBg};">${(v(r.tokki)||'').replace(/</g,'&lt;').replace(/\n/g,'<br/>')}</td></tr>`;
+      }).join('');
+      const emptyRows = Math.max(0, PER_PAGE - rows.length);
+      const emptyRowsHtml = Array.from({length: emptyRows}).map(() => `<tr style="height:38px;"><td rowspan="2" style="border:1px solid #475569;background:#f8fafc;height:74px;"></td>${Array.from({length: 5 + exerciseItems.length + 1}).map(() => '<td style="border:1px solid #94a3b8;"></td>').join('')}</tr><tr style="height:30px;"><td style="border:1px solid #94a3b8;background:#f1f5f9;text-align:center;font-size:10px;color:#cbd5e1;padding:1px;">特記</td><td colspan="${5 + exerciseItems.length + 1}" style="border:1px solid #94a3b8;"></td></tr>`).join('');
+      return `<div class="tp" style="width:297mm;min-height:210mm;box-sizing:border-box;padding:4mm 6mm;page-break-after:always;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div><div style="font-size:17px;font-weight:bold;letter-spacing:0.1em;line-height:1.1;">${tY}年${tM}月 サービス提供記録</div><div style="font-size:26px;font-weight:bold;margin-top:8px;line-height:1.1;">${patient.name} <span style="font-size:18px;font-weight:normal;">様</span></div></div><div style="font-size:10px;color:#475569;text-align:right;line-height:1.5;"><div>提供責任者: <b>${facility.serviceResponsible||'—'}</b>　　実施時間: <b>${jisshiTime}</b></div><div style="color:#1d4ed8;font-weight:bold;margin-top:2px;">通所曜日: ${schedText||'—'}</div></div></div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:0;table-layout:fixed;"><colgroup><col style="width:5%;"/><col style="width:45%;"/><col style="width:5%;"/><col style="width:45%;"/></colgroup><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">既往</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.kiou||''}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">留意</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.ryui||''}</td></tr></tbody></table>
+        <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px;table-layout:fixed;"><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;width:8%;">マッサージ</th><td style="border:1px solid #475569;font-size:11px;font-weight:bold;padding:1px 6px;width:42%;">${patient.massageNeed||'—'}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;width:8%;">温浴時電療</th><td style="border:1px solid #475569;font-size:11px;font-weight:bold;padding:1px 6px;width:42%;">${patient.onyokuDenryo||'—'}</td></tr></tbody></table>
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;"><thead><tr style="background:#1e293b;color:white;"><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:50px;">日付</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:34px;">状態</th><th style="border:1px solid #475569;padding:3px 1px;font-size:9px;width:60px;">気分</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:48px;">体温</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">開始 血圧(脈)</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">終了 血圧(脈)</th>${exerciseItems.map(it => `<th style="border:1px solid #475569;padding:3px 1px;font-size:9px;line-height:1.1;">${it.name}</th>`).join('')}<th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:42px;">介護整体</th></tr></thead><tbody>${tableRows}${emptyRowsHtml}</tbody></table>
+      </div>`;
+    };
+    allPages += pageGroups.map(renderPage).join('');
+  });
+  if (!allPages) return null;
+  return `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>サービス提供記録(全期間) ${patient.name}</title>
+<style>@page { size: A4 landscape; margin: 0; }
+html, body { font-family: "Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif; color:#1e293b; margin:0; padding:0; background:white; -webkit-font-smoothing:antialiased; }
+.no-print { background:#fef3c7; border:1px solid #fbbf24; padding:8px 12px; margin:8px; font-size:12px; }
+.no-print button { padding:6px 14px; font-weight:bold; cursor:pointer; }
+.tp table { border-collapse:collapse; } .tp table td, .tp table th { word-break:break-all; overflow-wrap:break-word; }
+@media print { .no-print { display:none !important; } body { margin:0; padding:0; } .tp { page-break-after:always; break-after:page; } .tp:last-child { page-break-after:avoid; break-after:avoid; } }
+</style></head><body>
+<div class="no-print">💡 Ctrl/Cmd + P →「PDFとして保存」で全期間を1つのPDFにできます。 <button onclick="window.print()">🖨 印刷 / PDF保存</button></div>
+${allPages}
+</body></html>`;
+}
+
 // === TicketView (サービス提供記録) ===
 function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientChange, dirtyRef, onShowPrintPreview }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
@@ -21219,6 +21309,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={()=>{if(onShowPrintPreview){onShowPrintPreview(`サービス提供記録_${tY}年${tM}月_${sp?.name||''}`, 'A4 landscape', 'print-content-ticket')}else{window.print();}}} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm"><Printer size={16} className="mr-1.5"/>プレビュー</button>
+          <button onClick={()=>{ const html=buildAllPeriodTicketHtml(appData, sp); if(!html){alert('この利用者の提供記録がありません。');return;} const w=window.open('','_blank'); if(!w){alert('ポップアップがブロックされました。ブラウザで許可してください。');return;} w.document.write(html); w.document.close(); }} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap" title="この利用者の全期間の提供記録を1つにまとめて表示→まとめてPDF保存できます"><FileText size={16} className="mr-1.5"/>全期間PDF</button>
         </div>
       </div>
       {/* コンテンツ：横スクロール可能 */}
