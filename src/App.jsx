@@ -21236,7 +21236,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const markClean = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=false; },[dirtyRef]);
   const [selId, setSelId] = useState(targetPatientId || (((appData.patients||[]).length) > 0 ? (appData.patients||[])[0].id : null));
   const [curMonth, setCurMonth] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
-  const [allPeriod, setAllPeriod] = useState(false); // 全期間モード: 画面と同じ形式で全月を並べて表示→一括PDF
+  const [periodMode, setPeriodMode] = useState(false); // 期間出力モード: 選んだ開始月〜終了月を、画面と同じ形式で並べて表示→一括PDF
+  const [periodFrom, setPeriodFrom] = useState(''); // YYYY-MM
+  const [periodTo, setPeriodTo] = useState('');     // YYYY-MM
   const [patDropOpen, setPatDropOpen] = useState(false);
   const [patSearch, setPatSearch] = useState('');
   const [showFaxHist, setShowFaxHist] = useState(false);
@@ -21265,16 +21267,14 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   // ★ 描画対象の月リスト。 通常は当月のみ。 全期間モードでは患者の記録がある全月を、各月「当時の運動項目」で描画
   const closedDaysTV = appData.systemSettings?.facilityInfo?.closedDays || [0];
   const renderList = (() => {
-    if (!allPeriod) return [{ mY: tY, mM: tM, ex, plannedM, tc, pages }];
-    const monthSet = new Set();
-    (appData.ticketRecords||[]).forEach(r => {
-      if (r.patientId !== sp.id) return;
-      const m = (r.date||'').match(/(\d+)月/); if (!m) return;
-      let y = r.year; if (!y) { y = (typeof r.id==='number' && r.id>1e12) ? new Date(r.id).getFullYear() : new Date().getFullYear(); }
-      monthSet.add(`${y}-${String(+m[1]).padStart(2,'0')}`);
-    });
-    let months = [...monthSet].map(k=>{const [y,m]=k.split('-').map(Number);return {y,m};}).sort((a,b)=>(a.y-b.y)||(a.m-b.m));
-    if (months.length === 0) months = [{ y: tY, m: tM }];
+    if (!periodMode || !periodFrom || !periodTo) return [{ mY: tY, mM: tM, ex, plannedM, tc, pages }];
+    // 開始月〜終了月の連続した月リストを生成
+    let [fy,fm] = periodFrom.split('-').map(Number);
+    const [ty2,tm2] = periodTo.split('-').map(Number);
+    const months = [];
+    let cy=fy, cm=fm;
+    while ((cy<ty2 || (cy===ty2 && cm<=tm2)) && months.length<120) { months.push({y:cy,m:cm}); cm++; if(cm>12){cm=1;cy++;} }
+    if (months.length === 0) months.push({ y: tY, m: tM });
     return months.map(({y,m}) => {
       const mRecords = generateMonthlySchedule([sp], y, m, appData.monthlyShifts, appData.ticketRecords || [], appData.holidays, closedDaysTV).sort((a,b)=>a.dayNum-b.dayNum);
       const mEx = getExerciseItemsForDate(appData.systemSettings, `${y}-${String(m).padStart(2,'0')}-01`, y) || appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
@@ -21331,8 +21331,17 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
           <input type="date" value={`${curMonth}-01`} onChange={e=>setCurMonth(e.target.value.substring(0,7))} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700"/>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={()=>setAllPeriod(a=>!a)} className={`px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap active:scale-95 ${allPeriod?'bg-violet-700 text-white':'bg-violet-100 text-violet-700 border border-violet-300 hover:bg-violet-200'}`} title="全期間の提供記録を、この画面と同じ形式で全月まとめて表示します。プレビューでまとめてPDF保存できます"><FileText size={16} className="mr-1.5"/>{allPeriod?'全期間 表示中':'全期間'}</button>
-          <button onClick={()=>{if(onShowPrintPreview){onShowPrintPreview(allPeriod?`サービス提供記録_全期間_${sp?.name||''}`:`サービス提供記録_${tY}年${tM}月_${sp?.name||''}`, 'A4 landscape', 'print-content-ticket')}else{window.print();}}} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm"><Printer size={16} className="mr-1.5"/>プレビュー</button>
+          <button onClick={()=>{ setPeriodMode(p=>{ const np=!p; if(np && (!periodFrom||!periodTo)){ // 既定: 最古の記録月〜当月
+            const set=new Set(); (appData.ticketRecords||[]).forEach(r=>{ if(r.patientId!==sp.id) return; const m=(r.date||'').match(/(\d+)月/); if(!m) return; let y=r.year; if(!y){ y=(typeof r.id==='number'&&r.id>1e12)?new Date(r.id).getFullYear():new Date().getFullYear(); } set.add(`${y}-${String(+m[1]).padStart(2,'0')}`); });
+            const arr=[...set].sort(); setPeriodFrom(arr[0]||curMonth); setPeriodTo(curMonth); } return np; }); }} className={`px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap active:scale-95 ${periodMode?'bg-violet-700 text-white':'bg-violet-100 text-violet-700 border border-violet-300 hover:bg-violet-200'}`} title="選んだ開始月〜終了月の提供記録を、この画面と同じ形式で並べて表示します。プレビューでまとめてPDF保存できます"><FileText size={16} className="mr-1.5"/>{periodMode?'期間出力 中':'期間出力'}</button>
+          {periodMode && (
+            <div className="flex items-center gap-1 bg-white border border-violet-300 rounded-xl px-2 py-1 shrink-0">
+              <input type="month" value={periodFrom} max={periodTo||undefined} onChange={e=>setPeriodFrom(e.target.value)} className="text-xs font-bold text-slate-700 outline-none"/>
+              <span className="text-xs text-slate-400">〜</span>
+              <input type="month" value={periodTo} min={periodFrom||undefined} onChange={e=>setPeriodTo(e.target.value)} className="text-xs font-bold text-slate-700 outline-none"/>
+            </div>
+          )}
+          <button onClick={()=>{if(onShowPrintPreview){onShowPrintPreview(periodMode?`サービス提供記録_${periodFrom}〜${periodTo}_${sp?.name||''}`:`サービス提供記録_${tY}年${tM}月_${sp?.name||''}`, 'A4 landscape', 'print-content-ticket')}else{window.print();}}} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm"><Printer size={16} className="mr-1.5"/>プレビュー</button>
         </div>
       </div>
       {/* コンテンツ：横スクロール可能 */}
