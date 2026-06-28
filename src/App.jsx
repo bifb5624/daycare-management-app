@@ -21516,13 +21516,23 @@ function renrakuToHtml(o) {
 const renrakuHasText = (o) => !!(renrakuToHtml(o).replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').trim());
 
 // リッチ入力エディタ (文字を選択して 太字/色/サイズ を部分的に適用)。 contentEditable は非制御 (初回のみ innerHTML を設定しカーソルを保持)
-function RichEditor({ initialHtml, onChange, templates }) {
+function RichEditor({ initialHtml, onChange, onRegister }) {
   const ref = React.useRef(null);
   const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
   React.useEffect(() => { if (ref.current && ref.current.innerHTML !== (initialHtml||'')) ref.current.innerHTML = initialHtml || ''; }, []); // 初回のみ
   const emit = () => { if (ref.current) onChange(ref.current.innerHTML); };
   const exec = (cmd, val) => { ref.current?.focus(); try { document.execCommand('styleWithCSS', false, true); } catch(e){} document.execCommand(cmd, false, val); emit(); };
-  const insertText = (t) => { ref.current?.focus(); document.execCommand('insertText', false, t); emit(); };
+  // 末尾に文章を挿入 (定型文の適応用)
+  const insertAtEnd = (t) => {
+    const el = ref.current; if (!el) return;
+    el.focus();
+    const sel = window.getSelection(); const range = document.createRange();
+    range.selectNodeContents(el); range.collapse(false); sel.removeAllRanges(); sel.addRange(range);
+    const pre = (el.textContent && !el.textContent.endsWith('\n')) ? '\n' : '';
+    document.execCommand('insertText', false, pre + t);
+    emit();
+  };
+  React.useEffect(() => { if (onRegister) onRegister(insertAtEnd); }, []); // 親に挿入関数を登録
   const btn = "px-2.5 py-1 rounded text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50";
   return (
     <div>
@@ -21546,12 +21556,6 @@ function RichEditor({ initialHtml, onChange, templates }) {
       <div ref={ref} contentEditable suppressContentEditableWarning onInput={emit}
         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none renraku-editor"
         style={{minHeight:'4.5rem',lineHeight:1.6,whiteSpace:'pre-wrap',wordBreak:'break-word'}}/>
-      {templates && templates.filter(t=>t&&t.trim()).length>0 && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          <span className="text-[10px] font-bold text-slate-400 self-center">定型文:</span>
-          {templates.filter(t=>t&&t.trim()).map((t,i)=>(<button key={i} type="button" onMouseDown={e=>{e.preventDefault(); insertText(t);}} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.split('\n')[0].slice(0,16)}{(t.length>16||t.includes('\n'))?'…':''}</button>))}
-        </div>
-      )}
     </div>
   );
 }
@@ -21578,9 +21582,16 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   const curPatient = patientList.find(p => p.id === curPid);
   const _addDays = (n) => { const d = new Date(); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const _today = _addDays(0);
-  const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
+  // 定型文: {title, content} の配列。 旧形式(文字列)は自動変換
+  const [templates, setTemplates] = React.useState(() => (cfg.renrakuTemplates||[]).map(t => typeof t==='string' ? { title:(t.split('\n')[0]||'定型文').slice(0,20), content:t } : { title:t.title||'', content:t.content||'' }));
   const [warn, setWarn] = React.useState('');
   const measureRef = React.useRef(null);
+  const allInsertRef = React.useRef(null); // 全員エディタへ挿入
+  const patInsertRef = React.useRef(null); // 個別エディタへ挿入
+  const [tmplView, setTmplView] = React.useState(null); // null | 'add' | 'list'
+  const [tmplForm, setTmplForm] = React.useState({ title:'', content:'' }); // 登録/編集フォーム
+  const [tmplEditIdx, setTmplEditIdx] = React.useState(-1); // 編集中の index (-1=新規)
+  const [applyIdx, setApplyIdx] = React.useState(-1); // 適応先を選択中の index
   // 連絡帳欄(高さ10rem≒144px)に収まるか実測 (約420px幅で折返しも考慮)。 はみ出すと警告
   React.useEffect(() => {
     const el = measureRef.current; if (!el) return;
@@ -21590,16 +21601,16 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   }, [all.html, pat?.html]);
   const save = () => {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
-    const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t!=null) };
+    const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t && ((t.title||'').trim() || (t.content||'').trim())) };
     const nextPatients = (appData.patients||[]).map(p => patMap[p.id] ? { ...p, contactBookRenraku: clean(patMap[p.id]) } : p);
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients });
     onClose();
   };
   // 1セクション分の編集UI。 ★ <Section/>で描画すると再マウントしカーソルが飛ぶため関数として呼び出す
-  const renderSection = ({ title, sub, st, set, editorKey, headerExtra }) => (
+  const renderSection = ({ title, sub, st, set, editorKey, headerExtra, onRegister }) => (
     <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
       <div className="flex items-center gap-2 mb-2 flex-wrap"><div className="text-sm font-bold text-slate-700">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>{headerExtra}</div>
-      <RichEditor key={editorKey} initialHtml={st.html} templates={templates} onChange={(html)=>set(s=>({...s,html}))}/>
+      <RichEditor key={editorKey} initialHtml={st.html} onRegister={onRegister} onChange={(html)=>set(s=>({...s,html}))}/>
       {(() => {
         const isNone = !st.from && !st.until;
         const isToday = st.from===_today && st.until===_today;
@@ -21639,9 +21650,9 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none px-2">✕</button>
         </div>
         <div className="space-y-3">
-          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll, editorKey:'all' })}
+          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll, editorKey:'all', onRegister:(fn)=>{allInsertRef.current=fn;} })}
           {curPid && pat && renderSection({
-            title:"👤 個別の連絡事項", sub:"選んだ方の連絡帳のみ", st:pat, set:setPat, editorKey:curPid,
+            title:"👤 個別の連絡事項", sub:"選んだ方の連絡帳のみ", st:pat, set:setPat, editorKey:curPid, onRegister:(fn)=>{patInsertRef.current=fn;},
             headerExtra: (
               <select value={curPid} onChange={e=>setCurPid(Number(e.target.value)||e.target.value)} className="ml-auto px-2 py-1 rounded-lg border border-slate-300 text-xs font-bold text-slate-700 outline-none bg-white cursor-pointer max-w-[180px]">
                 {patientList.map(p => <option key={p.id} value={p.id}>{p.name}{renrakuHasText(patMap[p.id])?' ●':''}</option>)}
@@ -21649,18 +21660,57 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
             )
           })}
           {warn && <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {warn}</div>}
-          {/* 定型文の管理 */}
+          {/* 定型文: 登録 / 一覧 */}
           <div className="rounded-xl border border-slate-200 p-3">
-            <div className="text-sm font-bold text-slate-700 mb-2">📝 定型文の登録<span className="text-[10px] text-slate-400 font-normal ml-2">改行も登録できます</span></div>
-            <div className="space-y-2">
-              {templates.map((t,i)=>(
-                <div key={i} className="flex items-start gap-2">
-                  <textarea value={t} onChange={e=>setTemplates(ts=>ts.map((x,j)=>j===i?e.target.value:x))} rows={2} placeholder="よく使う文（改行可）" className="flex-1 px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none resize-y"/>
-                  <button type="button" onClick={()=>setTemplates(ts=>ts.filter((_,j)=>j!==i))} className="text-red-400 hover:text-red-600 text-xs font-bold px-1 py-2 shrink-0">削除</button>
-                </div>
-              ))}
-              <button type="button" onClick={()=>setTemplates(ts=>[...ts,''])} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100">＋ 定型文を追加</button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-slate-700">📝 定型文</span>
+              <button type="button" onClick={()=>{ setTmplForm({title:'',content:''}); setTmplEditIdx(-1); setTmplView(v=>v==='add'?null:'add'); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${tmplView==='add'?'bg-blue-600 text-white border-blue-600':'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'}`}>＋ 登録</button>
+              <button type="button" onClick={()=>{ setApplyIdx(-1); setTmplView(v=>v==='list'?null:'list'); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${tmplView==='list'?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>📋 一覧 ({templates.length})</button>
             </div>
+
+            {/* 登録 / 編集フォーム */}
+            {tmplView==='add' && (
+              <div className="mt-3 space-y-2 bg-slate-50 rounded-lg p-3 border border-slate-200">
+                <div className="text-xs font-bold text-slate-500">{tmplEditIdx>=0?'定型文を編集':'新しい定型文'}</div>
+                <input value={tmplForm.title} onChange={e=>setTmplForm(f=>({...f,title:e.target.value}))} placeholder="タイトル（例: 負担割合証）" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                <textarea value={tmplForm.content} onChange={e=>setTmplForm(f=>({...f,content:e.target.value}))} rows={3} placeholder="内容（改行可。例: 負担割合証のご提出をお願いします）" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-y"/>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={()=>setTmplView(null)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100">キャンセル</button>
+                  <button type="button" disabled={!tmplForm.title.trim() && !tmplForm.content.trim()} onClick={()=>{
+                    const item = { title: tmplForm.title.trim()|| (tmplForm.content.split('\n')[0]||'定型文').slice(0,20), content: tmplForm.content };
+                    setTemplates(ts => tmplEditIdx>=0 ? ts.map((x,j)=>j===tmplEditIdx?item:x) : [...ts, item]);
+                    setTmplView('list'); setTmplEditIdx(-1);
+                  }} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40">{tmplEditIdx>=0?'更新':'登録'}</button>
+                </div>
+              </div>
+            )}
+
+            {/* 一覧 */}
+            {tmplView==='list' && (
+              <div className="mt-3 space-y-1.5">
+                {templates.length===0 && <div className="text-xs text-slate-400 font-bold py-2 text-center">登録された定型文はありません</div>}
+                {templates.map((t,i)=>(
+                  <div key={i} className="bg-slate-50 border border-slate-200 rounded-lg p-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-slate-700 truncate">{t.title||'(無題)'}</div>
+                        <div className="text-[11px] text-slate-400 truncate">{(t.content||'').replace(/\n/g,' ')}</div>
+                      </div>
+                      <button type="button" onClick={()=>setApplyIdx(applyIdx===i?-1:i)} className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shrink-0">適応</button>
+                      <button type="button" onClick={()=>{ setTmplForm({title:t.title||'',content:t.content||''}); setTmplEditIdx(i); setTmplView('add'); }} className="px-2 py-1 rounded text-xs font-bold bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 shrink-0">編集</button>
+                      <button type="button" onClick={()=>{ setTemplates(ts=>ts.filter((_,j)=>j!==i)); if(applyIdx===i) setApplyIdx(-1); }} className="px-2 py-1 rounded text-xs font-bold text-red-500 hover:bg-red-50 shrink-0">削除</button>
+                    </div>
+                    {applyIdx===i && (
+                      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-200">
+                        <span className="text-[10px] font-bold text-slate-400">どこに適応？</span>
+                        <button type="button" onClick={()=>{ allInsertRef.current && allInsertRef.current(t.content||''); setApplyIdx(-1); }} className="px-3 py-1 rounded text-xs font-bold bg-blue-600 text-white hover:bg-blue-700">👥 全員へ</button>
+                        <button type="button" disabled={!curPid} onClick={()=>{ patInsertRef.current && patInsertRef.current(t.content||''); setApplyIdx(-1); }} className="px-3 py-1 rounded text-xs font-bold bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-40">👤 個別へ{curPatient?`（${curPatient.name}）`:''}</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-slate-200">
