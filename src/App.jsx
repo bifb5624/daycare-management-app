@@ -21526,19 +21526,22 @@ function RichEditor({ initialHtml, onChange, templates }) {
   const btn = "px-2.5 py-1 rounded text-xs font-bold bg-white border border-slate-300 hover:bg-slate-50";
   return (
     <div>
-      <div className="flex items-center gap-1.5 flex-wrap mb-1.5 p-1.5 bg-slate-100 rounded-lg">
-        <span className="text-[10px] font-bold text-slate-400">選択して→</span>
-        <button type="button" onMouseDown={e=>{e.preventDefault(); exec('bold');}} className={btn} style={{fontWeight:900}}>太字</button>
-        <button type="button" onMouseDown={e=>{e.preventDefault(); exec('underline');}} className={btn} style={{textDecoration:'underline'}}>下線</button>
-        <span className="w-px h-5 bg-slate-300"/>
-        <span className="text-[10px] font-bold text-slate-400">色</span>
-        {COLORS.map(([c,l])=>(<button key={c} type="button" onMouseDown={e=>{e.preventDefault(); exec('foreColor', c);}} className="w-6 h-6 rounded-full border-2 border-white shadow" style={{background:c}} title={l}/>))}
-        <label className="w-6 h-6 rounded-full border border-slate-300 cursor-pointer relative overflow-hidden shadow" title="自由な色" style={{background:'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)'}}>
-          <input type="color" onChange={e=>exec('foreColor', e.target.value)} className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"/>
-        </label>
-        <span className="w-px h-5 bg-slate-300"/>
-        <span className="text-[10px] font-bold text-slate-400">大きさ</span>
-        {[['2','小'],['3','中'],['5','大']].map(([v,l])=>(<button key={v} type="button" onMouseDown={e=>{e.preventDefault(); exec('fontSize', v);}} className={btn}>{l}</button>))}
+      <div className="mb-1.5 p-1.5 bg-slate-100 rounded-lg space-y-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold text-slate-400">選択して→</span>
+          <button type="button" onMouseDown={e=>{e.preventDefault(); exec('bold');}} className={btn} style={{fontWeight:900}}>太字</button>
+          <button type="button" onMouseDown={e=>{e.preventDefault(); exec('underline');}} className={btn} style={{textDecoration:'underline'}}>下線</button>
+          <span className="w-px h-5 bg-slate-300"/>
+          <span className="text-[10px] font-bold text-slate-400">色</span>
+          {COLORS.map(([c,l])=>(<button key={c} type="button" onMouseDown={e=>{e.preventDefault(); exec('foreColor', c);}} className="w-6 h-6 rounded-full border-2 border-white shadow" style={{background:c}} title={l}/>))}
+          <label className="w-6 h-6 rounded-full border border-slate-300 cursor-pointer relative overflow-hidden shadow" title="自由な色" style={{background:'conic-gradient(red,orange,yellow,lime,cyan,blue,magenta,red)'}}>
+            <input type="color" onChange={e=>exec('foreColor', e.target.value)} className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"/>
+          </label>
+        </div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] font-bold text-slate-400">大きさ</span>
+          {[['2','小'],['3','中'],['5','大']].map(([v,l])=>(<button key={v} type="button" onMouseDown={e=>{e.preventDefault(); exec('fontSize', v);}} className={btn}>{l}</button>))}
+        </div>
       </div>
       <div ref={ref} contentEditable suppressContentEditableWarning onInput={emit}
         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none renraku-editor"
@@ -21554,10 +21557,13 @@ function RichEditor({ initialHtml, onChange, templates }) {
 }
 
 // 連絡帳の連絡事項 編集モーダル (全員共通／個別・リッチ入力・表示期間・定型文)
-function RenrakuModal({ appData, patientId, onClose, onSave }) {
+function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
-  // 個別編集できる利用者一覧 (削除予定/終了は除外しない: 連絡事項は誰にでも)
-  const patientList = (appData.patients||[]).filter(p => p && p.name);
+  // 個別編集できる利用者 = 本日(その日)の連絡帳に出ている利用者のみ
+  const _dayIds = dayPatientIds || [];
+  let patientList = (appData.patients||[]).filter(p => p && p.name && _dayIds.includes(p.id));
+  // 本日対象が無い/該当外から開いた場合の保険
+  if (patientList.length === 0) patientList = (appData.patients||[]).filter(p => p && p.name);
   const a0 = cfg.renrakuAll || {};
   const [all, setAll] = React.useState({ html: renrakuToHtml(a0), from:a0.from||'', until:a0.until||'' });
   // 全利用者の個別連絡事項をまとめて保持 (プルダウンで切替えても編集内容を保持)
@@ -22157,7 +22163,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { handleOverrideBlur(keypad.recordId, keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
       {isConfigOpen && <ContactBookConfigModal config={appData.contactBookConfig} exerciseItems={appData.systemSettings?.exerciseItems || appSettings.exerciseItems} onClose={() => setIsConfigOpen(false)} onSave={handleSaveConfig} />}
-      {renrakuModal && <RenrakuModal appData={appData} patientId={renrakuModal.patientId} onClose={()=>setRenrakuModal(null)} onSave={(d)=>{ markClean(); onSave(d); }} />}
+      {renrakuModal && <RenrakuModal appData={appData} patientId={renrakuModal.patientId} dayPatientIds={displayRecords.map(r=>r.patientId)} onClose={()=>setRenrakuModal(null)} onSave={(d)=>{ markClean(); onSave(d); }} />}
     </div>
   );
 }
