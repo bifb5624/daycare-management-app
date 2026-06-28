@@ -21502,8 +21502,9 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
   const patient = (appData.patients||[]).find(p => p.id === patientId);
   const a0 = cfg.renrakuAll || {}; const p0 = patient?.contactBookRenraku || {};
-  const [all, setAll] = React.useState({ text:a0.text||'', color:a0.color||'#000000', bold:!!a0.bold, size:a0.size||'normal' });
-  const [pat, setPat] = React.useState({ text:p0.text||'', color:p0.color||'#000000', bold:!!p0.bold, size:p0.size||'normal' });
+  const [all, setAll] = React.useState({ text:a0.text||'', color:a0.color||'#000000', bold:!!a0.bold, size:a0.size||'normal', until:a0.until||'' });
+  const [pat, setPat] = React.useState({ text:p0.text||'', color:p0.color||'#000000', bold:!!p0.bold, size:p0.size||'normal', until:p0.until||'' });
+  const _addDays = (n) => { const d = new Date(); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
   const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
   const [warn, setWarn] = React.useState('');
   const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
@@ -21542,6 +21543,14 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
         <button type="button" onClick={()=>set(s=>({...s,bold:!s.bold}))} className={`px-2.5 py-1 rounded text-xs font-bold border ${st.bold?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>太字</button>
         <span className="text-[10px] font-bold text-slate-400 ml-1">サイズ</span>
         {SIZES.map(([v,l])=>(<button key={v} type="button" onClick={()=>tryUpdate(which,{size:v})} className={`px-2 py-1 rounded text-xs font-bold border ${st.size===v?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300'}`}>{l}</button>))}
+      </div>
+      <div className="flex items-center gap-2 mt-2 flex-wrap">
+        <span className="text-[10px] font-bold text-slate-400">表示期間</span>
+        <button type="button" onClick={()=>set(s=>({...s,until:''}))} className={`px-2 py-1 rounded text-xs font-bold border ${!st.until?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>期限なし</button>
+        <button type="button" onClick={()=>set(s=>({...s,until:_addDays(7)}))} className="px-2 py-1 rounded text-xs font-bold border bg-white text-slate-600 border-slate-300 hover:bg-slate-50">1週間</button>
+        <button type="button" onClick={()=>set(s=>({...s,until:_addDays(30)}))} className="px-2 py-1 rounded text-xs font-bold border bg-white text-slate-600 border-slate-300 hover:bg-slate-50">1ヶ月</button>
+        <input type="date" value={st.until||''} onChange={e=>set(s=>({...s,until:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="表示終了日"/>
+        {st.until && <span className="text-[10px] text-slate-500 font-bold">〜{st.until} まで表示</span>}
       </div>
       {templates.filter(t=>t&&t.trim()).length>0 && (
         <div className="flex flex-wrap gap-1 mt-2">
@@ -22330,12 +22339,15 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
           {/* 連絡事項 — 全員共通＋個別。 クリックで編集 */}
           {(() => {
             const _all = config?.renrakuAll; const _pat = patient?.contactBookRenraku;
+            // 表示期間(until)を過ぎたものは表示しない (selectedDate は YYYY-MM-DD)
+            const _showAll = _all?.text && (!_all.until || _all.until >= selectedDate);
+            const _showPat = _pat?.text && (!_pat.until || _pat.until >= selectedDate);
             return (
             <div className="shrink-0 mb-2">
               <div className="font-bold text-slate-800" style={{fontSize:15,marginBottom:3}}>連絡事項</div>
               <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'10rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',lineHeight:1.5,boxSizing:'border-box'}}>
-                {_all?.text && <div style={{color:_all.color||'#000',fontWeight:_all.bold?'bold':'normal',fontSize:_all.size==='large'?18:_all.size==='small'?12:15,marginBottom:6}}>{_all.text}</div>}
-                {_pat?.text && <div style={{color:_pat.color||'#000',fontWeight:_pat.bold?'bold':'normal',fontSize:_pat.size==='large'?18:_pat.size==='small'?12:15}}>{_pat.text}</div>}
+                {_showAll && <div style={{color:_all.color||'#000',fontWeight:_all.bold?'bold':'normal',fontSize:_all.size==='large'?18:_all.size==='small'?12:15,marginBottom:6}}>{_all.text}</div>}
+                {_showPat && <div style={{color:_pat.color||'#000',fontWeight:_pat.bold?'bold':'normal',fontSize:_pat.size==='large'?18:_pat.size==='small'?12:15}}>{_pat.text}</div>}
               </div>
             </div>
             );
