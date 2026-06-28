@@ -21165,7 +21165,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const defTime = getDefTime(sp);
   const getSchedText = (p) => { if(!p?.scheduleAmPm) return ''; const dn=['日','月','火','水','木','金','土']; return p.scheduleAmPm.map((v,i)=>v?`${dn[i]}(${v})`:'').filter(Boolean).join('　'); };
   if (!sp) return <div className="p-8 text-center text-slate-500 font-bold">利用者データなし</div>;
-  const ex = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+  // ★ その月(tY/tM)に有効だった運動項目で描画 (項目を変えても過去月は当時の項目構成のまま=列ズレ/エラー防止)
+  const ex = getExerciseItemsForDate(appData.systemSettings, `${tY}-${String(tM).padStart(2,'0')}-01`, tY) || appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
   // ★ 設定数値(運動メニューの予定値・その月の値)。 数値だけなら単位を自動付与。
   const plannedM = getPlannedExercisesForMonth(sp, tY, tM);
   const _planUnit = (v, unit) => { const s = String(v ?? '').trim(); if (!s) return ''; return (/^[0-9０-９.]+$/.test(s) && unit) ? s + unit : s; };
