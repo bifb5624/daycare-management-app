@@ -135,8 +135,8 @@ const DataExportSection = ({ appData }) => {
   const [customFrom, setCustomFrom] = React.useState(`${new Date().getFullYear()}-01-01`);
   const [customTo, setCustomTo] = React.useState(`${new Date().getFullYear()}-12-31`);
   const [include, setInclude] = React.useState({
-    patients: true, tickets: true, fitness: true, diary: true,
-    absenceFax: true, generalFax: true,
+    patients: true, tickets: false, fitness: false, diary: false,
+    absenceFax: false, generalFax: false,
   });
   // 利用者選択: 'all' | 'select' (複数選択モード)
   const [patientMode, setPatientMode] = React.useState('all');
@@ -328,6 +328,11 @@ ${body}</body></html>`;
         const ecRows = [];
         targetPatients.forEach(p => (p.emergencyContacts||[]).forEach(c => ecRows.push([p.id,p.name,c.relation,c.name,c.phone,c.phoneMobile,c.email])));
         if (ecRows.length > 0) root.file('01_緊急連絡先.csv', toCsv(ecHeaders, ecRows));
+        // 事業所情報: ケアマネ事業所 + 担当者 (各種設定のマスタ)
+        const cmOffices = appData.systemSettings?.cmOffices || [];
+        if (cmOffices.length > 0) root.file('01_ケアマネ事業所.csv', toCsv(['事業所名','電話','FAX'], cmOffices.map(o=>[o.name,o.phone,o.fax])));
+        const careMgrs = appData.systemSettings?.careManagers || [];
+        if (careMgrs.length > 0) root.file('01_ケアマネ担当者.csv', toCsv(['事業所名','担当者名','電話'], careMgrs.map(c=>[c.office,c.name,c.phone])));
       }
       // 提供記録: 利用者×月ごとに HTML — TicketView の画面表示と同じ全日リスト
       if (include.tickets) {
@@ -729,23 +734,14 @@ HTML ファイルをブラウザで開き、
             <span className="text-[10px] text-slate-500">{outputFormat==='pdf'?'画面表示のままPDF化 (記録数が多いと時間がかかります)':'ファイル数が多くてもすぐ生成。後でブラウザでPDF化'}</span>
           </div>
         </div>
-        {/* 含める項目 */}
+        {/* 含める項目: 利用者基本情報 + 事業所(ケアマネ)情報 のみ */}
         <div>
           <div className="text-xs font-bold text-slate-600 mb-1.5">含める項目</div>
-          <div className="grid grid-cols-2 gap-1.5 text-xs">
-            {[
-              ['patients','利用者基本情報 + 緊急連絡先 (CSV)'],
-              ['tickets','提供記録 (利用者×月ごと)'],
-              ['fitness','体力測定 (CSV)'],
-              ['diary','日誌 (1日1ファイル)'],
-              ['absenceFax','休み連絡 控え'],
-              ['generalFax','各種連絡 控え'],
-            ].map(([k,l]) => (
-              <label key={k} className="flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={include[k]} onChange={e=>setInclude(s=>({...s,[k]:e.target.checked}))} className="w-3.5 h-3.5"/>
-                <span className="font-bold text-slate-700">{l}</span>
-              </label>
-            ))}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs font-bold text-blue-800">
+            ✓ 利用者基本情報（緊急連絡先・ケアマネ事業所/担当者を含む）
+          </div>
+          <div className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+            提供記録・体力測定・日誌・休み連絡・各種連絡は、それぞれの画面から出力してください（こちらの一括エクスポートには含まれません）。
           </div>
         </div>
         {/* 実行 */}
@@ -31746,6 +31742,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   });
   const [showTrash, setShowTrash] = useState(false);
+  const [expandedFaxId, setExpandedFaxId] = useState(null); // 連絡履歴: クリックで内容を展開
   const trashItems = personalFile.trash || [];
 
   // 月次スナップショットを今すぐ作成
@@ -31972,11 +31969,24 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         if (canOpen) { try { sessionStorage.setItem('tsumugiOpenFax', JSON.stringify({type:'absence', patientId:h.patientId, date:h.dateIso})); } catch {} }
                         onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo(view);
                       };
+                      const expanded = expandedFaxId === h.id;
+                      const bodyText = h.memo || h.body || h.content || h.note || '';
                       return (
-                      <button key={h.id} onClick={openDoc} className="w-full py-1.5 flex items-center justify-between gap-2 text-xs text-left hover:bg-slate-50 rounded px-1">
-                        <div className="min-w-0"><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}{canOpen && <span className="text-blue-500 ml-2 font-bold">書類を開く →</span>}</div>
-                        <span className="text-slate-400 shrink-0">{_ts(h.timestamp)}</span>
-                      </button>
+                      <div key={h.id}>
+                        <button onClick={()=>setExpandedFaxId(expanded?null:h.id)} className="w-full py-1.5 flex items-center justify-between gap-2 text-xs text-left hover:bg-slate-50 rounded px-1">
+                          <div className="min-w-0"><span className="text-slate-400 mr-1">{expanded?'▾':'▸'}</span><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}</div>
+                          <span className="text-slate-400 shrink-0">{_ts(h.timestamp)}</span>
+                        </button>
+                        {expanded && (
+                          <div className="mb-1.5 mx-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+                            {h.subject && <div><span className="font-bold text-slate-500">件名：</span><span className="text-slate-700">{h.subject}</span></div>}
+                            {h.dateIso && <div><span className="font-bold text-slate-500">対象日：</span><span className="text-slate-700">{h.dateIso}</span></div>}
+                            {(h.recipientOffice||h.recipientName) && <div><span className="font-bold text-slate-500">宛先：</span><span className="text-slate-700">{h.recipientOffice} {h.recipientName}</span></div>}
+                            <div><span className="font-bold text-slate-500">内容：</span><span className="text-slate-700 whitespace-pre-wrap">{bodyText || '（控えのみ・本文なし）'}</span></div>
+                            {navigateTo && <button onClick={openDoc} className="mt-1 text-[11px] font-bold text-blue-600 bg-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-50">{canOpen?'書類を開く →':'作成・出力へ →'}</button>}
+                          </div>
+                        )}
+                      </div>
                       );
                     })}
                   </div>
