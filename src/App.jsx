@@ -21505,8 +21505,22 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
   const [all, setAll] = React.useState({ text:a0.text||'', color:a0.color||'#000000', bold:!!a0.bold, size:a0.size||'normal' });
   const [pat, setPat] = React.useState({ text:p0.text||'', color:p0.color||'#000000', bold:!!p0.bold, size:p0.size||'normal' });
   const [templates, setTemplates] = React.useState(cfg.renrakuTemplates || []);
+  const [warn, setWarn] = React.useState('');
   const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
   const SIZES = [['small','小'],['normal','中'],['large','大']];
+  // ★ 連絡帳の連絡事項欄(高さ10rem=160px,内側余白16px → 約144px)に収まるか判定し、見切れる入力(改行・サイズ拡大)を防ぐ
+  const BOX_H = 144;
+  const _lineH = (sz) => (sz==='large'?18:sz==='small'?12:15) * 1.5;
+  const _cpl = (sz) => (sz==='large'?22:sz==='small'?34:27); // 1行あたり概算文字数(折返し考慮)
+  const _visualLines = (text, sz) => (text||'').split('\n').reduce((s,ln)=> s + Math.max(1, Math.ceil((ln.length||1)/_cpl(sz))), 0);
+  const _totalH = (a,p) => _visualLines(a.text,a.size)*_lineH(a.size) + (a.text?6:0) + _visualLines(p.text,p.size)*_lineH(p.size);
+  const tryUpdate = (which, patch) => {
+    const na = which==='all' ? {...all,...patch} : all;
+    const np = which==='pat' ? {...pat,...patch} : pat;
+    if (_totalH(na,np) > BOX_H) { setWarn('これ以上は連絡帳で見切れてしまうため入力できません。改行を減らすか、文字サイズを小さくしてください。'); return; }
+    setWarn('');
+    if (which==='all') setAll(na); else setPat(np);
+  };
   const save = () => {
     const nextCfg = { ...cfg, renrakuAll: { ...all, text: all.text.trim() }, renrakuTemplates: templates.filter(t=>t!=null) };
     const nextPatients = (appData.patients||[]).map(p => p.id === patientId ? { ...p, contactBookRenraku: { ...pat, text: pat.text.trim() } } : p);
@@ -21514,10 +21528,10 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
     onClose();
   };
   // 1セクション分の編集UI (text/color/bold/size + 定型文挿入)。 ★ <Section/>で描画すると入力毎に再マウントされフォーカスが外れるため、関数として呼び出す
-  const renderSection = ({ title, sub, st, set }) => (
+  const renderSection = ({ title, sub, st, set, which }) => (
     <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
       <div className="text-sm font-bold text-slate-700 mb-2">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>
-      <textarea value={st.text} onChange={e=>set(s=>({...s,text:e.target.value}))} rows={3} placeholder="連絡事項を入力（改行可）"
+      <textarea value={st.text} onChange={e=>tryUpdate(which,{text:e.target.value})} rows={3} placeholder="連絡事項を入力（改行可）"
         className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-y"
         style={{color:st.color, fontWeight:st.bold?'bold':'normal', fontSize:st.size==='large'?17:st.size==='small'?12:14}}/>
       <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -21527,12 +21541,12 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
         <span className="w-px h-5 bg-slate-200 mx-1"/>
         <button type="button" onClick={()=>set(s=>({...s,bold:!s.bold}))} className={`px-2.5 py-1 rounded text-xs font-bold border ${st.bold?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300'}`}>太字</button>
         <span className="text-[10px] font-bold text-slate-400 ml-1">サイズ</span>
-        {SIZES.map(([v,l])=>(<button key={v} type="button" onClick={()=>set(s=>({...s,size:v}))} className={`px-2 py-1 rounded text-xs font-bold border ${st.size===v?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300'}`}>{l}</button>))}
+        {SIZES.map(([v,l])=>(<button key={v} type="button" onClick={()=>tryUpdate(which,{size:v})} className={`px-2 py-1 rounded text-xs font-bold border ${st.size===v?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300'}`}>{l}</button>))}
       </div>
       {templates.filter(t=>t&&t.trim()).length>0 && (
         <div className="flex flex-wrap gap-1 mt-2">
           <span className="text-[10px] font-bold text-slate-400 self-center">定型文:</span>
-          {templates.filter(t=>t&&t.trim()).map((t,i)=>(<button key={i} type="button" onClick={()=>set(s=>({...s,text:s.text?s.text+'\n'+t:t}))} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.split('\n')[0].slice(0,16)}{(t.length>16||t.includes('\n'))?'…':''}</button>))}
+          {templates.filter(t=>t&&t.trim()).map((t,i)=>(<button key={i} type="button" onClick={()=>tryUpdate(which,{text:st.text?st.text+'\n'+t:t})} className="px-2 py-1 bg-amber-50 border border-amber-200 text-amber-800 rounded text-[11px] font-bold hover:bg-amber-100" title="クリックで挿入">＋ {t.split('\n')[0].slice(0,16)}{(t.length>16||t.includes('\n'))?'…':''}</button>))}
         </div>
       )}
     </div>
@@ -21545,8 +21559,9 @@ function RenrakuModal({ appData, patientId, onClose, onSave }) {
           <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none px-2">✕</button>
         </div>
         <div className="space-y-3">
-          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll })}
-          {renderSection({ title:`👤 ${patient?.name||''} 様（個別）`, sub:"この方の連絡帳のみ", st:pat, set:setPat })}
+          {renderSection({ title:"👥 全員への連絡事項", sub:"全利用者の連絡帳に表示", st:all, set:setAll, which:'all' })}
+          {renderSection({ title:`👤 ${patient?.name||''} 様（個別）`, sub:"この方の連絡帳のみ", st:pat, set:setPat, which:'pat' })}
+          {warn && <div className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⚠️ {warn}</div>}
           {/* 定型文の管理 */}
           <div className="rounded-xl border border-slate-200 p-3">
             <div className="text-sm font-bold text-slate-700 mb-2">📝 定型文の登録<span className="text-[10px] text-slate-400 font-normal ml-2">改行も登録できます</span></div>
