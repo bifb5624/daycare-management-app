@@ -23349,8 +23349,6 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
 
   return (
     <div className="flex h-full w-full gap-0 sm:gap-4 p-0 sm:p-4 bg-slate-100 overflow-hidden">
-      {/* ★ スマホ: 対象者一覧を開くフローティングボタン */}
-      <button onClick={() => setMobileRosterOpen(true)} className="md:hidden fixed left-3 bottom-5 z-30 bg-blue-600 text-white rounded-full shadow-lg px-4 py-3 font-bold text-sm flex items-center gap-1.5 active:scale-95"><Users size={16} />対象者</button>
       {mobileRosterOpen && <div onClick={() => setMobileRosterOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-40" aria-hidden="true" />}
       {/* サイドバー */}
       <div className={`bg-white shadow-md border border-slate-300 flex flex-col overflow-hidden
@@ -23506,6 +23504,10 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
 
       {/* メインエリア */}
       <div className="flex-1 overflow-auto">
+        {/* ★ スマホ: 常時表示の対象者バー (タップで一覧) */}
+        <button onClick={() => setMobileRosterOpen(true)} className="md:hidden w-full sticky top-0 z-20 bg-blue-600 active:bg-blue-700 text-white px-4 py-3.5 font-bold flex items-center justify-center gap-2 shadow-md">
+          <Users size={18} />{selectedPat ? `${selectedPat.name} 様` : '対象者を選ぶ'}<span className="ml-1 text-blue-200 text-sm">▼ 一覧</span>
+        </button>
         {selectedPat ? (
           <div className="space-y-4">
             {/* ヘッダー */}
@@ -24670,8 +24672,6 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   return (
     <div className="flex h-full min-h-0 w-full max-w-[1800px] mx-auto gap-4 relative">
       {/* 名簿 */}
-      {/* ★ スマホ: 名簿を開くフローティングボタン(閉じている時) */}
-      <button onClick={() => setMobileRosterOpen(true)} className="md:hidden fixed left-3 bottom-5 z-30 bg-blue-600 text-white rounded-full shadow-lg px-4 py-3 font-bold text-sm flex items-center gap-1.5 active:scale-95"><Users size={16} />名簿</button>
       {/* ★ スマホ: 背景オーバーレイ */}
       {mobileRosterOpen && <div onClick={() => setMobileRosterOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-40" aria-hidden="true" />}
       <div className={`bg-white shadow-md border border-slate-300 flex flex-col overflow-hidden min-h-0
@@ -24748,7 +24748,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       </div>
 
       {/* 詳細 */}
-      <div className="flex-1 bg-white rounded-2xl shadow-md border border-slate-300 overflow-hidden flex flex-col">
+      <div className="flex-1 bg-white sm:rounded-2xl shadow-md border border-slate-300 overflow-hidden flex flex-col">
+        {/* ★ スマホ: 常時表示の名簿バー (タップで一覧) */}
+        <button onClick={() => setMobileRosterOpen(true)} className="md:hidden w-full bg-blue-600 active:bg-blue-700 text-white px-4 py-3.5 font-bold flex items-center justify-center gap-2 shadow-md shrink-0"><Users size={18} />{localPatient ? `${localPatient.name} 様` : '利用者を選ぶ'}<span className="ml-1 text-blue-200 text-sm">▼ 名簿</span></button>
         {localPatient ? (<>
           <div className="px-6 py-3 border-b border-slate-200 bg-white flex justify-between items-center shrink-0 z-10 shadow-sm">
             <div className="flex items-center gap-3 flex-wrap"><div><span className="text-[10px] font-bold text-slate-400">ID:{String(localPatient.id).padStart(4, '0')}</span>{localPatient.kana && <span className="text-[11px] font-bold text-slate-500 leading-none block mt-0.5 mb-0.5">{localPatient.kana}</span>}<h2 className="text-xl font-bold text-slate-800 leading-tight">{localPatient.name} <span className="text-base font-normal">様</span>{calcAge(localPatient.birthDate)!==null && <span className="text-sm font-bold text-slate-500 ml-1">（{calcAge(localPatient.birthDate)}）</span>}</h2></div>{localPatient.careLevel && <span className="text-sm font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-lg">{localPatient.careLevel}</span>}
