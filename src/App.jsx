@@ -22235,6 +22235,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const [renrakuModal, setRenrakuModal] = useState(null); // {patientId} 連絡事項の編集
   const [showPrintCards, setShowPrintCards] = useState(false); // ★ 印刷用の隠しカードは印刷時だけ描画(スマホのメモリ対策)
   const [mobileCardLimit, setMobileCardLimit] = useState(6); // ★ スマホは重いカードを少しずつ描画(メモリ対策)
+  const [mobileOpenCardId, setMobileOpenCardId] = useState(null); // ★ スマホは重いカードを描画せず、開いた1人だけ描画(メモリ対策)
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [localOverrides, setLocalOverrides] = useState({});
@@ -22721,14 +22722,43 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </div>
         )}
 
-        <div className="flex flex-col items-center gap-8">
-          {(() => {
-            // ★ スマホ(<768px)は重い連絡帳カードを一度に全部描画するとメモリ不足で落ちるため、 mobileCardLimit 件ずつ表示
-            const isNarrow = typeof window !== 'undefined' && window.innerWidth < 768;
-            const shown = isNarrow ? displayRecords.slice(0, mobileCardLimit) : displayRecords;
-            const rest = displayRecords.length - shown.length;
-            return (<>
-              {shown.map((record, ri) => {
+        {(() => {
+          // ★ スマホ(<768px)は重い連絡帳カードを描画するとメモリ不足で落ちる(Safariが「問題が起きた」で再読込)。
+          //   そのため スマホでは カードを描画せず軽い一覧にし、「開く」を押した1人だけカードを描画する。
+          const isNarrow = typeof window !== 'undefined' && window.innerWidth < 768;
+          if (isNarrow) {
+            return (
+              <div className="flex flex-col gap-2 px-1 pb-8">
+                {displayRecords.length === 0 && <div className="text-center text-slate-500 font-bold py-12 w-full">選択された日付の出席記録がありません。</div>}
+                <div className="text-[11px] text-slate-500 font-bold bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-1">スマホでは動作を軽くするため一覧表示です。詳しく見る/編集は「開く」を押してください。</div>
+                {displayRecords.map((record) => {
+                  const patient = (appData.patients||[]).find(p => p.id === record.patientId);
+                  if (!patient) return null;
+                  const opened = mobileOpenCardId === record.patientId;
+                  return (
+                    <div key={record.id} className="bg-white rounded-xl border border-slate-300 shadow-sm overflow-hidden">
+                      <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                        <span className="font-bold text-slate-800 truncate">{patient.name} <span className="text-slate-400 font-normal text-sm">様</span></span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button onClick={()=>setRenrakuModal({ patientId: patient.id })} className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-700">連絡事項</button>
+                          <button onClick={()=>doPrint([record.patientId])} className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-100 text-blue-700">印刷</button>
+                          <button onClick={()=>setMobileOpenCardId(opened?null:record.patientId)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${opened?'bg-slate-200 text-slate-600':'bg-slate-700 text-white'}`}>{opened?'閉じる':'開く'}</button>
+                        </div>
+                      </div>
+                      {opened && (
+                        <div className="border-t border-slate-200 p-2 overflow-x-auto flex justify-center">
+                          <ContactBookCard record={record} patient={patient} selectedDate={selectedDate} config={appData.contactBookConfig} appData={appData} onOpenConfig={() => setIsConfigOpen(true)} onEditPatientValue={openPatientValueEdit} onEditRenraku={(p)=>setRenrakuModal({ patientId: p.id })} />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+          return (
+            <div className="flex flex-col items-center gap-8">
+              {displayRecords.map((record, ri) => {
                 const patient = (appData.patients||[]).find(p => p.id === record.patientId);
                 if (!patient) return null;
                 return (
@@ -22737,13 +22767,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                   </div>
                 );
               })}
-              {isNarrow && rest > 0 && (
-                <button onClick={()=>setMobileCardLimit(n=>n+6)} className="w-full max-w-xs mx-auto py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md active:scale-95">あと {rest} 件を表示</button>
-              )}
-            </>);
-          })()}
-          {displayRecords.length === 0 && <div className="text-center text-slate-500 font-bold py-12 w-full">選択された日付の出席記録がありません。</div>}
-        </div>
+              {displayRecords.length === 0 && <div className="text-center text-slate-500 font-bold py-12 w-full">選択された日付の出席記録がありません。</div>}
+            </div>
+          );
+        })()}
       </div>
       
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { handleOverrideBlur(keypad.recordId, keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
