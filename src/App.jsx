@@ -16637,6 +16637,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const _vstr = String(val ?? '');
                     // ★ 数字を含む値のときだけ単位を付ける (×・ー・○ 等の記号には単位を付けない)
                     const displayVal = (_vstr !== '' && _unit && /[0-9０-９]/.test(_vstr) && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
+                    // ★ ○/×/ー の記号は線が細く見づらいので、太く・大きく・色付きで表示
+                    const _isSym = displayVal==='○'||displayVal==='◯'||displayVal==='×'||displayVal==='✕'||displayVal==='ー';
+                    const _symColor = (displayVal==='×'||displayVal==='✕') ? '#dc2626' : (displayVal==='○'||displayVal==='◯') ? '#15803d' : (displayVal==='ー') ? '#475569' : undefined;
                     return (
                     <td key={item.id} className={`px-0.5 py-2 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
@@ -16659,7 +16662,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             if (v && _unit && /[0-9０-９]/.test(v) && !v.endsWith(_unit)) v = `${v}${_unit}`;
                             updateExercise(p.id, item.id, v);
                           }}
-                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14, fontWeight:'bold'}}
+                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: _isSym ? 22 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isSym ? 900 : 'bold', color: _symColor, WebkitTextStroke: _isSym ? '0.6px currentColor' : undefined, lineHeight: _isSym ? 1 : undefined}}
                           className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
