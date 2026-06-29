@@ -21942,7 +21942,7 @@ function RichEditor({ initialHtml, onChange, onRegister }) {
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] font-bold text-slate-400">大きさ</span>
-          {[['2','小'],['3','中'],['5','大']].map(([v,l])=>(<button key={v} type="button" onMouseDown={e=>{e.preventDefault(); exec('fontSize', v);}} className={btn}>{l}</button>))}
+          {[['4','小'],['5','中'],['6','大']].map(([v,l])=>(<button key={v} type="button" onMouseDown={e=>{e.preventDefault(); exec('fontSize', v);}} className={btn}>{l}</button>))}
         </div>
       </div>
       <div ref={ref} contentEditable suppressContentEditableWarning onInput={emit}
@@ -26677,6 +26677,8 @@ function AdminSettingsSection({ appData, onSave }) {
   const [email, setEmail] = React.useState(auth.email||'');
   const [emailMsg, setEmailMsg] = React.useState('');
   const [tgt, setTgt] = React.useState('');
+  const [outRole, setOutRole] = React.useState('介護職員'); // 完全譲渡後、現管理者の職種
+  const ROLE_OPTIONS = ['管理者','生活相談員','機能訓練指導員','看護師','介護職員'];
   const [del, setDel] = React.useState({memberId:'',from:'',until:''});
   const saveSS = (patch, msg) => onSave({...appData, systemSettings:{...ss, ...patch}}, {manual:true, message: msg||'✓ 保存しました'});
   const changePw = async () => {
@@ -26691,10 +26693,10 @@ function AdminSettingsSection({ appData, onSave }) {
   const doTransfer = () => {
     if(!tgt) return;
     const nm = members.find(m=>String(m.id)===String(tgt));
-    if(!window.confirm(`管理者を「${nm?.name||''}」に譲渡します。\n譲渡後は新しい管理者がスタッフ切替時にパスワードを再設定します。\nよろしいですか？`)) return;
+    if(!window.confirm(`管理者を「${nm?.name||''}」に譲渡します。\n現在の管理者は「${outRole}」になります。\n譲渡後は新しい管理者がスタッフ切替時にパスワードを再設定します。\nよろしいですか？`)) return;
     const nextMembers = members.map(m=>{
       if(String(m.id)===String(tgt)) return {...m, roleLabel:'管理者', isAdmin:true};
-      if(m.isAdmin||m.roleLabel==='管理者') return {...m, roleLabel:'介護職員', isAdmin:false};
+      if(m.isAdmin||m.roleLabel==='管理者') return {...m, roleLabel:outRole, isAdmin: outRole==='管理者'};
       return m;
     });
     onSave({...appData, storeMembers:nextMembers, systemSettings:{...ss, adminAuth:{email:auth.email||''}, adminDelegate:null}}, {manual:true, message:'✓ 管理者を譲渡しました'});
@@ -26753,13 +26755,19 @@ function AdminSettingsSection({ appData, onSave }) {
       </div>
       <div className="bg-red-50 border border-red-200 rounded-xl p-4">
         <div className="text-sm font-bold text-red-800 mb-1">🔁 管理者の完全譲渡（交代）</div>
-        <div className="text-[11px] text-red-700 mb-2">管理者を別の従業員に交代します。譲渡後は新しい管理者がパスワードを再設定し、現管理者は介護職員になります。</div>
-        <div className="flex gap-2">
-          <select value={tgt} onChange={e=>setTgt(e.target.value)} className={inp}>
+        <div className="text-[11px] text-red-700 mb-2">管理者を別の従業員に交代します。譲渡後は新しい管理者がパスワードを再設定します。現管理者は下で選んだ職種になります。</div>
+        <div className="flex gap-2 flex-wrap">
+          <select value={tgt} onChange={e=>setTgt(e.target.value)} className={inp} style={{maxWidth:200}}>
             <option value="">新しい管理者を選択</option>
             {nonAdmins.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
           <button type="button" disabled={!tgt} onClick={doTransfer} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm whitespace-nowrap disabled:opacity-40">譲渡する</button>
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-[11px] font-bold text-red-700 whitespace-nowrap">現管理者の譲渡後の職種:</span>
+          <select value={outRole} onChange={e=>setOutRole(e.target.value)} className={inp} style={{maxWidth:200}}>
+            {ROLE_OPTIONS.filter(r=>r!=='管理者').map(r=><option key={r} value={r}>{r}</option>)}
+          </select>
         </div>
       </div>
     </div>
