@@ -14857,6 +14857,7 @@ export default function App() {
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
         const PreviewModal = () => {
+          const [ifH, setIfH] = React.useState(900); // プレビュー iframe の内容高さ(px)
           const size = printPreviewContent.pageSize || 'A4 portrait';
           const isLandscape = size.toLowerCase().includes('landscape');
           const isB6 = size.toLowerCase().includes('b6');
@@ -14990,14 +14991,14 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              {/* プレビュー — ★ position:relative/zIndex で必ずヘッダーより下の階層に。 注入HTMLの fixed はプレビュー枠に閉じ込める */}
+              {/* プレビュー — ★ iframe で完全分離。 注入HTMLのスタイルやオーバーレイがヘッダーのボタンに干渉しないようにする */}
               <div style={{flex:1,overflow:'auto',background:'#525659',padding:'24px 20px',display:'flex',justifyContent:'center',alignItems:'flex-start',position:'relative',zIndex:1}}>
                 {printPreviewContent.html ? (
-                  <div dangerouslySetInnerHTML={{__html: (printPreviewContent.html||'').replace(/position\s*:\s*fixed/gi,'position:absolute')}}
-                    style={{background:'transparent',width:`${pageW*3.7795}px`,transformOrigin:'top center',transform:`scale(${scale})`,marginBottom:`${(scale-1)*pageH*3.7795}px`,
-                      // ページ区切りを視覚的に表示するCSS
-                      ...{}
-                    }}/>
+                  <div style={{width:`${pageW*3.7795*scale}px`, height:`${ifH*scale}px`, overflow:'hidden', flexShrink:0}}>
+                    <iframe title="印刷プレビュー" srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html||''}</body></html>`}
+                      onLoad={e=>{ try { const d = e.target.contentWindow.document; const hh = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); if (hh && Math.abs(hh - ifH) > 4) setIfH(hh); } catch {} }}
+                      style={{width:`${pageW*3.7795}px`, height:`${ifH}px`, border:'none', background:'white', transform:`scale(${scale})`, transformOrigin:'top left', display:'block'}} />
+                  </div>
                 ) : (
                   <div style={{background:'white',minWidth:595,padding:60,boxShadow:'0 4px 24px rgba(0,0,0,0.4)',textAlign:'center'}}>
                     <div style={{fontSize:18,fontWeight:'bold',color:'#475569',marginBottom:8}}>📄 {printPreviewContent.title}</div>
