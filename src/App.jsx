@@ -17332,8 +17332,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       {/* (介護整体の過去履歴は各セル内の絶対配置ポップオーバーに変更したため、固定ツールチップは廃止) */}
       {/* 利用者情報ポップアップ */}
       {patientInfoModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6" onClick={e=>e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-0 sm:p-4">
+          <div className="bg-white sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto sm:max-w-lg max-h-full sm:max-h-[92vh] overflow-y-auto p-5 sm:p-6" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="text-xs text-slate-900 font-bold">{patientInfoModal.kana}</div>
