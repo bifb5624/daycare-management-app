@@ -23246,6 +23246,8 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   const [selectedPatientId, setSelectedPatientId] = useState(targetPatientId || null);
   const [nameSearch, setNameSearch] = useState('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileRosterOpen, setMobileRosterOpen] = useState(false); // ★ スマホは対象者一覧をスライドオーバー
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [values, setValues] = useState({});
 
@@ -23346,10 +23348,15 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   React.useEffect(() => () => { if (saveFnRef) saveFnRef.current = null; }, []);
 
   return (
-    <div className="flex h-full w-full gap-4 p-4 bg-slate-100 overflow-hidden">
+    <div className="flex h-full w-full gap-0 sm:gap-4 p-0 sm:p-4 bg-slate-100 overflow-hidden">
+      {/* ★ スマホ: 対象者一覧を開くフローティングボタン */}
+      <button onClick={() => setMobileRosterOpen(true)} className="md:hidden fixed left-3 bottom-5 z-30 bg-blue-600 text-white rounded-full shadow-lg px-4 py-3 font-bold text-sm flex items-center gap-1.5 active:scale-95"><Users size={16} />対象者</button>
+      {mobileRosterOpen && <div onClick={() => setMobileRosterOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-40" aria-hidden="true" />}
       {/* サイドバー */}
-      <div className={`bg-white rounded-2xl shadow-md border border-slate-300 flex flex-col overflow-hidden flex-shrink-0 transition-all duration-300 ${sidebarCollapsed ? 'w-[44px]' : 'w-[240px]'}`}>
-        {sidebarCollapsed ? (
+      <div className={`bg-white shadow-md border border-slate-300 flex flex-col overflow-hidden
+        fixed inset-y-0 left-0 z-50 w-[88%] max-w-[320px] rounded-none transition-transform duration-300 ${mobileRosterOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:static md:translate-x-0 md:rounded-2xl md:flex-shrink-0 md:w-auto md:transition-all ${sidebarCollapsed ? 'md:w-[44px]' : 'md:w-[240px]'}`}>
+        {(sidebarCollapsed && !isMobileView) ? (
           <button onClick={() => setSidebarCollapsed(false)} className="h-full flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50">
             <ChevronRight size={18} />
             <span className="text-[9px] font-bold mt-2" style={{writingMode:'vertical-rl'}}>名簿</span>
@@ -23381,7 +23388,7 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                 ) : null;
               })()}
             </div>
-            <button onClick={() => setSidebarCollapsed(true)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg"><ChevronLeft size={16} /></button>
+            <button onClick={() => { if (isMobileView) setMobileRosterOpen(false); else setSidebarCollapsed(true); }} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg"><ChevronLeft size={16} /></button>
           </div>
           <div className="flex border-b border-slate-200 bg-white shrink-0">
             {['当月', '来月', 'その他'].map(s => (
@@ -23457,7 +23464,7 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                 const dueStr = due ? `${due.getMonth()+1}/${due.getDate()}` : '未測定';
                 return (
                   <div key={p.id} className="relative">
-                    <button onClick={() => { setSelectedPatientId(p.id); onPatientChange&&onPatientChange(p.id); setValues({}); }}
+                    <button onClick={() => { setSelectedPatientId(p.id); onPatientChange&&onPatientChange(p.id); setValues({}); setMobileRosterOpen(false); }}
                       className={`w-full text-left px-3 py-3 rounded-xl flex items-center justify-between border gap-2 transition-all ${selectedPatientId === p.id ? 'bg-blue-50 border-blue-200 shadow-sm' : isOver ? 'bg-red-50 border-red-100 hover:bg-red-100' : 'border-transparent hover:bg-white'}`}>
                       <div className="flex flex-col min-w-0 flex-1">
                                                 <span className="font-bold text-sm text-slate-800 truncate">{p.name}</span>
@@ -23525,24 +23532,24 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
             {/* 入力フォーム */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="grid grid-cols-4 bg-slate-50 border-b border-slate-200 text-xs font-bold text-slate-500">
-                <div className="px-4 py-2">項目</div>
-                <div className="px-4 py-2 text-center">今回入力</div>
-                <div className="px-4 py-2 text-center">前回{lastRecord && <span className="font-normal text-slate-400 ml-1">({lastRecord.date})</span>}</div>
-                <div className="px-4 py-2 text-center">平均</div>
+                <div className="px-1.5 sm:px-4 py-2">項目</div>
+                <div className="px-1.5 sm:px-4 py-2 text-center">今回入力</div>
+                <div className="px-1.5 sm:px-4 py-2 text-center">前回{lastRecord && <span className="font-normal text-slate-400 ml-1">({lastRecord.date})</span>}</div>
+                <div className="px-1.5 sm:px-4 py-2 text-center">平均</div>
               </div>
               {fitnessItems.map(item => {
                 const prev = lastRecord?.values?.[item.id];
                 const avg = avgVal(item.id);
                 return (
                   <div key={item.id} className="grid grid-cols-4 border-b border-slate-100 items-center hover:bg-slate-50">
-                    <div className="px-4 py-3 font-bold text-sm text-slate-700">{item.name}<span className="text-xs text-slate-400 ml-1">（{item.unit}）</span></div>
-                    <div className="px-4 py-2">
+                    <div className="px-1.5 sm:px-4 py-3 font-bold text-[13px] sm:text-sm text-slate-700 leading-tight">{item.name}<span className="text-xs text-slate-400 ml-0.5">（{item.unit}）</span></div>
+                    <div className="px-1 sm:px-4 py-2">
                       <input type="number" step="0.1" value={values[item.id] ?? ''}
                         onChange={e => { setValues({...values, [item.id]: e.target.value}); markDirty(); }}
                         placeholder="—"
-                        className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400 text-center" />
+                        className="w-full px-1 sm:px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400 text-center" />
                     </div>
-                    <div className="px-4 py-2 text-center">
+                    <div className="px-1 sm:px-4 py-2 text-center">
                       {!lastRecord ? <span className="text-slate-300">—</span>
                        : editPast ? (
                         <input type="number" step="0.1" defaultValue={prev ?? ''}
@@ -23558,7 +23565,7 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                         prev !== undefined && prev !== '' ? <span className="font-bold text-slate-700">{prev}<span className="text-xs text-slate-400 ml-0.5">{item.unit}</span></span> : <span className="text-slate-300">—</span>
                        )}
                     </div>
-                    <div className="px-4 py-2 text-center">
+                    <div className="px-1 sm:px-4 py-2 text-center">
                       {avg !== null ? <span className="font-bold text-green-700">{avg}<span className="text-xs text-green-500 ml-0.5">{item.unit}</span></span> : <span className="text-slate-300">—</span>}
                     </div>
                   </div>
