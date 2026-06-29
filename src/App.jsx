@@ -20783,22 +20783,15 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   );
 
   const renderKaikin = (k, getSD) => {
-    // 6列レイアウト: 1列目に 1〜N、2列目に N+1〜2N… と縦に順に流す。
-    // 行内は順位の右に余白を取り、名前と日数は密着させる。
+    // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ (行が増える)
     const N_COLS = 6;
-    const perCol = Math.ceil(k.length / N_COLS) || 1;
-    const cols = Array.from({length: N_COLS}, (_, ci) => k.slice(ci * perCol, (ci + 1) * perCol).map((item, ri) => ({...item, idx: ci * perCol + ri})));
     return (
-      <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},1fr)`,columnGap:24}}>
-        {cols.map((col, ci) => (
-          <div key={ci} style={{display:'flex',flexDirection:'column'}}>
-            {col.map(({patient,days,idx}) => (
-              <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #94a3b8'}}>
-                <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
-                <span style={{fontSize:12,fontWeight:'bold',color:'#000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',width:'7em',flexShrink:0}}>{patient.name}</span>
-                <span style={{fontSize:12,fontWeight:'bold',color:'#000',whiteSpace:'nowrap',flexShrink:0,marginLeft:2}}>{days}日</span>
-              </div>
-            ))}
+      <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
+        {k.map(({patient,days},idx) => (
+          <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #94a3b8',minWidth:0}}>
+            <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
+            <span style={{fontSize:12,fontWeight:'bold',color:'#000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
+            <span style={{fontSize:12,fontWeight:'bold',color:'#000',whiteSpace:'nowrap',flexShrink:0,marginLeft:4}}>{days}日</span>
           </div>
         ))}
       </div>
@@ -21376,24 +21369,17 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div id="ops-rank-att" data-sec="ops-rank-att" style={{scrollMarginTop:170}}/>
         <Card title={`出席率ランキング　${periodLabel}（${attRank.length}名）`} accent='#3b82f6'>
             {attRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
-              // 5列レイアウト: 1列目に 1〜N、2列目に N+1〜2N… と縦に順に流す。
-              // 名前と % は密着、列間に余白を確保。利用者が多ければ右に列が増える
+              // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ
               const N_COLS = 6;
               const list = showAllAtt ? attRank : attRank.slice(0,120);
-              const perCol = Math.ceil(list.length / N_COLS) || 1;
-              const cols = Array.from({length: N_COLS}, (_, ci) => list.slice(ci * perCol, (ci + 1) * perCol).map((item, ri) => ({...item, idx: ci * perCol + ri})));
               return (
                 <React.Fragment>
                   <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:12}}>
-                    {cols.map((col, ci) => (
-                      <div key={ci} style={{display:'flex',flexDirection:'column',minWidth:0}}>
-                        {col.map(({patient,rate,idx}) => (
-                          <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                            <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
-                            <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
-                            <span style={{fontSize:12,fontWeight:'bold',color:'#3b82f6',flexShrink:0,marginLeft:4}}>{rate}%</span>
-                          </div>
-                        ))}
+                    {list.map(({patient,rate}, idx) => (
+                      <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#3b82f6',flexShrink:0,marginLeft:4}}>{rate}%</span>
                       </div>
                     ))}
                   </div>
@@ -21413,20 +21399,14 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
             {absRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
               const N_COLS = 6;
               const list = showAllAbs ? absRank : absRank.slice(0,120);
-              const perCol = Math.ceil(list.length / N_COLS) || 1;
-              const cols = Array.from({length: N_COLS}, (_, ci) => list.slice(ci * perCol, (ci + 1) * perCol).map((item, ri) => ({...item, idx: ci * perCol + ri})));
               return (
                 <React.Fragment>
                   <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:12}}>
-                    {cols.map((col, ci) => (
-                      <div key={ci} style={{display:'flex',flexDirection:'column',minWidth:0}}>
-                        {col.map(({patient,rate,idx}) => (
-                          <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                            <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
-                            <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
-                            <span style={{fontSize:12,fontWeight:'bold',color:'#ef4444',flexShrink:0,marginLeft:4}}>{rate}%</span>
-                          </div>
-                        ))}
+                    {list.map(({patient,rate}, idx) => (
+                      <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#ef4444',flexShrink:0,marginLeft:4}}>{rate}%</span>
                       </div>
                     ))}
                   </div>
@@ -21446,23 +21426,17 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           {reasonRank.length===0 ? (
             <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>欠席理由の記録なし</div>
           ) : (() => {
-            // 6列レイアウト: 1列目に 1〜N、2列目に N+1〜2N… と縦に順に流す
+            // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ
             const N_COLS = 6;
             const list = showAllReason ? reasonRank : reasonRank.slice(0,120);
-            const perCol = Math.ceil(list.length / N_COLS) || 1;
-            const cols = Array.from({length: N_COLS}, (_, ci) => list.slice(ci * perCol, (ci + 1) * perCol).map((item, ri) => ({...item, idx: ci * perCol + ri})));
             return (
               <React.Fragment>
-                <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},1fr)`,columnGap:24}}>
-                  {cols.map((col, ci) => (
-                    <div key={ci} style={{display:'flex',flexDirection:'column'}}>
-                      {col.map(({reason,count,idx}) => (
-                        <div key={reason} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc'}}>
-                          <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
-                          <span style={{fontSize:12,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',width:'7em',flexShrink:0}}>{reason}</span>
-                          <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',flexShrink:0,marginLeft:2}}>{count}件</span>
-                        </div>
-                      ))}
+                <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
+                  {list.map(({reason,count}, idx) => (
+                    <div key={reason} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
+                      <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'🥇':idx===1?'🥈':'🥉'):`${idx+1}.`}</span>
+                      <span style={{fontSize:12,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{reason}</span>
+                      <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',flexShrink:0,marginLeft:4}}>{count}件</span>
                     </div>
                   ))}
                 </div>
@@ -28394,7 +28368,22 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         const prevKey = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}_${ampm}`;
         const prevLog = (nextAppData.diaryLogs||{})[prevKey];
         if (prevLog && SOUGEI_FIELDS.some(f => prevLog[f] && Object.keys(prevLog[f]).length)) {
-          SOUGEI_FIELDS.forEach(f => { if (prevLog[f]) loaded[f] = JSON.parse(JSON.stringify(prevLog[f])); });
+          // ★ 利用者と車を紐付けて反映: 送迎(pick/drop/_walk)は「行番号」キーなので、
+          //   先週の行→利用者ID→今週の行 に対応付け直す(出欠が変わっても本人の車に付く)。
+          //   driver(運転者)・carTimes(車別の時間)は利用者非依存なのでそのままコピー。
+          const _rankG = (st)=>st==='出席'?0:st==='振替'?1:st==='欠席'?2:st==='休止'?3:st==='休業'?4:5;
+          const _matchG = (r,p,dw)=>{ if(ampm==='1日')return true; if(r.status==='振替'){ const fa=r.furikaeAmpm; if(fa)return fa===ampm||fa==='1日'; if(typeof r.tokki==='string'){ if(r.tokki.includes('1日分振替'))return true; if(ampm==='AM'&&r.tokki.includes('AM分振替'))return true; if(ampm==='PM'&&r.tokki.includes('PM分振替'))return true; } const slot=p.scheduleAmPm?.[dw]||''; if(['AM','PM','1日'].includes(slot))return [ampm,'1日'].includes(slot); return ampm==='AM'; } return [ampm,'1日'].includes(p.scheduleAmPm?.[dw]); };
+          const _pidsForDate=(dStr,dw)=>{ const rec=(appData.ticketRecords||[]).filter(r=>r.date===dStr).filter(r=>{const p=(appData.patients||[]).find(pp=>pp.id===r.patientId);if(!p)return false;return _matchG(r,p,dw);}).map(r=>({pid:r.patientId,status:r.status})); const recPids=new Set(rec.map(r=>r.pid)); const extra=(appData.patients||[]).filter(p=>{ if(recPids.has(p.id))return false; if(getPatientDisplayStatus&&getPatientDisplayStatus(p)!=='利用中')return false; const slot=p.scheduleAmPm?.[dw]||''; if(ampm==='1日')return ['AM','PM','1日'].includes(slot); return slot===ampm||slot==='1日'; }).map(p=>({pid:p.id,status:'出席'})); return [...rec,...extra].sort((a,b)=>_rankG(a.status)-_rankG(b.status)).map(x=>x.pid); };
+          const _curDow = new Date(selectedDate).getDay();
+          const curPids = _pidsForDate(dateStr, _curDow);
+          const prevPids = _pidsForDate(`${_d.getMonth()+1}月${_d.getDate()}日`, _d.getDay());
+          const curRowByPid = {}; curPids.forEach((pid,i)=>{ if(curRowByPid[pid]==null) curRowByPid[pid]=i; });
+          const remapRow = (obj)=>{ const out={}; Object.keys(obj||{}).forEach(k=>{ const mm=k.match(/^(\d+)(_.+)?$/); if(!mm){ out[k]=obj[k]; return; } const pr=+mm[1]; const suf=mm[2]||''; const pid=prevPids[pr]; const cr=pid!=null?curRowByPid[pid]:undefined; if(cr==null) return; out[cr+suf]=obj[k]; }); return out; };
+          SOUGEI_FIELDS.forEach(f => {
+            if (!prevLog[f]) return;
+            if (f==='pick'||f==='drop'||f==='pick_walk'||f==='drop_walk') loaded[f] = remapRow(prevLog[f]);
+            else loaded[f] = JSON.parse(JSON.stringify(prevLog[f]));
+          });
           _didAutoCopy = true;
         }
       }
