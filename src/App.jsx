@@ -11596,7 +11596,7 @@ function FamilyView() {
           <form onSubmit={handleLogin} style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
             <div style={{marginBottom:14}}>
               <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>ログインID</label>
-              <input value={loginForm.username} onChange={e=>setLoginForm(f=>({...f,username:toHalfWidth(e.target.value),error:''}))} autoComplete="username"
+              <input value={loginForm.username} onChange={e=>{try{sessionStorage.removeItem('tsumugiIdleLogout')}catch{}; setLoginForm(f=>({...f,username:toHalfWidth(e.target.value),error:''}));}} autoComplete="username"
                 placeholder="例: inoue_family" autoFocus
                 style={{width:'100%',padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
             </div>
@@ -11612,6 +11612,11 @@ function FamilyView() {
                 </button>
               </div>
             </div>
+            {(()=>{ try{ return sessionStorage.getItem('tsumugiIdleLogout')==='1'; }catch{ return false; } })() && (
+              <div style={{background:'#fffbeb',border:'1px solid #fde68a',color:'#92400e',fontSize:12,fontWeight:'bold',borderRadius:10,padding:'8px 12px',marginBottom:12,textAlign:'center'}}>
+                30分間操作がなかったため、自動保存してログアウトしました。
+              </div>
+            )}
             {loginForm.error && <div style={{color:'#ef4444',fontSize:12,fontWeight:'bold',marginBottom:12,textAlign:'center'}}>{loginForm.error}</div>}
             <button type="submit"
               style={{width:'100%',padding:'13px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:'pointer',marginTop:12,boxShadow:'0 4px 12px rgba(125,170,61,0.3)'}}>
@@ -14333,6 +14338,39 @@ export default function App() {
     };
   }, [currentView]);
   const [sharedAmpm, setSharedAmpm] = useState('AM'); // 'AM' or 'PM'
+
+  // ★ 無操作が続いたら自動ログアウト (離席時の情報保護)。 ログアウト前に現在の入力画面を自動保存してから閉じる。
+  useEffect(() => {
+    if (!staffSession) return; // スタッフ/本部ログイン中のみ
+    const IDLE_MS = 30 * 60 * 1000; // 30分 無操作で自動ログアウト
+    const refMap = {
+      record: [recordDirtyRef, recordSaveFnRef], master: [masterDirtyRef, masterSaveFnRef],
+      settings: [settingsDirtyRef, settingsSaveFnRef], print: [printDirtyRef, printSaveFnRef],
+      fitness: [fitnessDirtyRef, fitnessSaveFnRef], diary: [diaryDirtyRef, diarySaveFnRef],
+      monitoring: [monitoringDirtyRef, monitoringSaveFnRef], ticket: [ticketDirtyRef, ticketSaveFnRef],
+      absence_fax: [absenceDirtyRef, absenceSaveFnRef], general_fax: [generalFaxDirtyRef, generalFaxSaveFnRef],
+      kinou_keikaku: [kinouKeikakuDirtyRef, kinouKeikakuSaveFnRef],
+      seikatsu_kinou: [seikatsuKinouDirtyRef, seikatsuKinouSaveFnRef],
+      kyomi_kanshin: [kyomiKanshinDirtyRef, kyomiKanshinSaveFnRef],
+    };
+    const flushCurrent = () => {
+      const pair = refMap[currentView];
+      if (pair && pair[0]?.current && typeof pair[1]?.current === 'function') {
+        try { pair[1].current(); } catch (e) { console.warn('[idle-logout] save failed', e); }
+      }
+    };
+    let timer = null;
+    const doIdleLogout = () => {
+      flushCurrent(); // 未保存の入力画面を保存
+      try { sessionStorage.setItem('tsumugiIdleLogout', '1'); } catch {}
+      setTimeout(() => handleLogout(), 500); // 保存反映を待ってからログアウト
+    };
+    const reset = () => { if (timer) clearTimeout(timer); timer = setTimeout(doIdleLogout, IDLE_MS); };
+    const events = ['mousemove','mousedown','keydown','touchstart','scroll','wheel'];
+    events.forEach(ev => window.addEventListener(ev, reset, { passive: true }));
+    reset();
+    return () => { if (timer) clearTimeout(timer); events.forEach(ev => window.removeEventListener(ev, reset)); };
+  }, [staffSession, currentView]);
 
   const handleSaveToCloud = (newData, options = {}) => {
     setAppData(newData);
