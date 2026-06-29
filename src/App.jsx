@@ -14269,7 +14269,10 @@ export default function App() {
   },[]); // {title, elementId}
   // ★ プレビュー iframe の高さ＆srcDoc は App 直下で安定保持 (PreviewModalを毎回作り直すと iframe再読込=チカチカ/QR点滅になるため)
   const [previewIfH, setPreviewIfH] = useState(900);
-  useEffect(()=>{ setPreviewIfH(900); }, [printPreviewContent?.title]);
+  // ★ プレビュー内のサブモーダル状態も App 直下へ (IIFE内に hook を置くと条件付き呼び出しで React error #310 になる)
+  const [showFaxHelp, setShowFaxHelp] = useState(false);
+  const [showFaxRecord, setShowFaxRecord] = useState(false);
+  useEffect(()=>{ setPreviewIfH(900); setShowFaxHelp(false); setShowFaxRecord(false); }, [printPreviewContent?.title]);
   const previewSrcDoc = useMemo(()=>{
     if(!printPreviewContent?.html) return '';
     let head=''; try{
@@ -14888,8 +14891,7 @@ export default function App() {
             pageH = isB6 ? 182 : isLandscape ? 210 : 297;
           }
           const scale = Math.min(1,(window.innerWidth-60)/(pageW*3.7795));
-          const [showFaxHelp, setShowFaxHelp] = React.useState(false);
-          const [showFaxRecord, setShowFaxRecord] = React.useState(false);
+          // showFaxHelp/showFaxRecord は App直下の state を使用 (ここで hook を呼ぶと条件付き呼び出しになる)
           // FAX系のタイトルから type と patientName を推測
           const _t = printPreviewContent.title || '';
           const faxType = _t.includes('休み連絡') ? 'absence' : _t.includes('各種連絡') ? 'general' : _t.includes('サービス提供記録') ? 'ticket' : 'other';
