@@ -14858,6 +14858,15 @@ export default function App() {
       {printPreviewContent && (() => {
         const PreviewModal = () => {
           const [ifH, setIfH] = React.useState(900); // プレビュー iframe の内容高さ(px)
+          // ★ iframe の srcDoc は親ページの CSS(Tailwind等)を引き継ぐ。 メモ化して毎回作り直さない(無限リロード=チカチカ防止)
+          const previewSrcDoc = React.useMemo(() => {
+            let head = '';
+            try {
+              document.querySelectorAll('style').forEach(s => { head += '<style>'+(s.textContent||'')+'</style>'; });
+              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => { if (l.href) head += '<link rel="stylesheet" href="'+l.href+'">'; });
+            } catch {}
+            return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html||''}</body></html>`;
+          }, [printPreviewContent.html]);
           const size = printPreviewContent.pageSize || 'A4 portrait';
           const isLandscape = size.toLowerCase().includes('landscape');
           const isB6 = size.toLowerCase().includes('b6');
@@ -14953,11 +14962,25 @@ export default function App() {
               w.document.close();
               return;
             }
-            const w = window.open('','_blank','width=900,height=700');
-            if (!w) { alert('ポップアップがブロックされました。ブラウザでポップアップを許可してください。'); return; }
-            w.document.write(docHtml);
-            w.document.close();
-            setTimeout(()=>{ w.focus(); w.print(); if(autoClose) setTimeout(()=>w.close(),1000); }, 800);
+            // ★ PC: ポップアップ窓は2回目以降ブロックされて開かないことがあるため、隠しiframeで印刷(何度でも確実)。
+            try {
+              let pf = document.getElementById('tsumugi-print-frame');
+              if (pf) { try { pf.remove(); } catch {} }
+              pf = document.createElement('iframe');
+              pf.id = 'tsumugi-print-frame';
+              pf.setAttribute('aria-hidden','true');
+              pf.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;pointer-events:none;';
+              document.body.appendChild(pf);
+              const fd = pf.contentWindow.document;
+              fd.open(); fd.write(docHtml); fd.close();
+              setTimeout(()=>{ try { pf.contentWindow.focus(); pf.contentWindow.print(); } catch(e){ console.warn('[print] failed', e); } }, 500);
+            } catch (e) {
+              // フォールバック: 別タブ
+              const w = window.open('','_blank');
+              if (!w) { alert('印刷画面を開けませんでした。ブラウザでポップアップを許可してください。'); return; }
+              w.document.write(docHtml); w.document.close();
+              setTimeout(()=>{ w.focus(); w.print(); }, 600);
+            }
           };
 
           return (
@@ -14995,8 +15018,8 @@ export default function App() {
               <div style={{flex:1,overflow:'auto',background:'#525659',padding:'24px 20px',display:'flex',justifyContent:'center',alignItems:'flex-start',position:'relative',zIndex:1}}>
                 {printPreviewContent.html ? (
                   <div style={{width:`${pageW*3.7795*scale}px`, height:`${ifH*scale}px`, overflow:'hidden', flexShrink:0}}>
-                    <iframe title="印刷プレビュー" srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html||''}</body></html>`}
-                      onLoad={e=>{ try { const d = e.target.contentWindow.document; const hh = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); if (hh && Math.abs(hh - ifH) > 4) setIfH(hh); } catch {} }}
+                    <iframe title="印刷プレビュー" srcDoc={previewSrcDoc}
+                      onLoad={e=>{ try { const d = e.target.contentWindow.document; const hh = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); if (hh && Math.abs(hh - ifH) > 8) setIfH(hh); } catch {} }}
                       style={{width:`${pageW*3.7795}px`, height:`${ifH}px`, border:'none', background:'white', transform:`scale(${scale})`, transformOrigin:'top left', display:'block'}} />
                   </div>
                 ) : (
@@ -22173,12 +22196,13 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     //             ページが縦なので Windows(Edge)/iPad でも回転・見切れせず、出力はB6サイズ。
     //   'b6port' = B6縦(128×182) 用紙いっぱい。 B6対応の複合機向け。
     //   'b5land' = B5横(257×182, 既定)。 連絡帳の中身は常に縦(182×257)、縮率0.70で約B6(128×182)になる。
-    // ★ b6port 以外(旧b5land/b5port含む)はすべて「B5縦にB6中央」に統一 (横B5は廃止)
-    const paper = appData.systemSettings?.renrakuPaper || 'b5port';
+    // ★ 用紙: 'b6port'=B6縦(128×182)用紙いっぱい / それ以外='横(B5)'=B5横(257×182)用紙の中央に連絡帳(縦182×257を縮小)を配置。
+    //   連絡帳の中身は常に縦。 用紙だけ横。
+    const paper = appData.systemSettings?.renrakuPaper === 'b6port' ? 'b6port' : 'b5land';
     const isB6 = paper === 'b6port';
-    const pageW = isB6 ? 128 : 182;
-    const pageH = isB6 ? 182 : 257;
-    const scale = 0.70; // B6実寸(約128×182mm)
+    const pageW = isB6 ? 128 : 257;
+    const pageH = 182;
+    const scale = isB6 ? 0.70 : 0.66;
     const pageSizeStr = `${pageW}mm ${pageH}mm`;
     const combinedHtml = htmlParts.map((h,i)=>
       `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
@@ -22310,10 +22334,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
           title="「B5にB6（縦）」= B5サイズ・縦向きのページにB6の連絡帳を中央配置。複合機のB5トレイにB6用紙を入れている場合に最適（中央給紙でB6用紙にちょうど乗ります）。縦向きなのでWindows(Edge)/iPadでも回転・見切れしません。印刷時は用紙「B5」＋「縦向き」を選んでください。B6対応機なら「縦（B6）」、B5用紙そのままなら「横（B5）」。">
           <span className="text-[12px] font-bold text-slate-500">🖨 用紙</span>
-          <select value={appData.systemSettings?.renrakuPaper === 'b6port' ? 'b6port' : 'b5port'}
+          <select value={appData.systemSettings?.renrakuPaper === 'b6port' ? 'b6port' : 'b5land'}
             onChange={e=>onSave({...appData, systemSettings:{...(appData.systemSettings||{}), renrakuPaper:e.target.value}})}
             className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer">
-            <option value="b5port">B5にB6（縦・推奨）</option>
+            <option value="b5land">横（B5）</option>
             <option value="b6port">縦（B6）</option>
           </select>
           <span className="text-slate-300 text-sm" title="B6サイズに対応した複合機がなければ「横（B5）」を選び、B5用紙の中央に連絡帳を配置して印刷します。B6対応機なら「縦（B6）」を選べます。">ⓘ</span>
