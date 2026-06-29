@@ -14961,8 +14961,8 @@ export default function App() {
 
           return (
             <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:9900,display:'flex',flexDirection:'column'}}>
-              {/* ヘッダー */}
-              <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)'}}>
+              {/* ヘッダー — ★ プレビュー内容(注入HTML)より必ず手前＆操作可能にする */}
+              <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)',position:'relative',zIndex:10,pointerEvents:'auto'}}>
                 <div style={{flex:1}}>
                   <span style={{color:'#94a3b8',fontSize:11,fontWeight:'bold',letterSpacing:1}}>印刷プレビュー</span>
                   <div style={{color:'white',fontWeight:'bold',fontSize:15,marginTop:2}}>📄 {printPreviewContent.title}</div>
@@ -14990,10 +14990,10 @@ export default function App() {
                   </button>
                 </div>
               </div>
-              {/* プレビュー */}
-              <div style={{flex:1,overflow:'auto',background:'#525659',padding:'24px 20px',display:'flex',justifyContent:'center',alignItems:'flex-start'}}>
+              {/* プレビュー — ★ position:relative/zIndex で必ずヘッダーより下の階層に。 注入HTMLの fixed はプレビュー枠に閉じ込める */}
+              <div style={{flex:1,overflow:'auto',background:'#525659',padding:'24px 20px',display:'flex',justifyContent:'center',alignItems:'flex-start',position:'relative',zIndex:1}}>
                 {printPreviewContent.html ? (
-                  <div dangerouslySetInnerHTML={{__html: printPreviewContent.html}}
+                  <div dangerouslySetInnerHTML={{__html: (printPreviewContent.html||'').replace(/position\s*:\s*fixed/gi,'position:absolute')}}
                     style={{background:'transparent',width:`${pageW*3.7795}px`,transformOrigin:'top center',transform:`scale(${scale})`,marginBottom:`${(scale-1)*pageH*3.7795}px`,
                       // ページ区切りを視覚的に表示するCSS
                       ...{}
@@ -22172,12 +22172,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     //             ページが縦なので Windows(Edge)/iPad でも回転・見切れせず、出力はB6サイズ。
     //   'b6port' = B6縦(128×182) 用紙いっぱい。 B6対応の複合機向け。
     //   'b5land' = B5横(257×182, 既定)。 連絡帳の中身は常に縦(182×257)、縮率0.70で約B6(128×182)になる。
-    const paper = appData.systemSettings?.renrakuPaper || 'b5land';
-    const isB5p = paper === 'b5port';
+    // ★ b6port 以外(旧b5land/b5port含む)はすべて「B5縦にB6中央」に統一 (横B5は廃止)
+    const paper = appData.systemSettings?.renrakuPaper || 'b5port';
     const isB6 = paper === 'b6port';
-    const pageW = isB5p ? 182 : isB6 ? 128 : 257;
-    const pageH = isB5p ? 257 : 182;
-    const scale = (isB5p || isB6) ? 0.70 : 0.66; // 0.70 で B6実寸(約128×182mm)
+    const pageW = isB6 ? 128 : 182;
+    const pageH = isB6 ? 182 : 257;
+    const scale = 0.70; // B6実寸(約128×182mm)
     const pageSizeStr = `${pageW}mm ${pageH}mm`;
     const combinedHtml = htmlParts.map((h,i)=>
       `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
@@ -22309,11 +22309,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
           title="「B5にB6（縦）」= B5サイズ・縦向きのページにB6の連絡帳を中央配置。複合機のB5トレイにB6用紙を入れている場合に最適（中央給紙でB6用紙にちょうど乗ります）。縦向きなのでWindows(Edge)/iPadでも回転・見切れしません。印刷時は用紙「B5」＋「縦向き」を選んでください。B6対応機なら「縦（B6）」、B5用紙そのままなら「横（B5）」。">
           <span className="text-[12px] font-bold text-slate-500">🖨 用紙</span>
-          <select value={appData.systemSettings?.renrakuPaper || 'b5land'}
+          <select value={appData.systemSettings?.renrakuPaper === 'b6port' ? 'b6port' : 'b5port'}
             onChange={e=>onSave({...appData, systemSettings:{...(appData.systemSettings||{}), renrakuPaper:e.target.value}})}
             className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer">
-            <option value="b5port">B5にB6（縦・全機種対応）</option>
-            <option value="b5land">横（B5）</option>
+            <option value="b5port">B5にB6（縦・推奨）</option>
             <option value="b6port">縦（B6）</option>
           </select>
           <span className="text-slate-300 text-sm" title="B6サイズに対応した複合機がなければ「横（B5）」を選び、B5用紙の中央に連絡帳を配置して印刷します。B6対応機なら「縦（B6）」を選べます。">ⓘ</span>
@@ -22515,7 +22514,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { handleOverrideBlur(keypad.recordId, keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
       {isConfigOpen && <ContactBookConfigModal config={appData.contactBookConfig} exerciseItems={appData.systemSettings?.exerciseItems || appSettings.exerciseItems} onClose={() => setIsConfigOpen(false)} onSave={handleSaveConfig} />}
-      {renrakuModal && <RenrakuModal appData={appData} patientId={renrakuModal.patientId} dayPatientIds={displayRecords.map(r=>r.patientId)} onClose={()=>setRenrakuModal(null)} onSave={(d)=>{ markClean(); onSave(d); }} />}
+      {renrakuModal && <RenrakuModal appData={appData} patientId={renrakuModal.patientId} dayPatientIds={displayRecords.map(r=>r.patientId)} onClose={()=>setRenrakuModal(null)} onSave={(d)=>{ markClean(); onSave(d, { manual: true, message: '✓ 連絡事項を保存しました' }); }} />}
     </div>
   );
 }
