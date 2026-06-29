@@ -13345,6 +13345,20 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
     } catch (e) { alert('アドオンの更新に失敗しました: ' + (e?.message||'')); }
     setAddonBusy(null);
   };
+  // ★ 本部から店舗の管理者パスワードをリセット (忘れた時の最終手段)。 次に管理者を選んだ時に新規設定になる
+  const resetStoreAdminPw = async (storeId, storeName) => {
+    if(!window.confirm(`「${storeName}」の管理者パスワードをリセットします。\nリセット後、店舗で次に「管理者」を選んだ時に新しいパスワードを設定し直す形になります。\nよろしいですか？`)) return;
+    setAddonBusy(storeId);
+    try {
+      const row = await supabaseLoadStateForStore(storeId);
+      const data = row?.data || {};
+      const auth = data.systemSettings?.adminAuth || {};
+      const newAuth = { ...auth }; delete newAuth.passwordHash; delete newAuth.resetCodeHash; delete newAuth.resetCodeExp;
+      await supabaseMergeAndSyncStateForStore(storeId, { ...data, systemSettings: { ...(data.systemSettings||{}), adminAuth: newAuth } });
+      alert(`「${storeName}」の管理者パスワードをリセットしました。\n店舗側で次に「管理者」を選ぶと、新しいパスワードの設定画面が出ます。`);
+    } catch(e){ alert('リセットに失敗しました: ' + (e?.message||'')); }
+    setAddonBusy(null);
+  };
   const [showAddStore, setShowAddStore] = useState(false);
   const [showAddStaff, setShowAddStaff] = useState(false);
   // ★ 店舗情報の後編集 (店舗名・短縮名・法人名・住所・電話・FAX。 店舗IDは変更不可)
@@ -13517,6 +13531,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                     <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                       <button onClick={()=>setShowLoginFor(prev => ({...prev, [s.id]: !prev[s.id]}))} style={{padding:'8px 12px',background:showing?'#94c456':'white',color:showing?'white':'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🔑 {showing?'隠す':'ログイン情報'}</button>
                       <button onClick={()=>setAddonModal({storeId:s.id, storeName:s.name})} style={{padding:'8px 12px',background:'white',color:'#0e7490',border:'1px solid #67e8f9',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🧩 アドオン</button>
+                      <button disabled={addonBusy===s.id} onClick={()=>resetStoreAdminPw(s.id, s.name)} style={{padding:'8px 12px',background:'white',color:'#b45309',border:'1px solid #fcd34d',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer',opacity:addonBusy===s.id?0.5:1}}>🔑 管理者PWリセット</button>
                       <button onClick={()=>onSelectStore(s)} style={{padding:'8px 14px',background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>この店舗を開く →</button>
                       <button onClick={()=>setEditStore({ id:s.id, name:s.name||'', short_name:s.short_name||'', org_name:s.org_name||'', zip_code:s.zip_code||'', address:s.address||'', phone:s.phone||'', fax:s.fax||'', loading:false, error:'' })} style={{padding:'8px 12px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>✏️ 編集</button>
                       <button onClick={async ()=>{
