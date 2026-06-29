@@ -14939,9 +14939,9 @@ export default function App() {
             //   本体ページ印刷だとプレビュー画面ごと写ってしまう。 → PCと同じく「表だけのクリーンな別タブ」を開き、
             //   そのタブ内の印刷ボタン(=ユーザー操作)で印刷/PDF保存してもらう(ダイアログも出ず、背景グレー等も無し)。
             if (isIOS) {
-              const isB5w = Math.round(pageW)===257, isB6w = Math.round(pageW)===128, isA4w = Math.round(pageW)===210, isLand = pageW > pageH;
+              const isB5w = Math.round(pageW)===257, isB6w = Math.round(pageW)===128, isB5pw = Math.round(pageW)===182, isLand = pageW > pageH;
               const orient = isB6w ? '用紙サイズ「B6」' : isB5w ? '用紙「B5」＋「横向き」' : isLand ? '「横向き」' : '';
-              const hint = isA4w ? 'A4のまま印刷できます（用紙・向きの変更不要）。連絡帳はB6サイズで中央に出るので、切り取ってお使いください' : orient ? `印刷オプションで ${orient} を選ぶと、はみ出さずにきれいに印刷できます` : '印刷オプションで用紙サイズ・向きを選べます';
+              const hint = isB5pw ? '用紙「B5」＋「縦向き」で印刷してください（B5トレイにB6用紙を入れている場合、連絡帳がB6で中央に乗ります）' : orient ? `印刷オプションで ${orient} を選ぶと、はみ出さずにきれいに印刷できます` : '印刷オプションで用紙サイズ・向きを選べます';
               const bar = `<div class="no-print" style="position:fixed;top:0;left:0;right:0;background:#1e293b;color:#fff;padding:12px 16px;text-align:center;font-family:-apple-system,sans-serif;z-index:99999;box-shadow:0 2px 10px rgba(0,0,0,0.35);">
                   <button onclick="window.print()" style="font-size:17px;font-weight:bold;padding:11px 28px;background:#2563eb;color:#fff;border:none;border-radius:10px;cursor:pointer;">🖨 印刷 / PDF保存</button>
                   <div style="font-size:12px;margin-top:7px;color:#cbd5e1;">${hint}</div>
@@ -22167,15 +22167,17 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       return h;
     }).filter(Boolean);
     if(!htmlParts.length){ alert('印刷データが見つかりません。'); return; }
-    // ★ 用紙向き設定: 'a4port'=A4縦用紙に【B6実寸】で配置(全環境で安定・出力はB6サイズ) / 'b6port'=B6縦(128×182) / 'b5land'=B5横(257×182, 既定)。
-    //   連絡帳の中身は常に縦(182×257)。 縮率0.70で B6サイズ(約128×182mm)になる。
-    //   ★ A4縦ページに B6実寸で置くことで、Windows(Edge)/iPad でも回転・見切れせず、出力は必ずB6サイズ(切り取ってそのまま使える)。
+    // ★ 用紙向き設定:
+    //   'b5port' = B5縦(182×257)ページに【B6実寸】を中央配置。 複合機のB5トレイにB6用紙を入れている運用向け(中央給紙でB6に乗る)。
+    //             ページが縦なので Windows(Edge)/iPad でも回転・見切れせず、出力はB6サイズ。
+    //   'b6port' = B6縦(128×182) 用紙いっぱい。 B6対応の複合機向け。
+    //   'b5land' = B5横(257×182, 既定)。 連絡帳の中身は常に縦(182×257)、縮率0.70で約B6(128×182)になる。
     const paper = appData.systemSettings?.renrakuPaper || 'b5land';
-    const isA4 = paper === 'a4port';
+    const isB5p = paper === 'b5port';
     const isB6 = paper === 'b6port';
-    const pageW = isA4 ? 210 : isB6 ? 128 : 257;
-    const pageH = isA4 ? 297 : 182;
-    const scale = (isA4 || isB6) ? 0.70 : 0.66; // 0.70 で B6実寸。 A4はB6を中央配置、B6は用紙いっぱい
+    const pageW = isB5p ? 182 : isB6 ? 128 : 257;
+    const pageH = isB5p ? 257 : 182;
+    const scale = (isB5p || isB6) ? 0.70 : 0.66; // 0.70 で B6実寸(約128×182mm)
     const pageSizeStr = `${pageW}mm ${pageH}mm`;
     const combinedHtml = htmlParts.map((h,i)=>
       `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
@@ -22305,12 +22307,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </button>
         {/* ★ 用紙の向き: 横(B5)＝B6非対応の複合機向け / 縦(B6)＝B6対応機向け。 連絡帳の中身は常に縦。 */}
         <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
-          title="「A4にB6」= A4用紙にB6サイズの連絡帳を中央配置して印刷（切り取ってそのままB6で使えます）。Windows(Edge)やiPadでも回転・見切れせず確実です。B6対応の複合機なら「縦（B6）」で用紙いっぱい、B5に合わせるなら「横（B5）」。">
+          title="「B5にB6（縦）」= B5サイズ・縦向きのページにB6の連絡帳を中央配置。複合機のB5トレイにB6用紙を入れている場合に最適（中央給紙でB6用紙にちょうど乗ります）。縦向きなのでWindows(Edge)/iPadでも回転・見切れしません。印刷時は用紙「B5」＋「縦向き」を選んでください。B6対応機なら「縦（B6）」、B5用紙そのままなら「横（B5）」。">
           <span className="text-[12px] font-bold text-slate-500">🖨 用紙</span>
           <select value={appData.systemSettings?.renrakuPaper || 'b5land'}
             onChange={e=>onSave({...appData, systemSettings:{...(appData.systemSettings||{}), renrakuPaper:e.target.value}})}
             className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer">
-            <option value="a4port">A4にB6（全機種対応）</option>
+            <option value="b5port">B5にB6（縦・全機種対応）</option>
             <option value="b5land">横（B5）</option>
             <option value="b6port">縦（B6）</option>
           </select>
