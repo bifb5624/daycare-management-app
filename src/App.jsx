@@ -10515,7 +10515,7 @@ function FamilyAdminView({ appData, onSave }) {
                 <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-auto" onClick={ev=>ev.stopPropagation()}>
                   <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 sticky top-0 bg-white">
                     <h3 className="text-sm font-bold text-slate-700">投稿の詳細</h3>
-                    <button className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">✕</button>
+                    <button onClick={()=>setHistoryDetail(null)} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg">✕</button>
                   </div>
                   <div className="p-5">
                     <div className="text-[11px] text-slate-400 mb-2">{historyDetail.item.date}</div>
@@ -17013,7 +17013,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="text-xl font-bold text-slate-800">{patientInfoModal.name} <span className="text-base text-slate-400">様</span></div>
                 {patientInfoModal.careLevel && <div className="text-xs font-bold text-blue-600 mt-0.5">{patientInfoModal.careLevel}</div>}
               </div>
-              <button className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"><X size={18}/></button>
+              <button onClick={()=>setPatientInfoModal(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"><X size={18}/></button>
             </div>
             <div className="space-y-3">
               <div className="bg-slate-50 rounded-xl p-3">
@@ -22377,7 +22377,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                   <button onClick={resetPatientValue} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-xs">既定値に戻す</button>
                 )}
                 <div className="flex-1"/>
-                <button className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm">キャンセル</button>
+                <button onClick={()=>setPatientValueModal(null)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold text-sm">キャンセル</button>
                 <button onClick={savePatientValue} className="px-5 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg font-bold text-sm shadow">保存</button>
               </div>
             </div>
@@ -25479,7 +25479,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto" onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2"><QrCode size={18} className="text-violet-600"/>家族・関係者アカウント発行・管理</h2>
-                <button className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+                <button onClick={()=>setFamilyShareModal(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
               <div className="p-6 space-y-5">
                 <div className="text-center">
@@ -26648,7 +26648,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               </div>
             )}
             <div className="flex gap-3 mt-5">
-              <button className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
+              <button onClick={()=>setCmEditModal(null)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
               <button onClick={saveCmEdit} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">💾 更新</button>
             </div>
           </div>
