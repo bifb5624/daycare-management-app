@@ -9489,7 +9489,8 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
       {mode === 'exercise' && (
         <div style={{display:'flex',gap:6,marginTop:10,paddingTop:10,borderTop:'1px solid #e2e8f0'}}>
           {[['○','#f0fdf4','#15803d','#86efac'],['×','#fef2f2','#dc2626','#fecaca'],['ー','#f1f5f9','#475569','#cbd5e1']].map(([s,bg,fg,bd])=>(
-            <button key={s} onClick={()=>{ if(onInput) onInput(s,false); }}
+            // ★ ○/×/ー はクリックで即確定 (ENTER 不要)。 値をセット → ENTER と同じ確定処理 → 閉じる
+            <button key={s} onClick={()=>{ if(onInput) onInput(s,false); if(onEnter) onEnter(s); onClose(); }}
               style={{flex:1,height:btnSize*0.8,background:bg,color:fg,border:`1.5px solid ${bd}`,borderRadius:10,fontSize:fontSize*0.95,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
               {s}
             </button>
