@@ -30259,6 +30259,56 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   );
 }
 
+// === モニタリング表（正式シート 1人1枚）編集モーダル ===
+function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoService, defaultRecorder, onClose, onSave, onPrint }) {
+  const init = record?.sheet || {};
+  const [goal, setGoal] = React.useState(init.goal || '');
+  const [service, setService] = React.useState(init.service || autoService || '');
+  const [statusEval, setStatusEval] = React.useState(init.statusEval || autoStatus || '');
+  const [intention, setIntention] = React.useState(init.intention || '');
+  const [issuesPlan, setIssuesPlan] = React.useState(init.issuesPlan || '');
+  const [notes, setNotes] = React.useState(init.notes || '');
+  const [recorder, setRecorder] = React.useState(init.recorder || defaultRecorder || '');
+  const collect = () => ({ goal, service, statusEval, intention, issuesPlan, notes, recorder });
+  const ta = (label, val, set, rows, hint) => (
+    <div>
+      <label className="block text-sm font-bold text-slate-700 mb-1">{label}{hint && <span className="text-[11px] font-normal text-slate-400 ml-1">{hint}</span>}</label>
+      <textarea value={val} onChange={e=>set(e.target.value)} rows={rows||3}
+        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400 leading-relaxed" />
+    </div>
+  );
+  return ReactDOM.createPortal(
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-0 sm:p-4">
+      <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-2xl max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+          <div className="font-bold text-slate-800"><ClipboardList size={18} className="inline mr-1.5 text-sky-600"/>モニタリング表 — {patient.name} 様<span className="text-xs font-normal text-slate-400 ml-2">{period}</span></div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg"><X size={18}/></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-xs text-slate-600 leading-relaxed">
+            <div><span className="font-bold">事業所:</span> {facility.name||'—'}{facility.fax?`　FAX ${facility.fax}`:''}</div>
+            <div><span className="font-bold">利用者:</span> {patient.name} 様{patient.careLevel?`（${patient.careLevel}）`:''}　<span className="font-bold">対象:</span> {period}</div>
+            <div><span className="font-bold">担当ケアマネ:</span> {patient.cmOffice||'—'} {patient.cmName||''}{patient.cmFax?`　(FAX ${patient.cmFax})`:''}{!patient.cmFax && patient.cmOffice ? <span className="text-red-500 font-bold ml-1">※FAX番号 未登録</span>:''}</div>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">記録者</label>
+            <input value={recorder} onChange={e=>setRecorder(e.target.value)} placeholder="記録者名" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" />
+          </div>
+          {ta('長期・短期目標', goal, setGoal, 2)}
+          {ta('サービス提供内容', service, setService, 2)}
+          {ta('実施状況・評価', statusEval, setStatusEval, 4, '自動下書き（通所/バイタル/気分等）。編集できます')}
+          {ta('本人・家族の意向', intention, setIntention, 2)}
+          {ta('課題・今後の方針', issuesPlan, setIssuesPlan, 2)}
+          {ta('特記事項', notes, setNotes, 2)}
+        </div>
+        <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2 shrink-0 flex-wrap">
+          <button onClick={()=>{ onPrint(collect(), true); }} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-sm flex items-center gap-1.5"><Printer size={15}/>印刷・FAX</button>
+          <button onClick={()=>{ onSave(collect()); onClose(); }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 shadow"><Save size={15}/>個人ファイルへ保存</button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+
 // === MonitoringView (モニタリング作成) ===
 function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
@@ -30285,6 +30335,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [checkedIds, setCheckedIds] = React.useState(new Set());
   const [activeSelection, setActiveSelection] = React.useState(null);
   const [monitorSort, setMonitorSort] = React.useState('kana'); // 'kana'|'careLevel'|'cmOffice'|'schedule'
+  const [sheetModal, setSheetModal] = React.useState(null); // {patientId} 正式モニタリング表の編集
 
   // 対象月が変わったらその月の保存済みデータで更新
   React.useEffect(() => {
@@ -30608,6 +30659,75 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
   const handleSavePdf = handlePrint;
 
+  // ★ 正式モニタリング表（1人1枚）: 自動下書き / 保管(個人ファイル) / FAX(ケアマネ宛先自動)
+  const monthLabelStr = `${tY}年${tM}月`;
+  const getSheetRecord = (pid) => (appData.monitoringRecords||[]).find(r => r.patientId===pid && r.period===monthLabelStr);
+  const buildAutoStatus = (patient) => {
+    try {
+      const d = buildPatientData(patient);
+      const parts = [];
+      if (d.planned!=null) parts.push(`${d.month}は計画${d.planned}回中${d.attended}回参加（出席率${d.rate!=null?d.rate+'%':'—'}）。`);
+      const vit = [];
+      if (d.avgBp!=null) vit.push(`血圧平均${d.avgBp}${d.maxBp!=null?`（最高${d.maxBp}）`:''}mmHg`);
+      if (d.avgTemp!=null) vit.push(`体温平均${d.avgTemp}℃`);
+      if (vit.length) parts.push(`バイタルは${vit.join('、')}で概ね安定。`);
+      if (d.avgMoodLabel) parts.push(`気分は概ね「${d.avgMoodLabel}」。`);
+      if (d.fitnessRecs && d.fitnessRecs.length) parts.push(`体力測定を実施し経過を確認。`);
+      if (d.tokki) parts.push(`特記: ${d.tokki}`);
+      return parts.join('');
+    } catch { return ''; }
+  };
+  const buildAutoService = (patient) => '個別機能訓練指導員による機能訓練、健康チェック（バイタル測定）、入浴・食事等の日常生活支援、送迎を提供。';
+  const escSheet = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  const saveSheet = (patient, sheet) => {
+    let existing = [...(appData.monitoringRecords||[])];
+    existing = existing.filter(r => !(r.patientId===patient.id && r.period===monthLabelStr));
+    existing.push({ id:`${patient.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`, patientId:patient.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sheet.statusEval||'', sheet });
+    onSave({...appData, monitoringRecords: existing});
+    setResults(prev=>({...prev,[patient.id]:{text:sheet.statusEval||'', confirmed:true, loading:false, error:null, editing:false}}));
+  };
+  const printSheet = (patient, sheet, forFax) => {
+    const f = appData.systemSettings?.facilityInfo || {};
+    const period = monthLabelStr;
+    const today = new Date().toLocaleDateString('ja-JP');
+    const labelCell = 'style="width:130px;background:#eef2f7;border:1px solid #94a3b8;padding:8px 10px;font-weight:bold;font-size:12px;vertical-align:top;"';
+    const valCell = 'style="border:1px solid #94a3b8;padding:8px 12px;font-size:13px;line-height:1.7;vertical-align:top;"';
+    const row = (label,val) => `<tr><td ${labelCell}>${label}</td><td ${valCell}>${escSheet(val)||'&nbsp;'}</td></tr>`;
+    const faxLine = forFax && patient.cmOffice
+      ? `<div style="border:1.5px solid #334155;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:13px;font-weight:bold;">FAX送付先：${escSheet(patient.cmOffice)} 御中${patient.cmName?`　ご担当 ${escSheet(patient.cmName)} 様`:''}${patient.cmFax?`　FAX: ${escSheet(patient.cmFax)}`:''}</div>`
+      : '';
+    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic',sans-serif;color:#1e293b;width:210mm;min-height:297mm;box-sizing:border-box;padding:14mm 14mm;background:white;">
+      <div style="text-align:center;font-size:22px;font-weight:bold;letter-spacing:4px;margin-bottom:4px;">モニタリング表</div>
+      <div style="text-align:right;font-size:12px;margin-bottom:8px;">作成日：${today}</div>
+      ${faxLine}
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;font-size:12px;">
+        <tr>
+          <td ${labelCell}>事業所</td><td ${valCell}>${escSheet(f.name)||''}${f.phone?`　TEL ${escSheet(f.phone)}`:''}${f.fax?`　FAX ${escSheet(f.fax)}`:''}</td>
+        </tr>
+        <tr>
+          <td ${labelCell}>利用者</td><td ${valCell}>${escSheet(patient.name)} 様　${patient.careLevel?`（${escSheet(patient.careLevel)}）`:''}　対象期間：${period}</td>
+        </tr>
+        <tr>
+          <td ${labelCell}>担当ケアマネ</td><td ${valCell}>${escSheet(patient.cmOffice)||''}${patient.cmName?`　${escSheet(patient.cmName)}`:''}</td>
+        </tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;">
+        ${row('長期・短期目標', sheet.goal)}
+        ${row('サービス提供内容', sheet.service)}
+        ${row('実施状況・評価', sheet.statusEval)}
+        ${row('本人・家族の意向', sheet.intention)}
+        ${row('課題・今後の方針', sheet.issuesPlan)}
+        ${row('特記事項', sheet.notes)}
+      </table>
+      <div style="margin-top:14px;text-align:right;font-size:13px;">記録者：${escSheet(sheet.recorder)||'　　　　　　'}　　㊞</div>
+    </div>`;
+    const title = `モニタリング表_${patient.name}_${period}`;
+    if (onShowPrintPreview) {
+      onShowPrintPreview(title,'A4 portrait',null);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 portrait',html}})),50);
+    }
+  };
+
   return (
     <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
       {/* ヘッダー固定（スクロール時も上部にとどまる） */}
@@ -30760,6 +30880,10 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 {!isPrintMode && (
                   <td style={{padding:'8px 10px',verticalAlign:'middle',width:260}} className="no-print">
                     <div style={{display:'flex',flexDirection:'row',gap:4,alignItems:'center',flexWrap:'nowrap',justifyContent:'center'}}>
+                      <button type="button" onClick={()=>setSheetModal({patientId:patient.id})} title="モニタリング表（1人1枚）を作成・保管・FAX"
+                        style={{background:'#0c4a6e',border:'none',color:'white',borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:3}}>
+                        📋 表
+                      </button>
                       {!confirmed && (
                         <button type="button"
                           onClick={()=>{
@@ -30856,6 +30980,26 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
         })()}
         </div>
       </div>{/* end diary-print-content */}
+
+      {/* ★ モニタリング表（正式シート）編集モーダル */}
+      {sheetModal && (() => {
+        const patient = (appData.patients||[]).find(p => p.id === sheetModal.patientId);
+        if (!patient) return null;
+        return (
+          <MonitoringSheetModal
+            patient={patient}
+            facility={appData.systemSettings?.facilityInfo || {}}
+            period={monthLabelStr}
+            record={getSheetRecord(patient.id)}
+            autoStatus={buildAutoStatus(patient)}
+            autoService={buildAutoService(patient)}
+            defaultRecorder={getActiveRecorderName() || ''}
+            onClose={()=>setSheetModal(null)}
+            onSave={(sheet)=>saveSheet(patient, sheet)}
+            onPrint={(sheet, forFax)=>printSheet(patient, sheet, forFax)}
+          />
+        );
+      })()}
     </div>
   );
 }
@@ -32354,6 +32498,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const patient = (appData.patients || []).find(p => p.id === patientProp.id) || patientProp;
   const personalFile = patient.personalFile || { categories: [], files: [], meetings: [] };
   const customCategories = personalFile.categories || [];
+  const [expandedMon, setExpandedMon] = useState(null); // モニタリング表の展開
   const allCategories = [...DEFAULT_PF_CATEGORIES, ...customCategories];
   const [activeCat, setActiveCat] = useState(allCategories[0].id);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
@@ -32938,6 +33083,45 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               )}
             </div>
           )}
+          {/* ケアマネジメントタブのみ: モニタリング表（保管・閲覧） */}
+          {isCMTab && (() => {
+            const mons = (appData.monitoringRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+            return (
+              <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
+                <div className="text-sm font-bold text-sky-900 mb-2 flex items-center gap-1.5"><ClipboardList size={15}/>モニタリング表（保管）</div>
+                {mons.length === 0 ? (
+                  <div className="text-xs text-slate-500">まだモニタリング表がありません。「モニタリング」画面の「📋 表」から作成・保存できます。</div>
+                ) : (
+                  <div className="space-y-2">
+                    {mons.map(r => {
+                      const s = r.sheet;
+                      const open = expandedMon === r.id;
+                      return (
+                        <div key={r.id} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                          <button onClick={()=>setExpandedMon(open?null:r.id)} className="w-full px-3 py-2.5 flex items-center justify-between text-left">
+                            <span className="text-sm font-bold text-slate-800">{r.period}</span>
+                            <span className="text-[11px] text-slate-400">{r.createdDate||''} {open?'▲':'▼'}</span>
+                          </button>
+                          {open && (
+                            <div className="px-3 pb-3 text-xs text-slate-700 space-y-1.5 border-t border-slate-100 pt-2">
+                              {s ? (<>
+                                {[['長期・短期目標',s.goal],['サービス提供内容',s.service],['実施状況・評価',s.statusEval],['本人・家族の意向',s.intention],['課題・今後の方針',s.issuesPlan],['特記事項',s.notes]].map(([l,v])=>(
+                                  <div key={l}><span className="font-bold text-slate-500">{l}：</span><span className="whitespace-pre-wrap">{v||'—'}</span></div>
+                                ))}
+                                {s.recorder && <div className="text-right text-slate-400">記録者：{s.recorder}</div>}
+                              </>) : (
+                                <div className="whitespace-pre-wrap">{r.summary||'—'}</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           {/* ケアマネジメントタブのみ: 担当者会議記録 機能 */}
           {isCMTab && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
