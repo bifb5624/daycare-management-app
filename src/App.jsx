@@ -12894,6 +12894,20 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
 // 記録者選択画面 (店舗ログイン後に「誰として利用するか」を選ぶ)
 // ===========================================
 // ★ パスワードのハッシュ化 (SHA-256)。 平文では保存しない
+// ★ そのメンバーが管理者として扱えるか (正規の管理者 or 期間内の一時譲渡先)
+function isMemberAdmin(m, systemSettings) {
+  if (!m) return false;
+  if (m.isAdmin || m.roleLabel === '管理者') return true;
+  const d = systemSettings?.adminDelegate;
+  if (d && String(d.memberId) === String(m.id)) {
+    const today = new Date().toISOString().slice(0,10);
+    if ((!d.from || today >= d.from) && (!d.until || today <= d.until)) return true;
+  }
+  return false;
+}
+// 正規(恒久)の管理者か (一時譲渡は含めない) — パスワード要求の判定に使用
+function isPermanentAdmin(m) { return !!(m && (m.isAdmin || m.roleLabel === '管理者')); }
+
 async function sha256Hex(str) {
   try {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(str)));
@@ -14435,9 +14449,9 @@ export default function App() {
     setAppData(nd);
     if (isSupabaseEnabled && staffSession?.storeId) { try { supabaseMergeAndSyncStateForStore(staffSession.storeId, nd); } catch(e){} }
   };
-  // スタッフ確定 (管理者なら認証済みフラグON、非管理者なら解除)
+  // スタッフ確定 (管理者=正規 or 期間内の譲渡先 なら認証済みフラグON、それ以外は解除)
   const commitRecorder = (m) => {
-    const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
+    const isAdminMember = isMemberAdmin(m, appData.systemSettings);
     try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m)); } catch {}
     setActiveRecorder(m);
     try { if (isAdminMember) sessionStorage.setItem('tsumugiAdminVerified','1'); else sessionStorage.removeItem('tsumugiAdminVerified'); } catch {}
@@ -23629,9 +23643,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const auth = appData.systemSettings?.adminAuth;
     if (!auth?.passwordHash) { fn(); return; } // 未設定 → そのまま実行
     let rec = null; try { rec = JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null'); } catch {}
-    const isAdmin = !!(rec && (rec.isAdmin || rec.roleLabel === '管理者'));
     const verified = (()=>{ try { return sessionStorage.getItem('tsumugiAdminVerified')==='1'; } catch { return false; } })();
-    if (isAdmin && verified) { fn(); return; } // 管理者本人 → そのまま
+    // 管理者として認証済み(正規 or 期間内の譲渡先) → そのまま。 それ以外は管理者パスワードを要求
+    if (verified || isMemberAdmin(rec, appData.systemSettings)) { fn(); return; }
     setAdminGate({ onSuccess: fn });
   };
   // ★ 利用者切替時の未保存確認モーダル (保存/破棄/キャンセル の 3 択)
@@ -26653,6 +26667,105 @@ function SectionCard({ title, children }) {
 }
 
 // === SettingsViewngsView (各種設定) ===
+// 管理者の設定: パスワード変更・再設定用メール・一時譲渡・完全譲渡 (管理者認証済みの時のみ表示)
+function AdminSettingsSection({ appData, onSave }) {
+  const ss = appData.systemSettings || {};
+  const auth = ss.adminAuth || {};
+  const members = (appData.storeMembers||[]).filter(m=>m&&m.name);
+  const delegate = ss.adminDelegate;
+  const [pw, setPw] = React.useState({old:'',n1:'',n2:'',err:'',ok:''});
+  const [email, setEmail] = React.useState(auth.email||'');
+  const [emailMsg, setEmailMsg] = React.useState('');
+  const [tgt, setTgt] = React.useState('');
+  const [del, setDel] = React.useState({memberId:'',from:'',until:''});
+  const saveSS = (patch, msg) => onSave({...appData, systemSettings:{...ss, ...patch}}, {manual:true, message: msg||'✓ 保存しました'});
+  const changePw = async () => {
+    setPw(p=>({...p,err:'',ok:''}));
+    if(!pw.n1 || pw.n1.length<4){ setPw(p=>({...p,err:'新しいパスワードは4文字以上にしてください'})); return; }
+    if(pw.n1!==pw.n2){ setPw(p=>({...p,err:'確認用パスワードが一致しません'})); return; }
+    if(auth.passwordHash){ const oh=await sha256Hex(pw.old); if(oh!==auth.passwordHash){ setPw(p=>({...p,err:'現在の管理者パスワードが違います'})); return; } }
+    const nh=await sha256Hex(pw.n1);
+    saveSS({adminAuth:{...auth, passwordHash:nh, setAt:Date.now()}}, '✓ 管理者パスワードを変更しました');
+    setPw({old:'',n1:'',n2:'',err:'',ok:'管理者パスワードを変更しました'});
+  };
+  const doTransfer = () => {
+    if(!tgt) return;
+    const nm = members.find(m=>String(m.id)===String(tgt));
+    if(!window.confirm(`管理者を「${nm?.name||''}」に譲渡します。\n譲渡後は新しい管理者がスタッフ切替時にパスワードを再設定します。\nよろしいですか？`)) return;
+    const nextMembers = members.map(m=>{
+      if(String(m.id)===String(tgt)) return {...m, roleLabel:'管理者', isAdmin:true};
+      if(m.isAdmin||m.roleLabel==='管理者') return {...m, roleLabel:'介護職員', isAdmin:false};
+      return m;
+    });
+    onSave({...appData, storeMembers:nextMembers, systemSettings:{...ss, adminAuth:{email:auth.email||''}, adminDelegate:null}}, {manual:true, message:'✓ 管理者を譲渡しました'});
+    try{ sessionStorage.removeItem('tsumugiAdminVerified'); }catch{}
+    setTgt('');
+    alert('譲渡しました。新しい管理者は、次にスタッフ切替で「管理者」を選んだ時に新しいパスワードを設定してください。');
+  };
+  const saveDelegate = () => {
+    if(!del.memberId||!del.from||!del.until){ alert('対象者と期間（開始・終了）を入力してください'); return; }
+    const nm = members.find(m=>String(m.id)===String(del.memberId));
+    saveSS({adminDelegate:{memberId:del.memberId, name:nm?.name||'', from:del.from, until:del.until}}, '✓ 一時的に管理者権限を委任しました');
+    setDel({memberId:'',from:'',until:''});
+  };
+  const inp = "w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none";
+  const nonAdmins = members.filter(m=>!(m.isAdmin||m.roleLabel==='管理者'));
+  return (
+    <div className="space-y-4">
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <div className="text-sm font-bold text-slate-700 mb-2">🔑 管理者パスワードの変更</div>
+        <div className="space-y-2">
+          {auth.passwordHash && <input type="password" value={pw.old} onChange={e=>setPw(p=>({...p,old:e.target.value}))} placeholder="現在の管理者パスワード" className={inp}/>}
+          <input type="password" value={pw.n1} onChange={e=>setPw(p=>({...p,n1:e.target.value}))} placeholder="新しい管理者パスワード(4文字以上)" className={inp}/>
+          <input type="password" value={pw.n2} onChange={e=>setPw(p=>({...p,n2:e.target.value}))} placeholder="新しい管理者パスワード(確認)" className={inp}/>
+          {pw.err && <div className="text-xs font-bold text-red-600">{pw.err}</div>}
+          {pw.ok && <div className="text-xs font-bold text-emerald-600">✓ {pw.ok}</div>}
+          <button type="button" onClick={changePw} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95">変更する</button>
+        </div>
+      </div>
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+        <div className="text-sm font-bold text-slate-700 mb-1">✉️ 再設定用メールアドレス</div>
+        <div className="text-[11px] text-slate-500 mb-2">パスワードを忘れた時の再設定に使います（任意・推奨）。</div>
+        <div className="flex gap-2">
+          <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setEmailMsg('');}} placeholder="admin@example.com" className={inp}/>
+          <button type="button" onClick={()=>{ saveSS({adminAuth:{...auth, email:email.trim()}}, '✓ メールを保存しました'); setEmailMsg('保存しました'); }} className="px-4 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm whitespace-nowrap">保存</button>
+        </div>
+        {emailMsg && <div className="text-xs font-bold text-emerald-600 mt-1">✓ {emailMsg}</div>}
+      </div>
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+        <div className="text-sm font-bold text-amber-800 mb-1">⏳ 管理者の一時譲渡（期間限定）</div>
+        <div className="text-[11px] text-amber-700 mb-2">不在時など、指定した期間だけ他の従業員に管理者権限を渡します（その期間は対象者がパスワード無しで管理者操作できます）。</div>
+        {delegate && (
+          <div className="bg-white border border-amber-200 rounded-lg p-2 text-xs font-bold text-amber-800 mb-2 flex items-center justify-between gap-2">
+            <span>現在の委任: {delegate.name}（{delegate.from}〜{delegate.until}）</span>
+            <button type="button" onClick={()=>saveSS({adminDelegate:null},'委任を解除しました')} className="text-red-500 hover:text-red-700 shrink-0">解除</button>
+          </div>
+        )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <select value={del.memberId} onChange={e=>setDel(d=>({...d,memberId:e.target.value}))} className={inp}>
+            <option value="">対象者を選択</option>
+            {nonAdmins.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <input type="date" value={del.from} onChange={e=>setDel(d=>({...d,from:e.target.value}))} className={inp} title="開始日"/>
+          <input type="date" value={del.until} onChange={e=>setDel(d=>({...d,until:e.target.value}))} className={inp} title="終了日"/>
+        </div>
+        <button type="button" onClick={saveDelegate} className="mt-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm active:scale-95">委任する</button>
+      </div>
+      <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+        <div className="text-sm font-bold text-red-800 mb-1">🔁 管理者の完全譲渡（交代）</div>
+        <div className="text-[11px] text-red-700 mb-2">管理者を別の従業員に交代します。譲渡後は新しい管理者がパスワードを再設定し、現管理者は介護職員になります。</div>
+        <div className="flex gap-2">
+          <select value={tgt} onChange={e=>setTgt(e.target.value)} className={inp}>
+            <option value="">新しい管理者を選択</option>
+            {nonAdmins.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+          <button type="button" disabled={!tgt} onClick={doTransfer} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-sm whitespace-nowrap disabled:opacity-40">譲渡する</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const [activeTab, setActiveTab] = useState('facility');
@@ -27854,6 +27967,18 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                   onSuccess={()=>{ setShowSettingsAdminGate(false); setAdminUnlocked(true); }}
                   onCancel={()=>setShowSettingsAdminGate(false)}
                 />
+              )}
+            </SectionCard>
+            <SectionCard title="管理者の設定">
+              {(_adminAuth?.passwordHash && !adminUnlocked) ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+                  <div className="text-3xl mb-2">🔒</div>
+                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ操作できます</div>
+                  <div className="text-xs text-amber-700 mb-3">管理者パスワードの変更・譲渡などには管理者パスワードが必要です。</div>
+                  <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">🔑 管理者として認証</button>
+                </div>
+              ) : (
+                <AdminSettingsSection appData={appData} onSave={onSave} />
               )}
             </SectionCard>
             <SectionCard title="モニタリング用APIキー">
