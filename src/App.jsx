@@ -16676,7 +16676,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             updateExercise(p.id, item.id, v);
                           }}
                           style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: _isSym ? 22 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isSym ? 900 : 'bold', WebkitTextStroke: _isSym ? '0.7px currentColor' : undefined, lineHeight: _isSym ? 1 : undefined}}
-                          className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
+                          className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
                     </td>
