@@ -763,6 +763,12 @@ HTML ファイルをブラウザで開き、
   );
 };
 
+// ★ 全角数字・全角記号を半角へ変換 (全角でも数字入力できるように)。 数字入力欄の onChange で使用
+const toHankaku = (s) => String(s == null ? '' : s)
+  .replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+  .replace(/[Ａ-Ｚａ-ｚ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+  .replace(/　/g, ' ').replace(/：/g, ':').replace(/[．。]/g, '.').replace(/[ー－−—]/g, '-').replace(/／/g, '/');
+
 // === お迎え時間セル: 時/分を別入力。分は空欄可 ("9:--" として保存)。 ===
 const PickupTimeCell = ({ day, idx, slot, isOff, initial, onCommit }) => {
   // 保存形式: "" / "9:--" / "9:30" 等。"HH" は0埋めしない (入力中の自然な数字反映のため)
@@ -778,8 +784,8 @@ const PickupTimeCell = ({ day, idx, slot, isOff, initial, onCommit }) => {
   const [m, setM] = React.useState(init.m);
   React.useEffect(() => { const x = splitTime(initial); setH(x.h); setM(x.m); }, [initial]);
   const commit = (newH, newM) => {
-    const hh = String(newH||'').replace(/[^0-9]/g,'').slice(0,2);
-    const mm = String(newM||'').replace(/[^0-9]/g,'').slice(0,2);
+    const hh = toHankaku(newH).replace(/[^0-9]/g,'').slice(0,2);
+    const mm = toHankaku(newM).replace(/[^0-9]/g,'').slice(0,2);
     let val = '';
     if (hh && mm) val = `${hh}:${mm}`;
     else if (hh) val = `${hh}:--`;
@@ -795,13 +801,13 @@ const PickupTimeCell = ({ day, idx, slot, isOff, initial, onCommit }) => {
       <div className="flex items-center justify-center gap-1">
         <input disabled={isOff} type="text" inputMode="numeric" maxLength={2}
           value={h}
-          onChange={e => { const v = e.target.value.replace(/[^0-9]/g,'').slice(0,2); setH(v); commit(v, m); }}
+          onChange={e => { const v = toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,2); setH(v); commit(v, m); }}
           placeholder="9"
           className="w-12 px-1.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-sm font-bold text-center outline-none disabled:opacity-60"/>
         <span className="text-sm font-bold text-slate-400">時</span>
         <input disabled={isOff} type="text" inputMode="numeric" maxLength={2}
           value={m}
-          onChange={e => { const v = e.target.value.replace(/[^0-9]/g,'').slice(0,2); setM(v); commit(h, v); }}
+          onChange={e => { const v = toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,2); setM(v); commit(h, v); }}
           placeholder="30"
           className="w-12 px-1.5 py-1.5 bg-slate-50 border border-slate-300 rounded text-sm font-bold text-center outline-none disabled:opacity-60"/>
         <span className="text-sm font-bold text-slate-400">分</span>
@@ -9721,7 +9727,7 @@ function SignupCompleteView({ context, appData, onSave }) {
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
                   {form.storeNumbers.map((num, i) => (
                     <div key={i} style={{display:'flex',gap:6}}>
-                      <input value={num} onChange={e=>{const arr=[...form.storeNumbers]; arr[i]=e.target.value.replace(/[^0-9-]/g,''); setForm(f=>({...f,storeNumbers:arr}));}}
+                      <input value={num} onChange={e=>{const arr=[...form.storeNumbers]; arr[i]=toHankaku(e.target.value).replace(/[^0-9-]/g,''); setForm(f=>({...f,storeNumbers:arr}));}}
                         placeholder={`事業所番号 ${i+1} (例: 1370200001)`}
                         style={{flex:1,padding:'10px 12px',border:'1px solid #bae6fd',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'Menlo,monospace'}}/>
                       {form.storeNumbers.length > 1 && (
@@ -11502,10 +11508,10 @@ function FamilyView() {
                             <input value={signupForm.cmNewOffice.name} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, name:e.target.value}, error:''}))}
                               placeholder="事業所名 (例: あおぞら居宅介護支援事業所)"
                               style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
-                            <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.phone)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, phone:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
+                            <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.phone)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, phone:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
                               placeholder="事業所の固定電話 (ハイフン不要)"
                               style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
-                            <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.fax)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, fax:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
+                            <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.fax)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, fax:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
                               placeholder="FAX (ハイフン不要)"
                               style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:12,outline:'none',boxSizing:'border-box'}}/>
                           </div>
@@ -11524,10 +11530,10 @@ function FamilyView() {
                       <input value={signupForm.cmNewOffice.name} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, name:e.target.value}, error:''}))}
                         placeholder="事業所名 (例: ○○訪問看護ステーション)"
                         style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:6,background:'white'}}/>
-                      <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.phone)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, phone:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
+                      <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.phone)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, phone:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
                         placeholder="事業所の電話番号 (ハイフン不要)"
                         style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:6,background:'white'}}/>
-                      <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.fax)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, fax:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
+                      <input type="tel" inputMode="numeric" value={formatJpPhone(signupForm.cmNewOffice.fax)} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, fax:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}, error:''}))}
                         placeholder="FAX (ハイフン不要)"
                         style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       <div style={{fontSize:10,color:'#64748b',marginTop:6}}>※ 個人の電話番号は上の「ご登録者情報」に入力してください。</div>
@@ -12312,13 +12318,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               )}
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 (固定)</label>
-                <input value={myInfoForm.phone} onChange={e=>setMyInfoForm(f=>({...f,phone:e.target.value.replace(/[^0-9-]/g,''),savedMsg:''}))}
+                <input value={myInfoForm.phone} onChange={e=>setMyInfoForm(f=>({...f,phone:toHankaku(e.target.value).replace(/[^0-9-]/g,''),savedMsg:''}))}
                   placeholder="03-XXXX-XXXX" inputMode="numeric"
                   style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 (携帯)</label>
-                <input value={myInfoForm.phoneMobile} onChange={e=>setMyInfoForm(f=>({...f,phoneMobile:e.target.value.replace(/[^0-9-]/g,''),savedMsg:''}))}
+                <input value={myInfoForm.phoneMobile} onChange={e=>setMyInfoForm(f=>({...f,phoneMobile:toHankaku(e.target.value).replace(/[^0-9-]/g,''),savedMsg:''}))}
                   placeholder="090-XXXX-XXXX" inputMode="numeric"
                   style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
@@ -13452,9 +13458,9 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
             ))}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:16}}>
               <div><label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:5}}>電話番号</label>
-                <input value={editStore.phone||''} onChange={e=>setEditStore(s=>({...s,phone:e.target.value.replace(/[^0-9]/g,''),error:''}))} inputMode="numeric" placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/></div>
+                <input value={editStore.phone||''} onChange={e=>setEditStore(s=>({...s,phone:toHankaku(e.target.value).replace(/[^0-9]/g,''),error:''}))} inputMode="numeric" placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/></div>
               <div><label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:5}}>FAX</label>
-                <input value={editStore.fax||''} onChange={e=>setEditStore(s=>({...s,fax:e.target.value.replace(/[^0-9]/g,''),error:''}))} inputMode="numeric" placeholder="0312345679" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/></div>
+                <input value={editStore.fax||''} onChange={e=>setEditStore(s=>({...s,fax:toHankaku(e.target.value).replace(/[^0-9]/g,''),error:''}))} inputMode="numeric" placeholder="0312345679" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/></div>
             </div>
             <div style={{display:'flex',gap:10}}>
               <button onClick={()=>setEditStore(null)} disabled={editStore.loading} style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
@@ -13488,7 +13494,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
               <div style={{marginBottom:12}}>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>郵便番号</label>
                 <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                  <input type="tel" inputMode="numeric" value={formatJpZip(storeForm.zip)} onChange={e=>setStoreForm(f=>({...f,zip:e.target.value.replace(/[^0-9]/g,'').slice(0,7)}))} placeholder="1350011" style={{width:160,padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                  <input type="tel" inputMode="numeric" value={formatJpZip(storeForm.zip)} onChange={e=>setStoreForm(f=>({...f,zip:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,7)}))} placeholder="1350011" style={{width:160,padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                   <button type="button" onClick={async ()=>{
                     const result = await lookupZipAddress(storeForm.zip);
                     if (result?.full) setStoreForm(f=>({...f, address: result.full}));
@@ -13507,11 +13513,11 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(ハイフン不要)</span></label>
-                  <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.phone)} onChange={e=>setStoreForm(f=>({...f,phone:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                  <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.phone)} onChange={e=>setStoreForm(f=>({...f,phone:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
                 <div>
                   <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>FAX <span style={{fontWeight:'normal',color:'#94a3b8'}}>(ハイフン不要)</span></label>
-                  <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.fax)} onChange={e=>setStoreForm(f=>({...f,fax:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345679" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                  <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.fax)} onChange={e=>setStoreForm(f=>({...f,fax:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345679" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
               </div>
               {/* ★ 店舗ログイン情報 (店舗作成と同時に発行) */}
@@ -13538,7 +13544,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                   </div>
                   <div>
                     <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先電話 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
-                    <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.login_phone)} onChange={e=>setStoreForm(f=>({...f,login_phone:e.target.value.replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                    <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.login_phone)} onChange={e=>setStoreForm(f=>({...f,login_phone:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                   </div>
                 </div>
               </div>
@@ -23758,8 +23764,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
     next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
-    // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合は「何月から適用するか」を確認
-    const peChanged = JSON.stringify(prev.plannedExercises||{}) !== JSON.stringify(pat.plannedExercises||{});
+    // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合のみ「何月から適用するか」を確認。
+    //    キー順・空値の差で誤検知しないよう正規化して比較 (運動メニュー以外の編集では出さない)
+    const _normPE = (o) => { const r={}; Object.keys(o||{}).forEach(k=>{ const v=o[k]; if(v!==''&&v!=null) r[k]=String(v); }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
+    const peChanged = _normPE(prev.plannedExercises) !== _normPE(pat.plannedExercises);
     const hasRecords = (appData.ticketRecords||[]).some(r => r.patientId === pat.id);
     if (peChanged && hasRecords) {
       const t = new Date();
@@ -24591,11 +24599,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号 (固定)</label>
-                      <input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhone||'')} onChange={e=>updateLP('familyPhone',e.target.value.replace(/[^0-9]/g,''))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhone||'')} onChange={e=>updateLP('familyPhone',toHankaku(e.target.value).replace(/[^0-9]/g,''))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号 (携帯)</label>
-                      <input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhoneMobile||'')} onChange={e=>updateLP('familyPhoneMobile',e.target.value.replace(/[^0-9]/g,''))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <input type="tel" inputMode="numeric" disabled={isOff} value={formatJpPhone(localPatient.familyPhoneMobile||'')} onChange={e=>updateLP('familyPhoneMobile',toHankaku(e.target.value).replace(/[^0-9]/g,''))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                   </div>
                   {/* メールアドレス (単独行) */}
@@ -24611,7 +24619,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     <div key={ei} className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                       <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400">{ei+1}件目</span>{!isOff&&<button type="button" onClick={()=>updateLP('emergencyContacts',(localPatient.emergencyContacts||[]).filter((_,i)=>i!==ei))} className="text-slate-300 hover:text-red-400 text-xs font-bold">✕</button>}</div>
                       <div className="grid grid-cols-2 gap-3 mb-2"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">氏名</label><input disabled={isOff} value={ec.name} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],name:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="氏名"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label><input disabled={isOff} value={ec.relation} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],relation:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="例: 長男"/></div></div>
-                      <div className="grid grid-cols-3 gap-3"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話（固定）</label><input type="tel" disabled={isOff} value={formatJpPhone(ec.phone||'')} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],phone:e.target.value.replace(/[^0-9]/g,'')};updateLP('emergencyContacts',a);}} inputMode="numeric" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="03-XXXX-XXXX"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話（携帯）</label><input type="tel" disabled={isOff} value={formatJpPhone(ec.phoneMobile||'')} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],phoneMobile:e.target.value.replace(/[^0-9]/g,'')};updateLP('emergencyContacts',a);}} inputMode="numeric" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="090-XXXX-XXXX"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">メール</label><input type="email" disabled={isOff} value={ec.email||''} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],email:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="mail@example.com"/></div></div>
+                      <div className="grid grid-cols-3 gap-3"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話（固定）</label><input type="tel" disabled={isOff} value={formatJpPhone(ec.phone||'')} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],phone:toHankaku(e.target.value).replace(/[^0-9]/g,'')};updateLP('emergencyContacts',a);}} inputMode="numeric" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="03-XXXX-XXXX"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話（携帯）</label><input type="tel" disabled={isOff} value={formatJpPhone(ec.phoneMobile||'')} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],phoneMobile:toHankaku(e.target.value).replace(/[^0-9]/g,'')};updateLP('emergencyContacts',a);}} inputMode="numeric" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="090-XXXX-XXXX"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">メール</label><input type="email" disabled={isOff} value={ec.email||''} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],email:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="mail@example.com"/></div></div>
                     </div>
                   ))}
                 </div>
@@ -26682,8 +26690,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={facilityInfo.address || ""} onChange={e => setFacilityInfo({...facilityInfo, address: e.target.value})} placeholder="郵便番号から検索すると自動入力されます" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">建物名・部屋番号</label><input type="text" value={facilityInfo.addressBuilding || ""} onChange={e => setFacilityInfo({...facilityInfo, addressBuilding: e.target.value})} placeholder="例: メイゾン白子101" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 {/* ★ 電話/FAX: ハイフン自動付与 (数字のみ入力 → formatJpPhone で表示) */}
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.phone || "")} onChange={e => setFacilityInfo({...facilityInfo, phone: e.target.value.replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345678" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.fax || "")} onChange={e => setFacilityInfo({...facilityInfo, fax: e.target.value.replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345679" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.phone || "")} onChange={e => setFacilityInfo({...facilityInfo, phone: toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345678" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.fax || "")} onChange={e => setFacilityInfo({...facilityInfo, fax: toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345679" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">サービス提供時間</h4>
                   <div className="grid grid-cols-3 gap-4">
                     <div><label className="block text-sm font-bold text-slate-600 mb-1.5">1単位目</label>
