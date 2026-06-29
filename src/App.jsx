@@ -12893,7 +12893,72 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
 // ===========================================
 // 記録者選択画面 (店舗ログイン後に「誰として利用するか」を選ぶ)
 // ===========================================
-function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores }) {
+// ★ パスワードのハッシュ化 (SHA-256)。 平文では保存しない
+async function sha256Hex(str) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(str)));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,'0')).join('');
+  } catch {
+    let h = 0; const s = String(str); for (let i=0;i<s.length;i++){ h=(h<<5)-h+s.charCodeAt(i)|0; } return 'x'+(h>>>0).toString(16);
+  }
+}
+
+// 管理者パスワードの設定/入力モーダル
+function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, onSetAuth }) {
+  const [pw, setPw] = React.useState('');
+  const [pw2, setPw2] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [err, setErr] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const submit = async () => {
+    setErr(''); setBusy(true);
+    try {
+      if (mode === 'set') {
+        if (pw.length < 4) { setErr('パスワードは4文字以上にしてください'); setBusy(false); return; }
+        if (pw !== pw2) { setErr('確認用パスワードが一致しません'); setBusy(false); return; }
+        const hash = await sha256Hex(pw);
+        await onSetAuth({ passwordHash: hash, email: (email||'').trim() });
+        onSuccess();
+      } else {
+        const hash = await sha256Hex(pw);
+        if (hash === existingHash) { onSuccess(); }
+        else { setErr('パスワードが違います'); setBusy(false); }
+      }
+    } catch (e) { setErr('処理に失敗しました'); setBusy(false); }
+  };
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div style={{background:'white',borderRadius:18,padding:24,width:'100%',maxWidth:380,boxShadow:'0 12px 40px rgba(0,0,0,0.3)'}}>
+        <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>🔑 {mode==='set'?'管理者パスワードを設定':'管理者パスワードを入力'}</div>
+        <div style={{fontSize:12,color:'#64748b',marginBottom:16}}>{adminName} 様（管理者）{mode==='set'?'の初回設定です。以降、管理者として入る時に必要になります。':'として入るにはパスワードが必要です。'}</div>
+        <input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder={mode==='set'?'新しいパスワード(4文字以上)':'パスワード'} autoFocus
+          onKeyDown={e=>{ if(e.key==='Enter' && mode==='verify') submit(); }}
+          style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+        {mode==='set' && <>
+          <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="パスワード(確認用)"
+            style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="再設定用メールアドレス(任意・推奨)"
+            style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
+          <div style={{fontSize:10,color:'#94a3b8',marginBottom:10}}>※ メールを登録すると、忘れた時に再設定メールを送れます（後で追加も可）。</div>
+        </>}
+        {err && <div style={{color:'#dc2626',fontSize:12,fontWeight:'bold',marginBottom:10}}>{err}</div>}
+        <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+          <button onClick={onCancel} disabled={busy} style={{padding:'9px 16px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+          <button onClick={submit} disabled={busy} style={{padding:'9px 20px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer',opacity:busy?0.6:1}}>{mode==='set'?'設定して入る':'認証して入る'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth }) {
+  const [pendingAdmin, setPendingAdmin] = React.useState(null); // 管理者選択 → 認証待ち
+  // 管理者メンバーを選んだ時はパスワード認証を挟む
+  const selectMember = (m) => {
+    const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
+    if (isAdminMember) { setPendingAdmin(m); return; }
+    onSelect(m);
+  };
   const [showAdd, setShowAdd] = useState(false);
   const [newLastName, setNewLastName] = useState('');
   const [newFirstName, setNewFirstName] = useState('');
@@ -12935,7 +13000,7 @@ function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMemb
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10,marginBottom:16}}>
                 {members.map(m => (
                   <div key={m.id} style={{position:'relative'}}>
-                    <button onClick={()=>onSelect(m)} style={{width:'100%',padding:'18px 12px',background:'#f4f8ed',color:'#3d5021',border:'2px solid #94c456',borderRadius:14,fontSize:14,fontWeight:'bold',cursor:'pointer',textAlign:'center',transition:'all 0.15s'}}
+                    <button onClick={()=>selectMember(m)} style={{width:'100%',padding:'18px 12px',background:'#f4f8ed',color:'#3d5021',border:'2px solid #94c456',borderRadius:14,fontSize:14,fontWeight:'bold',cursor:'pointer',textAlign:'center',transition:'all 0.15s'}}
                       onMouseEnter={e=>{e.currentTarget.style.background='#94c456';e.currentTarget.style.color='white';}}
                       onMouseLeave={e=>{e.currentTarget.style.background='#f4f8ed';e.currentTarget.style.color='#3d5021';}}>
                       <div style={{fontSize:24,marginBottom:6}}>👤</div>
@@ -13003,6 +13068,16 @@ function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMemb
             </form>
           </div>
         </div>
+      )}
+      {pendingAdmin && (
+        <AdminAuthModal
+          mode={adminAuth?.passwordHash ? 'verify' : 'set'}
+          adminName={pendingAdmin.name}
+          existingHash={adminAuth?.passwordHash}
+          onSetAuth={onSetAdminAuth}
+          onSuccess={()=>{ const m=pendingAdmin; setPendingAdmin(null); try{ sessionStorage.setItem('tsumugiAdminVerified','1'); }catch{} ; onSelect(m); }}
+          onCancel={()=>setPendingAdmin(null)}
+        />
       )}
     </div>
   );
@@ -14588,6 +14663,8 @@ export default function App() {
       storeName={staffSession.storeName || staffSession.storeShortName}
       members={appData.storeMembers || []}
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
+      adminAuth={appData.systemSettings?.adminAuth || null}
+      onSetAdminAuth={(auth)=>{ const nd={ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }; setAppData(nd); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseMergeAndSyncStateForStore(staffSession.storeId, nd); }catch(e){} } }}
       onSelect={(m) => {
         sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
         setActiveRecorder(m);
