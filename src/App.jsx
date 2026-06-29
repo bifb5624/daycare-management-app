@@ -15162,13 +15162,14 @@ export default function App() {
                 // 体力測定バッジ: 当日出席 かつ 当月測定対象の利用者数
                 const _now = new Date(); _now.setHours(0,0,0,0);
                 const _cycle = appData.systemSettings?.fitnessCycle;
-                const _cycleNum = parseInt(_cycle?.jigyo||'3');
                 const _unit = _cycle?.unit||'ヶ月';
-                const _addC = (d) => { const nd=new Date(d); if(_unit==='ヶ月') nd.setMonth(nd.getMonth()+_cycleNum); else if(_unit==='週') nd.setDate(nd.getDate()+_cycleNum*7); else if(_unit==='年') nd.setFullYear(nd.getFullYear()+_cycleNum); return nd; };
+                const _cycleNumFor = (p) => parseInt((_cycle?.sameForAll === false ? ((p.careLevel||'').includes('要介護') ? _cycle?.kaigo : _cycle?.jigyo) : _cycle?.jigyo) || '3');
+                const _addC = (d, p) => { const nd=new Date(d); const n=_cycleNumFor(p); if(_unit==='ヶ月') nd.setMonth(nd.getMonth()+n); else if(_unit==='週') nd.setDate(nd.getDate()+n*7); else if(_unit==='年') nd.setFullYear(nd.getFullYear()+n); return nd; };
                 const _getNextDue = (p) => {
                   const pr=(appData.fitnessRecords||[]).filter(r=>r.patientId===p.id).sort((a,b)=>b.date.localeCompare(a.date));
-                  const base = pr.length ? new Date(pr[0].date) : (p.startDate ? new Date(p.startDate) : null);
-                  return base ? _addC(base) : null;
+                  // ★ 未測定は「当月対象」(due=null → badge側で対象扱い)。 測定済みは最後の測定日 + 周期
+                  if (!pr.length) return null;
+                  return _addC(new Date(pr[0].date), p);
                 };
                 // 当日出席者
                 const _dateStr = selectedDate;
@@ -22928,7 +22929,9 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   const getPatientMonthOffset = (p) => {
     const cycle2 = appData.systemSettings?.fitnessCycle;
     if (cycle2?.unit === '実施しない' || cycle2?.disabled) return -1; // 実施しない → 予定に出さない
-    const cycleNum2 = parseInt(cycle2?.jigyo || '3');
+    // ★ 測定周期は各種設定の値を反映 (固定3ヶ月ではない)。 介護度別設定(sameForAll=false)なら 要介護=kaigo / 事業対象・要支援=jigyo
+    const _isKaigo = (p.careLevel || '').includes('要介護');
+    const cycleNum2 = parseInt((cycle2?.sameForAll === false ? (_isKaigo ? cycle2?.kaigo : cycle2?.jigyo) : cycle2?.jigyo) || '3');
     const unit2 = cycle2?.unit || 'ヶ月';
     const patRecs = records.filter(r => r.patientId === p.id && _hasFitVals(r)).sort((a,b)=>b.date.localeCompare(a.date));
     // ★ まだ一度も測定していない人は「当月」(=測定するまで当月に残す)。 測定後に次回予定へ移る。
