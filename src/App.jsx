@@ -23535,6 +23535,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
   // ★ 2段階削除確認 (誤操作で完全削除されないように)
   const [deleteConfirmStep2, setDeleteConfirmStep2] = useState(false);
+  // ★ 管理者認証ゲート (利用者削除など重要操作)。 {onSuccess} で成功時の処理を保持
+  const [adminGate, setAdminGate] = useState(null);
+  // 管理者パスワードが設定済みで、かつ現在のスタッフが管理者として認証済みでなければ、管理者PWを要求してから実行
+  const requireAdminThen = (fn) => {
+    const auth = appData.systemSettings?.adminAuth;
+    if (!auth?.passwordHash) { fn(); return; } // 未設定 → そのまま実行
+    let rec = null; try { rec = JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null'); } catch {}
+    const isAdmin = !!(rec && (rec.isAdmin || rec.roleLabel === '管理者'));
+    const verified = (()=>{ try { return sessionStorage.getItem('tsumugiAdminVerified')==='1'; } catch { return false; } })();
+    if (isAdmin && verified) { fn(); return; } // 管理者本人 → そのまま
+    setAdminGate({ onSuccess: fn });
+  };
   // ★ 利用者切替時の未保存確認モーダル (保存/破棄/キャンセル の 3 択)
   const [switchPatientConfirm, setSwitchPatientConfirm] = useState(null); // {targetPatient}
   const [docDeleteConfirm, setDocDeleteConfirm] = useState(null); // {key, imgId, name}
@@ -26029,10 +26041,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             <p className="text-xs text-slate-500 mb-6">{localPatient?.name} 様の全データが完全に消去されます。</p>
             <div className="flex flex-col gap-2">
               <button onClick={() => { setDeleteConfirmStep2(false); }} className="w-full py-3 rounded-xl font-bold text-slate-700 bg-slate-100 hover:bg-slate-200">いいえ、戻る</button>
-              <button onClick={() => { executeDelete(); setDeleteConfirmStep2(false); }} className="w-full py-3 rounded-xl font-bold text-white bg-red-700 hover:bg-red-800 shadow-lg active:scale-95">はい、完全に削除する</button>
+              <button onClick={() => { requireAdminThen(() => { executeDelete(); setDeleteConfirmStep2(false); setDeleteConfirmModal(false); }); }} className="w-full py-3 rounded-xl font-bold text-white bg-red-700 hover:bg-red-800 shadow-lg active:scale-95">はい、完全に削除する</button>
             </div>
           </div>
         </div>
+      )}
+      {adminGate && (
+        <AdminAuthModal
+          mode="verify"
+          adminName="管理者"
+          existingHash={appData.systemSettings?.adminAuth?.passwordHash}
+          onSuccess={()=>{ const fn = adminGate.onSuccess; setAdminGate(null); fn && fn(); }}
+          onCancel={()=>setAdminGate(null)}
+        />
       )}
       {careLevelModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
