@@ -21971,11 +21971,10 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
             <button type="button" onClick={()=>set(s=>({...s,from:s.from||_today,until:s.until||_addDays(6)}))} className={pbtn(isCustom)}>期間選択</button>
           </div>
           {(isCustom || (!isNone && !isToday && !isWeek)) ? (
-            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-              <input type="date" value={st.from||''} onChange={e=>set(s=>({...s,from:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="開始日"/>
-              <span className="text-xs text-slate-400">〜</span>
-              <input type="date" value={st.until||''} onChange={e=>set(s=>({...s,until:e.target.value}))} className="px-2 py-1 rounded text-xs border border-slate-300 outline-none" title="終了日"/>
-              <span className="text-[10px] text-slate-500 font-bold">の期間に表示</span>
+            <div className="mt-1.5">
+              {/* ★ カレンダーで「何日から何日まで」を選択 */}
+              <DateRangePicker fromValue={st.from||''} toValue={st.until||''} onFromChange={v=>set(s=>({...s,from:v}))} onToChange={v=>set(s=>({...s,until:v}))} />
+              <span className="text-[10px] text-slate-500 font-bold ml-1">の期間に表示</span>
             </div>
           ) : (!isNone && (
             <div className="text-[10px] text-slate-500 font-bold mt-1">{isToday?'本日（'+_today+'）のみ表示':'本日〜'+st.until+' まで表示'}</div>
