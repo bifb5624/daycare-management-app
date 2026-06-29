@@ -12918,12 +12918,42 @@ async function sha256Hex(str) {
 }
 
 // 管理者パスワードの設定/入力モーダル
-function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, onSetAuth }) {
+function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, onSetAuth, storeId }) {
   const [pw, setPw] = React.useState('');
   const [pw2, setPw2] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [err, setErr] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  // パスワード忘れ時のメール自己リセット
+  const [resetStep, setResetStep] = React.useState(0); // 0=通常, 1=メール入力, 2=コード+新PW
+  const [rEmail, setREmail] = React.useState('');
+  const [rCode, setRCode] = React.useState('');
+  const [rPw, setRPw] = React.useState(''); const [rPw2, setRPw2] = React.useState('');
+  const [rMsg, setRMsg] = React.useState('');
+  const requestCode = async () => {
+    setErr(''); setRMsg(''); if(!rEmail.trim()){ setErr('メールアドレスを入力してください'); return; }
+    setBusy(true);
+    try {
+      const resp = await fetch('/api/admin-reset', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ action:'request', storeId, email: rEmail.trim() }) });
+      const j = await resp.json().catch(()=>({}));
+      if (!resp.ok) { setErr(j.error || '送信に失敗しました'); setBusy(false); return; }
+      setRMsg('登録メールに確認コードを送りました（届かない場合は迷惑メールもご確認ください）。'); setResetStep(2); setBusy(false);
+    } catch(e){ setErr('通信に失敗しました'); setBusy(false); }
+  };
+  const doReset = async () => {
+    setErr(''); if(!rCode.trim()){ setErr('確認コードを入力してください'); return; }
+    if(rPw.length<4){ setErr('新しいパスワードは4文字以上にしてください'); return; }
+    if(rPw!==rPw2){ setErr('確認用パスワードが一致しません'); return; }
+    setBusy(true);
+    try {
+      const hash = await sha256Hex(rPw);
+      const resp = await fetch('/api/admin-reset', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ action:'reset', storeId, code: rCode.trim(), newPasswordHash: hash }) });
+      const j = await resp.json().catch(()=>({}));
+      if (!resp.ok) { setErr(j.error || 'リセットに失敗しました'); setBusy(false); return; }
+      alert('管理者パスワードを再設定しました。最新の状態に更新します。新しいパスワードで認証してください。');
+      try { window.location.reload(); } catch { setResetStep(0); setRCode(''); setRPw(''); setRPw2(''); setBusy(false); }
+    } catch(e){ setErr('通信に失敗しました'); setBusy(false); }
+  };
   const submit = async () => {
     setErr(''); setBusy(true);
     try {
@@ -12943,6 +12973,36 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
       <div style={{background:'white',borderRadius:18,padding:24,width:'100%',maxWidth:380,boxShadow:'0 12px 40px rgba(0,0,0,0.3)'}}>
+        {resetStep > 0 ? (
+          /* ===== パスワード忘れ → メール自己リセット ===== */
+          <>
+            <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>📧 管理者パスワードの再設定</div>
+            {resetStep === 1 ? (
+              <>
+                <div style={{fontSize:12,color:'#64748b',marginBottom:14}}>登録済みの再設定用メールアドレスを入力してください。確認コードをメールでお送りします。</div>
+                <input type="email" value={rEmail} onChange={e=>setREmail(e.target.value)} placeholder="登録メールアドレス" autoFocus style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+                {err && <div style={{color:'#dc2626',fontSize:12,fontWeight:'bold',marginBottom:10}}>{err}</div>}
+                <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                  <button onClick={()=>{ setResetStep(0); setErr(''); }} disabled={busy} style={{padding:'9px 16px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>戻る</button>
+                  <button onClick={requestCode} disabled={busy} style={{padding:'9px 20px',background:'#2563eb',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer',opacity:busy?0.6:1}}>コードを送る</button>
+                </div>
+              </>
+            ) : (
+              <>
+                {rMsg && <div style={{fontSize:12,color:'#15803d',fontWeight:'bold',marginBottom:12,background:'#f0fdf4',border:'1px solid #86efac',borderRadius:8,padding:'8px 10px'}}>{rMsg}</div>}
+                <input value={rCode} onChange={e=>setRCode(e.target.value)} placeholder="確認コード(6桁)" inputMode="numeric" autoFocus style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10,letterSpacing:2,fontWeight:'bold'}}/>
+                <input type="password" value={rPw} onChange={e=>setRPw(e.target.value)} placeholder="新しいパスワード(4文字以上)" style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+                <input type="password" value={rPw2} onChange={e=>setRPw2(e.target.value)} placeholder="新しいパスワード(確認)" style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+                {err && <div style={{color:'#dc2626',fontSize:12,fontWeight:'bold',marginBottom:10}}>{err}</div>}
+                <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                  <button onClick={()=>{ setResetStep(1); setErr(''); }} disabled={busy} style={{padding:'9px 16px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>戻る</button>
+                  <button onClick={doReset} disabled={busy} style={{padding:'9px 20px',background:'#2563eb',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer',opacity:busy?0.6:1}}>再設定する</button>
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+        <>
         <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>🔑 {mode==='set'?'管理者パスワードを設定':'管理者パスワードを入力'}</div>
         <div style={{fontSize:12,color:'#64748b',marginBottom:16}}>{adminName} 様（管理者）{mode==='set'?'の初回設定です。以降、管理者として入る時に必要になります。':'として入るにはパスワードが必要です。'}</div>
         <input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder={mode==='set'?'新しいパスワード(4文字以上)':'パスワード'} autoFocus
@@ -12960,12 +13020,19 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
           <button onClick={onCancel} disabled={busy} style={{padding:'9px 16px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
           <button onClick={submit} disabled={busy} style={{padding:'9px 20px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer',opacity:busy?0.6:1}}>{mode==='set'?'設定して入る':'認証して入る'}</button>
         </div>
+        {mode==='verify' && storeId && (
+          <div style={{textAlign:'center',marginTop:12}}>
+            <button onClick={()=>{ setResetStep(1); setErr(''); setRMsg(''); }} style={{background:'none',border:'none',color:'#2563eb',fontSize:12,fontWeight:'bold',cursor:'pointer',textDecoration:'underline'}}>パスワードをお忘れですか？（メールで再設定）</button>
+          </div>
+        )}
+        </>
+        )}
       </div>
     </div>
   );
 }
 
-function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth }) {
+function RecorderPickerGate({ storeName, storeId, members, canManage, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth }) {
   const [pendingAdmin, setPendingAdmin] = React.useState(null); // 管理者選択 → 認証待ち
   // 管理者メンバーを選んだ時はパスワード認証を挟む
   const selectMember = (m) => {
@@ -13088,6 +13155,7 @@ function RecorderPickerGate({ storeName, members, canManage, onSelect, onAddMemb
           mode={adminAuth?.passwordHash ? 'verify' : 'set'}
           adminName={pendingAdmin.name}
           existingHash={adminAuth?.passwordHash}
+          storeId={storeId}
           onSetAuth={onSetAdminAuth}
           onSuccess={()=>{ const m=pendingAdmin; setPendingAdmin(null); try{ sessionStorage.setItem('tsumugiAdminVerified','1'); }catch{} ; onSelect(m); }}
           onCancel={()=>setPendingAdmin(null)}
@@ -14722,6 +14790,7 @@ export default function App() {
   if (isSupabaseEnabled && staffSession?.storeId && !activeRecorder) {
     return <RecorderPickerGate
       storeName={staffSession.storeName || staffSession.storeShortName}
+      storeId={staffSession.storeId}
       members={appData.storeMembers || []}
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
       adminAuth={appData.systemSettings?.adminAuth || null}
@@ -14921,6 +14990,7 @@ export default function App() {
           mode={appData.systemSettings?.adminAuth?.passwordHash ? 'verify' : 'set'}
           adminName={pendingStaffSwitch.name}
           existingHash={appData.systemSettings?.adminAuth?.passwordHash}
+          storeId={staffSession?.storeId}
           onSetAuth={saveAdminAuth}
           onSuccess={()=>{ const m=pendingStaffSwitch; setPendingStaffSwitch(null); commitRecorder(m); }}
           onCancel={()=>setPendingStaffSwitch(null)}
