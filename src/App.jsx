@@ -14428,6 +14428,20 @@ export default function App() {
     };
   }, [currentView]);
   const [sharedAmpm, setSharedAmpm] = useState('AM'); // 'AM' or 'PM'
+  const [pendingStaffSwitch, setPendingStaffSwitch] = useState(null); // サイドバーのスタッフ切替で管理者を選んだ→認証待ち
+  // 管理者パスワードを保存 (RecorderPicker/スタッフ切替 共通)
+  const saveAdminAuth = (auth) => {
+    const nd = { ...appData, systemSettings: { ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } };
+    setAppData(nd);
+    if (isSupabaseEnabled && staffSession?.storeId) { try { supabaseMergeAndSyncStateForStore(staffSession.storeId, nd); } catch(e){} }
+  };
+  // スタッフ確定 (管理者なら認証済みフラグON、非管理者なら解除)
+  const commitRecorder = (m) => {
+    const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
+    try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m)); } catch {}
+    setActiveRecorder(m);
+    try { if (isAdminMember) sessionStorage.setItem('tsumugiAdminVerified','1'); else sessionStorage.removeItem('tsumugiAdminVerified'); } catch {}
+  };
   // ★ 起動/更新時に「今の時刻」とサービス提供時間(各種設定)から AM/PM を自動選択。
   //   午前の時間帯=AM、午後の時間帯(PM開始以降)=PM。 一度だけ(以降は手動切替を尊重)。
   const _ampmInitRef = useRef(false);
@@ -14887,6 +14901,17 @@ export default function App() {
   return (
     <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15}}>
       <GlobalStyle />
+      {/* ★ スタッフ切替で管理者を選んだ時の認証 */}
+      {pendingStaffSwitch && (
+        <AdminAuthModal
+          mode={appData.systemSettings?.adminAuth?.passwordHash ? 'verify' : 'set'}
+          adminName={pendingStaffSwitch.name}
+          existingHash={appData.systemSettings?.adminAuth?.passwordHash}
+          onSetAuth={saveAdminAuth}
+          onSuccess={()=>{ const m=pendingStaffSwitch; setPendingStaffSwitch(null); commitRecorder(m); }}
+          onCancel={()=>setPendingStaffSwitch(null)}
+        />
+      )}
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
           // ★ PreviewModalを毎回作り直さず、このIIFE内に直接JSXを描く(iframe再マウント=チカチカ防止)。 ifH/srcDocはApp直下のstateを使用
@@ -15248,8 +15273,10 @@ export default function App() {
                               onClick={() => {
                                 setStaffDropdownOpen(false);
                                 if (isCurrent) return;
-                                sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
-                                setActiveRecorder(m);
+                                const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
+                                // ★ 管理者へ切替える時はパスワード認証を要求 (未設定なら設定)
+                                if (isAdminMember) { setPendingStaffSwitch(m); return; }
+                                commitRecorder(m);
                               }}
                               className={`w-full text-left px-4 py-2 text-[11px] font-bold flex items-center justify-between border-b border-emerald-700/20 ${
                                 isCurrent
@@ -26643,6 +26670,11 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   const [newCred, setNewCred] = useState({storeName:'',id:'',pass:''});
   // パスワード変更フォーム状態
   const [pwChange, setPwChange] = useState({old:'', new1:'', new2:'', error:'', ok:''});
+  // ★ 管理者ロック: ログイン情報/パスワード変更は「管理者として認証済み」の時のみ操作可。 未設定なら従来どおり(=最初の管理者設定を促す)
+  const _adminAuth = appData.systemSettings?.adminAuth;
+  const [adminUnlocked, setAdminUnlocked] = useState(()=>{ try { return sessionStorage.getItem('tsumugiAdminVerified')==='1'; } catch { return false; } });
+  const [showSettingsAdminGate, setShowSettingsAdminGate] = useState(false);
+  const settingsSaveAdminAuth = (auth) => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth:{ ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }); };
   const [exerciseItems, setExerciseItems] = useState(appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
   const [newExItem, setNewExItem] = useState({ name: '', defaultUnit: '' });
   // 個別運動メニュー (利用者ごとに自由に組み合わせる項目: 平行棒・屋外歩行・体操 等)
@@ -27747,7 +27779,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               </div>
             </SectionCard>
             <SectionCard title="ログイン情報">
-              {(() => {
+              {(_adminAuth?.passwordHash && !adminUnlocked) ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+                  <div className="text-3xl mb-2">🔒</div>
+                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ操作できます</div>
+                  <div className="text-xs text-amber-700 mb-3">ログイン情報・パスワードの変更には管理者パスワードが必要です。</div>
+                  <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">🔑 管理者として認証</button>
+                </div>
+              ) : (() => {
                 const allCreds = appData.systemSettings?.loginCredentials || [];
                 const cred = allCreds[0]; // 1事業所運用なので先頭のみ扱う
                 return (
@@ -27800,6 +27839,16 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                   </div>
                 );
               })()}
+              {showSettingsAdminGate && (
+                <AdminAuthModal
+                  mode={_adminAuth?.passwordHash ? 'verify' : 'set'}
+                  adminName="管理者"
+                  existingHash={_adminAuth?.passwordHash}
+                  onSetAuth={settingsSaveAdminAuth}
+                  onSuccess={()=>{ setShowSettingsAdminGate(false); setAdminUnlocked(true); }}
+                  onCancel={()=>setShowSettingsAdminGate(false)}
+                />
+              )}
             </SectionCard>
             <SectionCard title="モニタリング用APIキー">
               <label className="block text-sm font-bold text-slate-600 mb-1.5">APIキー</label>
