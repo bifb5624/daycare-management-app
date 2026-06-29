@@ -29256,7 +29256,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         {/* A4を96dpi換算でスケール表示 */}
         <div className="flex flex-col items-center py-8 gap-8">
           {(() => {
-            const scale = Math.min(1, (window.innerWidth - 80) / 794);
+            // ★ スマホは余白を詰めて1枚を画面いっぱいに (PCは従来の80px余白)
+            const _margin = window.innerWidth < 768 ? 12 : 80;
+            const scale = Math.min(1, (window.innerWidth - _margin) / 794);
             const items = [];
             printPages.forEach(ap => {
               const d = getDiaryData(ap);
