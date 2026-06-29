@@ -14267,6 +14267,17 @@ export default function App() {
     window.addEventListener('setPrintHtml', handler);
     return ()=>window.removeEventListener('setPrintHtml', handler);
   },[]); // {title, elementId}
+  // ★ プレビュー iframe の高さ＆srcDoc は App 直下で安定保持 (PreviewModalを毎回作り直すと iframe再読込=チカチカ/QR点滅になるため)
+  const [previewIfH, setPreviewIfH] = useState(900);
+  useEffect(()=>{ setPreviewIfH(900); }, [printPreviewContent?.title]);
+  const previewSrcDoc = useMemo(()=>{
+    if(!printPreviewContent?.html) return '';
+    let head=''; try{
+      document.querySelectorAll('style').forEach(s=>{ head+='<style>'+(s.textContent||'')+'</style>'; });
+      document.querySelectorAll('link[rel="stylesheet"]').forEach(l=>{ if(l.href) head+='<link rel="stylesheet" href="'+l.href+'">'; });
+    }catch{}
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html}</body></html>`;
+  }, [printPreviewContent?.html]);
   // グローバルツールチップ（fixed）
   const [globalTip, setGlobalTip] = useState(null); // {text, x, y}
   const showTip = React.useCallback((text, e) => {
@@ -14856,17 +14867,8 @@ export default function App() {
       <GlobalStyle />
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
-        const PreviewModal = () => {
-          const [ifH, setIfH] = React.useState(900); // プレビュー iframe の内容高さ(px)
-          // ★ iframe の srcDoc は親ページの CSS(Tailwind等)を引き継ぐ。 メモ化して毎回作り直さない(無限リロード=チカチカ防止)
-          const previewSrcDoc = React.useMemo(() => {
-            let head = '';
-            try {
-              document.querySelectorAll('style').forEach(s => { head += '<style>'+(s.textContent||'')+'</style>'; });
-              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => { if (l.href) head += '<link rel="stylesheet" href="'+l.href+'">'; });
-            } catch {}
-            return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html||''}</body></html>`;
-          }, [printPreviewContent.html]);
+          // ★ PreviewModalを毎回作り直さず、このIIFE内に直接JSXを描く(iframe再マウント=チカチカ防止)。 ifH/srcDocはApp直下のstateを使用
+          const ifH = previewIfH, setIfH = setPreviewIfH;
           const size = printPreviewContent.pageSize || 'A4 portrait';
           const isLandscape = size.toLowerCase().includes('landscape');
           const isB6 = size.toLowerCase().includes('b6');
@@ -14962,18 +14964,18 @@ export default function App() {
               w.document.close();
               return;
             }
-            // ★ PC: ポップアップ窓は2回目以降ブロックされて開かないことがあるため、隠しiframeで印刷(何度でも確実)。
+            // ★ PC: ポップアップ窓は2回目以降ブロックされやすいため、隠しiframe(画面外・実サイズ)で印刷。 読込完了後に print(空白印刷を防ぐ)。
             try {
               let pf = document.getElementById('tsumugi-print-frame');
               if (pf) { try { pf.remove(); } catch {} }
               pf = document.createElement('iframe');
               pf.id = 'tsumugi-print-frame';
               pf.setAttribute('aria-hidden','true');
-              pf.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0;pointer-events:none;';
+              // ★ opacity:0 や 1px だと内容がレンダリングされず空白印刷になることがあるため、画面外に実サイズで配置
+              pf.style.cssText = `position:fixed;left:-10000px;top:0;width:${pageW}mm;height:1200px;border:0;background:white;`;
+              pf.onload = () => { setTimeout(()=>{ try { pf.contentWindow.focus(); pf.contentWindow.print(); } catch(e){ console.warn('[print] failed', e); } }, 350); };
+              pf.srcdoc = docHtml;
               document.body.appendChild(pf);
-              const fd = pf.contentWindow.document;
-              fd.open(); fd.write(docHtml); fd.close();
-              setTimeout(()=>{ try { pf.contentWindow.focus(); pf.contentWindow.print(); } catch(e){ console.warn('[print] failed', e); } }, 500);
             } catch (e) {
               // フォールバック: 別タブ
               const w = window.open('','_blank');
@@ -15041,8 +15043,6 @@ export default function App() {
               )}
             </div>
           );
-        };
-        return <PreviewModal key={printPreviewContent.title}/>;
       })()}
       {/* グローバルツールチップ */}
       {globalTip && (
