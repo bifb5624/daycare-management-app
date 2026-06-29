@@ -15014,6 +15014,20 @@ export default function App() {
                 </button>
                 {adminStoreDropdownOpen && (
                   <div className="bg-amber-900/30 border-t border-amber-700/30 max-h-[300px] overflow-y-auto">
+                    {/* ★ 本部(つむぎ管理局)の店舗一覧画面へ戻る */}
+                    <button onClick={() => {
+                      setAdminStoreDropdownOpen(false);
+                      storeTransitionRef.current = true;
+                      dataLoadedForStoreRef.current = null;
+                      const updated = { ...staffSession, storeId: null, storeName: undefined, storeShortName: undefined };
+                      sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
+                      sessionStorage.removeItem('tsumugiActiveRecorder');
+                      try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
+                      setStaffSession(updated);
+                      setActiveRecorder(null);
+                    }} className="w-full text-left px-4 py-2.5 text-[11px] font-bold text-white bg-amber-700/50 hover:bg-amber-700/80 border-b border-amber-700/40 flex items-center gap-1.5">
+                      <span>🏠</span><span>つむぎ管理局トップ（店舗一覧）へ戻る</span>
+                    </button>
                     {adminStoresList.length === 0 ? (
                       <div className="px-4 py-3 text-[10px] text-amber-300/70">読込中...</div>
                     ) : (
@@ -15179,8 +15193,8 @@ export default function App() {
               <SidebarItem icon={<FileText size={18} />} label="休み連絡" active={currentView === 'absence_fax'} onClick={() => navigateTo('absence_fax')} />
               <SidebarItem icon={<FileText size={18} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
-              {(hasAddon(appData,'kinou_keikaku') || staffSession?.role === 'super_admin') && (
-                <SidebarItem icon={<FileText size={18} />} label="個別機能訓練計画書" active={currentView === 'kinou_keikaku'} onClick={() => navigateTo('kinou_keikaku')} badge={!hasAddon(appData,'kinou_keikaku') ? '本部' : null} />
+              {hasAddon(appData,'kinou_keikaku') && (
+                <SidebarItem icon={<FileText size={18} />} label="個別機能訓練計画書" active={currentView === 'kinou_keikaku'} onClick={() => navigateTo('kinou_keikaku')} />
               )}
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
@@ -16637,9 +16651,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const _vstr = String(val ?? '');
                     // ★ 数字を含む値のときだけ単位を付ける (×・ー・○ 等の記号には単位を付けない)
                     const displayVal = (_vstr !== '' && _unit && /[0-9０-９]/.test(_vstr) && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
-                    // ★ ○/×/ー の記号は線が細く見づらいので、太く・大きく・色付きで表示
+                    // ★ ○/×/ー の記号は線が細く見づらいので、太く・大きく表示 (色は付けない)
                     const _isSym = displayVal==='○'||displayVal==='◯'||displayVal==='×'||displayVal==='✕'||displayVal==='ー';
-                    const _symColor = (displayVal==='×'||displayVal==='✕') ? '#dc2626' : (displayVal==='○'||displayVal==='◯') ? '#15803d' : (displayVal==='ー') ? '#475569' : undefined;
                     return (
                     <td key={item.id} className={`px-0.5 py-2 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
@@ -16662,7 +16675,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             if (v && _unit && /[0-9０-９]/.test(v) && !v.endsWith(_unit)) v = `${v}${_unit}`;
                             updateExercise(p.id, item.id, v);
                           }}
-                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: _isSym ? 22 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isSym ? 900 : 'bold', color: _symColor, WebkitTextStroke: _isSym ? '0.6px currentColor' : undefined, lineHeight: _isSym ? 1 : undefined}}
+                          style={{width:64,padding:'3px 1px',textAlign:'center',fontSize: _isSym ? 22 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isSym ? 900 : 'bold', WebkitTextStroke: _isSym ? '0.7px currentColor' : undefined, lineHeight: _isSym ? 1 : undefined}}
                           className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
