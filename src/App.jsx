@@ -15483,9 +15483,11 @@ export default function App() {
                  currentView === 'settings' ? '各種設定' : 'システム画面'}
               </h1>
             </div>
-            {/* ジャンプナビをヘッダー右側に配置し、画面領域を節約 */}
+            {/* ジャンプナビをヘッダー右側に配置し、画面領域を節約。 ★ スマホ(狭い)ではタイトルと重なるため非表示(サイドバーで移動可) */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
-              <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
+              <div className="hidden sm:flex items-center shrink-0">
+                <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
+              </div>
             )}
           </header>
 
@@ -22231,6 +22233,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const markClean = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=false; },[dirtyRef]);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [renrakuModal, setRenrakuModal] = useState(null); // {patientId} 連絡事項の編集
+  const [showPrintCards, setShowPrintCards] = useState(false); // ★ 印刷用の隠しカードは印刷時だけ描画(スマホのメモリ対策)
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [localOverrides, setLocalOverrides] = useState({});
@@ -22363,6 +22366,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const doPrint = (idsToprint) => {
     setPrintModeModal(false);
     if(!idsToprint || !idsToprint.length){ alert('印刷する利用者を1人以上選択してください'); return; }
+    // ★ 印刷用の隠しカードは普段は描画していないので、まず描画してから(1tick後)取得する
+    if (!showPrintCards) {
+      setShowPrintCards(true);
+      setTimeout(() => doPrint(idsToprint), 120);
+      return;
+    }
     const title = `連絡帳_${selectedDate}`;
     const targets = displayRecords.filter(r => idsToprint.includes(r.patientId));
     if(!targets || !targets.length){ alert('対象が見つかりませんでした'); return; }
@@ -22395,6 +22404,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     ).join('');
     // ★ iPadで確実に開くよう、null→遅延イベントの2段階をやめ、HTML付きイベントを即時発火 (1段階で表示)
     window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:pageSizeStr,html:combinedHtml,elementId:null}}));
+    // ★ 取得後は隠しカードを解放してメモリを戻す
+    setTimeout(() => setShowPrintCards(false), 800);
   };
   const handleSaveConfig = (newConfig) => { markClean(); onSave({ ...appData, contactBookConfig: newConfig }); setIsConfigOpen(false); };
 
@@ -22694,7 +22705,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           document.body);
         })()}
 
-        {/* 印刷用の隠しカード群 — 利用者ID単位で id を付与し、選択された利用者の DOM を doPrint で取得する */}
+        {/* 印刷用の隠しカード群 — ★ 印刷時のみ描画(常時描画だとスマホでメモリ不足→クラッシュするため) */}
+        {showPrintCards && (
         <div style={{display:'none'}} aria-hidden="true">
           {displayRecords.map((record) => {
             const patient = (appData.patients||[]).find(p => p.id === record.patientId);
@@ -22706,6 +22718,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
             );
           })}
         </div>
+        )}
 
         <div className="flex flex-col items-center gap-8">
           {displayRecords.map((record, ri) => {
