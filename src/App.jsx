@@ -14428,6 +14428,25 @@ export default function App() {
     };
   }, [currentView]);
   const [sharedAmpm, setSharedAmpm] = useState('AM'); // 'AM' or 'PM'
+  // ★ 起動/更新時に「今の時刻」とサービス提供時間(各種設定)から AM/PM を自動選択。
+  //   午前の時間帯=AM、午後の時間帯(PM開始以降)=PM。 一度だけ(以降は手動切替を尊重)。
+  const _ampmInitRef = useRef(false);
+  useEffect(()=>{
+    if (_ampmInitRef.current) return;
+    const fi = appData?.systemSettings?.facilityInfo;
+    if (!fi) return; // 施設情報が読み込まれてから判定
+    _ampmInitRef.current = true;
+    const parseStart = (s) => { const m = String(s||'').match(/(\d{1,2})[:：](\d{2})/); return m ? ((+m[1])*60 + (+m[2])) : null; };
+    const parseEnd = (s) => { const m = String(s||'').match(/[~～\-－].*?(\d{1,2})[:：](\d{2})/); return m ? ((+m[1])*60 + (+m[2])) : null; };
+    const now = new Date(); const cur = now.getHours()*60 + now.getMinutes();
+    const pmStart = parseStart(fi.serviceTimePM);
+    const amEnd = parseEnd(fi.serviceTimeAM);
+    let def;
+    if (pmStart != null) def = cur >= pmStart ? 'PM' : 'AM';           // PM開始時刻以降ならPM
+    else if (amEnd != null) def = cur > amEnd ? 'PM' : 'AM';           // 午前終了を過ぎたらPM
+    else def = cur >= 12*60 ? 'PM' : 'AM';                              // 既定: 正午で切替
+    setSharedAmpm(def);
+  }, [appData?.systemSettings?.facilityInfo]);
 
   // ★ 無操作が続いたら自動ログアウト (離席時の情報保護)。 ログアウト前に現在の入力画面を自動保存してから閉じる。
   useEffect(() => {
@@ -14962,7 +14981,11 @@ export default function App() {
                 </div><div class="no-print" style="height:78px;"></div>`;
               const w = window.open('', '_blank');
               if (!w) { alert('印刷用の画面を開けませんでした。Safari の設定でポップアップの許可をご確認ください。'); return; }
-              w.document.write(docHtml.replace('<body>', '<body>' + bar));
+              // ★ iOS Safari は <title>=ヘッダー、URL/日付=フッターに印字する。 タイトルを空にし @page margin:0 で極力消す
+              const iosDoc = docHtml
+                .replace(/<title>[^<]*<\/title>/, '<title> </title>')
+                .replace(/@page\s*\{[^}]*\}/g, m => /margin\s*:\s*0/.test(m) ? m : m.replace('}', ';margin:0}'));
+              w.document.write(iosDoc.replace('<body>', '<body>' + bar));
               w.document.close();
               return;
             }
