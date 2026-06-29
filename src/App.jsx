@@ -14939,9 +14939,9 @@ export default function App() {
             //   本体ページ印刷だとプレビュー画面ごと写ってしまう。 → PCと同じく「表だけのクリーンな別タブ」を開き、
             //   そのタブ内の印刷ボタン(=ユーザー操作)で印刷/PDF保存してもらう(ダイアログも出ず、背景グレー等も無し)。
             if (isIOS) {
-              const isB5w = Math.round(pageW)===257, isB6w = Math.round(pageW)===128, isLand = pageW > pageH;
+              const isB5w = Math.round(pageW)===257, isB6w = Math.round(pageW)===128, isA4w = Math.round(pageW)===210, isLand = pageW > pageH;
               const orient = isB6w ? '用紙サイズ「B6」' : isB5w ? '用紙「B5」＋「横向き」' : isLand ? '「横向き」' : '';
-              const hint = orient ? `印刷オプションで ${orient} を選ぶと、はみ出さずにきれいに印刷できます` : '印刷オプションで用紙サイズ・向きを選べます';
+              const hint = isA4w ? 'A4のまま印刷できます（用紙サイズ・向きの変更は不要です）' : orient ? `印刷オプションで ${orient} を選ぶと、はみ出さずにきれいに印刷できます` : '印刷オプションで用紙サイズ・向きを選べます';
               const bar = `<div class="no-print" style="position:fixed;top:0;left:0;right:0;background:#1e293b;color:#fff;padding:12px 16px;text-align:center;font-family:-apple-system,sans-serif;z-index:99999;box-shadow:0 2px 10px rgba(0,0,0,0.35);">
                   <button onclick="window.print()" style="font-size:17px;font-weight:bold;padding:11px 28px;background:#2563eb;color:#fff;border:none;border-radius:10px;cursor:pointer;">🖨 印刷 / PDF保存</button>
                   <div style="font-size:12px;margin-top:7px;color:#cbd5e1;">${hint}</div>
@@ -22167,15 +22167,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       return h;
     }).filter(Boolean);
     if(!htmlParts.length){ alert('印刷データが見つかりません。'); return; }
-    // ★ 用紙向き設定: 'b6port'=B6縦(128×182) / 'b5land'=B5横(257×182, 既定)。
+    // ★ 用紙向き設定: 'a4port'=A4縦(210×297,全環境で安定) / 'b6port'=B6縦(128×182) / 'b5land'=B5横(257×182, 既定)。
     //   連絡帳の中身は常に縦(182×257)。 用紙サイズと中央配置の縮率だけ変える。
+    //   ★ A4縦は Windows(Edge)/iPad でも回転・見切れせず確実に印刷できる (横向き@pageの回転問題を回避)。
     const paper = appData.systemSettings?.renrakuPaper || 'b5land';
+    const isA4 = paper === 'a4port';
     const isB6 = paper === 'b6port';
-    const pageW = isB6 ? 128 : 257;
-    const scale = isB6 ? 0.70 : 0.66; // 連絡帳(182×257縦)を各用紙に収める縮率
-    const pageSizeStr = `${pageW}mm 182mm`;
+    const pageW = isA4 ? 210 : isB6 ? 128 : 257;
+    const pageH = isA4 ? 297 : 182;
+    const scale = isA4 ? 1.10 : isB6 ? 0.70 : 0.66; // 連絡帳(182×257縦)を各用紙に収める縮率
+    const pageSizeStr = `${pageW}mm ${pageH}mm`;
     const combinedHtml = htmlParts.map((h,i)=>
-      `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:182mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
+      `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
         <div style="transform:scale(${scale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h}</div>
       </div>`
     ).join('');
@@ -22302,11 +22305,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </button>
         {/* ★ 用紙の向き: 横(B5)＝B6非対応の複合機向け / 縦(B6)＝B6対応機向け。 連絡帳の中身は常に縦。 */}
         <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
-          title="B6サイズに対応した複合機がなければ「横（B5）」を選び、B5用紙の中央に連絡帳を配置して印刷します。B6対応機なら「縦（B6）」で連絡帳サイズそのまま印刷できます。">
+          title="Windows(Edge)やiPadで向きが回転して見切れる場合は「A4（縦）」を選ぶと、用紙・向きを変えずそのまま正しく印刷できます。B5用紙に合わせたい場合は「横（B5）」、B6対応機なら「縦（B6）」。">
           <span className="text-[12px] font-bold text-slate-500">🖨 用紙</span>
           <select value={appData.systemSettings?.renrakuPaper || 'b5land'}
             onChange={e=>onSave({...appData, systemSettings:{...(appData.systemSettings||{}), renrakuPaper:e.target.value}})}
             className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer">
+            <option value="a4port">A4（縦・全機種対応）</option>
             <option value="b5land">横（B5）</option>
             <option value="b6port">縦（B6）</option>
           </select>
