@@ -16664,7 +16664,61 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           /* Firefox 用 */
           .record-view-scroll { scrollbar-width: auto !important; scrollbar-color: #94a3b8 #e2e8f0; }
         `}</style>
-        <table id="record-table" className="text-sm text-left relative" style={{
+        {/* ★ スマホ用カード表示 (md未満)。 PC/iPad は下のテーブル。 横長の表をスマホで縦カードに */}
+        <div className="md:hidden p-2 space-y-3">
+          {displayRecords.length===0 && <div className="text-center text-slate-400 font-bold py-8">対象の利用者がいません</div>}
+          {displayRecords.map((p) => {
+            const masterData = (appData.patients||[]).find(pt => pt.id === p.patientId || pt.id === p.id || pt.name === p.name) || {};
+            const plannedEx = masterData.plannedExercises || {};
+            const isReadOnly = !isEditMode;
+            const isAbsent = p.status === '欠席' || p.status === '休業';
+            const isPause = masterData.status === '休止';
+            const config = getStatusConfig(p.status);
+            const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+            const tf = (timeFilter==='AM'||timeFilter==='PM') ? timeFilter : 'AM';
+            const dis = isAbsent||isReadOnly||isPause;
+            const vT = p[`temp_${tf}`]||'';
+            const vBuSt=p[`bpUpSt_${tf}`]||'', vBdSt=p[`bpDnSt_${tf}`]||'';
+            const vBuEn=p[`bpUpEn_${tf}`]||'', vBdEn=p[`bpDnEn_${tf}`]||'';
+            return (
+              <div key={`m-${p.id}`} className={`bg-white rounded-xl border-2 shadow-sm p-3 ${isAbsent||isPause?'border-slate-200 opacity-70':'border-slate-300'}`}>
+                <div className="flex items-center justify-between gap-2 mb-2.5">
+                  <button onClick={()=>setPatientInfoModal(masterData)} className="font-bold text-base text-slate-800 flex items-center gap-1 min-w-0"><span className="truncate">{p.name}</span><span className="text-[10px] text-blue-500 shrink-0">ⓘ</span></button>
+                  {isReadOnly||isPause ? <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${config.lightColor} ${config.textColor}`}>{p.status||'出席'}</span>
+                    : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{p.status==='振替'?(<><option value="振替">振替</option><option value="取り消し">取り消し</option></>):appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}</select>}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {['arrival','departure'].map(t=>{ const mo=KIBUN_MOODS.find(m=>m.key===p[t==='arrival'?'kibunArrival':'kibunDeparture']); return (
+                    <button key={t} disabled={dis} onClick={()=>openKibunModal(p.id,t)} className={`rounded-lg py-2 flex items-center justify-center gap-2 disabled:opacity-40 ${mo?mo.color+' font-bold':'bg-slate-100 text-slate-400'}`}>
+                      <span className="text-xs font-bold text-slate-700">{t==='arrival'?'通所':'帰宅'}</span><span className="text-2xl leading-none">{mo?mo.emoji:'＋'}</span>
+                    </button>
+                  );})}
+                </div>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {[['体温',`temp_${tf}`,vT,getTempColorClass(vT),vT?`${vT}℃`:'＋'],
+                    ['開始 血圧',`bpSt_combo_${tf}`,(vBuSt&&vBdSt)?`${vBuSt}/${vBdSt}`:'','text-slate-800',(vBuSt||vBdSt)?`${vBuSt}/${vBdSt}`:'＋'],
+                    ['終了 血圧',`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋']
+                  ].map(([lbl,field,cur,colorCls,shown])=>(
+                    <button key={field} disabled={dis} onClick={()=>{openKeypad(p.id,field,cur,isAbsent);setActiveCell(`${p.id}-${field}`);}} className="rounded-lg border border-slate-300 bg-white py-1.5 px-1 disabled:opacity-40 flex flex-col items-center">
+                      <span className="text-[10px] font-bold text-slate-500">{lbl}</span>
+                      <span className={`text-base font-bold ${colorCls}`}>{shown}</span>
+                    </button>
+                  ))}
+                </div>
+                {!isAbsent && <div className="grid grid-cols-3 gap-1.5">
+                  {exItems.map(item=>{ const v=p.exercises?.[item.id]; const vs=String((typeof v==='object'?'':v)??''); const unit=item.defaultUnit||''; const disp=(vs&&/[0-9０-９]/.test(vs)&&unit&&!vs.endsWith(unit))?`${vs}${unit}`:vs; const ph=plannedEx[item.id]||''; return (
+                    <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0">
+                      <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
+                      <span className="text-sm font-bold text-blue-700">{disp||<span className="text-slate-300">{ph||'＋'}</span>}</span>
+                    </button>
+                  );})}
+                </div>}
+                <input type="text" disabled={dis} value={p.tokki||''} onChange={e=>updateRow(p.id,'tokki',e.target.value)} placeholder={isAbsent?'欠席理由...':'特記...'} className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-50"/>
+              </div>
+            );
+          })}
+        </div>
+        <table id="record-table" className="hidden md:table text-sm text-left relative" style={{
           tableLayout:'fixed',borderCollapse:'separate',borderSpacing:0,
           minWidth:'max-content',width:'max-content',
           // ★ 全画面時のみ 1.1 倍拡大 (transform-origin top-left でレイアウト整合)
