@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tsumugi (紡ぎ) ロゴ案 v6 — 水彩風 四つ葉 + リース</title>
+<style>
+  body {
+    background: #f7f5ee;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3a1f;
+    font-family: 'Hiragino Sans', 'Hiragino Maru Gothic ProN', sans-serif;
+  }
+  h1 {
+    text-align: center;
+    color: #2d3a1f;
+    font-weight: 500;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+  .sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    gap: 30px;
+  }
+  .logo-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 36px;
+    box-shadow: 0 4px 24px rgba(60,80,40,0.06);
+    border: 1px solid #e8e4d4;
+  }
+  .logo-card h2 {
+    font-size: 20px;
+    margin: 0 0 8px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #4a5d2f;
+  }
+  .logo-card .desc {
+    font-size: 13px;
+    margin-bottom: 24px;
+    line-height: 1.7;
+    color: #6b7280;
+  }
+  .preview-area {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+  .preview-box {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 40px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ece8d8;
+  }
+  .compact-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .compact-box {
+    background: #faf8f1;
+    border-radius: 12px;
+    padding: 24px 16px;
+    text-align: center;
+    border: 1px solid #ece8d8;
+  }
+  .compact-box span {
+    display: block;
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 8px;
+    letter-spacing: 1px;
+  }
+  .label {
+    font-size: 11px;
+    color: #6b7280;
+    text-align: center;
+    margin: 6px 0 0;
+    letter-spacing: 1px;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+  .login-mockup {
+    background: linear-gradient(135deg, #e8e4d2 0%, #d9d3bd 100%);
+    padding: 30px 24px;
+    border-radius: 16px;
+    margin-top: 8px;
+  }
+  .login-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 24px 20px;
+    max-width: 280px;
+    margin: 0 auto;
+    box-shadow: 0 10px 30px rgba(60,80,40,0.2);
+  }
+</style>
+</head>
+<body>
+  <h1>紡ぎ - Tsumugi ロゴ案 v6</h1>
+  <p class="sub">水彩風 四つ葉のクローバー + リース (月桂冠)</p>
+
+  <div class="container">
+
+    <!-- メインロゴ -->
+    <div class="logo-card">
+      <h2>🌿 完全版 (ロゴ + リース + 文字)</h2>
+      <p class="desc">参考画像の雰囲気を取り入れた水彩風四つ葉。リース (月桂冠) で4者を囲み、「すべてを抱き込む・調和」のニュアンスを表現。</p>
+
+      <div class="preview-box">
+        <svg viewBox="0 0 600 280" style="width:100%; max-width:560px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <!-- 水彩風の葉グラデ -->
+            <radialGradient id="leafA" cx="40%" cy="55%" r="55%">
+              <stop offset="0%" stop-color="#e3edc8" stop-opacity="1"/>
+              <stop offset="45%" stop-color="#a5c47a" stop-opacity="1"/>
+              <stop offset="100%" stop-color="#6b8b48" stop-opacity="0.9"/>
+            </radialGradient>
+            <radialGradient id="leafB" cx="55%" cy="50%" r="55%">
+              <stop offset="0%" stop-color="#dce6b9" stop-opacity="1"/>
+              <stop offset="50%" stop-color="#94b86a" stop-opacity="1"/>
+              <stop offset="100%" stop-color="#5e7d40" stop-opacity="0.85"/>
+            </radialGradient>
+            <radialGradient id="leafWreath" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#b8cf8a"/>
+              <stop offset="100%" stop-color="#7a9658"/>
+            </radialGradient>
+          </defs>
+
+          <!-- ============ リース (月桂冠) ============ -->
+          <g transform="translate(140, 140)">
+            <!-- 左の枝 -->
+            <path d="M 0 110 Q -90 90 -100 0 Q -90 -100 0 -110"
+                  stroke="#7a9658" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <!-- 左の葉 (下から上へ) -->
+            <g fill="url(#leafWreath)">
+              <ellipse cx="-30" cy="106" rx="12" ry="4.5" transform="rotate(60 -30 106)" opacity="0.85"/>
+              <ellipse cx="-55" cy="100" rx="13" ry="5" transform="rotate(45 -55 100)" opacity="0.9"/>
+              <ellipse cx="-72" cy="85" rx="13" ry="5" transform="rotate(30 -72 85)" opacity="0.85"/>
+              <ellipse cx="-86" cy="65" rx="13" ry="5" transform="rotate(10 -86 65)" opacity="0.9"/>
+              <ellipse cx="-96" cy="40" rx="13" ry="5" transform="rotate(-10 -96 40)" opacity="0.85"/>
+              <ellipse cx="-100" cy="14" rx="13" ry="5" transform="rotate(-30 -100 14)" opacity="0.9"/>
+              <ellipse cx="-100" cy="-14" rx="13" ry="5" transform="rotate(30 -100 -14)" opacity="0.85"/>
+              <ellipse cx="-96" cy="-40" rx="13" ry="5" transform="rotate(10 -96 -40)" opacity="0.9"/>
+              <ellipse cx="-86" cy="-65" rx="13" ry="5" transform="rotate(-10 -86 -65)" opacity="0.85"/>
+              <ellipse cx="-72" cy="-85" rx="13" ry="5" transform="rotate(-30 -72 -85)" opacity="0.9"/>
+              <ellipse cx="-55" cy="-100" rx="13" ry="5" transform="rotate(-45 -55 -100)" opacity="0.85"/>
+              <ellipse cx="-30" cy="-106" rx="12" ry="4.5" transform="rotate(-60 -30 -106)" opacity="0.9"/>
+            </g>
+            <!-- 左側の小さな白い花 -->
+            <g fill="#fefcf6" stroke="#a8c47e" stroke-width="0.6">
+              <circle cx="-95" cy="40" r="2.5"/>
+              <circle cx="-90" cy="-50" r="2.5"/>
+              <circle cx="-50" cy="-95" r="2.5"/>
+            </g>
+
+            <!-- 右の枝 -->
+            <path d="M 0 110 Q 90 90 100 0 Q 90 -100 0 -110"
+                  stroke="#7a9658" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <!-- 右の葉 -->
+            <g fill="url(#leafWreath)">
+              <ellipse cx="30" cy="106" rx="12" ry="4.5" transform="rotate(-60 30 106)" opacity="0.85"/>
+              <ellipse cx="55" cy="100" rx="13" ry="5" transform="rotate(-45 55 100)" opacity="0.9"/>
+              <ellipse cx="72" cy="85" rx="13" ry="5" transform="rotate(-30 72 85)" opacity="0.85"/>
+              <ellipse cx="86" cy="65" rx="13" ry="5" transform="rotate(-10 86 65)" opacity="0.9"/>
+              <ellipse cx="96" cy="40" rx="13" ry="5" transform="rotate(10 96 40)" opacity="0.85"/>
+              <ellipse cx="100" cy="14" rx="13" ry="5" transform="rotate(30 100 14)" opacity="0.9"/>
+              <ellipse cx="100" cy="-14" rx="13" ry="5" transform="rotate(-30 100 -14)" opacity="0.85"/>
+              <ellipse cx="96" cy="-40" rx="13" ry="5" transform="rotate(-10 96 -40)" opacity="0.9"/>
+              <ellipse cx="86" cy="-65" rx="13" ry="5" transform="rotate(10 86 -65)" opacity="0.85"/>
+              <ellipse cx="72" cy="-85" rx="13" ry="5" transform="rotate(30 72 -85)" opacity="0.9"/>
+              <ellipse cx="55" cy="-100" rx="13" ry="5" transform="rotate(45 55 -100)" opacity="0.85"/>
+              <ellipse cx="30" cy="-106" rx="12" ry="4.5" transform="rotate(60 30 -106)" opacity="0.9"/>
+            </g>
+            <!-- 右側の小さな白い花 -->
+            <g fill="#fefcf6" stroke="#a8c47e" stroke-width="0.6">
+              <circle cx="95" cy="40" r="2.5"/>
+              <circle cx="90" cy="-50" r="2.5"/>
+              <circle cx="50" cy="-95" r="2.5"/>
+            </g>
+
+            <!-- ============ 中央の四つ葉クローバー (水彩風) ============ -->
+            <!-- 各葉は ハート型 を中心に向けて配置 -->
+            <!-- 上の葉 -->
+            <g transform="rotate(0)">
+              <path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z"
+                    fill="url(#leafA)" opacity="0.95"/>
+              <!-- 水彩のムラ -->
+              <ellipse cx="-12" cy="-30" rx="8" ry="14" fill="#6b8b48" opacity="0.18"/>
+              <ellipse cx="15" cy="-45" rx="6" ry="10" fill="#8aa959" opacity="0.25"/>
+              <!-- 葉脈 -->
+              <line x1="0" y1="-3" x2="0" y2="-55" stroke="#4a5d2f" stroke-width="0.6" opacity="0.4"/>
+            </g>
+            <!-- 右の葉 -->
+            <g transform="rotate(90)">
+              <path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z"
+                    fill="url(#leafB)" opacity="0.95"/>
+              <ellipse cx="-12" cy="-30" rx="8" ry="14" fill="#5e7d40" opacity="0.18"/>
+              <ellipse cx="15" cy="-45" rx="6" ry="10" fill="#7c9d52" opacity="0.25"/>
+              <line x1="0" y1="-3" x2="0" y2="-55" stroke="#4a5d2f" stroke-width="0.6" opacity="0.4"/>
+            </g>
+            <!-- 下の葉 -->
+            <g transform="rotate(180)">
+              <path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z"
+                    fill="url(#leafA)" opacity="0.92"/>
+              <ellipse cx="-12" cy="-30" rx="8" ry="14" fill="#6b8b48" opacity="0.18"/>
+              <ellipse cx="15" cy="-45" rx="6" ry="10" fill="#8aa959" opacity="0.25"/>
+              <line x1="0" y1="-3" x2="0" y2="-55" stroke="#4a5d2f" stroke-width="0.6" opacity="0.4"/>
+            </g>
+            <!-- 左の葉 -->
+            <g transform="rotate(270)">
+              <path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z"
+                    fill="url(#leafB)" opacity="0.93"/>
+              <ellipse cx="-12" cy="-30" rx="8" ry="14" fill="#5e7d40" opacity="0.18"/>
+              <ellipse cx="15" cy="-45" rx="6" ry="10" fill="#7c9d52" opacity="0.25"/>
+              <line x1="0" y1="-3" x2="0" y2="-55" stroke="#4a5d2f" stroke-width="0.6" opacity="0.4"/>
+            </g>
+
+            <!-- 茎 (下に伸びる) -->
+            <path d="M 0 0 Q 4 30 -2 72" stroke="#5e7d40" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.9"/>
+            <!-- 茎の小葉 -->
+            <ellipse cx="-12" cy="55" rx="9" ry="3.5" fill="url(#leafWreath)" transform="rotate(-30 -12 55)" opacity="0.9"/>
+          </g>
+
+          <!-- ============ テキスト ============ -->
+          <text x="310" y="125" font-family="'Hiragino Sans','Hiragino Maru Gothic ProN',sans-serif"
+                font-size="54" fill="#3d5021" font-weight="400" letter-spacing="10">紡ぎ</text>
+          <line x1="310" y1="148" x2="335" y2="148" stroke="#a8c47e" stroke-width="1"/>
+          <text x="343" y="155" font-family="'Helvetica Neue',Arial,sans-serif"
+                font-size="20" fill="#6b8b48" letter-spacing="6" font-weight="300" font-style="italic">Tsumugi</text>
+          <line x1="450" y1="148" x2="475" y2="148" stroke="#a8c47e" stroke-width="1"/>
+          <text x="310" y="190" font-family="'Hiragino Sans','Hiragino Maru Gothic ProN',sans-serif"
+                font-size="12" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+        </svg>
+      </div>
+      <p class="label">完全版 (ログイン画面・パンフレット用)</p>
+    </div>
+
+    <!-- コンパクト版 (リース無し) -->
+    <div class="logo-card">
+      <h2>🍀 コンパクト版 (クローバー + 文字、リース無し)</h2>
+      <p class="desc">サイドバー・狭いヘッダー用にリースを省略したシンプル版。</p>
+
+      <div class="preview-box">
+        <svg viewBox="0 0 440 130" style="width:100%; max-width:420px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="leafA2" cx="40%" cy="55%" r="55%">
+              <stop offset="0%" stop-color="#e3edc8"/>
+              <stop offset="45%" stop-color="#a5c47a"/>
+              <stop offset="100%" stop-color="#6b8b48"/>
+            </radialGradient>
+            <radialGradient id="leafB2" cx="55%" cy="50%" r="55%">
+              <stop offset="0%" stop-color="#dce6b9"/>
+              <stop offset="50%" stop-color="#94b86a"/>
+              <stop offset="100%" stop-color="#5e7d40"/>
+            </radialGradient>
+          </defs>
+          <!-- 四つ葉 -->
+          <g transform="translate(60, 65)">
+            <g transform="rotate(0)">
+              <path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z"
+                    fill="url(#leafA2)" opacity="0.95"/>
+            </g>
+            <g transform="rotate(90)">
+              <path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z"
+                    fill="url(#leafB2)" opacity="0.95"/>
+            </g>
+            <g transform="rotate(180)">
+              <path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z"
+                    fill="url(#leafA2)" opacity="0.92"/>
+            </g>
+            <g transform="rotate(270)">
+              <path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z"
+                    fill="url(#leafB2)" opacity="0.93"/>
+            </g>
+            <path d="M 0 0 Q 3 20 -2 50" stroke="#5e7d40" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.85"/>
+          </g>
+          <!-- テキスト -->
+          <text x="130" y="62" font-family="'Hiragino Sans',sans-serif" font-size="44" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+          <text x="130" y="86" font-family="'Helvetica Neue',Arial,sans-serif" font-size="16" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+          <text x="130" y="111" font-family="'Hiragino Sans',sans-serif" font-size="10.5" fill="#5e7d40" letter-spacing="2">家族と現場をむすぶ、デイサービス</text>
+        </svg>
+      </div>
+      <p class="label">コンパクト版 (サイドバーなど)</p>
+    </div>
+
+    <!-- ファビコン / アイコン版 -->
+    <div class="logo-card">
+      <h2>🌱 アイコン版 (各サイズ)</h2>
+      <p class="desc">ブラウザタブ・スマホホーム画面用のアイコンサイズ。</p>
+
+      <div class="compact-row">
+        <div class="compact-box">
+          <svg viewBox="0 0 80 80" width="64" height="64">
+            <defs>
+              <radialGradient id="leafA3" cx="40%" cy="55%" r="55%">
+                <stop offset="0%" stop-color="#e3edc8"/>
+                <stop offset="45%" stop-color="#a5c47a"/>
+                <stop offset="100%" stop-color="#6b8b48"/>
+              </radialGradient>
+              <radialGradient id="leafB3" cx="55%" cy="50%" r="55%">
+                <stop offset="0%" stop-color="#dce6b9"/>
+                <stop offset="50%" stop-color="#94b86a"/>
+                <stop offset="100%" stop-color="#5e7d40"/>
+              </radialGradient>
+            </defs>
+            <g transform="translate(40, 40)">
+              <g transform="rotate(0)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafA3)"/></g>
+              <g transform="rotate(90)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafB3)"/></g>
+              <g transform="rotate(180)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafA3)"/></g>
+              <g transform="rotate(270)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafB3)"/></g>
+            </g>
+          </svg>
+          <span>64×64</span>
+        </div>
+        <div class="compact-box">
+          <svg viewBox="0 0 80 80" width="32" height="32">
+            <defs>
+              <radialGradient id="leafA4" cx="40%" cy="55%" r="55%">
+                <stop offset="0%" stop-color="#e3edc8"/>
+                <stop offset="45%" stop-color="#a5c47a"/>
+                <stop offset="100%" stop-color="#6b8b48"/>
+              </radialGradient>
+              <radialGradient id="leafB4" cx="55%" cy="50%" r="55%">
+                <stop offset="0%" stop-color="#dce6b9"/>
+                <stop offset="50%" stop-color="#94b86a"/>
+                <stop offset="100%" stop-color="#5e7d40"/>
+              </radialGradient>
+            </defs>
+            <g transform="translate(40, 40)">
+              <g transform="rotate(0)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafA4)"/></g>
+              <g transform="rotate(90)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafB4)"/></g>
+              <g transform="rotate(180)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafA4)"/></g>
+              <g transform="rotate(270)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafB4)"/></g>
+            </g>
+          </svg>
+          <span>32×32</span>
+        </div>
+        <div class="compact-box">
+          <svg viewBox="0 0 80 80" width="16" height="16">
+            <defs>
+              <radialGradient id="leafA5" cx="40%" cy="55%" r="55%">
+                <stop offset="0%" stop-color="#e3edc8"/>
+                <stop offset="45%" stop-color="#a5c47a"/>
+                <stop offset="100%" stop-color="#6b8b48"/>
+              </radialGradient>
+              <radialGradient id="leafB5" cx="55%" cy="50%" r="55%">
+                <stop offset="0%" stop-color="#dce6b9"/>
+                <stop offset="50%" stop-color="#94b86a"/>
+                <stop offset="100%" stop-color="#5e7d40"/>
+              </radialGradient>
+            </defs>
+            <g transform="translate(40, 40)">
+              <g transform="rotate(0)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafA5)"/></g>
+              <g transform="rotate(90)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafB5)"/></g>
+              <g transform="rotate(180)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafA5)"/></g>
+              <g transform="rotate(270)"><path d="M 0 0 C -10 -8 -24 -18 -24 -34 C -24 -46 -12 -50 0 -42 C 12 -50 24 -46 24 -34 C 24 -18 10 -8 0 0 Z" fill="url(#leafB5)"/></g>
+            </g>
+          </svg>
+          <span>16×16 (favicon)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ログイン画面モックアップ -->
+    <div class="logo-card">
+      <h2>🖼 ログイン画面イメージ</h2>
+      <p class="desc">実際のログイン画面でどう見えるかのモックアップ。</p>
+
+      <div class="login-mockup">
+        <svg viewBox="0 0 600 280" style="width:100%; max-width:380px; display:block; margin:0 auto 20px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="leafA6" cx="40%" cy="55%" r="55%">
+              <stop offset="0%" stop-color="#e3edc8"/>
+              <stop offset="45%" stop-color="#a5c47a"/>
+              <stop offset="100%" stop-color="#6b8b48"/>
+            </radialGradient>
+            <radialGradient id="leafB6" cx="55%" cy="50%" r="55%">
+              <stop offset="0%" stop-color="#dce6b9"/>
+              <stop offset="50%" stop-color="#94b86a"/>
+              <stop offset="100%" stop-color="#5e7d40"/>
+            </radialGradient>
+            <radialGradient id="leafWreath2" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#b8cf8a"/>
+              <stop offset="100%" stop-color="#7a9658"/>
+            </radialGradient>
+          </defs>
+          <g transform="translate(140, 140)">
+            <path d="M 0 110 Q -90 90 -100 0 Q -90 -100 0 -110" stroke="#7a9658" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <g fill="url(#leafWreath2)">
+              <ellipse cx="-30" cy="106" rx="12" ry="4.5" transform="rotate(60 -30 106)" opacity="0.85"/>
+              <ellipse cx="-55" cy="100" rx="13" ry="5" transform="rotate(45 -55 100)" opacity="0.9"/>
+              <ellipse cx="-72" cy="85" rx="13" ry="5" transform="rotate(30 -72 85)" opacity="0.85"/>
+              <ellipse cx="-86" cy="65" rx="13" ry="5" transform="rotate(10 -86 65)" opacity="0.9"/>
+              <ellipse cx="-96" cy="40" rx="13" ry="5" transform="rotate(-10 -96 40)" opacity="0.85"/>
+              <ellipse cx="-100" cy="14" rx="13" ry="5" transform="rotate(-30 -100 14)" opacity="0.9"/>
+              <ellipse cx="-100" cy="-14" rx="13" ry="5" transform="rotate(30 -100 -14)" opacity="0.85"/>
+              <ellipse cx="-96" cy="-40" rx="13" ry="5" transform="rotate(10 -96 -40)" opacity="0.9"/>
+              <ellipse cx="-86" cy="-65" rx="13" ry="5" transform="rotate(-10 -86 -65)" opacity="0.85"/>
+              <ellipse cx="-72" cy="-85" rx="13" ry="5" transform="rotate(-30 -72 -85)" opacity="0.9"/>
+              <ellipse cx="-55" cy="-100" rx="13" ry="5" transform="rotate(-45 -55 -100)" opacity="0.85"/>
+              <ellipse cx="-30" cy="-106" rx="12" ry="4.5" transform="rotate(-60 -30 -106)" opacity="0.9"/>
+            </g>
+            <path d="M 0 110 Q 90 90 100 0 Q 90 -100 0 -110" stroke="#7a9658" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <g fill="url(#leafWreath2)">
+              <ellipse cx="30" cy="106" rx="12" ry="4.5" transform="rotate(-60 30 106)" opacity="0.85"/>
+              <ellipse cx="55" cy="100" rx="13" ry="5" transform="rotate(-45 55 100)" opacity="0.9"/>
+              <ellipse cx="72" cy="85" rx="13" ry="5" transform="rotate(-30 72 85)" opacity="0.85"/>
+              <ellipse cx="86" cy="65" rx="13" ry="5" transform="rotate(-10 86 65)" opacity="0.9"/>
+              <ellipse cx="96" cy="40" rx="13" ry="5" transform="rotate(10 96 40)" opacity="0.85"/>
+              <ellipse cx="100" cy="14" rx="13" ry="5" transform="rotate(30 100 14)" opacity="0.9"/>
+              <ellipse cx="100" cy="-14" rx="13" ry="5" transform="rotate(-30 100 -14)" opacity="0.85"/>
+              <ellipse cx="96" cy="-40" rx="13" ry="5" transform="rotate(-10 96 -40)" opacity="0.9"/>
+              <ellipse cx="86" cy="-65" rx="13" ry="5" transform="rotate(10 86 -65)" opacity="0.85"/>
+              <ellipse cx="72" cy="-85" rx="13" ry="5" transform="rotate(30 72 -85)" opacity="0.9"/>
+              <ellipse cx="55" cy="-100" rx="13" ry="5" transform="rotate(45 55 -100)" opacity="0.85"/>
+              <ellipse cx="30" cy="-106" rx="12" ry="4.5" transform="rotate(60 30 -106)" opacity="0.9"/>
+            </g>
+            <g transform="rotate(0)"><path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z" fill="url(#leafA6)" opacity="0.95"/></g>
+            <g transform="rotate(90)"><path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z" fill="url(#leafB6)" opacity="0.95"/></g>
+            <g transform="rotate(180)"><path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z" fill="url(#leafA6)" opacity="0.92"/></g>
+            <g transform="rotate(270)"><path d="M 0 0 C -15 -10 -35 -25 -35 -48 C -35 -65 -18 -70 0 -58 C 18 -70 35 -65 35 -48 C 35 -25 15 -10 0 0 Z" fill="url(#leafB6)" opacity="0.93"/></g>
+          </g>
+          <text x="310" y="125" font-family="'Hiragino Sans',sans-serif" font-size="54" fill="#3d5021" font-weight="400" letter-spacing="10">紡ぎ</text>
+          <text x="343" y="155" font-family="'Helvetica Neue',sans-serif" font-size="20" fill="#6b8b48" letter-spacing="6" font-weight="300" font-style="italic">Tsumugi</text>
+          <text x="310" y="190" font-family="'Hiragino Sans',sans-serif" font-size="12" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+        </svg>
+
+        <div class="login-card">
+          <h3 style="font-size:13px; text-align:center; margin:0 0 14px; color:#4a5d2f; letter-spacing:3px; font-weight:500; font-family:'Hiragino Sans',serif;">事業所ログイン</h3>
+          <div style="margin-bottom:10px;">
+            <label style="display:block; font-size:10px; font-weight:bold; color:#7a9658; margin-bottom:4px; letter-spacing:1px;">ログインID</label>
+            <input type="text" placeholder="例: hikari-ogi" style="width:100%; padding:8px 10px; border:1px solid #d4dec0; background:#fffdf7; border-radius:8px; font-size:12px; outline:none; box-sizing:border-box;">
+          </div>
+          <div style="margin-bottom:14px;">
+            <label style="display:block; font-size:10px; font-weight:bold; color:#7a9658; margin-bottom:4px; letter-spacing:1px;">パスワード</label>
+            <input type="password" placeholder="••••••••" style="width:100%; padding:8px 10px; border:1px solid #d4dec0; background:#fffdf7; border-radius:8px; font-size:12px; outline:none; box-sizing:border-box;">
+          </div>
+          <button style="width:100%; padding:10px; background:linear-gradient(135deg,#7a9658,#5e7d40); color:#fff8e7; border:none; border-radius:8px; font-size:12px; font-weight:bold; cursor:pointer; letter-spacing:3px;">ログイン</button>
+          <button style="width:100%; padding:8px; background:#fffdf7; color:#5e7d40; border:2px dashed #c5d4a8; border-radius:8px; font-size:11px; font-weight:bold; cursor:pointer; margin-top:8px;">🎮 デモで試す（ログイン不要）</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer">
+    🌿 この方向で良さそうなら「これでお願いします」<br>
+    調整希望もOK — 色のトーン・リースの装飾・葉の形など
+  </p>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tsumugi (紡ぎ) ロゴ案 v11 — 緑トーン統一の5案</title>
+<style>
+  body {
+    background: #f7f5ee;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3a1f;
+    font-family: 'Hiragino Sans', sans-serif;
+  }
+  h1 {
+    text-align: center;
+    color: #2d3a1f;
+    font-weight: 500;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+  .sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    gap: 28px;
+  }
+  .logo-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 4px 24px rgba(60,80,40,0.06);
+    border: 1px solid #e8e4d4;
+  }
+  .logo-card h2 {
+    font-size: 19px;
+    margin: 0 0 6px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #4a5d2f;
+  }
+  .logo-card .desc {
+    font-size: 12.5px;
+    margin-bottom: 16px;
+    line-height: 1.7;
+    color: #6b7280;
+  }
+  .preview-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 14px;
+  }
+  .preview-main {
+    background: #fffdf7;
+    border-radius: 12px;
+    padding: 26px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon {
+    background: #fffdf7;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon span {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: 1px;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+  <h1>紡ぎ - Tsumugi ロゴ案 v11</h1>
+  <p class="sub">緑トーンで統一した「4つが結ばれる」5案</p>
+
+  <!-- 共通: 緑のグラデ -->
+  <svg width="0" height="0" style="position:absolute;">
+    <defs>
+      <linearGradient id="greenDeep" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#a5c47a"/>
+        <stop offset="100%" stop-color="#5e7d40"/>
+      </linearGradient>
+      <linearGradient id="greenMid" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#bcd497"/>
+        <stop offset="100%" stop-color="#7a9658"/>
+      </linearGradient>
+      <linearGradient id="greenLight" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#dce6b9"/>
+        <stop offset="100%" stop-color="#94b86a"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <div class="container">
+
+    <!-- ============ 案1: 手をつなぐ4人の輪 (緑) ============ -->
+    <div class="logo-card">
+      <h2>案1:「手をつなぐ4人の輪」 — 緑トーン</h2>
+      <p class="desc">4人の人型が手をつないで円を作る。緑の濃淡で4人を区別、中心に金のハート。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 140" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 60)">
+              <!-- 4人の頭 (緑の濃淡で区別) -->
+              <circle cx="0" cy="-32" r="7" fill="#5e7d40"/>
+              <circle cx="32" cy="0" r="7" fill="#7a9658"/>
+              <circle cx="0" cy="32" r="7" fill="#94b86a"/>
+              <circle cx="-32" cy="0" r="7" fill="#7a9658"/>
+              <!-- 体・腕 (緑の濃淡で繋がる) -->
+              <g fill="none" stroke-width="3.5" stroke-linecap="round">
+                <path d="M -5 -29 Q -22 -22 -29 -5" stroke="#6b8b48" opacity="0.85"/>
+                <path d="M 5 -29 Q 22 -22 29 -5" stroke="#7a9658" opacity="0.85"/>
+                <path d="M 29 5 Q 22 22 5 29" stroke="#8aa959" opacity="0.85"/>
+                <path d="M -5 29 Q -22 22 -29 5" stroke="#7a9658" opacity="0.85"/>
+              </g>
+              <!-- 中央のハート (金色アクセント) -->
+              <path d="M 0 -2 C -2 -6 -7 -6 -7 -2 C -7 2 -3 5 0 8 C 3 5 7 2 7 -2 C 7 -6 2 -6 0 -2 Z" fill="#fff" stroke="#a8741a" stroke-width="1.5"/>
+              <circle cx="0" cy="2" r="1.8" fill="#fbbf24"/>
+            </g>
+            <text x="155" y="56" font-family="'Hiragino Sans',sans-serif" font-size="42" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="80" font-family="'Helvetica Neue',sans-serif" font-size="16" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="104" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="60" height="60">
+            <g transform="translate(50, 50)">
+              <circle cx="0" cy="-32" r="7" fill="#5e7d40"/>
+              <circle cx="32" cy="0" r="7" fill="#7a9658"/>
+              <circle cx="0" cy="32" r="7" fill="#94b86a"/>
+              <circle cx="-32" cy="0" r="7" fill="#7a9658"/>
+              <g fill="none" stroke-width="3.5" stroke-linecap="round">
+                <path d="M -5 -29 Q -22 -22 -29 -5" stroke="#6b8b48"/>
+                <path d="M 5 -29 Q 22 -22 29 -5" stroke="#7a9658"/>
+                <path d="M 29 5 Q 22 22 5 29" stroke="#8aa959"/>
+                <path d="M -5 29 Q -22 22 -29 5" stroke="#7a9658"/>
+              </g>
+              <path d="M 0 -2 C -2 -6 -7 -6 -7 -2 C -7 2 -3 5 0 8 C 3 5 7 2 7 -2 C 7 -6 2 -6 0 -2 Z" fill="#fff" stroke="#a8741a" stroke-width="1.5"/>
+              <circle cx="0" cy="2" r="1.8" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案2: 水引結び (緑) ============ -->
+    <div class="logo-card">
+      <h2>案2:「水引結び」 — 緑トーン</h2>
+      <p class="desc">4本の水引が緑のグラデで統一。中心の結び目は金色のアクセント。和の上品さ + 自然の緑。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 140" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 60)">
+              <!-- 4本の水引 (緑の濃淡) -->
+              <g fill="none" stroke-width="3.5" stroke-linecap="round">
+                <path d="M -35 -35 Q -20 -25 -8 -8" stroke="#5e7d40"/>
+                <path d="M 35 -35 Q 20 -25 8 -8" stroke="#7a9658"/>
+                <path d="M 35 35 Q 20 25 8 8" stroke="#94b86a"/>
+                <path d="M -35 35 Q -20 25 -8 8" stroke="#6b8b48"/>
+              </g>
+              <!-- 水引の先端 (玉) -->
+              <circle cx="-35" cy="-35" r="3.5" fill="#5e7d40"/>
+              <circle cx="35" cy="-35" r="3.5" fill="#7a9658"/>
+              <circle cx="35" cy="35" r="3.5" fill="#94b86a"/>
+              <circle cx="-35" cy="35" r="3.5" fill="#6b8b48"/>
+              <!-- 中心の結び目 (花結び風 / 金アクセント) -->
+              <g>
+                <ellipse cx="-6" cy="0" rx="6" ry="9" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.2" transform="rotate(45 -6 0)"/>
+                <ellipse cx="6" cy="0" rx="6" ry="9" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.2" transform="rotate(-45 6 0)"/>
+                <circle cx="0" cy="0" r="3" fill="#fbbf24"/>
+              </g>
+            </g>
+            <text x="155" y="56" font-family="'Hiragino Sans',sans-serif" font-size="42" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="80" font-family="'Helvetica Neue',sans-serif" font-size="16" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="104" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="60" height="60">
+            <g transform="translate(50, 50)">
+              <g fill="none" stroke-width="3.5" stroke-linecap="round">
+                <path d="M -35 -35 Q -20 -25 -8 -8" stroke="#5e7d40"/>
+                <path d="M 35 -35 Q 20 -25 8 -8" stroke="#7a9658"/>
+                <path d="M 35 35 Q 20 25 8 8" stroke="#94b86a"/>
+                <path d="M -35 35 Q -20 25 -8 8" stroke="#6b8b48"/>
+              </g>
+              <circle cx="-35" cy="-35" r="3.5" fill="#5e7d40"/>
+              <circle cx="35" cy="-35" r="3.5" fill="#7a9658"/>
+              <circle cx="35" cy="35" r="3.5" fill="#94b86a"/>
+              <circle cx="-35" cy="35" r="3.5" fill="#6b8b48"/>
+              <ellipse cx="-6" cy="0" rx="6" ry="9" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.2" transform="rotate(45 -6 0)"/>
+              <ellipse cx="6" cy="0" rx="6" ry="9" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.2" transform="rotate(-45 6 0)"/>
+              <circle cx="0" cy="0" r="3" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案3: 4つのハート (緑) ============ -->
+    <div class="logo-card">
+      <h2>案3:「4つのハート」 — 緑トーン</h2>
+      <p class="desc">4つのハートが中心に向かって寄り添う。緑の濃淡で家族の絆を表現。葉っぽくも見えて自然。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 140" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 60)">
+              <g transform="rotate(0)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenDeep)" transform="translate(0, -22)"/></g>
+              <g transform="rotate(90)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenMid)" transform="translate(0, -22)"/></g>
+              <g transform="rotate(180)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenDeep)" transform="translate(0, -22)"/></g>
+              <g transform="rotate(270)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenMid)" transform="translate(0, -22)"/></g>
+              <!-- 中心の小さなハート (金アクセント) -->
+              <path d="M 0 -2 C -2 -6 -7 -6 -7 -2 C -7 2 -3 5 0 8 C 3 5 7 2 7 -2 C 7 -6 2 -6 0 -2 Z" fill="#fbbf24"/>
+            </g>
+            <text x="155" y="56" font-family="'Hiragino Sans',sans-serif" font-size="42" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="80" font-family="'Helvetica Neue',sans-serif" font-size="16" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="104" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="60" height="60">
+            <g transform="translate(50, 50)">
+              <g transform="rotate(0)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenDeep)" transform="translate(0, -22)"/></g>
+              <g transform="rotate(90)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenMid)" transform="translate(0, -22)"/></g>
+              <g transform="rotate(180)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenDeep)" transform="translate(0, -22)"/></g>
+              <g transform="rotate(270)"><path d="M 0 -10 C -3 -18 -14 -18 -14 -10 C -14 -2 -8 4 0 12 C 8 4 14 -2 14 -10 C 14 -18 3 -18 0 -10 Z" fill="url(#greenMid)" transform="translate(0, -22)"/></g>
+              <path d="M 0 -2 C -2 -6 -7 -6 -7 -2 C -7 2 -3 5 0 8 C 3 5 7 2 7 -2 C 7 -6 2 -6 0 -2 Z" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案4: ひとつ屋根の下 (緑) ============ -->
+    <div class="logo-card">
+      <h2>案4:「ひとつ屋根の下」 — 緑トーン</h2>
+      <p class="desc">緑の屋根と家。中の4人も緑の濃淡で統一。自然の中で安心して暮らす家族のような印象。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 140" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 60)">
+              <!-- 屋根 (緑の三角) -->
+              <path d="M -42 -10 L 0 -42 L 42 -10 Z" fill="url(#greenDeep)" stroke="#3d5021" stroke-width="1.5" stroke-linejoin="round"/>
+              <!-- 屋根の頂点に金アクセント -->
+              <circle cx="0" cy="-44" r="3" fill="#fbbf24" stroke="#a8741a" stroke-width="1"/>
+              <!-- 家本体 (クリーム色の四角) -->
+              <rect x="-36" y="-10" width="72" height="40" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.5" rx="3"/>
+              <!-- 中の4人 (緑の濃淡で頭) -->
+              <circle cx="-22" cy="8" r="6" fill="#5e7d40"/>
+              <circle cx="-8" cy="8" r="6" fill="#7a9658"/>
+              <circle cx="8" cy="8" r="6" fill="#94b86a"/>
+              <circle cx="22" cy="8" r="6" fill="#7a9658"/>
+              <!-- 体の暗示 -->
+              <path d="M -22 14 Q -22 22 -22 30" stroke="#5e7d40" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <path d="M -8 14 Q -8 22 -8 30" stroke="#7a9658" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <path d="M 8 14 Q 8 22 8 30" stroke="#94b86a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <path d="M 22 14 Q 22 22 22 30" stroke="#7a9658" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            </g>
+            <text x="155" y="56" font-family="'Hiragino Sans',sans-serif" font-size="42" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="80" font-family="'Helvetica Neue',sans-serif" font-size="16" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="104" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="60" height="60">
+            <g transform="translate(50, 50)">
+              <path d="M -42 -10 L 0 -42 L 42 -10 Z" fill="url(#greenDeep)" stroke="#3d5021" stroke-width="1.5" stroke-linejoin="round"/>
+              <rect x="-36" y="-10" width="72" height="40" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.5" rx="3"/>
+              <circle cx="-22" cy="8" r="6" fill="#5e7d40"/>
+              <circle cx="-8" cy="8" r="6" fill="#7a9658"/>
+              <circle cx="8" cy="8" r="6" fill="#94b86a"/>
+              <circle cx="22" cy="8" r="6" fill="#7a9658"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案5: 4本の糸が紡がれる (緑) ============ -->
+    <div class="logo-card">
+      <h2>案5:「4本の糸が紡がれる」 — 緑トーン</h2>
+      <p class="desc">緑の濃淡で4本の糸を表現、中央の紡錘(つむ)で1本に。「紡ぎ」という名前の意味を最も忠実に。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 140" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 60)">
+              <!-- 4本の糸 (緑の濃淡) -->
+              <g fill="none" stroke-width="2.5" stroke-linecap="round">
+                <path d="M -40 -38 Q -20 -28 -12 -10" stroke="#5e7d40"/>
+                <path d="M -15 -42 Q -8 -25 -4 -12" stroke="#7a9658"/>
+                <path d="M 15 -42 Q 8 -25 4 -12" stroke="#94b86a"/>
+                <path d="M 40 -38 Q 20 -28 12 -10" stroke="#6b8b48"/>
+              </g>
+              <!-- 4本の糸の先端 (玉) -->
+              <circle cx="-40" cy="-38" r="3" fill="#5e7d40"/>
+              <circle cx="-15" cy="-42" r="3" fill="#7a9658"/>
+              <circle cx="15" cy="-42" r="3" fill="#94b86a"/>
+              <circle cx="40" cy="-38" r="3" fill="#6b8b48"/>
+              <!-- 中心の紡錘 -->
+              <ellipse cx="0" cy="0" rx="6" ry="14" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.5"/>
+              <line x1="0" y1="-10" x2="0" y2="10" stroke="#5e7d40" stroke-width="1" opacity="0.7"/>
+              <!-- 下に流れる1本の糸 -->
+              <path d="M 0 14 Q -2 28 1 50" stroke="#3d5021" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <circle cx="1" cy="50" r="3.5" fill="#fbbf24" stroke="#a8741a" stroke-width="1"/>
+            </g>
+            <text x="155" y="56" font-family="'Hiragino Sans',sans-serif" font-size="42" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="80" font-family="'Helvetica Neue',sans-serif" font-size="16" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="104" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="60" height="60">
+            <g transform="translate(50, 45)">
+              <g fill="none" stroke-width="2.5" stroke-linecap="round">
+                <path d="M -38 -36 Q -20 -28 -12 -10" stroke="#5e7d40"/>
+                <path d="M -15 -40 Q -8 -25 -4 -12" stroke="#7a9658"/>
+                <path d="M 15 -40 Q 8 -25 4 -12" stroke="#94b86a"/>
+                <path d="M 38 -36 Q 20 -28 12 -10" stroke="#6b8b48"/>
+              </g>
+              <ellipse cx="0" cy="0" rx="6" ry="14" fill="#faf8f1" stroke="#5e7d40" stroke-width="1.5"/>
+              <line x1="0" y1="-10" x2="0" y2="10" stroke="#5e7d40" stroke-width="1"/>
+              <path d="M 0 14 Q -2 28 1 45" stroke="#3d5021" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <circle cx="1" cy="45" r="3.5" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer">
+    🌿 緑の雰囲気で統一した5案。1〜5 で気になるものは?<br>
+    クローバーに戻すのも・組み合わせもOK
+  </p>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tsumugi (紡ぎ) ロゴ案 v17 — 最終案</title>
+<style>
+  body {
+    background: #f7f5ee;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3a1f;
+    font-family: 'Hiragino Sans', sans-serif;
+  }
+  h1 {
+    text-align: center;
+    color: #2d3a1f;
+    font-weight: 500;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+  .sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    gap: 28px;
+  }
+  .logo-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 36px;
+    box-shadow: 0 4px 24px rgba(60,80,40,0.06);
+    border: 1px solid #e8e4d4;
+  }
+  .logo-card h2 {
+    font-size: 20px;
+    margin: 0 0 16px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #4a5d2f;
+  }
+  .preview-row {
+    display: grid;
+    grid-template-columns: 2.5fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .preview-main {
+    background: #fff;
+    border-radius: 12px;
+    padding: 36px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon span {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: 1px;
+  }
+  .notes {
+    background: #fffef7;
+    padding: 16px 20px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    color: #4a5d2f;
+    line-height: 1.7;
+    border-left: 3px solid #a8c47e;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+  <h1>紡ぎ - Tsumugi ロゴ案 v17 (最終案)</h1>
+  <p class="sub">2枚目のクローバー + 1枚目のフォント + 文字ブロックに高さを合わせる</p>
+
+  <div class="container">
+
+    <!-- メイン ロゴ -->
+    <div class="logo-card">
+      <h2>📐 最終ロゴ — クローバーと文字ブロックの高さを揃える</h2>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 440 90" style="width:100%; max-width:420px;" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="leafA17" cx="40%" cy="55%" r="55%">
+                <stop offset="0%" stop-color="#dce6b9"/>
+                <stop offset="50%" stop-color="#a8c47e"/>
+                <stop offset="100%" stop-color="#6b8b48"/>
+              </radialGradient>
+              <radialGradient id="leafB17" cx="55%" cy="50%" r="55%">
+                <stop offset="0%" stop-color="#d4e3b0"/>
+                <stop offset="50%" stop-color="#94b86a"/>
+                <stop offset="100%" stop-color="#5e7d40"/>
+              </radialGradient>
+            </defs>
+            <!-- クローバー (文字ブロック=高さ約78pxに合わせる) -->
+            <g transform="translate(40, 42)">
+              <!-- 茎 (右に少しカーブ) -->
+              <path d="M 0 3 Q 4 16 6 32" stroke="#5e7d40" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+              <!-- X字 4枚葉 -->
+              <g transform="rotate(45)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafA17)" opacity="0.95"/></g>
+              <g transform="rotate(135)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafB17)" opacity="0.95"/></g>
+              <g transform="rotate(225)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafA17)" opacity="0.92"/></g>
+              <g transform="rotate(315)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafB17)" opacity="0.93"/></g>
+              <!-- 中心 -->
+              <circle cx="0" cy="0" r="3" fill="#fbbf24"/>
+            </g>
+            <!-- テキスト (1枚目のフォントスタイルを再現) -->
+            <text x="90" y="32" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif" font-size="36" fill="#3d5021" font-weight="700" letter-spacing="2">紡ぎ</text>
+            <text x="92" y="54" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif" font-size="14" fill="#6b8b48" font-weight="500" letter-spacing="3">Tsumugi</text>
+            <text x="92" y="74" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif" font-size="11" fill="#5e7d40" font-weight="400" letter-spacing="1">家族と現場を結ぶ、デイサービス管理</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="leafA17f" cx="40%" cy="55%" r="55%">
+                <stop offset="0%" stop-color="#dce6b9"/>
+                <stop offset="50%" stop-color="#a8c47e"/>
+                <stop offset="100%" stop-color="#6b8b48"/>
+              </radialGradient>
+              <radialGradient id="leafB17f" cx="55%" cy="50%" r="55%">
+                <stop offset="0%" stop-color="#d4e3b0"/>
+                <stop offset="50%" stop-color="#94b86a"/>
+                <stop offset="100%" stop-color="#5e7d40"/>
+              </radialGradient>
+            </defs>
+            <g transform="translate(45, 45)">
+              <path d="M 0 4 Q 5 22 8 42" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafA17f)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafB17f)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafA17f)"/></g>
+              <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafB17f)"/></g>
+              <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+
+      <div class="notes">
+        ✓ クローバー: 2枚目を再現 (X字配置 / 水彩風グラデ / 黄色い中心 / 茎は右にカーブ)<br>
+        ✓ 書体: 1枚目を採用 (ヒラギノ角ゴ太字 + 中ゴ + 細字)<br>
+        ✓ サイズ: クローバー全体高さ ≒ 紡ぎ + Tsumugi + タグラインの縦幅 (約78px)<br>
+        ✓ タグライン: 「家族と現場を結ぶ、デイサービス管理」
+      </div>
+    </div>
+
+    <!-- 拡大プレビュー (細部チェック) -->
+    <div class="logo-card">
+      <h2>🔍 拡大表示 (細部の確認)</h2>
+
+      <div class="preview-main" style="background: #fff;">
+        <svg viewBox="0 0 440 90" style="width:100%; max-width:880px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="leafA17b" cx="40%" cy="55%" r="55%">
+              <stop offset="0%" stop-color="#dce6b9"/>
+              <stop offset="50%" stop-color="#a8c47e"/>
+              <stop offset="100%" stop-color="#6b8b48"/>
+            </radialGradient>
+            <radialGradient id="leafB17b" cx="55%" cy="50%" r="55%">
+              <stop offset="0%" stop-color="#d4e3b0"/>
+              <stop offset="50%" stop-color="#94b86a"/>
+              <stop offset="100%" stop-color="#5e7d40"/>
+            </radialGradient>
+          </defs>
+          <g transform="translate(40, 42)">
+            <path d="M 0 3 Q 4 16 6 32" stroke="#5e7d40" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <g transform="rotate(45)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafA17b)" opacity="0.95"/></g>
+            <g transform="rotate(135)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafB17b)" opacity="0.95"/></g>
+            <g transform="rotate(225)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafA17b)" opacity="0.92"/></g>
+            <g transform="rotate(315)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafB17b)" opacity="0.93"/></g>
+            <circle cx="0" cy="0" r="3" fill="#fbbf24"/>
+          </g>
+          <text x="90" y="32" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif" font-size="36" fill="#3d5021" font-weight="700" letter-spacing="2">紡ぎ</text>
+          <text x="92" y="54" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif" font-size="14" fill="#6b8b48" font-weight="500" letter-spacing="3">Tsumugi</text>
+          <text x="92" y="74" font-family="'Hiragino Sans','Hiragino Kaku Gothic ProN',sans-serif" font-size="11" fill="#5e7d40" font-weight="400" letter-spacing="1">家族と現場を結ぶ、デイサービス管理</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 紫背景での見え方 -->
+    <div class="logo-card">
+      <h2>🟣 紫背景での見え方 (ログイン画面参考)</h2>
+
+      <div class="preview-main" style="background: linear-gradient(135deg, #8b6db3, #b89dd1);">
+        <svg viewBox="0 0 440 90" style="width:100%; max-width:420px;" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="leafA17c" cx="40%" cy="55%" r="55%">
+              <stop offset="0%" stop-color="#dce6b9"/>
+              <stop offset="50%" stop-color="#a8c47e"/>
+              <stop offset="100%" stop-color="#6b8b48"/>
+            </radialGradient>
+            <radialGradient id="leafB17c" cx="55%" cy="50%" r="55%">
+              <stop offset="0%" stop-color="#d4e3b0"/>
+              <stop offset="50%" stop-color="#94b86a"/>
+              <stop offset="100%" stop-color="#5e7d40"/>
+            </radialGradient>
+          </defs>
+          <g transform="translate(40, 42)">
+            <path d="M 0 3 Q 4 16 6 32" stroke="#5e7d40" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+            <g transform="rotate(45)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafA17c)" opacity="0.95"/></g>
+            <g transform="rotate(135)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafB17c)" opacity="0.95"/></g>
+            <g transform="rotate(225)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafA17c)" opacity="0.92"/></g>
+            <g transform="rotate(315)"><path d="M 0 -3 C -6 -8 -16 -16 -16 -25 C -16 -33 -8 -35 0 -29 C 8 -35 16 -33 16 -25 C 16 -16 6 -8 0 -3 Z" fill="url(#leafB17c)" opacity="0.93"/></g>
+            <circle cx="0" cy="0" r="3" fill="#fbbf24"/>
+          </g>
+          <text x="90" y="32" font-family="'Hiragino Sans',sans-serif" font-size="36" fill="#fff" font-weight="700" letter-spacing="2">紡ぎ</text>
+          <text x="92" y="54" font-family="'Hiragino Sans',sans-serif" font-size="14" fill="#fff8e7" font-weight="500" letter-spacing="3">Tsumugi</text>
+          <text x="92" y="74" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#fff8e7" font-weight="400" letter-spacing="1" opacity="0.85">家族と現場を結ぶ、デイサービス管理</text>
+        </svg>
+      </div>
+
+      <div class="notes" style="margin-top:16px;">
+        紫背景の場合、紡ぎ/Tsumugi/タグラインは白系で見やすく。クローバーはそのまま緑で映えます。
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer">
+    🌿 この最終案で問題なければ、アプリ (ログイン画面・サイドバー・ファビコン) に実装します!
+  </p>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tsumugi (紡ぎ) ロゴ案 v22 — v16案A + 丸ゴ + 明るい緑</title>
+<style>
+  body {
+    background: #f7f5ee;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3a1f;
+    font-family: 'Hiragino Maru Gothic ProN', 'Hiragino Sans', sans-serif;
+  }
+  h1 {
+    text-align: center;
+    color: #2d3a1f;
+    font-weight: 500;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+  .sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    gap: 28px;
+  }
+  .logo-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 36px;
+    box-shadow: 0 4px 24px rgba(60,80,40,0.06);
+    border: 1px solid #e8e4d4;
+  }
+  .logo-card h2 {
+    font-size: 20px;
+    margin: 0 0 16px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #4a5d2f;
+  }
+  .preview-row {
+    display: grid;
+    grid-template-columns: 2.5fr 1fr;
+    gap: 20px;
+    margin-bottom: 14px;
+  }
+  .preview-main {
+    background: #fff;
+    border-radius: 12px;
+    padding: 36px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon span {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: 1px;
+  }
+  .notes {
+    background: #fffef7;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    color: #4a5d2f;
+    line-height: 1.7;
+    border-left: 3px solid #94c456;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+  <h1>紡ぎ - Tsumugi ロゴ案 v22</h1>
+  <p class="sub">v16 案A をベース + 書体を丸ゴ + 緑をベースに明るく</p>
+
+  <!-- 共通グラデーション: 明るい緑 -->
+  <svg width="0" height="0" style="position:absolute;">
+    <defs>
+      <radialGradient id="leafV22A" cx="40%" cy="55%" r="55%">
+        <stop offset="0%" stop-color="#608a3e"/>
+        <stop offset="50%" stop-color="#94c456"/>
+        <stop offset="100%" stop-color="#d4e7a5"/>
+      </radialGradient>
+      <radialGradient id="leafV22B" cx="55%" cy="50%" r="55%">
+        <stop offset="0%" stop-color="#5a8330"/>
+        <stop offset="50%" stop-color="#8fb84a"/>
+        <stop offset="100%" stop-color="#cee49b"/>
+      </radialGradient>
+    </defs>
+  </svg>
+
+  <div class="container">
+
+    <!-- メイン -->
+    <div class="logo-card">
+      <h2>🌿 v16 案A → 丸ゴ書体 + 明るい緑</h2>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(50, 55)">
+              <!-- 茎: v16 案A と同じ (微カーブ下方向) -->
+              <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <!-- クローバー全体を-60°回転 (v16 案A と同じ構造) -->
+              <g transform="rotate(-60)">
+                <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)" opacity="0.96"/></g>
+                <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)" opacity="0.96"/></g>
+                <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)" opacity="0.94"/></g>
+                <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)" opacity="0.94"/></g>
+                <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
+              </g>
+            </g>
+            <!-- テキスト: 丸ゴ -->
+            <text x="105" y="50" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="40" fill="#3d5021" font-weight="700" letter-spacing="3">紡ぎ</text>
+            <text x="107" y="73" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="17" fill="#7daa3d" font-weight="500" letter-spacing="6">Tsumugi</text>
+            <text x="107" y="98" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="11" fill="#5e8030" font-weight="400" letter-spacing="2">家族と現場を結ぶ、デイサービス管理</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 120" width="60" height="72" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(50, 45)">
+              <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <g transform="rotate(-60)">
+                <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)"/></g>
+                <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)"/></g>
+                <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)"/></g>
+                <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)"/></g>
+                <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
+              </g>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+
+      <div class="notes">
+        <strong>変更点:</strong><br>
+        ✓ 構造: v16 案A をそのまま (X字配置 + rotate(-60) + 茎は微カーブ下方向)<br>
+        ✓ 書体: <code>Hiragino Maru Gothic ProN</code> (丸ゴ、やさしい印象)<br>
+        ✓ 配色: 明るい緑グラデ<br>
+        　・濃: <code>#608a3e</code> (深緑から明るく)<br>
+        　・中: <code>#94c456</code> (鮮やかな新緑)<br>
+        　・淡: <code>#d4e7a5</code> (明るい若葉色)<br>
+        ✓ 中心: 金色 #fbbf24 (やや明るめ)
+      </div>
+    </div>
+
+    <!-- 拡大 -->
+    <div class="logo-card">
+      <h2>🔍 拡大表示</h2>
+
+      <div class="preview-main" style="background: #fff;">
+        <svg viewBox="0 0 480 130" style="width:100%; max-width:880px;" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(50, 55)">
+            <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            <g transform="rotate(-60)">
+              <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)" opacity="0.96"/></g>
+              <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)" opacity="0.96"/></g>
+              <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)" opacity="0.94"/></g>
+              <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)" opacity="0.94"/></g>
+              <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
+            </g>
+          </g>
+          <text x="105" y="50" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="40" fill="#3d5021" font-weight="700" letter-spacing="3">紡ぎ</text>
+          <text x="107" y="73" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="17" fill="#7daa3d" font-weight="500" letter-spacing="6">Tsumugi</text>
+          <text x="107" y="98" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="11" fill="#5e8030" font-weight="400" letter-spacing="2">家族と現場を結ぶ、デイサービス管理</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- クローバー単体 -->
+    <div class="logo-card">
+      <h2>🍀 クローバー単体 (大きく)</h2>
+
+      <div class="preview-main" style="background: #fff; padding: 60px 30px;">
+        <svg viewBox="0 0 200 240" style="width:200px; height:240px;" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(100, 90)">
+            <path d="M 0 6 Q 2 44 -2 100" stroke="#3d5021" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+            <g transform="rotate(-60)">
+              <g transform="rotate(45)"><path d="M 0 -6 C -16 -20 -44 -44 -44 -68 C -44 -88 -22 -94 0 -80 C 22 -94 44 -88 44 -68 C 44 -44 16 -20 0 -6 Z" fill="url(#leafV22A)" opacity="0.96"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -16 -20 -44 -44 -44 -68 C -44 -88 -22 -94 0 -80 C 22 -94 44 -88 44 -68 C 44 -44 16 -20 0 -6 Z" fill="url(#leafV22B)" opacity="0.96"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -16 -20 -44 -44 -44 -68 C -44 -88 -22 -94 0 -80 C 22 -94 44 -88 44 -68 C 44 -44 16 -20 0 -6 Z" fill="url(#leafV22A)" opacity="0.94"/></g>
+              <g transform="rotate(315)"><path d="M 0 -6 C -16 -20 -44 -44 -44 -68 C -44 -88 -22 -94 0 -80 C 22 -94 44 -88 44 -68 C 44 -44 16 -20 0 -6 Z" fill="url(#leafV22B)" opacity="0.94"/></g>
+              <circle cx="0" cy="0" r="8" fill="#fbbf24"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <!-- 紫背景 -->
+    <div class="logo-card">
+      <h2>🟣 紫背景</h2>
+
+      <div class="preview-main" style="background: linear-gradient(135deg, #8b6db3, #b89dd1);">
+        <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+          <g transform="translate(50, 55)">
+            <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            <g transform="rotate(-60)">
+              <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)" opacity="0.97"/></g>
+              <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)" opacity="0.97"/></g>
+              <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22A)" opacity="0.95"/></g>
+              <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#leafV22B)" opacity="0.95"/></g>
+              <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
+            </g>
+          </g>
+          <text x="105" y="50" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="40" fill="#fff" font-weight="700" letter-spacing="3">紡ぎ</text>
+          <text x="107" y="73" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="17" fill="#fff8e7" font-weight="500" letter-spacing="6">Tsumugi</text>
+          <text x="107" y="98" font-family="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" font-size="11" fill="#fff8e7" font-weight="400" letter-spacing="2" opacity="0.85">家族と現場を結ぶ、デイサービス管理</text>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer">
+    🌿 OK ならアプリに実装します!
+  </p>
+</body>
+</html>

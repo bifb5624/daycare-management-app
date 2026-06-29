@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tsumugi (紡ぎ) ロゴ案 v9 — 斜め配置のクローバー + 下に伸びる茎</title>
+<style>
+  body {
+    background: #f7f5ee;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3a1f;
+    font-family: 'Hiragino Sans', sans-serif;
+  }
+  h1 {
+    text-align: center;
+    color: #2d3a1f;
+    font-weight: 500;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+  .sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    gap: 30px;
+  }
+  .logo-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 4px 24px rgba(60,80,40,0.06);
+    border: 1px solid #e8e4d4;
+  }
+  .logo-card h2 {
+    font-size: 20px;
+    margin: 0 0 8px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #4a5d2f;
+  }
+  .logo-card .desc {
+    font-size: 13px;
+    margin-bottom: 20px;
+    line-height: 1.7;
+    color: #6b7280;
+  }
+  .preview-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+  }
+  .preview-main {
+    background: #fffdf7;
+    border-radius: 14px;
+    padding: 30px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon {
+    background: #fffdf7;
+    border-radius: 14px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon span {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: 1px;
+  }
+  .compare-section {
+    margin-top: 40px;
+    padding: 30px;
+    background: #faf8f1;
+    border-radius: 20px;
+    border: 1px solid #e8e4d4;
+  }
+  .compare-section h3 {
+    text-align: center;
+    font-size: 14px;
+    color: #4b5563;
+    margin-top: 0;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+  }
+  .compare-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .compare-item {
+    text-align: center;
+  }
+  .compare-item .box {
+    background: #fffdf7;
+    padding: 20px 10px;
+    border-radius: 12px;
+    border: 1px solid #ece8d8;
+  }
+  .compare-item .label-tag {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+  <h1>紡ぎ - Tsumugi ロゴ案 v9</h1>
+  <p class="sub">クローバーの葉を斜め (X字) に配置 + 茎は下に伸びる</p>
+
+  <svg width="0" height="0" style="position:absolute;">
+    <defs>
+      <radialGradient id="leafA" cx="40%" cy="55%" r="55%">
+        <stop offset="0%" stop-color="#e3edc8"/>
+        <stop offset="45%" stop-color="#a5c47a"/>
+        <stop offset="100%" stop-color="#6b8b48"/>
+      </radialGradient>
+      <radialGradient id="leafB" cx="55%" cy="50%" r="55%">
+        <stop offset="0%" stop-color="#dce6b9"/>
+        <stop offset="50%" stop-color="#94b86a"/>
+        <stop offset="100%" stop-color="#5e7d40"/>
+      </radialGradient>
+      <radialGradient id="leafSide" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#c5d49a"/>
+        <stop offset="100%" stop-color="#7a9658"/>
+      </radialGradient>
+    </defs>
+  </svg>
+
+  <div class="container">
+
+    <!-- ============ 案A: 斜め配置 + シンプルな茎 ============ -->
+    <div class="logo-card">
+      <h2>案A:「斜め配置 + シンプル茎」 — 王道のクローバー</h2>
+      <p class="desc">葉を斜め (X字) に配置した、最もクローバーらしい形。茎はまっすぐ下に伸びる。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 140" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 55)">
+              <!-- 4枚の葉を斜め配置 (45°, 135°, 225°, 315°) -->
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.95"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.95"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.92"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.93"/></g>
+              <!-- 中心のアクセント -->
+              <circle cx="0" cy="0" r="2.5" fill="#5e7d40" opacity="0.7"/>
+              <!-- 真下に伸びる茎 -->
+              <path d="M 0 8 Q 1 26 -2 56" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+            <text x="155" y="60" font-family="'Hiragino Sans',sans-serif" font-size="44" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="84" font-family="'Helvetica Neue',sans-serif" font-size="17" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="109" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 42)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 Q 1 26 -2 50" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案B: 斜め配置 + 長い茎 + 終端に小葉 ============ -->
+    <div class="logo-card">
+      <h2>案B:「斜め配置 + 長め茎 + 終端小葉」</h2>
+      <p class="desc">茎が長めに下に伸びて、終端に小さな葉が付く。バランスと締まりがある。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 150" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 50)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.95"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.95"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.92"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.93"/></g>
+              <circle cx="0" cy="0" r="2.5" fill="#5e7d40" opacity="0.7"/>
+              <!-- 長めの茎 -->
+              <path d="M 0 8 Q 2 30 -1 72" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <!-- 終端の小葉 -->
+              <ellipse cx="-1" cy="72" rx="9" ry="3.2" fill="url(#leafSide)" transform="rotate(80 -1 72)" opacity="0.9"/>
+            </g>
+            <text x="155" y="60" font-family="'Hiragino Sans',sans-serif" font-size="44" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="84" font-family="'Helvetica Neue',sans-serif" font-size="17" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="109" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 110" width="60" height="66">
+            <g transform="translate(50, 40)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 Q 2 30 -1 65" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <ellipse cx="-1" cy="65" rx="7" ry="2.8" fill="url(#leafSide)" transform="rotate(80 -1 65)"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案C: 斜め配置 + 茎の途中に小葉 ============ -->
+    <div class="logo-card">
+      <h2>案C:「斜め配置 + 茎の途中に小葉」</h2>
+      <p class="desc">茎の途中に左右どちらかに小葉が1枚。自然な雰囲気と動きが出る。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 150" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 50)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.95"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.95"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.92"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.93"/></g>
+              <circle cx="0" cy="0" r="2.5" fill="#5e7d40" opacity="0.7"/>
+              <!-- 長めの茎 -->
+              <path d="M 0 8 Q 2 30 -1 70" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <!-- 茎の途中に小葉 (左側) -->
+              <ellipse cx="-8" cy="38" rx="9" ry="3" fill="url(#leafSide)" transform="rotate(-30 -8 38)" opacity="0.88"/>
+              <!-- 茎の小さな分岐 -->
+              <path d="M 1 38 Q -3 38 -8 38" stroke="#5e7d40" stroke-width="0.9" fill="none" stroke-linecap="round" opacity="0.7"/>
+            </g>
+            <text x="155" y="60" font-family="'Hiragino Sans',sans-serif" font-size="44" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="84" font-family="'Helvetica Neue',sans-serif" font-size="17" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="109" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 110" width="60" height="66">
+            <g transform="translate(50, 40)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 Q 2 30 -1 62" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <ellipse cx="-8" cy="36" rx="7" ry="2.5" fill="url(#leafSide)" transform="rotate(-30 -8 36)"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案D: 斜め配置 + 短めの茎 (最もミニマル) ============ -->
+    <div class="logo-card">
+      <h2>案D:「斜め配置 + 短めの茎」 — ミニマル</h2>
+      <p class="desc">茎は控えめに短く。クローバーを主役にしたミニマルな印象。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(55, 55)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.95"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.95"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)" opacity="0.92"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)" opacity="0.93"/></g>
+              <circle cx="0" cy="0" r="2.5" fill="#5e7d40" opacity="0.7"/>
+              <!-- 短めの茎 -->
+              <path d="M 0 8 L 0 32" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+            <text x="155" y="60" font-family="'Hiragino Sans',sans-serif" font-size="44" fill="#3d5021" font-weight="400" letter-spacing="8">紡ぎ</text>
+            <text x="155" y="84" font-family="'Helvetica Neue',sans-serif" font-size="17" fill="#6b8b48" letter-spacing="5" font-weight="300" font-style="italic">Tsumugi</text>
+            <text x="155" y="109" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#5e7d40" letter-spacing="3">家族と現場をむすぶ、デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 45)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 L 0 28" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 比較 -->
+  <div class="compare-section">
+    <h3>📐 4案を並べて比較</h3>
+    <div class="compare-grid">
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 110" width="80" height="88">
+            <g transform="translate(50, 42)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 Q 1 26 -2 56" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案A</strong> シンプル茎</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 120" width="80" height="96">
+            <g transform="translate(50, 40)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 Q 2 32 -1 72" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <ellipse cx="-1" cy="72" rx="7" ry="2.8" fill="url(#leafSide)" transform="rotate(80 -1 72)"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案B</strong> 長め茎 + 終端葉</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 120" width="80" height="96">
+            <g transform="translate(50, 40)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 Q 2 30 -1 70" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <ellipse cx="-8" cy="38" rx="8" ry="2.8" fill="url(#leafSide)" transform="rotate(-30 -8 38)"/>
+              <path d="M 1 38 Q -3 38 -8 38" stroke="#5e7d40" stroke-width="0.9" fill="none" opacity="0.7"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案C</strong> 茎途中に葉</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 100" width="80" height="80">
+            <g transform="translate(50, 45)">
+              <g transform="rotate(315)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(45)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <g transform="rotate(135)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafA)"/></g>
+              <g transform="rotate(225)"><path d="M 0 -6 C -9 -12 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 9 -12 0 -6 Z" fill="url(#leafB)"/></g>
+              <path d="M 0 8 L 0 26" stroke="#5e7d40" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案D</strong> ミニマル短茎</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer">
+    A / B / C / D のどれが好きですか? 細かい調整もOK
+  </p>
+</body>
+</html>

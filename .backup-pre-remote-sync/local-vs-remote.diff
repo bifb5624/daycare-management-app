@@ -1,0 +1,319 @@
+diff --git a/src/App.jsx b/daycare-app.jsx
+similarity index 99%
+rename from src/App.jsx
+rename to daycare-app.jsx
+index 8628005..1c62f01 100644
+--- a/src/App.jsx
++++ b/daycare-app.jsx
+@@ -11468,9 +11468,8 @@ function OpsCard({title, accent='#3b82f6', children}) {
+   );
+ }
+ 
+-function AttrSection({appData, tY, tM, baseMonth}) {
++function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth}) {
+   const Card = OpsCard;
+-  const [attrMonth, setAttrMonth] = React.useState(baseMonth);
+   const [aY, aM2] = attrMonth.split('-').map(Number);
+   const monthOptions = Array.from({length:12},(_,i)=>{
+     const d=new Date(tY, tM-1-i, 1);
+@@ -11574,14 +11573,11 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+   const [baseMonth, setBaseMonth] = React.useState(() => {
+     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+   });
++  const [attrMonth, setAttrMonth] = React.useState(baseMonth);
+   const [openDow, setOpenDow] = React.useState(null);
+   const [showAllAtt, setShowAllAtt] = React.useState(false);
+   const [showAllAbs, setShowAllAbs] = React.useState(false);
+   const [showAllReason, setShowAllReason] = React.useState(false);
+-  // セクション選択（プレビュー用）
+-  const OPS_SECTIONS = [['ops-rate','稼働率','中'],['ops-monthly','月別推移','長'],['ops-dow','曜日別','中'],['ops-attr','利用者属性','中'],['ops-mood','気分割合','短'],['ops-kaikin','皆勤賞','短'],['ops-rank-att','出席率','中'],['ops-rank-abs','欠席率','中'],['ops-reason','欠席理由','短']];
+-  const [opsPrintSecs, setOpsPrintSecs] = React.useState(()=>Object.fromEntries(OPS_SECTIONS.map(([id])=>[id,true])));
+-  const [showOpsSecSelect, setShowOpsSecSelect] = React.useState(false);
+   const [salesEditModal, setSalesEditModal] = React.useState(null); // { month: '2025-06' }
+   const [period, setPeriod] = React.useState('1');
+   const [customFrom, setCustomFrom] = React.useState(() => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+@@ -11929,106 +11925,85 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+           )}
+         </div>
+         <div style={{display:'flex',gap:6,alignItems:'center'}}>
+-          <div style={{position:'relative'}}>
+-            <button type="button" onClick={()=>setShowOpsSecSelect(v=>!v)}
+-              style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
+-              <Printer size={14}/>プレビュー ▾
+-            </button>
+-            {showOpsSecSelect && (
+-              <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:'white',border:'1px solid #e2e8f0',borderRadius:14,boxShadow:'0 8px 32px rgba(0,0,0,0.18)',zIndex:9999,padding:16,minWidth:200}} onClick={e=>e.stopPropagation()}>
+-                <div style={{fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'1px solid #f1f5f9'}}>印刷するセクションを選択</div>
+-                <div style={{marginBottom:6,padding:'6px 8px',background:'#fff7ed',borderRadius:6,fontSize:10,color:'#475569',lineHeight:'1.4'}}>
+-                  A4横・2段組で自動配置されます
+-                </div>
+-                {OPS_SECTIONS.map(([id,label,size])=>(
+-                  <div key={id} style={{display:'flex',alignItems:'center',gap:6,padding:'3px 0'}}>
+-                    <label style={{display:'flex',alignItems:'center',gap:6,flex:1,fontSize:13,fontWeight:'bold',color:'#1e293b',cursor:'pointer'}}>
+-                      <input type="checkbox" checked={!!opsPrintSecs[id]} onChange={e=>setOpsPrintSecs(p=>({...p,[id]:e.target.checked}))} style={{width:15,height:15,cursor:'pointer',accentColor:'#ea580c'}}/>
+-                      {label}
+-                    </label>
+-                    <span style={{fontSize:10,fontWeight:'bold',color:size==='長'?'#ef4444':size==='中'?'#f59e0b':'#22c55e',background:size==='長'?'#fef2f2':size==='中'?'#fffbeb':'#f0fdf4',borderRadius:4,padding:'1px 4px'}}>{size}</span>
+-                  </div>
+-                ))}
+-                <div style={{marginTop:8,paddingTop:8,borderTop:'1px solid #f1f5f9',display:'flex',gap:6}}>
+-                  <button onClick={()=>setOpsPrintSecs(Object.fromEntries(OPS_SECTIONS.map(([id])=>[id,true])))} style={{flex:1,padding:'5px',borderRadius:6,border:'1px solid #e2e8f0',fontSize:11,fontWeight:'bold',color:'#475569',cursor:'pointer',background:'#f8fafc'}}>全選択</button>
+-                  <button onClick={()=>{
+-                    setShowOpsSecSelect(false);
+-                    const container = document.getElementById('print-content-operation');
+-                    if(!container){ alert('稼働データが見つかりません'); return; }
+-                    const clone = container.cloneNode(true);
+-                    const opsSecIds = OPS_SECTIONS.map(([id])=>id);
+-                    // 非選択セクションを非表示
+-                    const secEls = Array.from(clone.querySelectorAll('[data-sec]'));
+-                    secEls.forEach((secEl, i) => {
+-                      const secId = secEl.getAttribute('data-sec');
+-                      if(!opsPrintSecs[secId]){
+-                        secEl.style.display='none';
+-                        let sib = secEl.nextElementSibling;
+-                        const nextSec = secEls[i+1];
+-                        while(sib && sib !== nextSec){
+-                          sib.style.display='none';
+-                          sib = sib.nextElementSibling;
+-                        }
+-                      }
+-                    });
+-                    // SVG viewBox付与
+-                    clone.querySelectorAll('svg').forEach(svg=>{
+-                      if(!svg.getAttribute('viewBox')){
+-                        const w=parseInt(svg.getAttribute('width'))||0;
+-                        const h=parseInt(svg.getAttribute('height'))||0;
+-                        if(w > 100){
+-                          svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+-                          svg.style.maxWidth='100%';
+-                          svg.style.height='auto';
+-                        }
+-                      }
+-                    });
+-                    clone.querySelectorAll('.vital-scroll').forEach(d=>{d.style.overflow='visible';d.style.maxWidth='100%';});
+-                    clone.querySelectorAll('[style]').forEach(el=>{
+-                      const bg = el.style.backgroundColor||el.style.background;
+-                      if(bg && bg.includes('slate')) el.style.background='white';
+-                    });
+-                    // 各セクションをカラム幅に収まるよう縮小ラップ
+-                    const colW2 = (297 - 16 - 8) / 2;
+-                    const colPx2 = colW2 * 3.7795;
+-                    const measure2 = document.createElement('div');
+-                    measure2.style.cssText = 'position:absolute;left:-9999px;top:0;width:297mm;visibility:hidden;';
+-                    document.body.appendChild(measure2);
+-                    measure2.appendChild(clone);
+-                    const opsIdSet = new Set(opsSecIds.filter(id=>opsPrintSecs[id]));
+-                    opsSecIds.forEach(secId=>{
+-                      if(!opsPrintSecs[secId]) return;
+-                      const el = clone.querySelector('#'+secId);
+-                      if(!el) return;
+-                      const group = document.createElement('div');
+-                      group.style.cssText = 'break-inside:avoid;page-break-inside:avoid;margin-bottom:12px;';
+-                      el.parentNode.insertBefore(group, el);
+-                      group.appendChild(el);
+-                      while(group.nextElementSibling && !group.nextElementSibling.id || (group.nextElementSibling?.id && !opsIdSet.has(group.nextElementSibling.id))){
+-                        if(!group.nextElementSibling) break;
+-                        group.appendChild(group.nextElementSibling);
+-                      }
+-                      const natW = group.scrollWidth;
+-                      if(natW > colPx2){
+-                        const sc = colPx2 / natW;
+-                        const wrapper = document.createElement('div');
+-                        wrapper.style.cssText = `transform:scale(${sc.toFixed(4)});transform-origin:top left;width:${(100/sc).toFixed(2)}%;margin-bottom:${-(group.scrollHeight*(1-sc)).toFixed(0)}px;break-inside:avoid;page-break-inside:avoid;`;
+-                        group.parentNode.insertBefore(wrapper, group);
+-                        wrapper.appendChild(group);
+-                      }
+-                    });
+-                    const parts = clone.innerHTML;
+-                    document.body.removeChild(measure2);
+-                    if(!parts){alert('セクションを1つ以上選択してください');return;}
+-                    const title='分析_稼働';
+-                    const colStyle = 'columns:2;column-gap:8mm;';
+-                    const html=`<div style="padding:6mm 8mm;font-family:'Hiragino Sans','Yu Gothic',sans-serif;background:white;width:297mm;box-sizing:border-box;"><style>*{box-sizing:border-box;}svg[viewBox]{max-width:100%!important;overflow:visible!important;}@media print{.page-sep{display:none!important;}.print-col{column-fill:auto!important;}}</style><div class="print-col" style="${colStyle}">${parts}</div></div>`;
+-                    window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}}));
+-                  }} style={{flex:1,padding:'5px',borderRadius:6,border:'none',fontSize:11,fontWeight:'bold',color:'white',cursor:'pointer',background:'#ea580c'}}>プレビュー</button>
+-                </div>
+-              </div>
+-            )}
+-          </div>
++          <button type="button" onClick={async()=>{
++            // 利用者属性を「最新の月」（custom時はcustomTo、それ以外はbaseMonth）にセット
++            const latestMonth = period === 'custom' ? customTo : baseMonth;
++            setAttrMonth(latestMonth);
++            await new Promise(r => setTimeout(r, 220));
++            const container = document.getElementById('print-content-operation');
++            if(!container){ alert('稼働データが見つかりません'); return; }
++            const clone = container.cloneNode(true);
++            // SVG viewBox付与
++            clone.querySelectorAll('svg').forEach(svg=>{
++              if(!svg.getAttribute('viewBox')){
++                const w=parseInt(svg.getAttribute('width'))||0;
++                const h=parseInt(svg.getAttribute('height'))||0;
++                if(w > 100){
++                  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
++                  svg.style.maxWidth='100%';
++                  svg.style.height='auto';
++                }
++              }
++            });
++            clone.querySelectorAll('.vital-scroll').forEach(d=>{d.style.overflow='visible';d.style.maxWidth='100%';});
++            clone.querySelectorAll('[style]').forEach(el=>{
++              const bg = el.style.backgroundColor||el.style.background;
++              if(bg && bg.includes('slate')) el.style.background='white';
++            });
++            // セクション要素を data-sec マーカーから抽出
++            const allSecEls = Array.from(clone.querySelectorAll('[data-sec]'));
++            const collectSec = (secId)=>{
++              const idx = allSecEls.findIndex(el=>el.getAttribute('data-sec')===secId);
++              if(idx < 0) return [];
++              const secEl = allSecEls[idx];
++              const nextSec = allSecEls[idx+1];
++              const parts=[secEl];
++              let sib = secEl.nextElementSibling;
++              while(sib && sib !== nextSec){ parts.push(sib); sib = sib.nextElementSibling; }
++              return parts;
++            };
++            // 3ページ構成
++            const pageGroups = [
++              ['ops-rate','ops-monthly','ops-dow'],
++              ['ops-attr','ops-mood'],
++              ['ops-kaikin','ops-rank-att','ops-rank-abs','ops-reason']
++            ];
++            // 各ページは縦1列。セクションがページ幅を超える場合のみ縮小ラップ
++            const pageW = 210 - 16; // 横幅 - 左右パディング合計
++            const pagePx = pageW * 3.7795;
++            const measure = document.createElement('div');
++            measure.style.cssText = 'position:absolute;left:-9999px;top:0;width:210mm;visibility:hidden;';
++            document.body.appendChild(measure);
++            const pagesHtml = pageGroups.map((secIds, pageIdx)=>{
++              const pageDiv = document.createElement('div');
++              pageDiv.style.cssText = `padding:6mm 8mm;width:210mm;box-sizing:border-box;${pageIdx<pageGroups.length-1?'page-break-after:always;':''}`;
++              measure.appendChild(pageDiv);
++              secIds.forEach(secId=>{
++                const els = collectSec(secId);
++                if(!els.length) return;
++                const group = document.createElement('div');
++                group.style.cssText = 'break-inside:avoid;page-break-inside:avoid;margin-bottom:12px;';
++                els.forEach(el=>group.appendChild(el));
++                pageDiv.appendChild(group);
++                const natW = group.scrollWidth;
++                if(natW > pagePx){
++                  const sc = pagePx / natW;
++                  const wrapper = document.createElement('div');
++                  wrapper.style.cssText = `transform:scale(${sc.toFixed(4)});transform-origin:top left;width:${(100/sc).toFixed(2)}%;margin-bottom:${-(group.scrollHeight*(1-sc)).toFixed(0)}px;break-inside:avoid;page-break-inside:avoid;`;
++                  pageDiv.replaceChild(wrapper, group);
++                  wrapper.appendChild(group);
++                }
++              });
++              return pageDiv.outerHTML;
++            }).join('');
++            document.body.removeChild(measure);
++            const title='分析_稼働';
++            const html=`<div style="font-family:'Hiragino Sans','Yu Gothic',sans-serif;background:white;width:210mm;box-sizing:border-box;"><style>*{box-sizing:border-box;}svg[viewBox]{max-width:100%!important;overflow:visible!important;}@media print{.page-sep{display:none!important;}}</style>${pagesHtml}</div>`;
++            window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 portrait',html}}));
++          }}
++            style={{background:'rgba(255,255,255,0.15)',border:'1px solid rgba(255,255,255,0.3)',color:'white',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
++            <Printer size={14}/>プレビュー
++          </button>
+         </div>
+       </div>{/* end orange header */}
+         {/* ページ内ナビゲーション */}
+@@ -12137,6 +12112,20 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+                 const prevAt = prevMRecs.filter(r=>r.status==='出席'||r.status==='振替');
+                 return prevPl.length ? Math.round(prevAt.length/prevPl.length*100) : null;
+               })();
++              // 前月キー
++              let pmY = yr, pmM = mo - 1;
++              if (pmM <= 0) { pmM = 12; pmY -= 1; }
++              const prevMonthKey = `${pmY}-${String(pmM).padStart(2,'0')}`;
++              const prevMonthSalesRec = salesRecs.find(s=>s.month===prevMonthKey);
++              const prevMonthSales = prevMonthSalesRec?.sales || 0;
++              // 前月稼働率（月番号のみで照合、rateの算出方法に合わせる）
++              const pmRecs = allTicketRecs.filter(r => {
++                const m2 = r.date?.match(/(\d+)月/);
++                return m2 && parseInt(m2[1]) === pmM;
++              });
++              const pmPl = pmRecs.filter(r=>['出席','欠席','振替','休止'].includes(r.status));
++              const pmAt = pmRecs.filter(r=>r.status==='出席'||r.status==='振替');
++              const prevMonthRate = pmPl.length ? Math.round(pmAt.length/pmPl.length*100) : null;
+               return {
+                 label: `${mo}月`,
+                 month: key,
+@@ -12144,18 +12133,23 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+                 mo,
+                 sales: sales?.sales || 0,
+                 prevSales: prevSalesValue,
++                prevMonthSales,
+                 rate,
+                 prevRate: prevRate !== null ? (prevRate > 100 ? 100 : prevRate) : null,
++                prevMonthRate: prevMonthRate !== null ? (prevMonthRate > 100 ? 100 : prevMonthRate) : null,
+                 workDays,
+               };
+             });
+-            
+-            // 前年度との差を計算
++
++            // 前年度・前月との差を計算
+             const chartDataWithDiff = chartData.map((d, idx) => {
+               return {
+                 ...d,
+                 diffPrevYear: d.sales - d.prevSales,
+-                diffRatePrevYear: d.rate - d.prevRate,
++                diffPrevMonth: d.sales - d.prevMonthSales,
++                ratioPrevMonth: d.prevMonthSales > 0 ? Math.round(d.sales / d.prevMonthSales * 1000) / 10 : null,
++                diffRatePrevYear: d.prevRate !== null ? d.rate - d.prevRate : null,
++                diffRatePrevMonth: d.prevMonthRate !== null ? d.rate - d.prevMonthRate : null,
+               };
+             });
+             
+@@ -12250,6 +12244,22 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+                           </td>
+                         ))}
+                       </tr>
++                      <tr style={{background:'#fafafa'}}>
++                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#06b6d4'}}>前月売上差</td>
++                        {chartDataWithDiff.map(d=>(
++                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffPrevMonth>=0?'#3b82f6':'#dc2626'}}>
++                            {d.sales || d.prevMonthSales ? (d.diffPrevMonth>=0?'+':'')+`¥${d.diffPrevMonth.toLocaleString()}` : '-'}
++                          </td>
++                        ))}
++                      </tr>
++                      <tr>
++                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#06b6d4'}}>前月売上比</td>
++                        {chartDataWithDiff.map(d=>(
++                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.ratioPrevMonth!==null?(d.ratioPrevMonth>=100?'#3b82f6':'#dc2626'):'#94a3b8'}}>
++                            {d.ratioPrevMonth !== null ? `${d.ratioPrevMonth}%` : '—'}
++                          </td>
++                        ))}
++                      </tr>
+                       <tr style={{background:'#fafafa'}}>
+                         <td style={{padding:'4px 8px',fontWeight:'bold',color:'#0891b2'}}>稼働日数</td>
+                         {chartDataWithDiff.map(d=>(
+@@ -12273,8 +12283,16 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+                       <tr>
+                         <td style={{padding:'4px 8px',fontWeight:'bold',color:'#7c3aed'}}>稼働率前年比</td>
+                         {chartDataWithDiff.map(d=>(
+-                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffRatePrevYear>=0?'#3b82f6':'#dc2626'}}>
+-                            {d.prevRate !== null ? (d.diffRatePrevYear>=0?'+':'')+d.diffRatePrevYear+'%' : '—'}
++                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffRatePrevYear!==null?(d.diffRatePrevYear>=0?'#3b82f6':'#dc2626'):'#94a3b8'}}>
++                            {d.diffRatePrevYear !== null ? (d.diffRatePrevYear>=0?'+':'')+d.diffRatePrevYear+'%' : '—'}
++                          </td>
++                        ))}
++                      </tr>
++                      <tr style={{background:'#fafafa'}}>
++                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#06b6d4'}}>前月稼働率比</td>
++                        {chartDataWithDiff.map(d=>(
++                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffRatePrevMonth!==null?(d.diffRatePrevMonth>=0?'#3b82f6':'#dc2626'):'#94a3b8'}}>
++                            {d.diffRatePrevMonth !== null ? (d.diffRatePrevMonth>=0?'+':'')+d.diffRatePrevMonth+'%' : '—'}
+                           </td>
+                         ))}
+                       </tr>
+@@ -12348,7 +12366,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
+ 
+         {/* 7. 利用者属性分析 */}
+         <div id="ops-attr" data-sec="ops-attr" style={{scrollMarginTop:120}}/>
+-        <AttrSection appData={appData} tY={tY} tM={tM} baseMonth={baseMonth}/>
++        <AttrSection appData={appData} tY={tY} tM={tM} baseMonth={baseMonth} attrMonth={attrMonth} setAttrMonth={setAttrMonth}/>
+ 
+         {/* 2.5 気分割合 */}
+         <div id="ops-mood" data-sec="ops-mood" style={{scrollMarginTop:120}}/>

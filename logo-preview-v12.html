@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Tsumugi (紡ぎ) ロゴ案 v12 — 案3ベースの葉配置5パターン</title>
+<style>
+  body {
+    background: #f7f5ee;
+    margin: 0;
+    padding: 40px 20px;
+    color: #2d3a1f;
+    font-family: 'Hiragino Sans', sans-serif;
+  }
+  h1 {
+    text-align: center;
+    color: #2d3a1f;
+    font-weight: 500;
+    letter-spacing: 3px;
+    margin-bottom: 10px;
+  }
+  .sub {
+    text-align: center;
+    color: #6b7280;
+    margin-bottom: 30px;
+    font-size: 14px;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    gap: 28px;
+  }
+  .logo-card {
+    background: #faf8f1;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 4px 24px rgba(60,80,40,0.06);
+    border: 1px solid #e8e4d4;
+  }
+  .logo-card h2 {
+    font-size: 19px;
+    margin: 0 0 6px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    color: #4a5d2f;
+  }
+  .logo-card .desc {
+    font-size: 12.5px;
+    margin-bottom: 16px;
+    line-height: 1.7;
+    color: #6b7280;
+  }
+  .preview-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 14px;
+  }
+  .preview-main {
+    background: #fff;
+    border-radius: 12px;
+    padding: 36px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #ece8d8;
+  }
+  .preview-favicon span {
+    font-size: 11px;
+    color: #6b7280;
+    letter-spacing: 1px;
+  }
+  .compare-section {
+    margin-top: 40px;
+    padding: 30px;
+    background: #faf8f1;
+    border-radius: 20px;
+    border: 1px solid #e8e4d4;
+  }
+  .compare-section h3 {
+    text-align: center;
+    font-size: 14px;
+    color: #4b5563;
+    margin-top: 0;
+    margin-bottom: 20px;
+    letter-spacing: 2px;
+  }
+  .compare-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+  }
+  .compare-item { text-align: center; }
+  .compare-item .box {
+    background: #fff;
+    padding: 22px 12px;
+    border-radius: 12px;
+    border: 1px solid #ece8d8;
+  }
+  .compare-item .label-tag {
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+  <h1>紡ぎ - Tsumugi ロゴ案 v12</h1>
+  <p class="sub">添付参考の書体スタイル + 葉の配置5パターン</p>
+
+  <div class="container">
+
+    <!-- ============ 案A: 参考画像通り (3枚葉、扇形) ============ -->
+    <div class="logo-card">
+      <h2>案A:「参考画像通り」 — 3枚葉が扇のように開く</h2>
+      <p class="desc">添付された参考画像をそのまま再現。中央葉が一番大きく上向き、左右の葉が少し下向きに開く。最もシンプル。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(70, 65)">
+              <!-- 左の葉 (やや下向き、傾き) -->
+              <ellipse cx="-22" cy="6" rx="14" ry="20" fill="#a8c47e" transform="rotate(-35 -22 6)" opacity="0.95"/>
+              <!-- 右の葉 (やや下向き、傾き) -->
+              <ellipse cx="22" cy="6" rx="14" ry="20" fill="#a8c47e" transform="rotate(35 22 6)" opacity="0.95"/>
+              <!-- 中央の葉 (一番大きく、上向き) -->
+              <ellipse cx="0" cy="-12" rx="13" ry="22" fill="#6b8b48" opacity="0.95"/>
+              <!-- 中心の黄色い丸 -->
+              <circle cx="0" cy="10" r="6" fill="#fbbf24"/>
+            </g>
+            <!-- テキスト (近づける) -->
+            <text x="120" y="48" font-family="'Hiragino Sans',sans-serif" font-size="40" fill="#3d5021" font-weight="600" letter-spacing="3">紡ぎ</text>
+            <text x="120" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="18" fill="#6b8b48" letter-spacing="6" font-weight="400">Tsumugi</text>
+            <text x="120" y="98" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#6b8b48" letter-spacing="2" font-weight="400">家族と現場をむすぶ デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="-22" cy="6" rx="14" ry="20" fill="#a8c47e" transform="rotate(-35 -22 6)"/>
+              <ellipse cx="22" cy="6" rx="14" ry="20" fill="#a8c47e" transform="rotate(35 22 6)"/>
+              <ellipse cx="0" cy="-12" rx="13" ry="22" fill="#6b8b48"/>
+              <circle cx="0" cy="10" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案B: 4枚葉 (X字配置) ============ -->
+    <div class="logo-card">
+      <h2>案B:「4枚X字」 — 4枚の葉が斜めに広がる</h2>
+      <p class="desc">3枚を4枚に増やして「4者の結びつき」を明示。葉は同サイズで斜めに均等配置、X字の安定感。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(70, 65)">
+              <ellipse cx="-15" cy="-15" rx="12" ry="18" fill="#6b8b48" transform="rotate(-45 -15 -15)" opacity="0.95"/>
+              <ellipse cx="15" cy="-15" rx="12" ry="18" fill="#a8c47e" transform="rotate(45 15 -15)" opacity="0.95"/>
+              <ellipse cx="-15" cy="15" rx="12" ry="18" fill="#a8c47e" transform="rotate(45 -15 15)" opacity="0.95"/>
+              <ellipse cx="15" cy="15" rx="12" ry="18" fill="#6b8b48" transform="rotate(-45 15 15)" opacity="0.95"/>
+              <circle cx="0" cy="0" r="6" fill="#fbbf24"/>
+            </g>
+            <text x="120" y="48" font-family="'Hiragino Sans',sans-serif" font-size="40" fill="#3d5021" font-weight="600" letter-spacing="3">紡ぎ</text>
+            <text x="120" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="18" fill="#6b8b48" letter-spacing="6" font-weight="400">Tsumugi</text>
+            <text x="120" y="98" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#6b8b48" letter-spacing="2" font-weight="400">家族と現場をむすぶ デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="-15" cy="-15" rx="12" ry="18" fill="#6b8b48" transform="rotate(-45 -15 -15)"/>
+              <ellipse cx="15" cy="-15" rx="12" ry="18" fill="#a8c47e" transform="rotate(45 15 -15)"/>
+              <ellipse cx="-15" cy="15" rx="12" ry="18" fill="#a8c47e" transform="rotate(45 -15 15)"/>
+              <ellipse cx="15" cy="15" rx="12" ry="18" fill="#6b8b48" transform="rotate(-45 15 15)"/>
+              <circle cx="0" cy="0" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案C: 4枚葉 (大小ミックス、自然) ============ -->
+    <div class="logo-card">
+      <h2>案C:「4枚 大小ミックス」 — 自然な不揃い感</h2>
+      <p class="desc">4枚の葉のサイズと角度を不揃いに。中央葉が大、両脇の葉がやや小さく、後ろの葉がさらに小さく。本物の植物のような自然な雰囲気。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(70, 65)">
+              <!-- 後ろの葉 (一番小さく、奥行き) -->
+              <ellipse cx="0" cy="-22" rx="9" ry="16" fill="#a8c47e" opacity="0.7"/>
+              <!-- 左の葉 -->
+              <ellipse cx="-22" cy="2" rx="12" ry="18" fill="#a8c47e" transform="rotate(-40 -22 2)" opacity="0.95"/>
+              <!-- 右の葉 (やや大きめ) -->
+              <ellipse cx="22" cy="2" rx="13" ry="20" fill="#7a9658" transform="rotate(40 22 2)" opacity="0.95"/>
+              <!-- 中央前の葉 (一番大きい) -->
+              <ellipse cx="0" cy="-8" rx="14" ry="23" fill="#5e7d40" opacity="0.95"/>
+              <circle cx="0" cy="14" r="6" fill="#fbbf24"/>
+            </g>
+            <text x="120" y="48" font-family="'Hiragino Sans',sans-serif" font-size="40" fill="#3d5021" font-weight="600" letter-spacing="3">紡ぎ</text>
+            <text x="120" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="18" fill="#6b8b48" letter-spacing="6" font-weight="400">Tsumugi</text>
+            <text x="120" y="98" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#6b8b48" letter-spacing="2" font-weight="400">家族と現場をむすぶ デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="0" cy="-22" rx="9" ry="16" fill="#a8c47e" opacity="0.7"/>
+              <ellipse cx="-22" cy="2" rx="12" ry="18" fill="#a8c47e" transform="rotate(-40 -22 2)"/>
+              <ellipse cx="22" cy="2" rx="13" ry="20" fill="#7a9658" transform="rotate(40 22 2)"/>
+              <ellipse cx="0" cy="-8" rx="14" ry="23" fill="#5e7d40"/>
+              <circle cx="0" cy="14" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案D: 5枚葉 (花のような開き) ============ -->
+    <div class="logo-card">
+      <h2>案D:「5枚扇開き」 — 花のように広がる</h2>
+      <p class="desc">5枚の葉が扇のように放射状に広がる。中央葉が一番上、左右に少しずつ角度をつけて美しく開く。華やかさUP。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(70, 70)">
+              <!-- 一番左 (倒れている) -->
+              <ellipse cx="-28" cy="6" rx="11" ry="17" fill="#a8c47e" transform="rotate(-65 -28 6)" opacity="0.95"/>
+              <!-- 左やや上向き -->
+              <ellipse cx="-16" cy="-12" rx="11" ry="18" fill="#a8c47e" transform="rotate(-32 -16 -12)" opacity="0.95"/>
+              <!-- 中央上向き (最大) -->
+              <ellipse cx="0" cy="-18" rx="12" ry="22" fill="#6b8b48" opacity="0.95"/>
+              <!-- 右やや上向き -->
+              <ellipse cx="16" cy="-12" rx="11" ry="18" fill="#a8c47e" transform="rotate(32 16 -12)" opacity="0.95"/>
+              <!-- 一番右 (倒れている) -->
+              <ellipse cx="28" cy="6" rx="11" ry="17" fill="#a8c47e" transform="rotate(65 28 6)" opacity="0.95"/>
+              <circle cx="0" cy="14" r="6" fill="#fbbf24"/>
+            </g>
+            <text x="120" y="48" font-family="'Hiragino Sans',sans-serif" font-size="40" fill="#3d5021" font-weight="600" letter-spacing="3">紡ぎ</text>
+            <text x="120" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="18" fill="#6b8b48" letter-spacing="6" font-weight="400">Tsumugi</text>
+            <text x="120" y="98" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#6b8b48" letter-spacing="2" font-weight="400">家族と現場をむすぶ デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 55)">
+              <ellipse cx="-28" cy="6" rx="11" ry="17" fill="#a8c47e" transform="rotate(-65 -28 6)"/>
+              <ellipse cx="-16" cy="-12" rx="11" ry="18" fill="#a8c47e" transform="rotate(-32 -16 -12)"/>
+              <ellipse cx="0" cy="-18" rx="12" ry="22" fill="#6b8b48"/>
+              <ellipse cx="16" cy="-12" rx="11" ry="18" fill="#a8c47e" transform="rotate(32 16 -12)"/>
+              <ellipse cx="28" cy="6" rx="11" ry="17" fill="#a8c47e" transform="rotate(65 28 6)"/>
+              <circle cx="0" cy="14" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 案E: 3枚葉 (タイト・ミニマル) ============ -->
+    <div class="logo-card">
+      <h2>案E:「3枚タイト」 — 葉が小さくミニマル</h2>
+      <p class="desc">参考画像と同じ3枚構成だが、葉のサイズを少し小さく・角度を急にして、コンパクトにまとめる。アイコン化しても見やすい。</p>
+
+      <div class="preview-row">
+        <div class="preview-main">
+          <svg viewBox="0 0 480 130" style="width:100%; max-width:440px;" xmlns="http://www.w3.org/2000/svg">
+            <g transform="translate(70, 65)">
+              <ellipse cx="-15" cy="2" rx="10" ry="16" fill="#a8c47e" transform="rotate(-30 -15 2)" opacity="0.95"/>
+              <ellipse cx="15" cy="2" rx="10" ry="16" fill="#a8c47e" transform="rotate(30 15 2)" opacity="0.95"/>
+              <ellipse cx="0" cy="-10" rx="10" ry="18" fill="#6b8b48" opacity="0.95"/>
+              <circle cx="0" cy="10" r="5.5" fill="#fbbf24"/>
+            </g>
+            <text x="115" y="48" font-family="'Hiragino Sans',sans-serif" font-size="40" fill="#3d5021" font-weight="600" letter-spacing="3">紡ぎ</text>
+            <text x="115" y="72" font-family="'Helvetica Neue',Arial,sans-serif" font-size="18" fill="#6b8b48" letter-spacing="6" font-weight="400">Tsumugi</text>
+            <text x="115" y="98" font-family="'Hiragino Sans',sans-serif" font-size="11" fill="#6b8b48" letter-spacing="2" font-weight="400">家族と現場をむすぶ デイサービス</text>
+          </svg>
+        </div>
+        <div class="preview-favicon">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="-15" cy="2" rx="10" ry="16" fill="#a8c47e" transform="rotate(-30 -15 2)"/>
+              <ellipse cx="15" cy="2" rx="10" ry="16" fill="#a8c47e" transform="rotate(30 15 2)"/>
+              <ellipse cx="0" cy="-10" rx="10" ry="18" fill="#6b8b48"/>
+              <circle cx="0" cy="10" r="5.5" fill="#fbbf24"/>
+            </g>
+          </svg>
+          <span>ファビコン</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 比較 -->
+  <div class="compare-section">
+    <h3>📐 5案を並べて比較</h3>
+    <div class="compare-grid">
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="-22" cy="6" rx="14" ry="20" fill="#a8c47e" transform="rotate(-35 -22 6)"/>
+              <ellipse cx="22" cy="6" rx="14" ry="20" fill="#a8c47e" transform="rotate(35 22 6)"/>
+              <ellipse cx="0" cy="-12" rx="13" ry="22" fill="#6b8b48"/>
+              <circle cx="0" cy="10" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案A</strong> 参考画像通り</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="-15" cy="-15" rx="12" ry="18" fill="#6b8b48" transform="rotate(-45 -15 -15)"/>
+              <ellipse cx="15" cy="-15" rx="12" ry="18" fill="#a8c47e" transform="rotate(45 15 -15)"/>
+              <ellipse cx="-15" cy="15" rx="12" ry="18" fill="#a8c47e" transform="rotate(45 -15 15)"/>
+              <ellipse cx="15" cy="15" rx="12" ry="18" fill="#6b8b48" transform="rotate(-45 15 15)"/>
+              <circle cx="0" cy="0" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案B</strong> 4枚X字</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="0" cy="-22" rx="9" ry="16" fill="#a8c47e" opacity="0.7"/>
+              <ellipse cx="-22" cy="2" rx="12" ry="18" fill="#a8c47e" transform="rotate(-40 -22 2)"/>
+              <ellipse cx="22" cy="2" rx="13" ry="20" fill="#7a9658" transform="rotate(40 22 2)"/>
+              <ellipse cx="0" cy="-8" rx="14" ry="23" fill="#5e7d40"/>
+              <circle cx="0" cy="14" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案C</strong> 4枚大小ミックス</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 55)">
+              <ellipse cx="-28" cy="6" rx="11" ry="17" fill="#a8c47e" transform="rotate(-65 -28 6)"/>
+              <ellipse cx="-16" cy="-12" rx="11" ry="18" fill="#a8c47e" transform="rotate(-32 -16 -12)"/>
+              <ellipse cx="0" cy="-18" rx="12" ry="22" fill="#6b8b48"/>
+              <ellipse cx="16" cy="-12" rx="11" ry="18" fill="#a8c47e" transform="rotate(32 16 -12)"/>
+              <ellipse cx="28" cy="6" rx="11" ry="17" fill="#a8c47e" transform="rotate(65 28 6)"/>
+              <circle cx="0" cy="14" r="6" fill="#fbbf24"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案D</strong> 5枚扇開き</div>
+      </div>
+      <div class="compare-item">
+        <div class="box">
+          <svg viewBox="0 0 100 100" width="64" height="64">
+            <g transform="translate(50, 50)">
+              <ellipse cx="-15" cy="2" rx="10" ry="16" fill="#a8c47e" transform="rotate(-30 -15 2)"/>
+              <ellipse cx="15" cy="2" rx="10" ry="16" fill="#a8c47e" transform="rotate(30 15 2)"/>
+              <ellipse cx="0" cy="-10" rx="10" ry="18" fill="#6b8b48"/>
+              <circle cx="0" cy="10" r="5.5" fill="#fbbf24"/>
+            </g>
+          </svg>
+        </div>
+        <div class="label-tag"><strong>案E</strong> 3枚タイト</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="footer">
+    🌿 A〜E のどれが好きですか? 葉のサイズ・角度の微調整もOK
+  </p>
+</body>
+</html>
