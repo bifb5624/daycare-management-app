@@ -15483,9 +15483,9 @@ export default function App() {
                  currentView === 'settings' ? '各種設定' : 'システム画面'}
               </h1>
             </div>
-            {/* ジャンプナビをヘッダー右側に配置し、画面領域を節約。 ★ スマホ(狭い)ではタイトルと重なるため非表示(サイドバーで移動可) */}
+            {/* ジャンプナビをヘッダー右側に配置。 ★ 狭い画面(スマホ/iPad縦)ではタイトルと重なるため非表示(サイドバーで移動可)。 横長(lg〜)のみ表示 */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
-              <div className="hidden sm:flex items-center shrink-0">
+              <div className="hidden lg:flex items-center shrink-0">
                 <QuickNav navigateTo={navigateTo} currentView={currentView} patientId={targetPatientId} appData={appData}/>
               </div>
             )}
@@ -22234,6 +22234,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [renrakuModal, setRenrakuModal] = useState(null); // {patientId} 連絡事項の編集
   const [showPrintCards, setShowPrintCards] = useState(false); // ★ 印刷用の隠しカードは印刷時だけ描画(スマホのメモリ対策)
+  const [mobileCardLimit, setMobileCardLimit] = useState(6); // ★ スマホは重いカードを少しずつ描画(メモリ対策)
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [localOverrides, setLocalOverrides] = useState({});
@@ -22721,15 +22722,26 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         )}
 
         <div className="flex flex-col items-center gap-8">
-          {displayRecords.map((record, ri) => {
-            const patient = (appData.patients||[]).find(p => p.id === record.patientId);
-            if (!patient) return null;
-            return (
-              <div key={record.id} className="flex justify-center w-full">
-                <ContactBookCard record={record} patient={patient} selectedDate={selectedDate} config={appData.contactBookConfig} appData={appData} onOpenConfig={() => setIsConfigOpen(true)} onEditPatientValue={openPatientValueEdit} onEditRenraku={(p)=>setRenrakuModal({ patientId: p.id })} />
-              </div>
-            );
-          })}
+          {(() => {
+            // ★ スマホ(<768px)は重い連絡帳カードを一度に全部描画するとメモリ不足で落ちるため、 mobileCardLimit 件ずつ表示
+            const isNarrow = typeof window !== 'undefined' && window.innerWidth < 768;
+            const shown = isNarrow ? displayRecords.slice(0, mobileCardLimit) : displayRecords;
+            const rest = displayRecords.length - shown.length;
+            return (<>
+              {shown.map((record, ri) => {
+                const patient = (appData.patients||[]).find(p => p.id === record.patientId);
+                if (!patient) return null;
+                return (
+                  <div key={record.id} className="flex justify-center w-full">
+                    <ContactBookCard record={record} patient={patient} selectedDate={selectedDate} config={appData.contactBookConfig} appData={appData} onOpenConfig={() => setIsConfigOpen(true)} onEditPatientValue={openPatientValueEdit} onEditRenraku={(p)=>setRenrakuModal({ patientId: p.id })} />
+                  </div>
+                );
+              })}
+              {isNarrow && rest > 0 && (
+                <button onClick={()=>setMobileCardLimit(n=>n+6)} className="w-full max-w-xs mx-auto py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md active:scale-95">あと {rest} 件を表示</button>
+              )}
+            </>);
+          })()}
           {displayRecords.length === 0 && <div className="text-center text-slate-500 font-bold py-12 w-full">選択された日付の出席記録がありません。</div>}
         </div>
       </div>
