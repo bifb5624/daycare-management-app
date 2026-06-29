@@ -23907,6 +23907,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [masterSort, setMasterSort] = useState('kana'); // 'kana'|'startDate'|'careLevel'|'cmOffice'|'bday'|'insurance'
   const [masterSortOrder, setMasterSortOrder] = useState('asc'); // 'asc'|'desc'
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [mobileRosterOpen, setMobileRosterOpen] = useState(false); // ★ スマホは名簿をスライドオーバー表示
+  const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
   const [activeDetailTab, setActiveDetailTab] = useState('basic');
   const [isEditingResigned, setIsEditingResigned] = useState(false);
   const [furikaeModal, setFurikaeModal] = useState({ isOpen: false, day: null, ampm: null, fromDate: "", reason: "", mode: 'forward' });
@@ -24661,8 +24663,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   return (
     <div className="flex h-full min-h-0 w-full max-w-[1800px] mx-auto gap-4 relative">
       {/* 名簿 */}
-      <div className={`bg-white rounded-2xl shadow-md border border-slate-300 flex flex-col overflow-hidden flex-shrink-0 min-h-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-[44px]' : 'w-[340px]'}`}>
-        {isSidebarCollapsed ? (<button onClick={() => setIsSidebarCollapsed(false)} className="h-full flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50"><ChevronRight size={18} /><span className="text-[9px] font-bold mt-2" style={{ writingMode: 'vertical-rl' }}>名簿</span></button>) : (<>
+      {/* ★ スマホ: 名簿を開くフローティングボタン(閉じている時) */}
+      <button onClick={() => setMobileRosterOpen(true)} className="md:hidden fixed left-3 bottom-5 z-30 bg-blue-600 text-white rounded-full shadow-lg px-4 py-3 font-bold text-sm flex items-center gap-1.5 active:scale-95"><Users size={16} />名簿</button>
+      {/* ★ スマホ: 背景オーバーレイ */}
+      {mobileRosterOpen && <div onClick={() => setMobileRosterOpen(false)} className="md:hidden fixed inset-0 bg-black/50 z-40" aria-hidden="true" />}
+      <div className={`bg-white shadow-md border border-slate-300 flex flex-col overflow-hidden min-h-0
+        fixed inset-y-0 left-0 z-50 w-[88%] max-w-[360px] rounded-none transition-transform duration-300 ${mobileRosterOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:static md:translate-x-0 md:rounded-2xl md:flex-shrink-0 md:w-auto md:transition-all ${isSidebarCollapsed ? 'md:w-[44px]' : 'md:w-[340px]'}`}>
+        {(isSidebarCollapsed && !isMobileView) ? (<button onClick={() => setIsSidebarCollapsed(false)} className="h-full flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 hover:bg-blue-50"><ChevronRight size={18} /><span className="text-[9px] font-bold mt-2" style={{ writingMode: 'vertical-rl' }}>名簿</span></button>) : (<>
           <div className="p-3 border-b border-slate-200 bg-slate-50 shrink-0">
             <div className="flex justify-between items-center mb-2">
               <div>
@@ -24677,14 +24685,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 <button onClick={()=>{setNewPatientName('');setNewPatientModal(true);}} className="flex items-center gap-1 px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0"><Plus size={13}/>新規</button>
                 <button onClick={()=>setCsvModal({isOpen:true, mode:null, importText:'', error:''})} title="CSV入出力" className="flex items-center gap-1 px-2 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0">CSV</button>
                 <button onClick={()=>setMergeModal({open:true})} title="重複している利用者を統合（記録は引き継ぎ）" className="flex items-center gap-1 px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0">重複</button>
-                <button onClick={() => setIsSidebarCollapsed(true)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg"><ChevronLeft size={18} /></button>
+                <button onClick={() => { if (isMobileView) setMobileRosterOpen(false); else setIsSidebarCollapsed(true); }} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg" title={isMobileView ? '閉じる' : '名簿を折りたたむ'}><ChevronLeft size={18} /></button>
               </div>
             </div>
           </div>
           <div className="flex border-b border-slate-200 bg-white shrink-0">{['利用中', '休止', '退所済み'].map(s => (<button key={s} onClick={() => { setPatientStatusFilter(s); setActiveKanaFilter('all'); }} className={`flex-1 py-3 text-[13px] font-bold border-b-2 transition-colors ${patientStatusFilter === s ? (s === '休止' ? 'border-orange-500 text-orange-600' : s === '退所済み' ? 'border-slate-500 text-slate-600' : 'border-blue-600 text-blue-600') : 'border-transparent text-slate-400 hover:bg-slate-50'}`}>{s === '退所済み' ? '退所済' : s}</button>))}</div>
           <div className="px-2 py-1.5 border-b border-slate-200 bg-white shrink-0 space-y-1"><div className="relative"><Search className="absolute left-2 top-1.5 text-slate-400 z-10" size={12} /><SuggestInput value={nameSearchQuery} onChangeText={setNameSearchQuery}
             options={(appData.patients||[]).map(p=>({key:p.id, label:p.name, sub:p.kana}))}
-            onSelect={(o)=>{ const p=(appData.patients||[]).find(x=>String(x.id)===String(o.key)); if(!p) return; setNameSearchQuery(''); if(p.id!==editingPatientId){ const hasUnsaved=!!dirtyRef?.current||!!pendingShifts||!!pendingTickets; if(hasUnsaved){ setSwitchPatientConfirm({targetPatient:p}); return; } } setEditingPatientId(p.id); onPatientChange&&onPatientChange(p.id); }}
+            onSelect={(o)=>{ const p=(appData.patients||[]).find(x=>String(x.id)===String(o.key)); if(!p) return; setNameSearchQuery(''); if(p.id!==editingPatientId){ const hasUnsaved=!!dirtyRef?.current||!!pendingShifts||!!pendingTickets; if(hasUnsaved){ setSwitchPatientConfirm({targetPatient:p}); return; } } setEditingPatientId(p.id); onPatientChange&&onPatientChange(p.id); setMobileRosterOpen(false); }}
             inputProps={{type:'text', placeholder:'🔍 利用者名で検索（候補から選べます）', className:'w-full pl-7 pr-6 py-2 bg-slate-100 border border-slate-200 rounded-lg text-[14px] font-bold outline-none'}} />{nameSearchQuery && <button onClick={() => setNameSearchQuery('')} className="absolute right-1.5 top-1.5 text-slate-400 z-10"><X size={12} /></button>}</div><div className="flex flex-wrap gap-0.5">{kanaGroups.map(g => (<button key={g} onClick={() => setActiveKanaFilter(g)} className={`px-2 py-1 text-[11px] font-bold rounded ${activeKanaFilter === g ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{g === 'all' ? '全て' : g + '行'}</button>))}</div>
             <div className="flex gap-0.5 flex-wrap items-center">
               {[['kana','名前順'],['startDate','通所歴'],['careLevel','介護度'],['cmOffice','事業所'],['bday','誕生月'],['insurance','保険更新'],['age','年齢']].map(([k,l])=>(
@@ -24714,6 +24722,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               }
               setEditingPatientId(p.id);
               onPatientChange && onPatientChange(p.id);
+              setMobileRosterOpen(false); // ★ スマホ: 選択したら名簿を閉じて詳細を表示
             }} className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between border gap-3 transition-all ${editingPatientId === p.id ? 'bg-blue-50 border-blue-200 shadow-sm' : expiring ? 'border-red-200 bg-red-50' : bday ? 'border-yellow-200 bg-yellow-50' : 'border-transparent hover:bg-white'}`}>
               <div className="flex flex-col min-w-0 flex-1">
                 <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{pendingInitialReportSet.has(p.id) && <span title="初回ご利用報告が未報告です" className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded px-1 py-0.5 shrink-0">📋初回報告</span>}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
