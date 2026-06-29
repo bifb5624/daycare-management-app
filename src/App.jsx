@@ -19742,7 +19742,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         {r.bpUpEn?`${r.bpUpEn}/${r.bpDnEn}`:'-'}{r.plEn&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plEn})</span>}
                       </td>
                       {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
-                        const rawV = r.exercises?.[ex.id];
+                        let rawV = r.exercises?.[ex.id];
+                        // ★ ○ はその月の設定数値(例:10分)に置き換えて表示。 設定が無ければ○のまま。 ×/ー/数値はそのまま。
+                        if (rawV === '○' || rawV === '◯') {
+                          const _mm = (r.date||'').match(/(\d+)月/); const _ry = r.year || new Date().getFullYear();
+                          const _planned = getPlannedExercisesForMonth(selectedPatient, _ry, _mm?+_mm[1]:1)[ex.id];
+                          rawV = (_planned && _planned !== 'ー') ? _planned : rawV;
+                        }
                         const _unit = ex.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(ex.name))?.defaultUnit || '';
                         const vStr = String(rawV ?? '');
                         const disp = (vStr && /[0-9０-９]/.test(vStr) && _unit && !vStr.endsWith(_unit)) ? `${vStr}${_unit}` : vStr;
