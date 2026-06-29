@@ -9263,7 +9263,9 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
   const baseFontSize = isSmall ? 20 : screenW < 1024 ? 22 : 18;
   const fontSize = Math.round(baseFontSize * scale);
   const padW = btnSize * 4 + 12 * 3 + 24; // 4列 + gap3 + padding
-  const padH = btnSize * 4 + 140; // 4行 + ヘッダー + フッター
+  // ★ 運動モードは ○/×/ー 行 + クイック(+分/+回/+kg/+ー)行が増えるので高さに加算。 quickButtons があればさらに加算
+  const _extraRows = (mode === 'exercise' ? 2 : 0) + ((quickButtons && quickButtons.length) ? 1 : 0);
+  const padH = btnSize * 4 + 140 + _extraRows * (Math.round(btnSize * 0.66) + 12); // 4行 + ヘッダー/フッター + 追加行
 
   // ★ 初期位置: visualViewport の表示可能領域内に必ず収まる中央寄せ (右下角は見切れ防止)
   const [pos, setPos] = React.useState(() => {
@@ -9316,11 +9318,21 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
       setPos(prev => {
         const overlap = !(r.right < prev.x || r.left > prev.x + padW || r.bottom < prev.y || r.top > prev.y + padH);
         if (!overlap) return prev; // かぶっていない → そのまま
-        const cellMidY = r.top + r.height / 2, cellMidX = r.left + r.width / 2;
-        let y = cellMidY > ot + vh / 2 ? ot + 8 : ot + vh - padH - 16;      // セルが下半分→上へ
-        let x = cellMidX > ol + vw / 2 ? ol + 8 : ol + vw - padW - 16;      // セルが右半分→左へ
+        // ★ かぶる時は遠い隅へ飛ばさず「セルの横」に出す。 右隣に入らなければ左隣、それも無理なら上下に逃がす。
+        const padHv = Math.min(padH, vh - 16); // 画面に収まる実効高さ
+        let x = r.right + 8;                          // まず右隣
+        if (x + padW > ol + vw - 8) x = r.left - padW - 8; // 入らなければ左隣
+        let placedBeside = (x >= ol + 8 && x + padW <= ol + vw - 8);
+        if (!placedBeside) {
+          // 左右に入らない → セルの上か下へ (横位置はセルに合わせる)
+          x = Math.max(ol + 8, Math.min(r.left, ol + vw - padW - 8));
+          let y = (r.top - padHv - 8 >= ot + 8) ? (r.top - padHv - 8) : (r.bottom + 8); // 上に入れば上、無理なら下
+          y = Math.max(ot + 8, Math.min(y, ot + vh - padHv - 8));
+          return { x, y };
+        }
         x = Math.max(ol + 8, Math.min(x, ol + vw - padW - 8));
-        y = Math.max(ot + 8, Math.min(y, ot + vh - padH - 8));
+        // 縦はセル上端に合わせる (画面内にクランプ)
+        let y = Math.max(ot + 8, Math.min(r.top, ot + vh - padHv - 8));
         return { x, y };
       });
     }, 40);
@@ -9427,7 +9439,9 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
       transform:'translateZ(0)', WebkitTransform:'translateZ(0)',
       background:'white', borderRadius:18, border:'2.5px solid #1e293b',
       boxShadow:'0 8px 40px rgba(0,0,0,0.35)',
-      padding:'12px', width:padW, userSelect:'none', touchAction:'none'
+      padding:'12px', width:padW, userSelect:'none', touchAction:'none',
+      // ★ 画面より高い場合でも下のボタン(+分/+回 等)が見切れないよう上限＋スクロール
+      maxHeight:'calc(100vh - 12px)', overflowY:'auto'
     }}>
       {/* ドラッグハンドル + サイズ調整 */}
       <div onMouseDown={onDragStart} onTouchStart={onDragStart}
