@@ -370,8 +370,17 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
     //   上書きする恐れがあるためマージ対象に含めない (= 従来どおり編集端末の値を採用)。
     const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords'];
-    const merged = { ...localData };
-    ARRAY_KEYS.forEach(k => { merged[k] = mergeById(localData[k], cloud[k]); });
+    // ★ 削除した記録の墓石(tombstone)を local+cloud で統合。 これが無いと「id単位の和集合マージ」で
+    //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
+    const localTomb = (localData && localData.deletedIds) || {};
+    const cloudTomb = (cloud && cloud.deletedIds) || {};
+    const mergedTomb = {};
+    ARRAY_KEYS.forEach(k => { mergedTomb[k] = { ...(cloudTomb[k] || {}), ...(localTomb[k] || {}) }; });
+    const merged = { ...localData, deletedIds: mergedTomb };
+    ARRAY_KEYS.forEach(k => {
+      const tomb = mergedTomb[k] || {};
+      merged[k] = mergeById(localData[k], cloud[k]).filter(r => !(r && r.id != null && tomb[String(r.id)]));
+    });
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
     //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
     if (Array.isArray(merged.ticketRecords)) {

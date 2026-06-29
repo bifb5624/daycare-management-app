@@ -15158,7 +15158,7 @@ export default function App() {
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
-              {(()=>{
+              {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
                 // 体力測定バッジ: 当日出席 かつ 当月測定対象の利用者数
                 const _now = new Date(); _now.setHours(0,0,0,0);
                 const _cycle = appData.systemSettings?.fitnessCycle;
@@ -22931,20 +22931,16 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
     const cycleNum2 = parseInt(cycle2?.jigyo || '3');
     const unit2 = cycle2?.unit || 'ヶ月';
     const patRecs = records.filter(r => r.patientId === p.id && _hasFitVals(r)).sort((a,b)=>b.date.localeCompare(a.date));
-    let baseDate;
-    if (!patRecs.length) {
-      if (!p.startDate) return 0;
-      baseDate = new Date(p.startDate);
-    } else {
-      baseDate = new Date(patRecs[0].date);
-    }
+    // ★ まだ一度も測定していない人は「当月」(=測定するまで当月に残す)。 測定後に次回予定へ移る。
+    if (!patRecs.length) return 0;
+    const baseDate = new Date(patRecs[0].date);
     let nextDue = new Date(baseDate);
     if (unit2 === 'ヶ月') nextDue.setMonth(nextDue.getMonth() + cycleNum2);
     else if (unit2 === '週') nextDue.setDate(nextDue.getDate() + cycleNum2 * 7);
     else if (unit2 === '年') nextDue.setFullYear(nextDue.getFullYear() + cycleNum2);
-    const diffMs = nextDue - now;
-    const diffMonths = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30));
-    return Math.max(0, diffMonths);
+    // ★ オフセットは「カレンダー月の差」で算出 (30日換算だと9月予定が8月にズレる不具合を解消)
+    const offset = (nextDue.getFullYear() - thisYear) * 12 + (nextDue.getMonth() - thisMonth);
+    return Math.max(0, offset);
   };
 
   const allPats = (appData.patients || []).filter(p => getPatientDisplayStatus(p) !== '退所済み');
@@ -23272,7 +23268,12 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                           })}
                           {editPast && (
                             <td className="px-2 py-1 text-center">
-                              <button onClick={() => { if(!window.confirm(`${r.date} の記録を削除します。よろしいですか？`)) return; onSave({...appData, fitnessRecords: records.filter(rr => rr.id !== r.id)}); }}
+                              <button onClick={() => { if(!window.confirm(`${r.date} の記録を削除します。よろしいですか？`)) return;
+                                  // ★ 墓石(tombstone)に追加して同期マージでの復活を防ぐ + 即時クラウド保存
+                                  const _td = { ...(appData.deletedIds||{}), fitnessRecords: { ...((appData.deletedIds||{}).fitnessRecords||{}), [String(r.id)]: Date.now() } };
+                                  markClean();
+                                  onSave({...appData, fitnessRecords: records.filter(rr => rr.id !== r.id), deletedIds: _td}, { manual: true, message: '記録を削除しました' });
+                                }}
                                 className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[11px] font-bold whitespace-nowrap">削除</button>
                             </td>
                           )}
@@ -26578,6 +26579,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   const [fitnessCycle, setFitnessCycle] = useState(defaultCycle);
   const saveCycle = (updated) => {
     setFitnessCycle(updated);
+    // ★ 即時に systemSettings.fitnessCycle へ保存 (これが無いと『実施しない』等が反映されなかった)
+    onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), fitnessCycle: updated } });
   };
 
   const addFitnessItem = () => {
