@@ -17885,12 +17885,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 </div>
                 {/* 既往歴・留意点 (compactMode は 1 列、 事業所は 2 列) */}
                 <div style={{display:'grid',gridTemplateColumns: compactMode ? '1fr' : '1fr 1fr',gap:10}}>
-                  <div style={{background:'#fefce8',borderRadius:10,padding:'8px 12px',border:'1px solid #fef08a'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#92400e',marginBottom:3}}>既往歴</div>
+                  <div style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #94a3b8'}}>
+                    <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>既往歴</div>
                     <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{selectedPatient.kiou||'—'}</div>
                   </div>
-                  <div style={{background:'#fef2f2',borderRadius:10,padding:'8px 12px',border:'1px solid #fecaca'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#991b1b',marginBottom:3}}>留意点</div>
+                  <div style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #94a3b8'}}>
+                    <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>留意点</div>
                     <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{selectedPatient.ryui||'—'}</div>
                   </div>
                 </div>
