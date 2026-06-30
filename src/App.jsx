@@ -14054,6 +14054,12 @@ export default function App() {
   });
   // ★ ローカル編集タイムスタンプ (Supabase pull の race condition 防止)
   const lastLocalEditRef = React.useRef(0);
+  // ★ つむぎ管理局(super_admin)が店舗に入ったら、その店舗の「管理者」として全ての管理者専用機能を解放する。
+  React.useEffect(() => {
+    if (staffSession?.role === 'super_admin' && staffSession?.storeId) {
+      try { sessionStorage.setItem('tsumugiAdminVerified', '1'); } catch {}
+    }
+  }, [staffSession?.role, staffSession?.storeId]);
   // ★ つむぎ管理局(super_admin)が店舗に入ったら、記録者は本部名ではなく「その店舗の管理者」を自動選択
   //   (本部は確認用で記録には使わないため。 管理者が居なければ未選択のまま=選択画面)
   React.useEffect(() => {
@@ -27251,7 +27257,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   // ★ 重要設定(ログイン情報/管理者設定/APIキー)は「現在のスタッフが管理者」の時のみ表示。
   //   管理者がまだ1人もいない(初期設定)時のみ全員に開放。
   const _hasAnyAdmin = (appData.storeMembers||[]).some(m => m && (m.isAdmin || (m.roleLabel||'') === '管理者'));
-  const canAdmin = adminUnlocked || !_hasAnyAdmin;
+  // ★ つむぎ管理局(本部/スーパー管理者)でログインした場合は、各事業所の管理者扱いにして重要設定も閲覧・変更可
+  const canAdmin = adminUnlocked || !_hasAnyAdmin || !!isSuperAdmin;
   const [showSettingsAdminGate, setShowSettingsAdminGate] = useState(false);
   const settingsSaveAdminAuth = (auth) => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth:{ ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }); };
   const [exerciseItems, setExerciseItems] = useState(appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
