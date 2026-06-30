@@ -24053,6 +24053,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     setLocalPatient(updated);
     if (dirtyRef) dirtyRef.current = true;
   };
+  // ★ localPatient はマスタ画面の編集スナップショット。 個人ファイル(写真/書類/フェイスシート等)は
+  //   別モーダルで appData に直接保存されるため、 localPatient を書き戻す際にこれらを「最新の appData」から
+  //   引き継がないと、モーダルで追加した写真が古い localPatient で上書きされて消える。
+  const FILE_FIELDS = ['personalFile','faceSheet','docInsurance','docBurden','medicationImages','docOther','emergencyContacts','relatedParties'];
+  const withLatestFiles = (lp) => {
+    if (!lp) return lp;
+    const cur = (appData.patients||[]).find(p => p.id === lp.id);
+    if (!cur) return lp;
+    const merged = { ...lp };
+    FILE_FIELDS.forEach(k => { if (cur[k] !== undefined) merged[k] = cur[k]; });
+    return merged;
+  };
   const saveLP = (field, value) => {
     if (!localPatient) return;
     const prev = (appData.patients||[]).find(p=>p.id===localPatient.id)||{};
@@ -24063,7 +24075,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     }
     setLocalPatient(updated);
     if (dirtyRef) dirtyRef.current = false;
-    onSave({ ...appData, patients: appData.patients.map(p => p.id === updated.id ? updated : p) });
+    const toSave = withLatestFiles(updated);
+    onSave({ ...appData, patients: appData.patients.map(p => p.id === toSave.id ? toSave : p) });
   };
 
   // 介護度・負担割合の変更時にログを記録
@@ -24137,6 +24150,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
       });
       if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
+      pat = withLatestFiles(pat);
       next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
     }
     onSave(next);
@@ -24206,6 +24220,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
+    pat = withLatestFiles(pat);
     next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
     // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合のみ「何月から適用するか」を確認。
     //    キー順・空値の差で誤検知しないよう正規化して比較 (運動メニュー以外の編集では出さない)
