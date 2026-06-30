@@ -30304,29 +30304,35 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
 }
 
 // === モニタリング表（通所介護モニタリング表 正式様式 1人1枚）編集モーダル ===
-const MON_EXPLAIN = {
-  s1: '利用者に係る通所介護計画の内容どおりに、サービス提供を実施できたかどうかについて。',
-  s2: '現に利用しているサービスに、利用者及び家族が満足しているかどうかについて。',
-  s3: '利用者の生活状況や心身の状況に変化がないかどうかについて。',
-  s4: '通所介護計画の変更が必要となるような新たな課題が生じていないか、提供したサービスの内容が③の内容に照らして適切であるかどうか等により判断した結果について。',
-};
-function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, defaultRecorder, defaultDate, onClose, onSave, onPrint }) {
+// ★ 運営基準で求められる必須事項: ①サービスの実施状況 ②目標の達成(進捗)状況 ③利用者及び家族の満足度
+//   ④生活状況・心身の状況の変化 ⑤今後の方向性(継続/一部変更して継続/中止)。 各項目はプルダウン選択+記述。
+const MON_ITEMS = [
+  { key:'s1',   no:'①', title:'サービスの実施状況',                 explain:'通所介護計画の内容どおりにサービス提供を実施できたかどうか。', options:['実施できた','概ね実施できた','一部実施できなかった','実施できなかった'] },
+  { key:'goal', no:'②', title:'サービス利用目標の達成・進捗状況',     explain:'通所介護計画の目標の達成度・進捗状況。',                     options:['達成','概ね達成','一部達成','未達成','評価困難'] },
+  { key:'s2',   no:'③', title:'利用者及び家族の満足度',             explain:'現に利用しているサービスに利用者・家族が満足しているか。',     options:['満足','概ね満足','普通','やや不満','不満'] },
+  { key:'s3',   no:'④', title:'利用者の生活状況及び心身の状況の変化', explain:'生活状況や心身の状況に変化がないか。',                       options:['変化なし','改善傾向','悪化傾向','経過観察を要する'] },
+  { key:'s4',   no:'⑤', title:'今後の方向性',                       explain:'計画の変更が必要な新たな課題が生じていないか等による判断。',   options:['このまま継続','一部内容を変更して継続','サービス中止'] },
+];
+const _monNorm = (v, autoText) => (v && typeof v === 'object') ? { sel: v.sel||'', text: v.text||'' } : { sel:'', text: (v!=null && v!=='') ? v : (autoText||'') };
+function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, noAttendance, defaultRecorder, defaultDate, onClose, onSave, onPrint }) {
   const init = record?.sheet || {};
+  const hasRec = !!record;
   const [implDate, setImplDate] = React.useState(init.implDate || defaultDate || '');
   const [recorder, setRecorder] = React.useState(init.recorder || defaultRecorder || '');
-  const [s1, setS1] = React.useState(init.s1 != null ? init.s1 : (autoStatus || ''));
-  const [s2, setS2] = React.useState(init.s2 || '');
-  const [s3, setS3] = React.useState(init.s3 != null ? init.s3 : (autoChange || ''));
-  const [s4, setS4] = React.useState(init.s4 || '');
-  const collect = () => ({ implDate, recorder, s1, s2, s3, s4 });
-  const ta = (no, title, val, set, hint) => (
-    <div className="border border-slate-200 rounded-lg overflow-hidden">
-      <div className="bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700">{no}{title}</div>
-      <div className="px-3 pt-1.5 text-[11px] text-slate-400 leading-snug">{hint}</div>
-      <textarea value={val} onChange={e=>set(e.target.value)} rows={4}
-        className="w-full px-3 py-2 text-sm outline-none focus:bg-blue-50/30 leading-relaxed resize-y" />
-    </div>
-  );
+  // 各項目の {sel,text}。 既存記録があればそれ、無ければ自動初期値。
+  const initVal = (key) => {
+    if (hasRec) return _monNorm(init[key]);
+    if (key==='s1') return { sel: noAttendance ? '実施できなかった' : '実施できた', text: autoStatus||'' };
+    if (key==='s3') return { sel: '変化なし', text: autoChange||'' };
+    if (key==='goal') return { sel: noAttendance ? '評価困難' : '概ね達成', text: noAttendance ? '当月は通所がなく評価が困難。' : '' };
+    if (key==='s2') return { sel: noAttendance ? '' : '概ね満足', text: '' };
+    if (key==='s4') return { sel: 'このまま継続', text: '' };
+    return { sel:'', text:'' };
+  };
+  const [vals, setVals] = React.useState(() => { const o={}; MON_ITEMS.forEach(it=>o[it.key]=initVal(it.key)); return o; });
+  const setSel = (k,v) => setVals(p=>({...p,[k]:{...p[k],sel:v}}));
+  const setText = (k,v) => setVals(p=>({...p,[k]:{...p[k],text:v}}));
+  const collect = () => ({ implDate, recorder, ...Object.fromEntries(MON_ITEMS.map(it=>[it.key, vals[it.key]])) });
   return ReactDOM.createPortal(
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-0 sm:p-4">
       <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-2xl max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden">
@@ -30339,6 +30345,7 @@ function MonitoringSheetModal({ patient, facility, period, record, autoStatus, a
             <div><span className="font-bold">利用者:</span> {patient.name} 様（被保険者番号: {patient.insuranceNo||'—'}）</div>
             <div><span className="font-bold">事業所名:</span> {facility.name||'—'}</div>
             <div><span className="font-bold">居宅介護支援事業者:</span> {patient.cmOffice||'—'}　<span className="font-bold">担当ケアマネ:</span> {patient.cmName||'—'} 様{patient.cmFax?`（FAX ${patient.cmFax}）`:''}{!patient.cmFax && patient.cmOffice ? <span className="text-red-500 font-bold ml-1">※FAX番号 未登録</span>:''}</div>
+            {noAttendance && <div className="text-red-600 font-bold mt-1">⚠ 当月は通所(利用)がありません → ①は「実施できなかった」を初期選択しています。</div>}
           </div>
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[140px]">
@@ -30350,11 +30357,22 @@ function MonitoringSheetModal({ patient, facility, period, record, autoStatus, a
               <input value={recorder} onChange={e=>setRecorder(e.target.value)} placeholder="実施者名" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" />
             </div>
           </div>
-          <div className="text-xs font-bold text-slate-500 pt-1">【モニタリング結果】</div>
-          {ta('①','サービスの実施状況', s1, setS1, MON_EXPLAIN.s1+'（通所/バイタル等から自動下書き。編集可）')}
-          {ta('②','利用者及び家族の満足度', s2, setS2, MON_EXPLAIN.s2)}
-          {ta('③','利用者の生活状況及び心身の状況の変化', s3, setS3, MON_EXPLAIN.s3+'（自動下書き。編集可）')}
-          {ta('④','サービス変更の必要性', s4, setS4, MON_EXPLAIN.s4)}
+          <div className="text-xs font-bold text-slate-500 pt-1">【モニタリング結果】各項目をプルダウンで選び、必要に応じて内容を記入します。</div>
+          {MON_ITEMS.map(it => (
+            <div key={it.key} className="border border-slate-200 rounded-lg overflow-hidden">
+              <div className="bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700 flex items-center justify-between gap-2">
+                <span>{it.no}{it.title}</span>
+                <select value={vals[it.key].sel} onChange={e=>setSel(it.key, e.target.value)}
+                  className="px-2 py-1 text-xs font-bold bg-white border border-slate-300 rounded-md outline-none focus:border-blue-400">
+                  <option value="">— 選択 —</option>
+                  {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="px-3 pt-1.5 text-[11px] text-slate-400 leading-snug">{it.explain}</div>
+              <textarea value={vals[it.key].text} onChange={e=>setText(it.key, e.target.value)} rows={3} placeholder="内容（任意・選択に沿って記入）"
+                className="w-full px-3 py-2 text-sm outline-none focus:bg-blue-50/30 leading-relaxed resize-y" />
+            </div>
+          ))}
         </div>
         <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2 shrink-0 flex-wrap">
           <button onClick={()=>{ onPrint(collect(), true); }} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-sm flex items-center gap-1.5"><Printer size={15}/>印刷・FAX</button>
@@ -30721,6 +30739,9 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     // ①サービスの実施状況: 計画通りに提供できたか + 通所実績
     try {
       const d = buildPatientData(patient);
+      if (!d.attended) {
+        return `${d.month}は通所(利用)がなかったため、通所介護計画に基づくサービスを実施できなかった。`;
+      }
       const parts = ['通所介護計画に基づき、個別機能訓練・健康チェック・入浴・食事等の日常生活支援・送迎を提供。'];
       if (d.planned!=null) parts.push(`${d.month}は計画${d.planned}回中${d.attended}回参加（出席率${d.rate!=null?d.rate+'%':'—'}）。`);
       parts.push('概ね計画どおりサービスを実施できた。');
@@ -30745,29 +30766,37 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
   const escSheet = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
   const fmtJpDate = (ymd) => { if(!ymd) return ''; try { return new Date(ymd).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}); } catch { return ymd; } };
+  const _monCell = (v) => (v && typeof v==='object') ? v : { sel:'', text:(v!=null?String(v):'') };
+  const _monSummary = (sheet) => { const c=_monCell(sheet.s1); return c.text || c.sel || ''; };
   const saveSheet = (patient, sheet) => {
     let existing = [...(appData.monitoringRecords||[])];
     existing = existing.filter(r => !(r.patientId===patient.id && r.period===monthLabelStr));
-    existing.push({ id:`${patient.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`, patientId:patient.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sheet.s1||'', sheet });
+    const sm = _monSummary(sheet);
+    existing.push({ id:`${patient.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`, patientId:patient.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
     onSave({...appData, monitoringRecords: existing});
-    setResults(prev=>({...prev,[patient.id]:{text:sheet.s1||'', confirmed:true, loading:false, error:null, editing:false}}));
+    setResults(prev=>({...prev,[patient.id]:{text:sm, confirmed:true, loading:false, error:null, editing:false}}));
   };
   const printSheet = (patient, sheet, forFax) => {
     const f = appData.systemSettings?.facilityInfo || {};
-    // 正式様式「通所介護モニタリング表」を再現
     const bd = 'border:1px solid #000;';
-    const th = `style="${bd}background:#d9d9d9;padding:6px 8px;font-weight:bold;font-size:11.5px;text-align:center;vertical-align:middle;"`;
-    const lab = `style="${bd}background:#d9d9d9;padding:6px 8px;font-weight:bold;font-size:11.5px;text-align:center;vertical-align:middle;width:96px;"`;
-    const cell = `style="${bd}padding:6px 8px;font-size:11.5px;vertical-align:top;line-height:1.6;"`;
     const infoLab = `style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11.5px;white-space:nowrap;"`;
     const infoVal = `style="${bd}padding:5px 8px;font-size:11.5px;"`;
     const faxLine = forFax && patient.cmOffice
       ? `<div style="border:1.5px solid #000;padding:6px 10px;margin-bottom:8px;font-size:12px;font-weight:bold;">FAX送付先：${escSheet(patient.cmOffice)} 御中${patient.cmName?`　ご担当 ${escSheet(patient.cmName)} 様`:''}${patient.cmFax?`　FAX: ${escSheet(patient.cmFax)}`:''}</div>`
       : '';
+    // 各必須項目を「項目 | 結果(選択) | 内容」の行で出力 (運営基準の必須事項)
+    const itemRows = MON_ITEMS.map(it => {
+      const c = _monCell(sheet[it.key]);
+      return `<tr>
+        <td style="${bd}background:#d9d9d9;padding:7px 8px;font-weight:bold;font-size:11px;width:170px;vertical-align:top;line-height:1.45;">${it.no}${it.title}<div style="font-weight:normal;font-size:9px;color:#444;margin-top:3px;">${it.explain}</div></td>
+        <td style="${bd}padding:7px 6px;font-size:11px;font-weight:bold;text-align:center;width:96px;vertical-align:top;">${escSheet(c.sel)||'　'}</td>
+        <td style="${bd}padding:7px 9px;font-size:11px;vertical-align:top;line-height:1.7;">${escSheet(c.text)||'&nbsp;'}</td>
+      </tr>`;
+    }).join('');
     const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm 12mm;background:white;">
       <div style="text-align:center;font-size:19px;font-weight:bold;margin-bottom:14px;">通所介護モニタリング表</div>
       ${faxLine}
-      <table style="width:100%;border-collapse:collapse;margin-bottom:14px;">
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
         <tr>
           <td ${infoLab}>利用者名</td><td ${infoVal} style="${bd}padding:5px 8px;font-size:11.5px;width:34%;">${escSheet(patient.name)} 様　(被保険者番号: ${escSheet(patient.insuranceNo)||''})</td>
           <td ${infoLab}>事業社名</td><td ${infoVal}>${escSheet(f.name)||''}</td>
@@ -30776,33 +30805,22 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           <td ${infoLab}>居宅介護支援事業者</td><td ${infoVal}>${escSheet(patient.cmOffice)||''}</td>
           <td ${infoLab}>担当ケアマネージャー</td><td ${infoVal}>${escSheet(patient.cmName)||''} 様</td>
         </tr>
+        <tr>
+          <td ${infoLab}>対象期間</td><td ${infoVal}>${escSheet(monthLabelStr)}</td>
+          <td ${infoLab}>実施日</td><td ${infoVal}>${escSheet(fmtJpDate(sheet.implDate))}</td>
+        </tr>
+        <tr>
+          <td ${infoLab}>モニタリング実施者</td><td ${infoVal} colspan="3">${escSheet(sheet.recorder)||''}</td>
+        </tr>
       </table>
-      <div style="font-size:12px;font-weight:bold;margin-bottom:4px;">【モニタリング結果】</div>
+      <div style="font-size:12px;font-weight:bold;margin:8px 0 4px;">【モニタリング結果】</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
-        <colgroup><col style="width:96px;"/><col/><col/><col/><col/></colgroup>
         <tr>
-          <td ${th}></td>
-          <td ${th}>①サービスの実施状況</td>
-          <td ${th}>②利用者及び家族の満足度</td>
-          <td ${th}>③利用者の生活状況及び<br>心身の状況の変化</td>
-          <td ${th}>④サービス変更の必要性</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:170px;">項目</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:96px;">結果</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;">内容</td>
         </tr>
-        <tr>
-          <td ${lab}>各項目の説明</td>
-          <td ${cell} style="${bd}padding:6px 8px;font-size:10px;vertical-align:top;line-height:1.5;color:#333;">${MON_EXPLAIN.s1}</td>
-          <td ${cell} style="${bd}padding:6px 8px;font-size:10px;vertical-align:top;line-height:1.5;color:#333;">${MON_EXPLAIN.s2}</td>
-          <td ${cell} style="${bd}padding:6px 8px;font-size:10px;vertical-align:top;line-height:1.5;color:#333;">${MON_EXPLAIN.s3}</td>
-          <td ${cell} style="${bd}padding:6px 8px;font-size:10px;vertical-align:top;line-height:1.5;color:#333;">${MON_EXPLAIN.s4}</td>
-        </tr>
-        <tr>
-          <td ${lab} style="${bd}background:#d9d9d9;padding:6px 8px;font-weight:bold;font-size:11px;text-align:center;vertical-align:top;">
-            実施日<br><span style="font-weight:normal;">${escSheet(fmtJpDate(sheet.implDate))}</span><br><br>モニタリング実施者<br><span style="font-weight:normal;">${escSheet(sheet.recorder)||''}</span>
-          </td>
-          <td ${cell} style="${bd}padding:8px;font-size:11.5px;vertical-align:top;line-height:1.7;height:320px;">${escSheet(sheet.s1)||'&nbsp;'}</td>
-          <td ${cell} style="${bd}padding:8px;font-size:11.5px;vertical-align:top;line-height:1.7;">${escSheet(sheet.s2)||'&nbsp;'}</td>
-          <td ${cell} style="${bd}padding:8px;font-size:11.5px;vertical-align:top;line-height:1.7;">${escSheet(sheet.s3)||'&nbsp;'}</td>
-          <td ${cell} style="${bd}padding:8px;font-size:11.5px;vertical-align:top;line-height:1.7;">${escSheet(sheet.s4)||'&nbsp;'}</td>
-        </tr>
+        ${itemRows}
       </table>
     </div>`;
     const title = `通所介護モニタリング表_${patient.name}_${monthLabelStr}`;
@@ -31077,6 +31095,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             record={getSheetRecord(patient.id)}
             autoStatus={buildAutoStatus(patient)}
             autoChange={buildAutoChange(patient)}
+            noAttendance={!hasAttendance(patient)}
             defaultRecorder={getActiveRecorderName() || ''}
             defaultDate={new Date().toISOString().slice(0,10)}
             onClose={()=>setSheetModal(null)}
@@ -33190,9 +33209,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                           {open && (
                             <div className="px-3 pb-3 text-xs text-slate-700 space-y-1.5 border-t border-slate-100 pt-2">
                               {s ? (<>
-                                {[['①サービスの実施状況',s.s1],['②利用者及び家族の満足度',s.s2],['③生活状況・心身の変化',s.s3],['④サービス変更の必要性',s.s4]].map(([l,v])=>(
-                                  <div key={l}><span className="font-bold text-slate-500">{l}：</span><span className="whitespace-pre-wrap">{v||'—'}</span></div>
-                                ))}
+                                {MON_ITEMS.map(it => { const c = s[it.key]; const sel=(c&&typeof c==='object')?c.sel:''; const text=(c&&typeof c==='object')?c.text:(c||''); return (
+                                  <div key={it.key}><span className="font-bold text-slate-500">{it.no}{it.title}：</span>{sel && <span className="font-bold text-sky-700">{sel}</span>}{text && <span className="whitespace-pre-wrap"> {text}</span>}{!sel && !text && <span>—</span>}</div>
+                                );})}
                                 <div className="text-right text-slate-400">{s.implDate?`実施日：${s.implDate}　`:''}{s.recorder?`実施者：${s.recorder}`:''}</div>
                               </>) : (
                                 <div className="whitespace-pre-wrap">{r.summary||'—'}</div>
