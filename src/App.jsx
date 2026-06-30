@@ -28785,7 +28785,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const _curDow = new Date(selectedDate).getDay();
           const curPids = _pidsForDate(dateStr, _curDow);
           const prevPids = _pidsForDate(`${_d.getMonth()+1}月${_d.getDate()}日`, _d.getDay());
-          const curRowByPid = {}; curPids.forEach((pid,i)=>{ if(curRowByPid[pid]==null) curRowByPid[pid]=i; });
+          // ★ 当週(コピー先)で欠席/休止/休業の人は、その人の車(送迎)を表示しない → 対応付けから除外
+          const _absentNow = new Set((appData.ticketRecords||[]).filter(r=>r.date===dateStr && (r.status==='欠席'||r.status==='休業'||r.status==='休止')).map(r=>r.patientId));
+          const curRowByPid = {}; curPids.forEach((pid,i)=>{ if(_absentNow.has(pid)) return; if(curRowByPid[pid]==null) curRowByPid[pid]=i; });
           const remapRow = (obj)=>{ const out={}; Object.keys(obj||{}).forEach(k=>{ const mm=k.match(/^(\d+)(_.+)?$/); if(!mm){ out[k]=obj[k]; return; } const pr=+mm[1]; const suf=mm[2]||''; const pid=prevPids[pr]; const cr=pid!=null?curRowByPid[pid]:undefined; if(cr==null) return; out[cr+suf]=obj[k]; }); return out; };
           SOUGEI_FIELDS.forEach(f => {
             if (!prevLog[f]) return;
