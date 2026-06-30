@@ -11269,8 +11269,9 @@ function FamilyView() {
                       const existingContacts = p.emergencyContacts || [];
                       const dup = existingContacts.some(c => (c.name||'').trim() === ecName && (c.relation||'').trim() === ecRelation);
                       let updatedContacts;
-                      if (isPrimary) {
-                        // 主要に反映済みなので追加配列にはコピーしない
+                      if (isPrimary || isCmKind) {
+                        // ★ 代表家族は familyName 等に反映済み。 ケアマネ/その他関係者は「担当ケアマネ/その他関係者」に入れるので
+                        //   緊急連絡先(emergencyContacts)には追加しない。
                         updatedContacts = existingContacts;
                       } else {
                         updatedContacts = dup ? existingContacts : [...existingContacts, newEmergencyContact];
@@ -24015,6 +24016,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [newPatientModal, setNewPatientModal] = useState(false);
   const [csvModal, setCsvModal] = useState({isOpen:false, mode:null, importText:'', error:''});
   const [familyShareModal, setFamilyShareModal] = useState(null); // {patient}
+  const deletingAccIdsRef = useRef(new Set()); // ★ 削除中/削除済みのアカウントID (Supabase再取得で復活させない)
   const [personalFileModal, setPersonalFileModal] = useState(null); // {patient}
 
   // ★ アカウント管理モーダルを開いた時 + 10秒ごと、Supabase から最新の家族招待/アカウントを取得
@@ -24039,14 +24041,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           usedBy: i.used_by||null, usedAt: i.used_at||null,
           _fromSupabase: true,
         }));
-        const mappedAcc = accounts.map(a => ({
-          id: a.id, patientId: pat.id, storeId: a.store_id||null,
-          username: a.username, password: '****',
-          kind: a.kind||'family', relation: a.relation||'',
-          displayName: a.display_name||'', email: a.email||'',
-          role: a.role||'member', lastLogin: a.last_login||null,
-          _fromSupabase: true,
-        }));
+        const mappedAcc = accounts
+          .filter(a => !deletingAccIdsRef.current.has(a.id)) // ★ 削除中/削除済みは復活させない
+          .map(a => ({
+            id: a.id, patientId: pat.id, storeId: a.store_id||null,
+            username: a.username, password: '****',
+            kind: a.kind||'family', relation: a.relation||'',
+            displayName: a.display_name||'', email: a.email||'',
+            role: a.role||'member', lastLogin: a.last_login||null,
+            _fromSupabase: true,
+          }));
         onSave({ ...appData,
           familyInvites: [...localInv, ...mappedInv],
           familyAccounts: [...localAcc, ...mappedAcc],
@@ -26071,6 +26075,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         };
         const removeAccount = (accId) => {
           if (!window.confirm('このアカウントを削除します。\n紐づく招待コードも削除され、同じIDで再登録できるようになります。\nよろしいですか?')) return;
+          // ★ 削除中IDに登録 → 10秒ごとのSupabase再取得で復活させない
+          try { deletingAccIdsRef.current.add(accId); } catch {}
           // ★ まず画面に即時反映 (固まらないように)。 アカウント削除＋紐づく招待コードも削除(unlinkではなく物理削除)。
           onSave({
             ...appData,
@@ -26080,8 +26086,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           // ★ Supabase は背景で物理削除 (UIを待たせない)。 失敗時のみ後から通知。
           if (isSupabaseEnabled) {
             supabaseDeleteFamilyAccount(accId)
-              .then(ok => { if (!ok) alert('クラウド側の削除に失敗しました。通信状況を確認のうえ、もう一度お試しください。'); })
-              .catch(() => {});
+              .then(ok => { if (!ok) { try { deletingAccIdsRef.current.delete(accId); } catch {}; alert('クラウド側の削除に失敗しました。通信状況を確認のうえ、もう一度お試しください。'); } })
+              .catch(() => { try { deletingAccIdsRef.current.delete(accId); } catch {} });
           }
         };
         const resetPw = (accId) => {
