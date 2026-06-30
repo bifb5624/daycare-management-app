@@ -1245,6 +1245,12 @@ const normalizeInviteCode = (raw) => {
   if (s.length <= 7) return `${s.slice(0,3)}-${s.slice(3)}`;
   return `${s.slice(0,3)}-${s.slice(3,7)}-${s.slice(7,11)}`;
 };
+// ★ QR画像はメモ化して「同じURLなら再描画・再読込しない」(モーダルがポーリング等で頻繁に再描画されても
+//   リモートQR画像が点滅(チカチカ)しないようにする)。
+const QRImg = React.memo(function QRImg({ url, size = 100, className, style, alt }) {
+  const src = `https://api.qrserver.com/v1/create-qr-code/?size=${size*2}x${size*2}&margin=6&data=${encodeURIComponent(url || '')}`;
+  return <img src={src} width={size} height={size} className={className} style={style} alt={alt || 'QR'} loading="eager" decoding="async" />;
+});
 
 // 日付文字列 ("4月15日" 等) を YYYY-MM に正規化。年が無いものは currentYear で補完
 // ★ 動画ファイル判定 (容量対策のため動画アップロードは不可。 写真・PDFのみ許可)
@@ -26110,7 +26116,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                 {/* ★ 未使用コード: 新規登録URL + QR (このQRを読むと登録画面が開く) */}
                                 {showCodeTools && (
                                   <div className="mt-2 pt-2 border-t border-amber-100 flex items-start gap-2.5">
-                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(inviteUrlOf(inv))}`} width={84} height={84} className="border border-amber-200 rounded bg-white p-1 shrink-0" alt="登録QR"/>
+                                    <QRImg url={inviteUrlOf(inv)} size={84} className="border border-amber-200 rounded bg-white p-1 shrink-0" alt="登録QR"/>
                                     <div className="flex-1 min-w-0 space-y-1.5">
                                       <div className="text-[10px] font-bold text-amber-800">新規登録ページ（このQRを読み取ると、コード入力済みで登録画面が開きます）</div>
                                       <div className="flex gap-1">
@@ -26132,7 +26138,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
                   <div className="text-xs font-bold text-violet-700 mb-2">共通ログインURL（全利用者共通）</div>
                   <div className="flex items-start gap-3">
-                    <img src={qrSrc} alt="共通QR" width={100} height={100} className="border border-violet-300 rounded-lg p-1 bg-white shrink-0"/>
+                    <QRImg url={loginUrl} size={100} alt="共通QR" className="border border-violet-300 rounded-lg p-1 bg-white shrink-0"/>
                     <div className="flex-1 min-w-0 space-y-2">
                       <div className="flex gap-2 flex-wrap">
                         <input readOnly value={loginUrl} className="flex-1 min-w-0 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-[11px] font-mono outline-none"/>
