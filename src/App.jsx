@@ -10698,32 +10698,35 @@ function FamilyView() {
       try {
         const stores = await supabaseListStores();
         const pidNum = parseInt(authPid, 10);
-        // ★ 期待される利用者名 (ログイン/登録時に保存)。 利用者 ID は店舗ごとの連番で
-        //   一意でないため、 ID だけで店舗を確定すると別店舗の同番号の人に化ける。
-        //   氏名が判っている場合は ID + 氏名の両方が一致した店舗のみ採用する。
         let _expectName = '';
         try { _expectName = sessionStorage.getItem('familyAuthPatientName') || ''; } catch {}
+        // ★ 利用者IDは店舗ごとの連番で全店一意でない。 ID該当の店舗を全て集めてから判定する。
+        //   - 該当が1店舗だけ → 安全に採用
+        //   - 複数店舗に同番号 → 氏名一致で1つに確定。 確定できなければ どの店舗も採用しない
+        //     (別店舗の同番号の人に化ける/点滅する・他人の情報が見える事故を防ぐ。 誤表示より「取得中」が安全)
+        const candidates = [];
         for (const s of (stores || [])) {
           if (cancelled) return;
           try {
             const st = await supabaseLoadStateForStore(s.id);
-            const found = (st?.patients || []).find(p => {
-              const idMatch = (p.id === pidNum || p.id === authPid || String(p.id) === String(authPid));
-              if (!idMatch) return false;
-              // 氏名が判っていれば一致を必須化 (誤紐付け防止)
-              if (_expectName) return String(p.name||'').trim() === _expectName.trim();
-              return true;
-            });
-            if (found) {
-              try { sessionStorage.setItem('familyAuthStoreId', String(s.id)); } catch {}
-              // 強制的に再レンダー (familyStoreId を再計算)
-              setAuthAccId(prev => prev); // no-op だが React state を「触る」ことで再評価
-              window.location.reload();
-              return;
-            }
+            const pat = (st?.patients || []).find(p => (p.id === pidNum || p.id === authPid || String(p.id) === String(authPid)));
+            if (pat) candidates.push({ storeId: s.id, name: String(pat.name||'').trim() });
           } catch { /* skip */ }
         }
-        console.warn('[family] auto-store fallback: patient not found in any store');
+        if (cancelled) return;
+        let chosen = null;
+        if (candidates.length === 1) {
+          chosen = candidates[0].storeId;
+        } else if (candidates.length > 1 && _expectName) {
+          const named = candidates.filter(c => c.name === _expectName.trim());
+          if (named.length === 1) chosen = named[0].storeId;
+        }
+        if (chosen) {
+          try { sessionStorage.setItem('familyAuthStoreId', String(chosen)); } catch {}
+          window.location.reload();
+          return;
+        }
+        console.warn('[family] auto-store fallback: 店舗を一意に特定できませんでした (候補', candidates.length, ')');
       } catch (e) {
         console.warn('[family] auto-store fallback failed:', e?.message);
       }
