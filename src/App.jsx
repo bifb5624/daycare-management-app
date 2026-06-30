@@ -11121,10 +11121,13 @@ function FamilyView() {
                   if (!code) { setSignupForm(f=>({...f, error:'招待コードを入力してください'})); return; }
                   if (uname.length < 4) { setSignupForm(f=>({...f, error:'IDは4文字以上必要です'})); return; }
                   if (!/^[a-zA-Z0-9_\-]+$/.test(uname)) { setSignupForm(f=>({...f, error:'IDは半角英数字・ハイフン・アンダースコアのみ使用できます'})); return; }
-                  // ★ 全事業所でIDが重複していないか確認 (重複すると別店舗の利用者と取り違え=点滅するため禁止)
+                  // ★ 全事業所でIDが重複していないか確認 (重複すると別店舗の利用者と取り違え=点滅するため禁止)。
+                  //   通信が滞っても固まらないよう8秒で打ち切り (timeout/null時は確認できないが登録は止めない)
                   if (isSupabaseEnabled) {
-                    setSignupForm(f=>({...f, error:''}));
-                    const _dup = await supabaseFamilyUsernameExists(uname);
+                    setSignupForm(f=>({...f, checking:true, error:''}));
+                    let _dup = null;
+                    try { _dup = await Promise.race([ supabaseFamilyUsernameExists(uname), new Promise(res=>setTimeout(()=>res('timeout'), 8000)) ]); } catch { _dup = null; }
+                    setSignupForm(f=>({...f, checking:false}));
                     if (_dup === true) { setSignupForm(f=>({...f, error:'このIDは既に使われています。別のIDを設定してください。'})); return; }
                   }
                   if (pw.length < 8) { setSignupForm(f=>({...f, error:'パスワードは8文字以上必要です'})); return; }
@@ -11319,11 +11322,13 @@ function FamilyView() {
                   };
                   try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
                   setData(updated);
-                  // ★ Supabase 同期 (端末越しログインを可能にする)
+                  // ★ Supabase 同期 (端末越しログインを可能にする)。 送信中表示。
+                  setSignupForm(f=>({...f, submitting:true, error:''}));
                   let _sbStoreId = null;  // Supabase が返す確実な店舗 ID (自動ログインの store 確定に使う)
                   if (isSupabaseEnabled) {
                     try {
-                      const _sbResult = await supabaseSignupFamily({
+                      // ★ 通信不達でも固まらないよう15秒で打ち切り (登録自体はローカルに保存済み)
+                      const _sbResult = await Promise.race([ supabaseSignupFamily({
                         inviteCode: code,
                         username: uname,
                         password: pw,
@@ -11335,7 +11340,7 @@ function FamilyView() {
                         facilityName: latest.facility?.name || '',
                         patientName: (latest.patients||[]).find(p=>p.id===invite.patientId)?.name || '',
                         inviteFallback: { patientId: invite.patientId, storeId: invite.storeId || invite.store_id || null, expiresAt: invite.expiresAt },
-                      });
+                      }), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 15000)) ]);
                       _sbStoreId = _sbResult?.account?.store_id || _sbResult?.invite?.store_id || null;
                       // ★ 緊急連絡先を Supabase 側の patient にも反映 (staff 側からも見えるように)。
                       //   invite に storeId が無いケースがあるため、Supabaseが返す確実な店舗ID(_sbStoreId)を最優先。
@@ -11609,9 +11614,9 @@ function FamilyView() {
                     </label>
                   </div>
                   {signupForm.error && <div style={{color:'#ef4444',fontSize:12,fontWeight:'bold',marginBottom:10,textAlign:'center',background:'#fef2f2',padding:'8px 10px',borderRadius:8}}>{signupForm.error}</div>}
-                  <button type="submit" disabled={!(signupForm.agreedTerms && signupForm.agreedPrivacy)}
-                    style={{width:'100%',padding:'13px',background: (signupForm.agreedTerms && signupForm.agreedPrivacy)?'#7daa3d':'#cbd5e1',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:(signupForm.agreedTerms && signupForm.agreedPrivacy)?'pointer':'not-allowed',marginTop:6,boxShadow:'0 4px 12px rgba(125,170,61,0.3)'}}>
-                    登録する
+                  <button type="submit" disabled={!(signupForm.agreedTerms && signupForm.agreedPrivacy) || signupForm.checking || signupForm.submitting}
+                    style={{width:'100%',padding:'13px',background: (signupForm.agreedTerms && signupForm.agreedPrivacy && !signupForm.checking && !signupForm.submitting)?'#7daa3d':'#cbd5e1',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:(signupForm.agreedTerms && signupForm.agreedPrivacy)?'pointer':'not-allowed',marginTop:6,boxShadow:'0 4px 12px rgba(125,170,61,0.3)'}}>
+                    {signupForm.checking ? 'ID確認中...' : signupForm.submitting ? '登録中...' : '登録する'}
                   </button>
                   <button type="button" onClick={()=>setMode('login')} style={{display:'block',width:'100%',padding:'10px',marginTop:10,background:'transparent',color:'#64748b',border:'none',fontSize:12,fontWeight:'bold',cursor:'pointer'}}>← ログイン画面に戻る</button>
                 </form>
