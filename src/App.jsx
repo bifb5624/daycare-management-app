@@ -17005,6 +17005,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             placeholder={selItem?`${patDefault||''}${selItem.defaultUnit?` ${selItem.defaultUnit}`:''}`:'未選択'}
                             style={{fontSize:13,padding:'3px 4px'}}
                             className="w-full text-center border border-emerald-300 rounded font-bold bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-emerald-300"/>
+                          {/* ★ ○ ボタン: 押すとサービス提供内容で設定した基準値を入力 */}
+                          {selItem && patDefault && !isReadOnly && !isAbsent && !isPause && (
+                            <button type="button" onClick={()=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: patDefault})}
+                              title={`○（基準値「${patDefault}${selItem.defaultUnit||''}」を入力）`}
+                              className="w-full mt-0.5 py-0.5 text-[13px] font-bold leading-none rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-100 active:scale-95">○</button>
+                          )}
                         </td>
                       );
                     }
