@@ -31084,28 +31084,48 @@ ${optionsDesc}
                   </div>
                   <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{patient.careLevel||''}</div>
                 </td>
-                {/* 内容列 */}
+                {/* 内容列 — ★ モニタリング表(正式シート)があれば全項目をインライン表示。 無ければ従来の要約 */}
                 <td style={{padding:'10px 14px',verticalAlign:'middle'}}>
-                  {res?.loading ? (
-                    <div style={{display:'flex',alignItems:'center',gap:8,color:'#0284c7',fontSize:12}}>
-                      <span style={{fontSize:16}}>⟳</span> AI生成中...
-                    </div>
-                  ) : res?.error ? (
-                    <div style={{color:'#dc2626',fontSize:11}}>{res.error}</div>
-                  ) : null}
-                  {confirmed && res?.text && (
-                    <div style={{fontSize:13,lineHeight:1.7,color:'#1e293b',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{res.text}</div>
-                  )}
-                  {!confirmed && (editing || res?.text) ? (
-                    <input type="text"
-                      value={res?.text||''}
-                      onChange={e=>setResults(prev=>({...prev,[patient.id]:{...prev[patient.id],text:e.target.value,editing:true}}))}
-                      placeholder="手入力または生成..."
-                      style={{width:'100%',fontSize:13,border:'1px solid #e2e8f0',borderRadius:8,padding:'7px 10px',outline:'none',background:'white',fontFamily:'inherit',boxSizing:'border-box'}}
-                    />
-                  ) : !confirmed && !res?.text && (
-                    <div style={{color:'#cbd5e1',fontSize:11}}>未生成</div>
-                  )}
+                  {(() => {
+                    const sheetRec = getSheetRecord(patient.id);
+                    const sh = sheetRec?.sheet;
+                    if (sh) {
+                      return (
+                        <div style={{fontSize:11,lineHeight:1.55,color:'#1e293b'}}>
+                          {MON_ITEMS.map(it => { const c=_monCell(sh[it.key]); return (
+                            <div key={it.key} style={{marginBottom:2}}>
+                              <span style={{fontWeight:'bold',color:'#0369a1'}}>{it.no}</span>
+                              {c.sel && <span style={{fontWeight:'bold',background:'#e0f2fe',borderRadius:4,padding:'0 4px',marginLeft:2}}>{c.sel}</span>}
+                              {c.text && <span style={{color:'#475569'}}> {c.text}</span>}
+                            </div>
+                          );})}
+                          <div style={{fontSize:9,color:'#94a3b8',marginTop:3}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}　<span style={{color:'#0c4a6e',fontWeight:'bold'}}>（📋表 から編集）</span></div>
+                        </div>
+                      );
+                    }
+                    return (<>
+                      {res?.loading ? (
+                        <div style={{display:'flex',alignItems:'center',gap:8,color:'#0284c7',fontSize:12}}>
+                          <span style={{fontSize:16}}>⟳</span> AI生成中...
+                        </div>
+                      ) : res?.error ? (
+                        <div style={{color:'#dc2626',fontSize:11}}>{res.error}</div>
+                      ) : null}
+                      {confirmed && res?.text && (
+                        <div style={{fontSize:13,lineHeight:1.7,color:'#1e293b',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{res.text}</div>
+                      )}
+                      {!confirmed && (editing || res?.text) ? (
+                        <input type="text"
+                          value={res?.text||''}
+                          onChange={e=>setResults(prev=>({...prev,[patient.id]:{...prev[patient.id],text:e.target.value,editing:true}}))}
+                          placeholder="手入力または生成..."
+                          style={{width:'100%',fontSize:13,border:'1px solid #e2e8f0',borderRadius:8,padding:'7px 10px',outline:'none',background:'white',fontFamily:'inherit',boxSizing:'border-box'}}
+                        />
+                      ) : !confirmed && !res?.text && (
+                        <div style={{color:'#cbd5e1',fontSize:11}}>未作成（📋表 か ⚡生成）</div>
+                      )}
+                    </>);
+                  })()}
                 </td>
                 {/* 操作列（横並び） */}
                 {!isPrintMode && (
