@@ -15369,28 +15369,35 @@ export default function App() {
                         members.map(m => {
                           const isCurrent = m.id === activeRecorder.id;
                           return (
-                            <button key={m.id}
-                              onClick={() => {
-                                setStaffDropdownOpen(false);
-                                if (isCurrent) return;
-                                const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
-                                // ★ 管理者へ切替える時はパスワード認証を要求 (未設定なら設定)
-                                if (isAdminMember) { setPendingStaffSwitch(m); return; }
-                                commitRecorder(m);
-                              }}
-                              className={`w-full text-left px-4 py-2 text-[11px] font-bold flex items-center justify-between border-b border-emerald-700/20 ${
-                                isCurrent
-                                  ? 'bg-emerald-700/60 text-white cursor-default'
-                                  : 'text-emerald-100 hover:bg-emerald-800/60'
-                              }`}>
-                              <span className="flex items-center gap-1.5 truncate">
-                                <span>👤</span>
-                                <span className="truncate">{m.name}{m.roleLabel && <span className="text-[9px] opacity-70 ml-1">({m.roleLabel})</span>}</span>
-                              </span>
-                              <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">
-                                {isCurrent ? '✓ 現在' : '切替 →'}
-                              </span>
-                            </button>
+                            <div key={m.id} className={`flex items-stretch border-b border-emerald-700/20 ${isCurrent ? 'bg-emerald-700/60' : 'hover:bg-emerald-800/60'}`}>
+                              <button
+                                onClick={() => {
+                                  setStaffDropdownOpen(false);
+                                  if (isCurrent) return;
+                                  const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
+                                  // ★ 管理者へ切替える時はパスワード認証を要求 (未設定なら設定)
+                                  if (isAdminMember) { setPendingStaffSwitch(m); return; }
+                                  commitRecorder(m);
+                                }}
+                                className={`flex-1 min-w-0 text-left px-4 py-2 text-[11px] font-bold flex items-center justify-between ${isCurrent ? 'text-white cursor-default' : 'text-emerald-100'}`}>
+                                <span className="flex items-center gap-1.5 truncate">
+                                  <span>👤</span>
+                                  <span className="truncate">{m.name}{m.roleLabel && <span className="text-[9px] opacity-70 ml-1">({m.roleLabel})</span>}</span>
+                                </span>
+                                <span className="text-[9px] opacity-70 ml-1 whitespace-nowrap">
+                                  {isCurrent ? '✓ 現在' : '切替 →'}
+                                </span>
+                              </button>
+                              {/* ★ スタッフ情報の編集 */}
+                              <button title="このスタッフの情報を編集"
+                                onClick={() => {
+                                  setStaffDropdownOpen(false);
+                                  const parts = (m.name||'').split(/[\s　]+/);
+                                  setStaffAddForm({ editId: m.id, lastName: m.lastName || parts[0] || '', firstName: m.firstName || parts.slice(1).join(' ') || '', role: m.roleLabel || '', prevName: m.name || '', prevRole: m.roleLabel || '' });
+                                  setStaffAddModal(true);
+                                }}
+                                className="px-3 flex items-center text-emerald-300 hover:text-white hover:bg-emerald-700/70 border-l border-emerald-700/30">✎</button>
+                            </div>
                           );
                         })
                       )}
@@ -15545,9 +15552,9 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-xl">👤</span>
-              <h3 className="text-lg font-bold text-slate-800">スタッフを追加</h3>
+              <h3 className="text-lg font-bold text-slate-800">{staffAddForm.editId ? 'スタッフ情報を編集' : 'スタッフを追加'}</h3>
             </div>
-            <p className="text-xs text-slate-500 mb-4">姓・名・役職を分けて入力してください。</p>
+            <p className="text-xs text-slate-500 mb-4">姓・名・役職を分けて入力してください。{staffAddForm.editId ? '（日誌の担当職員名も連動して更新されます）' : ''}</p>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -15585,6 +15592,28 @@ export default function App() {
                 if (!last || !first) { alert('姓と名は必須です'); return; }
                 if (!staffAddForm.role) { alert('役職を選択してください'); return; }
                 const fullName = `${last} ${first}`;
+                // ★ 編集モード: 既存スタッフの氏名・役職を更新 (日誌の担当職員・現在の担当者も連動)
+                if (staffAddForm.editId) {
+                  const eid = staffAddForm.editId;
+                  const newMembers = (appData.storeMembers||[]).map(m => m.id===eid ? {...m, name:fullName, lastName:last, firstName:first, roleLabel:staffAddForm.role} : m);
+                  const _prevNorm = normalizeName(staffAddForm.prevName||'').trim();
+                  const newDiaryStaff = (appData.diarySettings?.staff||[]).map(s => {
+                    const linked = s._syncedFromMemberId===eid || s.id===`ds_sync_${eid}` || (normalizeName(s.name).trim()===_prevNorm && (s.role||'')===(staffAddForm.prevRole||''));
+                    return linked ? {...s, name:fullName, role:staffAddForm.role} : s;
+                  });
+                  handleSaveToCloud({
+                    ...appData,
+                    storeMembers: newMembers,
+                    diarySettings: { ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}), staff: newDiaryStaff },
+                  });
+                  if (activeRecorder && activeRecorder.id===eid) {
+                    const ua = {...activeRecorder, name:fullName, lastName:last, firstName:first, roleLabel:staffAddForm.role};
+                    try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(ua)); } catch {}
+                    setActiveRecorder(ua);
+                  }
+                  setStaffAddModal(false);
+                  return;
+                }
                 const _normFull = normalizeName(fullName).trim();
                 // ★ 重複チェック: スタッフ切替(店舗メンバー)に同名+同役職があれば登録しない。
                 //   日誌にだけ居る人はスタッフ切替に居ないので追加を許可する(日誌へは重複追加しない)。
@@ -15619,7 +15648,7 @@ export default function App() {
                 });
                 setStaffAddModal(false);
               }}
-                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">追加</button>
+                className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">{staffAddForm.editId ? '保存' : '追加'}</button>
             </div>
           </div>
         </div>
