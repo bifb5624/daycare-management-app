@@ -12415,12 +12415,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 };
                 try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
                 setData(updated);
-                // Supabase 反映 (staff 側にも反映されるように)
+                // Supabase 反映 (staff 側にも反映されるように)。 ★ ネットワーク停滞でも「保存中」で固まらないよう最大10秒で打ち切り
+                let _synced = false;
                 if (isSupabaseEnabled) {
                   const _storeId = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
                   if (_storeId) {
                     try {
-                      await supabaseMergePatientFromFamily(_storeId, patient.id, isParent ? {
+                      const _p = supabaseMergePatientFromFamily(_storeId, patient.id, isParent ? {
                         familyName: updatedPatient.familyName,
                         familyLastName: updatedPatient.familyLastName,
                         familyFirstName: updatedPatient.familyFirstName,
@@ -12434,10 +12435,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       } : {
                         emergencyContacts: updatedPatient.emergencyContacts,
                       });
+                      const _r = await Promise.race([ _p, new Promise((res)=>setTimeout(()=>res('timeout'), 10000)) ]);
+                      _synced = _r !== 'timeout';
                     } catch (e) { console.warn('[supabase] myInfo sync failed', e); }
                   }
                 }
-                setMyInfoForm(f=>({...f, saving:false, savedMsg:'保存しました。事業所側に反映されました。'}));
+                setMyInfoForm(f=>({...f, saving:false, savedMsg: _synced ? '保存しました。事業所側に反映されました。' : '保存しました（端末に保存。通信状況により事業所への反映が遅れる場合があります）。'}));
               }} disabled={myInfoForm.saving}
                 style={{flex:1,padding:'11px',background:myInfoForm.saving?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:myInfoForm.saving?'not-allowed':'pointer'}}>
                 {myInfoForm.saving ? '⏳ 保存中...' : '💾 保存'}

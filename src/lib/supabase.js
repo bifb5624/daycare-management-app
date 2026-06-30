@@ -529,28 +529,33 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
           if (!dup) mergedRelated = [...mergedRelated, c];
         });
       }
-      // ★ 代表家族(familyName 等の単一フィールド)は「クラウドに既に代表が居る場合は上書きしない」。
-      //   2人目以降の家族登録で代表が最新の人に化ける不具合の対策。 代表が居る時、2人目の情報は
-      //   emergencyContacts に追加する(下の mergedContacts2)。
+      // ★ 代表家族(familyName 等)の扱い:
+      //   - クラウドに代表が居らず or 「同一人物(familyName 一致)の更新」 → そのまま反映 (代表が自分の情報を編集できる)
+      //   - クラウドに代表が居て「別人」が代表を上書きしようとした場合のみ → 上書きせず emergencyContacts へ追加
+      //   (2人目の家族登録で代表が最新の人に化ける不具合の対策。 かつ代表本人の編集はブロックしない)
       const FAMILY_PRIMARY = ['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
-      const cloudHasPrimary = !!(p.familyName && String(p.familyName).trim());
+      const cloudName = String(p.familyName||'').trim();
+      const cloudHasPrimary = !!cloudName;
+      const incName = String(patientPatch.familyName||'').trim();
+      // 代表フィールドを含むパッチか
+      const patchHasPrimary = FAMILY_PRIMARY.some(k => patientPatch[k] !== undefined && patientPatch[k] !== null && patientPatch[k] !== '');
+      // 別人による代表の上書きか (代表が居て、 名前が入っていて、 既存代表と違う)
+      const isDifferentPerson = cloudHasPrimary && patchHasPrimary && incName && incName !== cloudName;
       let mergedContacts2 = mergedContacts;
+      if (isDifferentPerson) {
+        const incRel = String(patientPatch.familyRelation||'').trim();
+        const dup2 = mergedContacts2.some(c => (c.name||'').trim() === incName && (c.relation||'').trim() === incRel);
+        if (incName && !dup2) {
+          mergedContacts2 = [...mergedContacts2, { name: incName, relation: incRel, phone: patientPatch.familyPhone||'', phoneMobile: patientPatch.familyPhoneMobile||'', email: patientPatch.familyEmail||'' }];
+        }
+      }
       const filteredPatch = {};
       Object.keys(patientPatch).forEach(k => {
         if (k === 'emergencyContacts' || k === 'relatedParties') return;
         const v = patientPatch[k];
         if (v === undefined || v === null || v === '') return;
-        // 既に代表が居るのに、別人で代表フィールドを上書きしようとしている → 上書きせず緊急連絡先へ
-        if (FAMILY_PRIMARY.includes(k) && cloudHasPrimary && k === 'familyName' && String(v).trim() !== String(p.familyName).trim()) {
-          const incName = String(patientPatch.familyName||'').trim();
-          const incRel = String(patientPatch.familyRelation||'').trim();
-          const dup2 = mergedContacts2.some(c => (c.name||'').trim() === incName && (c.relation||'').trim() === incRel);
-          if (incName && !dup2) {
-            mergedContacts2 = [...mergedContacts2, { name: incName, relation: incRel, phone: patientPatch.familyPhone||'', phoneMobile: patientPatch.familyPhoneMobile||'', email: patientPatch.familyEmail||'' }];
-          }
-          return; // familyName は上書きしない
-        }
-        if (FAMILY_PRIMARY.includes(k) && cloudHasPrimary) return; // 代表が居る時は代表フィールドを上書きしない
+        // 別人が代表フィールドを上書きしようとした場合のみスキップ (本人/初回はそのまま反映)
+        if (FAMILY_PRIMARY.includes(k) && isDifferentPerson) return;
         filteredPatch[k] = v;
       });
       return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated };
