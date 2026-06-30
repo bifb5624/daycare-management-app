@@ -30314,7 +30314,7 @@ const MON_ITEMS = [
   { key:'s4',   no:'⑤', title:'今後の方向性',                       explain:'計画の変更が必要な新たな課題が生じていないか等による判断。',   options:['このまま継続','一部内容を変更して継続','サービス中止'] },
 ];
 const _monNorm = (v, autoText) => (v && typeof v === 'object') ? { sel: v.sel||'', text: v.text||'' } : { sel:'', text: (v!=null && v!=='') ? v : (autoText||'') };
-function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, autoSel, noAttendance, defaultRecorder, defaultDate, onClose, onSave, onPrint }) {
+function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, autoSel, noAttendance, defaultRecorder, defaultDate, onClose, onSave, onPrint, onAiDraft, hasApiKey }) {
   const init = record?.sheet || {};
   const hasRec = !!record;
   const [implDate, setImplDate] = React.useState(init.implDate || defaultDate || '');
@@ -30332,6 +30332,17 @@ function MonitoringSheetModal({ patient, facility, period, record, autoStatus, a
   const [vals, setVals] = React.useState(() => { const o={}; MON_ITEMS.forEach(it=>o[it.key]=initVal(it.key)); return o; });
   const setSel = (k,v) => setVals(p=>({...p,[k]:{...p[k],sel:v}}));
   const setText = (k,v) => setVals(p=>({...p,[k]:{...p[k],text:v}}));
+  const [aiLoading, setAiLoading] = React.useState(false);
+  const [aiErr, setAiErr] = React.useState('');
+  const runAi = async () => {
+    if (!onAiDraft) return;
+    setAiErr(''); setAiLoading(true);
+    try {
+      const out = await onAiDraft();
+      setVals(prev => { const n={...prev}; MON_ITEMS.forEach(it=>{ if(out[it.key]) n[it.key] = { sel: out[it.key].sel || prev[it.key].sel, text: out[it.key].text || prev[it.key].text }; }); return n; });
+    } catch(e){ setAiErr(String(e.message||e)); }
+    setAiLoading(false);
+  };
   const collect = () => ({ implDate, recorder, ...Object.fromEntries(MON_ITEMS.map(it=>[it.key, vals[it.key]])) });
   return ReactDOM.createPortal(
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[80] flex items-center justify-center p-0 sm:p-4">
@@ -30357,7 +30368,14 @@ function MonitoringSheetModal({ patient, facility, period, record, autoStatus, a
               <input value={recorder} onChange={e=>setRecorder(e.target.value)} placeholder="実施者名" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400" />
             </div>
           </div>
-          <div className="text-xs font-bold text-slate-500 pt-1">【モニタリング結果】各項目をプルダウンで選び、必要に応じて内容を記入します。</div>
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="text-xs font-bold text-slate-500">【モニタリング結果】各項目をプルダウンで選び、必要に応じて内容を記入します。</div>
+            <button onClick={runAi} disabled={aiLoading} title={hasApiKey?'AIで全項目の下書きを生成':'各種設定→モニタリングでAPIキーを設定してください'}
+              className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white whitespace-nowrap">
+              {aiLoading ? '⟳ 生成中...' : '🤖 AIで下書き'}
+            </button>
+          </div>
+          {aiErr && <div className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 rounded-lg px-3 py-2">{aiErr}</div>}
           {MON_ITEMS.map(it => (
             <div key={it.key} className="border border-slate-200 rounded-lg overflow-hidden">
               <div className="bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-700 flex items-center justify-between gap-2">
@@ -30776,6 +30794,50 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
   const escSheet = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
   const fmtJpDate = (ymd) => { if(!ymd) return ''; try { return new Date(ymd).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}); } catch { return ymd; } };
+  // ★ AIでモニタリング表(プルダウン選択+本文)を一括下書き。 APIキー(各種設定→モニタリング)が必要。
+  const aiDraftSheet = async (patient) => {
+    const apiKey = (appData.systemSettings?.anthropicApiKey || '').trim();
+    if (!apiKey) throw new Error('APIキーが未設定です。各種設定 → モニタリング でAPIキーを入力・保存してください。');
+    const d = buildPatientData(patient);
+    const fitnessText = (d.fitnessRecs && d.fitnessRecs.length)
+      ? d.fitnessRecs.map(r => { const vals=(d.fitnessItems||[]).map(it=> r.values?.[it.id]?`${it.name}:${r.values[it.id]}${it.unit||''}`:null).filter(Boolean).join('、'); return `${r.date}（${vals||'データあり'}）`; }).join(' / ')
+      : '記録なし';
+    const optionsDesc = MON_ITEMS.map(it=>`${it.key}（${it.no}${it.title}）: 選択肢=[${it.options.join(' / ')}]`).join('\n');
+    const prompt = `あなたは通所介護（リハビリ特化・半日型デイサービス／入浴・食事の提供は無し）の機能訓練指導員です。以下の利用者データをもとに「通所介護モニタリング表」の各項目を作成してください。
+
+利用者: ${d.name}（${d.careLevel||''}）
+対象月: ${d.month}
+通所実績: 計画${d.planned}回中${d.attended}回参加（出席率${d.rate!=null?d.rate+'%':'不明'}）${d.attended===0?'　※当月は一度も通所なし':''}
+血圧平均: ${d.avgBp||'不明'}mmHg（前月${d.prevAvgBp||'不明'}）
+体温平均: ${d.avgTemp||'不明'}℃
+通所時の気分: ${d.avgMoodLabel||'不明'}
+体力測定: ${fitnessText}
+特記事項: ${d.tokki||'なし'}
+
+各項目で、必ず下記の選択肢から最も適切なものを1つ"sel"に選び、"text"に2〜3文の専門的で具体的な所見を書いてください。提供サービスは「個別機能訓練（運動プログラム）・健康チェック（バイタル測定）・送迎」のみ。当月に通所が無い場合は①を必ず「実施できなかった」にしてください。
+${optionsDesc}
+
+出力は次のJSONのみ（前後に説明文やコードブロックを付けない）:
+{"s1":{"sel":"","text":""},"goal":{"sel":"","text":""},"s2":{"sel":"","text":""},"s3":{"sel":"","text":""},"s4":{"sel":"","text":""}}`;
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:900, messages:[{role:'user', content:prompt}] })
+    });
+    let data; try { data = await resp.json(); } catch { throw new Error(`レスポンス解析エラー (HTTP ${resp.status})`); }
+    if (!resp.ok) throw new Error(data?.error?.message || `APIエラー (HTTP ${resp.status})`);
+    let txt = data.content?.[0]?.text?.trim() || '';
+    const m = txt.match(/\{[\s\S]*\}/);
+    let obj; try { obj = JSON.parse(m ? m[0] : txt); } catch { throw new Error('AIの出力を解釈できませんでした。もう一度お試しください。'); }
+    // 選択肢の検証 (候補外なら空に)
+    const out = {};
+    MON_ITEMS.forEach(it => {
+      const v = obj[it.key] || {};
+      const sel = it.options.includes(v.sel) ? v.sel : '';
+      out[it.key] = { sel, text: typeof v.text==='string' ? v.text : '' };
+    });
+    return out;
+  };
   const _monCell = (v) => (v && typeof v==='object') ? v : { sel:'', text:(v!=null?String(v):'') };
   const _monSummary = (sheet) => { const c=_monCell(sheet.s1); return c.text || c.sel || ''; };
   const saveSheet = (patient, sheet) => {
@@ -31112,6 +31174,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             onClose={()=>setSheetModal(null)}
             onSave={(sheet)=>saveSheet(patient, sheet)}
             onPrint={(sheet, forFax)=>printSheet(patient, sheet, forFax)}
+            onAiDraft={()=>aiDraftSheet(patient)}
+            hasApiKey={!!(appData.systemSettings?.anthropicApiKey||'').trim()}
           />
         );
       })()}
