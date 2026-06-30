@@ -8,6 +8,7 @@ import {
   ChevronDown, ChevronUp, Thermometer, Heart, Copy, Edit3, Edit2, MessageSquare
 } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { encodeInviteToken, decodeInviteToken, normalizeInviteCode } from './lib/logic';
 import {
   isSupabaseEnabled,
   supabaseCreateInvite,
@@ -1220,31 +1221,7 @@ const generateOneTimeInviteCode = () => {
 };
 
 // URL-safe base64 (招待データを URL に埋め込んで端末越しに動作させるため)
-const encodeInviteToken = (obj) => {
-  try {
-    const json = JSON.stringify(obj);
-    // UTF-8 → bytes → base64
-    const utf8 = unescape(encodeURIComponent(json));
-    return btoa(utf8).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-  } catch { return ''; }
-};
-const decodeInviteToken = (token) => {
-  try {
-    if (!token) return null;
-    let b64 = token.replace(/-/g,'+').replace(/_/g,'/');
-    // padding
-    while (b64.length % 4) b64 += '=';
-    const utf8 = atob(b64);
-    return JSON.parse(decodeURIComponent(escape(utf8)));
-  } catch { return null; }
-};
-// 入力コード正規化: 半角化・大文字化・ハイフン自動補完
-const normalizeInviteCode = (raw) => {
-  const s = (raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-  if (s.length <= 3) return s;
-  if (s.length <= 7) return `${s.slice(0,3)}-${s.slice(3)}`;
-  return `${s.slice(0,3)}-${s.slice(3,7)}-${s.slice(7,11)}`;
-};
+// encodeInviteToken / decodeInviteToken / normalizeInviteCode は ./lib/logic.js に移動 (自動テスト対象)
 // ★ 不具合レポート用: 直近のJSエラーをリングバッファに記録 (window.__tsumugiErrors)。 一度だけ設定。
 if (typeof window !== 'undefined' && !window.__tsumugiErrInit) {
   window.__tsumugiErrInit = true;
