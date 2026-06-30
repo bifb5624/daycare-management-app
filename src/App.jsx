@@ -15605,7 +15605,7 @@ export default function App() {
                     ...appData,
                     storeMembers: newMembers,
                     diarySettings: { ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}), staff: newDiaryStaff },
-                  });
+                  }, { manual: true, message: '✓ スタッフ情報を更新しました' });
                   if (activeRecorder && activeRecorder.id===eid) {
                     const ua = {...activeRecorder, name:fullName, lastName:last, firstName:first, roleLabel:staffAddForm.role};
                     try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(ua)); } catch {}
@@ -15645,7 +15645,7 @@ export default function App() {
                     ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
                     staff: newDiaryStaff,
                   },
-                });
+                }, { manual: true, message: '✓ スタッフを登録しました' });
                 setStaffAddModal(false);
               }}
                 className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm">{staffAddForm.editId ? '保存' : '追加'}</button>
@@ -30314,7 +30314,7 @@ const MON_ITEMS = [
   { key:'s4',   no:'⑤', title:'今後の方向性',                       explain:'計画の変更が必要な新たな課題が生じていないか等による判断。',   options:['このまま継続','一部内容を変更して継続','サービス中止'] },
 ];
 const _monNorm = (v, autoText) => (v && typeof v === 'object') ? { sel: v.sel||'', text: v.text||'' } : { sel:'', text: (v!=null && v!=='') ? v : (autoText||'') };
-function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, noAttendance, defaultRecorder, defaultDate, onClose, onSave, onPrint }) {
+function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, autoSel, noAttendance, defaultRecorder, defaultDate, onClose, onSave, onPrint }) {
   const init = record?.sheet || {};
   const hasRec = !!record;
   const [implDate, setImplDate] = React.useState(init.implDate || defaultDate || '');
@@ -30322,9 +30322,9 @@ function MonitoringSheetModal({ patient, facility, period, record, autoStatus, a
   // 各項目の {sel,text}。 既存記録があればそれ、無ければ自動初期値。
   const initVal = (key) => {
     if (hasRec) return _monNorm(init[key]);
-    if (key==='s1') return { sel: noAttendance ? '実施できなかった' : '実施できた', text: autoStatus||'' };
+    if (key==='s1') return { sel: (autoSel&&autoSel.s1) || (noAttendance ? '実施できなかった' : '実施できた'), text: autoStatus||'' };
     if (key==='s3') return { sel: '変化なし', text: autoChange||'' };
-    if (key==='goal') return { sel: noAttendance ? '評価困難' : '概ね達成', text: noAttendance ? '当月は通所がなく評価が困難。' : '' };
+    if (key==='goal') return { sel: (autoSel&&autoSel.goal) || (noAttendance ? '評価困難' : '概ね達成'), text: noAttendance ? '当月は通所がなく評価が困難。' : '' };
     if (key==='s2') return { sel: noAttendance ? '' : '概ね満足', text: '' };
     if (key==='s4') return { sel: 'このまま継続', text: '' };
     return { sel:'', text:'' };
@@ -30748,6 +30748,16 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       return parts.join('');
     } catch { return ''; }
   };
+  // ★ 出席率に応じた①実施状況・②目標 のプルダウン初期選択
+  const buildAutoSel = (patient) => {
+    try {
+      const d = buildPatientData(patient);
+      if (!d.attended) return { s1:'実施できなかった', goal:'評価困難' };
+      const r = d.rate;
+      const s1 = (r!=null && r>=100) ? '実施できた' : (r!=null && r>=50) ? '概ね実施できた' : '一部実施できなかった';
+      return { s1, goal:'概ね達成' };
+    } catch { return {}; }
+  };
   const buildAutoChange = (patient) => {
     // ③利用者の生活状況及び心身の状況の変化: バイタル/気分/体力測定の経過
     try {
@@ -31095,6 +31105,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             record={getSheetRecord(patient.id)}
             autoStatus={buildAutoStatus(patient)}
             autoChange={buildAutoChange(patient)}
+            autoSel={buildAutoSel(patient)}
             noAttendance={!hasAttendance(patient)}
             defaultRecorder={getActiveRecorderName() || ''}
             defaultDate={new Date().toISOString().slice(0,10)}
