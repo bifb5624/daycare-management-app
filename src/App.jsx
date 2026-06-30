@@ -17071,11 +17071,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             placeholder={selItem?`${patDefault||''}${selItem.defaultUnit?` ${selItem.defaultUnit}`:''}`:'未選択'}
                             style={{fontSize:13,padding:'3px 4px'}}
                             className="w-full text-center border border-emerald-300 rounded font-bold bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-emerald-300"/>
-                          {/* ★ ○ ボタン: 押すとサービス提供内容で設定した基準値を入力 */}
-                          {selItem && patDefault && !isReadOnly && !isAbsent && !isPause && (
-                            <button type="button" onClick={()=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: patDefault})}
-                              title={`○（基準値「${patDefault}${selItem.defaultUnit||''}」を入力）`}
-                              className="w-full mt-0.5 py-0.5 text-[13px] font-bold leading-none rounded bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-100 active:scale-95">○</button>
+                          {/* ★ ○ ボタン: 押すと「○」を記録(実施)。 分析/トレンドでは基準値の数値に変換表示、連絡帳は○表示 */}
+                          {selItem && !isReadOnly && !isAbsent && !isPause && (
+                            <button type="button" onClick={()=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: (cur.value==='○'?'':'○')})}
+                              title={patDefault?`○（実施。分析では基準値「${patDefault}${selItem.defaultUnit||''}」で表示）`:'○（実施）'}
+                              className={`w-full mt-0.5 py-0.5 text-[13px] font-bold leading-none rounded border active:scale-95 ${cur.value==='○'?'bg-emerald-500 border-emerald-500 text-white':'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-100'}`}>○</button>
                           )}
                         </td>
                       );
@@ -17977,7 +17977,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                           // ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー=除外
                           const resolveExVal = (r, exItem)=>{
                             let raw = r.exercises?.[exItem.id];
-                            if (raw && typeof raw === 'object') raw = raw.value != null ? String(raw.value) : ''; // 個別運動スロット {itemId,value}
+                            if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
+                              const _val = String(raw.value ?? '').trim();
+                              if (_val === '○' || _val === '◯') { const ind = (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
+                              else raw = _val;
+                            }
                             if (raw==null||raw===''||raw==='×'||raw==='✕'||raw==='x'||raw==='ー'||raw==='-') return null;
                             if (raw==='○'||raw==='◯') {
                               const mm=(r.date||'').match(/(\d+)月/); const ry=r.year||new Date().getFullYear();
@@ -18604,7 +18608,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       // ◯=その月の設定数値 / 数値=そのまま / ×・ー・空=表示しない / 個別運動オブジェクトは value
                       const resolveEx = (rec, it) => {
                         let v = rec?.exercises?.[it.id];
-                        if (v && typeof v === 'object') { const val = String(v.value ?? '').trim(); return val || (v.itemId ? '○' : null); }
+                        if (v && typeof v === 'object') {
+                          // 個別運動スロット {itemId,value}: ○ は基準値(個別運動メニューのdefaultValue)に変換、数値はそのまま
+                          const val = String(v.value ?? '').trim();
+                          if (val === '○' || val === '◯') { const ind = (selectedPatient.individualExercises||[]).find(x=>x.itemId===v.itemId); const dv = String(ind?.defaultValue||'').trim(); return dv || null; }
+                          return val || null;
+                        }
                         if (v==null||v===''||v==='×'||v==='✕'||v==='x'||v==='ー'||v==='-') return null;
                         if (v==='○'||v==='◯') { const mm=(rec.date||'').match(/(\d+)月/); const ry=rec.year||new Date().getFullYear(); v=getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[it.id]; if(!v||v==='ー') return null; }
                         return v;
@@ -19527,7 +19536,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             // ★ 値の解決: ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー・空=反映しない('') / 個別運動オブジェクトは value
             const _exMonthVal = (r) => {
               let raw = r.exercises?.[selEx.id];
-              if (raw && typeof raw === 'object') raw = raw.value != null ? String(raw.value) : (raw.itemId ? '○' : ''); // 個別運動スロット {itemId,value}
+              if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
+                const _val = String(raw.value ?? '').trim();
+                if (_val === '○' || _val === '◯') { const ind = (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
+                else raw = _val;
+              }
               if (raw == null || raw === '' || raw === '×' || raw === '✕' || raw === 'x' || raw === 'ー' || raw === '-') return '';
               if (raw === '○' || raw === '◯') {
                 const mm = (r.date||'').match(/(\d+)月/);

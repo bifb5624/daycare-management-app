@@ -2,7 +2,7 @@
 // 環境変数:
 //   BREVO_API_KEY        - Brevo の API キー
 //   BREVO_SENDER_EMAIL   - 送信元メール (Brevo 認証済み)
-//   REPORT_TO_EMAIL      - 受信先 (未設定なら honbu@ones-style.co.jp)
+//   REPORT_TO_EMAIL      - 受信先 (未設定なら support@ones-style.co.jp)
 //
 // POST /api/report  { description, context }
 //   context = { facility, storeId, recorder, view, url, userAgent, appVersion, when, errors:[...] }
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.BREVO_SENDER_EMAIL || 'noreply@ones-style.co.jp';
-  const toEmail = process.env.REPORT_TO_EMAIL || 'honbu@ones-style.co.jp';
+  const toEmail = process.env.REPORT_TO_EMAIL || 'support@ones-style.co.jp';
   if (!apiKey) return res.status(500).json({ error: 'サーバー設定エラー: BREVO_API_KEY が未設定です' });
 
   const errLines = Array.isArray(ctx.errors) && ctx.errors.length
