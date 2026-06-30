@@ -30690,6 +30690,41 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const cancelGenerate = () => {
     cancelRef.current = true;
     setIsGeneratingAll(false);
+    setSheetBatchProg(null);
+  };
+
+  // ★ モニタリング表(正式シート)をAIで一括下書き → まとめて個人ファイルに保存
+  const [sheetBatchProg, setSheetBatchProg] = React.useState(null); // {done,total} | null
+  const generateAllSheets = async () => {
+    if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('APIキーが未設定です。各種設定 → モニタリング でAPIキーを入力・保存してください。'); return; }
+    const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
+    const targets = checked.length ? checked : [...attendedPats, ...absentPats];
+    if (!targets.length) { alert('対象の利用者がいません'); return; }
+    if (!window.confirm(`${targets.length}名のモニタリング表をAIで一括下書きし、個人ファイルに保存します。\n（既に作成済みの月は上書きされます）よろしいですか？`)) return;
+    cancelRef.current = false;
+    setSheetBatchProg({ done:0, total:targets.length });
+    let existing = [...(appData.monitoringRecords||[])];
+    const newResults = {};
+    let done = 0, ok = 0;
+    const rec = getActiveRecorderName() || '';
+    const today = new Date().toISOString().slice(0,10);
+    for (const p of targets) {
+      if (cancelRef.current) break;
+      try {
+        const out = await aiDraftSheet(p);
+        const sheet = { implDate: today, recorder: rec, ...out };
+        existing = existing.filter(r => !(r.patientId===p.id && r.period===monthLabelStr));
+        const sm = _monSummary(sheet);
+        existing.push({ id:`${p.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}_${ok}`, patientId:p.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
+        newResults[p.id] = { text:sm, confirmed:true, loading:false, error:null, editing:false };
+        ok++;
+      } catch(e) { /* この利用者はスキップ */ }
+      done++; setSheetBatchProg({ done, total:targets.length });
+    }
+    onSave({ ...appData, monitoringRecords: existing }, { manual:true, message:`✓ ${ok}名のモニタリング表を作成・保存しました` });
+    setResults(prev => ({ ...prev, ...newResults }));
+    setSheetBatchProg(null);
+    cancelRef.current = false;
   };
 
   const copyText = (id, text) => {
@@ -30985,6 +31020,18 @@ ${optionsDesc}
           <button type="button" onClick={generateAll}
             style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #93c5fd',background:'#eff6ff',color:'#1d4ed8',cursor:'pointer'}}>
             ⚡ 生成
+          </button>
+        )}
+        {/* ★ モニタリング表(正式シート)を全員ぶんAIで一括下書き → 個人ファイル保存 */}
+        {sheetBatchProg ? (
+          <button type="button" onClick={cancelGenerate}
+            style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
+            ⟳ 表 {sheetBatchProg.done}/{sheetBatchProg.total}（中止）
+          </button>
+        ) : (
+          <button type="button" onClick={generateAllSheets} title="チェックした(無ければ全員の)モニタリング表をAIで一括下書きし個人ファイルに保存"
+            style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
+            🤖 表を一括下書き
           </button>
         )}
         <button type="button" onClick={()=>{
