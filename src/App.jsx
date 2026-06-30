@@ -24250,7 +24250,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   // ★ localPatient はマスタ画面の編集スナップショット。 個人ファイル(写真/書類/フェイスシート等)は
   //   別モーダルで appData に直接保存されるため、 localPatient を書き戻す際にこれらを「最新の appData」から
   //   引き継がないと、モーダルで追加した写真が古い localPatient で上書きされて消える。
-  const FILE_FIELDS = ['personalFile','faceSheet','docInsurance','docBurden','medicationImages','docOther','emergencyContacts','relatedParties'];
+  // ★ 個人ファイル系(別モーダルで保存)は保存時に最新appDataを優先。 ただし emergencyContacts/relatedParties は
+  //   基本情報フォームで直接編集(削除含む)するため除外する(=ここに入れると削除が保存時に上書きされ復活してしまう)。
+  const FILE_FIELDS = ['personalFile','faceSheet','docInsurance','docBurden','medicationImages','docOther'];
   const withLatestFiles = (lp) => {
     if (!lp) return lp;
     const cur = (appData.patients||[]).find(p => p.id === lp.id);
