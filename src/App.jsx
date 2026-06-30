@@ -1245,6 +1245,14 @@ const normalizeInviteCode = (raw) => {
   if (s.length <= 7) return `${s.slice(0,3)}-${s.slice(3)}`;
   return `${s.slice(0,3)}-${s.slice(3,7)}-${s.slice(7,11)}`;
 };
+// ★ 不具合レポート用: 直近のJSエラーをリングバッファに記録 (window.__tsumugiErrors)。 一度だけ設定。
+if (typeof window !== 'undefined' && !window.__tsumugiErrInit) {
+  window.__tsumugiErrInit = true;
+  window.__tsumugiErrors = window.__tsumugiErrors || [];
+  const _pushErr = (msg) => { try { window.__tsumugiErrors.push(`[${new Date().toLocaleTimeString('ja-JP')}] ${msg}`); if (window.__tsumugiErrors.length > 20) window.__tsumugiErrors.shift(); } catch {} };
+  window.addEventListener('error', (e) => { _pushErr(`${e.message || 'error'} @ ${(e.filename||'').split('/').pop()}:${e.lineno||''}`); });
+  window.addEventListener('unhandledrejection', (e) => { _pushErr(`unhandled: ${(e.reason && (e.reason.message || e.reason)) || 'rejection'}`); });
+}
 // ★ QR画像はメモ化して「同じURLなら再描画・再読込しない」(モーダルがポーリング等で頻繁に再描画されても
 //   リモートQR画像が点滅(チカチカ)しないようにする)。
 const QRImg = React.memo(function QRImg({ url, size = 100, className, style, alt }) {
@@ -14547,6 +14555,7 @@ export default function App() {
   }, [currentView]);
   const [sharedAmpm, setSharedAmpm] = useState('AM'); // 'AM' or 'PM'
   const [pendingStaffSwitch, setPendingStaffSwitch] = useState(null); // サイドバーのスタッフ切替で管理者を選んだ→認証待ち
+  const [bugReport, setBugReport] = useState(null); // {desc, sending, sent, err} | null  不具合レポート
   // 管理者パスワードを保存 (RecorderPicker/スタッフ切替 共通)
   const saveAdminAuth = (auth) => {
     const nd = { ...appData, systemSettings: { ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } };
@@ -15032,6 +15041,57 @@ export default function App() {
           onCancel={()=>setPendingStaffSwitch(null)}
         />
       )}
+      {/* ★ 不具合レポート (管理者のみ): 画面状況・直近エラーを本部へワンタップ送信 */}
+      {bugReport && (
+        <div className="fixed inset-0 bg-slate-900/60 z-[95] flex items-center justify-center p-0 sm:p-4" onClick={()=>!bugReport.sending && setBugReport(null)}>
+          <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-lg max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="font-bold text-slate-800">🐞 不具合を本部に報告</div>
+              <button onClick={()=>!bugReport.sending && setBugReport(null)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-lg"><X size={18}/></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {bugReport.sent ? (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-2">✅</div>
+                  <div className="font-bold text-slate-800">送信しました</div>
+                  <div className="text-xs text-slate-500 mt-1">本部で内容を確認します。ご協力ありがとうございます。</div>
+                </div>
+              ) : (<>
+                <div className="text-xs text-slate-500 leading-relaxed bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">どんな操作で・どこが・どうおかしいかを書いて送信してください。<b>今の画面・端末・直近のエラー</b>も自動で添付されます（個人情報の本文は送りません）。</div>
+                <textarea autoFocus value={bugReport.desc} onChange={e=>setBugReport(b=>({...b, desc:e.target.value}))} rows={6}
+                  placeholder="例: 提供記録入力で○○を押すと画面が固まる / 連絡帳の印刷で△△が出ない 等"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400 leading-relaxed"/>
+                {bugReport.err && <div className="text-xs text-red-600 font-bold bg-red-50 border border-red-200 rounded-lg px-3 py-2">{bugReport.err}</div>}
+              </>)}
+            </div>
+            {!bugReport.sent && (
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2 shrink-0">
+                <button onClick={()=>!bugReport.sending && setBugReport(null)} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
+                <button disabled={bugReport.sending || !bugReport.desc.trim()} onClick={async()=>{
+                  setBugReport(b=>({...b, sending:true, err:''}));
+                  try {
+                    const context = {
+                      facility: appData.systemSettings?.facilityInfo?.name || '',
+                      storeId: staffSession?.storeId || '',
+                      recorder: activeRecorder?.name || '',
+                      view: currentView,
+                      url: (typeof window!=='undefined'?window.location.href:''),
+                      userAgent: (typeof navigator!=='undefined'?navigator.userAgent:''),
+                      appVersion: 'stable-rebuild',
+                      when: new Date().toLocaleString('ja-JP'),
+                      errors: (typeof window!=='undefined' && window.__tsumugiErrors) ? window.__tsumugiErrors.slice(-20) : [],
+                    };
+                    const r = await fetch('/api/report', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ description: bugReport.desc, context }) });
+                    const j = await r.json().catch(()=>({}));
+                    if (!r.ok) { setBugReport(b=>({...b, sending:false, err: j.error || '送信に失敗しました'})); return; }
+                    setBugReport(b=>({...b, sending:false, sent:true}));
+                  } catch(e){ setBugReport(b=>({...b, sending:false, err:'通信に失敗しました'})); }
+                }} className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white rounded-xl font-bold text-sm shadow">{bugReport.sending?'送信中...':'本部に送信'}</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
           // ★ PreviewModalを毎回作り直さず、このIIFE内に直接JSXを描く(iframe再マウント=チカチカ防止)。 ifH/srcDocはApp直下のstateを使用
@@ -15484,6 +15544,12 @@ export default function App() {
                 <SidebarItem icon={<TrendingUp size={18} />} label="分析（稼働）" active={currentView === 'dash_operation'} onClick={() => navigateTo('dash_operation')} />
                 <SidebarItem icon={<QrCode size={18} />} label="家族関係者閲覧 管理" active={currentView === 'family_admin'} onClick={() => navigateTo('family_admin')} />
                 <SidebarItem icon={<Settings size={18} />} label="各種設定" active={currentView === 'settings'} onClick={() => navigateTo('settings')} />
+                {/* ★ 不具合レポート (管理者のみ) */}
+                {activeRecorder && isMemberAdmin(activeRecorder, appData.systemSettings) && (
+                  <button onClick={()=>setBugReport({desc:'',sending:false,sent:false,err:''})} className="w-full mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-bold text-amber-200 hover:bg-amber-900/40 transition-colors">
+                    <span className="text-base">🐞</span> 不具合を本部に報告
+                  </button>
+                )}
               </div>
             </div>
           </div>
