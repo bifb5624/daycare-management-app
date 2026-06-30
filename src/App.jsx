@@ -11740,6 +11740,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [inviteMode, setInviteMode] = useState('list');
   // ★ 利用者・登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
+  const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
@@ -12135,10 +12136,62 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           </button>
         )}
       </div>
+      {/* ★ 不具合レポート (家族・関係者) */}
+      <div style={{maxWidth:720,margin:'0 auto',padding:'0 16px 6px',display:'flex',justifyContent:'center'}}>
+        <button onClick={()=>setFamReport({desc:'',sending:false,sent:false,err:''})}
+          style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'transparent',color:'#94a3b8',border:'1px solid #e2e8f0',borderRadius:10,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>
+          🐞 不具合・ご意見を運営に報告
+        </button>
+      </div>
       <div style={{textAlign:'center',padding:'14px 16px 32px',fontSize:10,color:'#94a3b8'}}>
         {facility.name||''} {facility.phone?`／${facility.phone}`:''}<br/>
         このページは {patient.name} 様のご家族専用です
       </div>
+      {/* ★ 不具合レポートモーダル (家族・関係者) */}
+      {famReport && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9100,display:'flex',alignItems:'center',justifyContent:'center',padding:12}} onClick={()=>!famReport.sending&&setFamReport(null)}>
+          <div style={{background:'white',borderRadius:16,maxWidth:440,width:'100%',padding:'20px',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>🐞 不具合・ご意見の報告</div>
+            {famReport.sent ? (
+              <div style={{textAlign:'center',padding:'20px 0'}}>
+                <div style={{fontSize:36,marginBottom:8}}>✅</div>
+                <div style={{fontWeight:'bold',color:'#1e293b'}}>送信しました</div>
+                <div style={{fontSize:12,color:'#64748b',marginTop:4}}>ご協力ありがとうございます。</div>
+                <button onClick={()=>setFamReport(null)} style={{marginTop:16,padding:'10px 24px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+              </div>
+            ) : (<>
+              <div style={{fontSize:11,color:'#64748b',lineHeight:1.7,background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:8,padding:'10px',marginBottom:10}}>どの画面で・何が・どうおかしいか（ご意見・ご要望も可）をお書きください。画面状況・端末情報も自動で添付されます。</div>
+              <textarea autoFocus value={famReport.desc} onChange={e=>setFamReport(b=>({...b,desc:e.target.value}))} rows={5}
+                placeholder="例: 写真が表示されない / お知らせが開けない など"
+                style={{width:'100%',boxSizing:'border-box',padding:'10px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',lineHeight:1.6,resize:'vertical'}}/>
+              {famReport.err && <div style={{color:'#dc2626',fontSize:12,fontWeight:'bold',marginTop:8}}>{famReport.err}</div>}
+              <div style={{display:'flex',gap:8,marginTop:12}}>
+                <button onClick={()=>!famReport.sending&&setFamReport(null)} style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+                <button disabled={famReport.sending||!famReport.desc.trim()} onClick={async()=>{
+                  setFamReport(b=>({...b,sending:true,err:''}));
+                  try {
+                    const context = {
+                      facility: facility.name || '',
+                      storeId: (loggedAcc?.storeId || loggedAcc?.store_id || ''),
+                      recorder: `家族/関係者: ${loggedAcc?.displayName||loggedAcc?.username||''}（${patient?.name||''} 様）`,
+                      view: 'family',
+                      url: (typeof window!=='undefined'?window.location.href:''),
+                      userAgent: (typeof navigator!=='undefined'?navigator.userAgent:''),
+                      appVersion: 'stable-rebuild',
+                      when: new Date().toLocaleString('ja-JP'),
+                      errors: (typeof window!=='undefined' && window.__tsumugiErrors) ? window.__tsumugiErrors.slice(-20) : [],
+                    };
+                    const r = await fetch('/api/report', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ description: famReport.desc, context }) });
+                    const j = await r.json().catch(()=>({}));
+                    if (!r.ok) { setFamReport(b=>({...b,sending:false,err:j.error||'送信に失敗しました'})); return; }
+                    setFamReport(b=>({...b,sending:false,sent:true}));
+                  } catch(e){ setFamReport(b=>({...b,sending:false,err:'通信に失敗しました'})); }
+                }} style={{flex:1,padding:'11px',background:famReport.sending?'#94a3b8':'#d97706',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>{famReport.sending?'送信中...':'送信'}</button>
+              </div>
+            </>)}
+          </div>
+        </div>
+      )}
       {/* 写真・PDF プレビュー (フルスクリーン) */}
       {mediaPreview && <MediaPreviewModal media={mediaPreview} onClose={()=>setMediaPreview(null)} />}
       {/* 利用者・登録者情報モーダル (タブ式) */}
