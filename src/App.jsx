@@ -32609,9 +32609,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [pdfPreviewMeeting, setPdfPreviewMeeting] = useState(null);
 
-  const updatePatient = (patch) => {
+  const updatePatient = (patch, opts) => {
     const newPatient = { ...patient, personalFile: { ...personalFile, ...patch } };
-    onSave({ ...appData, patients: (appData.patients || []).map(p => p.id === patient.id ? newPatient : p) });
+    onSave({ ...appData, patients: (appData.patients || []).map(p => p.id === patient.id ? newPatient : p) }, opts);
   };
 
   const handleFileUpload = async (e) => {
@@ -32642,7 +32642,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
       if (!rec.storagePath && !rec.data) continue;
       newFiles.push(rec);
     }
-    updatePatient({ files: [...(personalFile.files || []), ...newFiles] });
+    // ★ 写真/書類は即時クラウド保存 (デバウンス頼みだと別端末に反映されない)
+    updatePatient({ files: [...(personalFile.files || []), ...newFiles] }, { manual: true, message: '✓ ファイルを保存しました' });
     e.target.value = '';
   };
 
@@ -32923,8 +32924,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                             if (!item.storagePath && !item.data) continue;
                             cur.push(item);
                           }
-                          // patient レベルに保存 (個人ファイル ではなく旧構造)
-                          onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: cur } : p) });
+                          // patient レベルに保存 (個人ファイル ではなく旧構造)。 ★ 即時クラウド保存
+                          onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: cur } : p) }, { manual: true, message: '✓ 写真を保存しました' });
                           e.target.value = '';
                         }}/>
                       </label>
