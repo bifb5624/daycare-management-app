@@ -30742,7 +30742,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       if (!d.attended) {
         return `${d.month}は通所(利用)がなかったため、通所介護計画に基づくサービスを実施できなかった。`;
       }
-      const parts = ['通所介護計画に基づき、個別機能訓練・健康チェック・入浴・食事等の日常生活支援・送迎を提供。'];
+      const parts = ['通所介護計画に基づき、個別機能訓練（運動プログラム）・健康チェック（バイタル測定）・送迎を提供。'];
       if (d.planned!=null) parts.push(`${d.month}は計画${d.planned}回中${d.attended}回参加（出席率${d.rate!=null?d.rate+'%':'—'}）。`);
       parts.push('概ね計画どおりサービスを実施できた。');
       return parts.join('');
@@ -30793,8 +30793,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
         <td style="${bd}padding:7px 9px;font-size:11px;vertical-align:top;line-height:1.7;">${escSheet(c.text)||'&nbsp;'}</td>
       </tr>`;
     }).join('');
-    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:210mm;min-height:297mm;box-sizing:border-box;padding:12mm 12mm;background:white;">
-      <div style="text-align:center;font-size:19px;font-weight:bold;margin-bottom:14px;">通所介護モニタリング表</div>
+    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:297mm;min-height:210mm;box-sizing:border-box;padding:10mm 12mm;background:white;">
+      <div style="text-align:center;font-size:19px;font-weight:bold;margin-bottom:12px;">通所介護モニタリング表</div>
       ${faxLine}
       <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
         <tr>
@@ -30825,8 +30825,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     </div>`;
     const title = `通所介護モニタリング表_${patient.name}_${monthLabelStr}`;
     if (onShowPrintPreview) {
-      onShowPrintPreview(title,'A4 portrait',null);
-      setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 portrait',html}})),50);
+      onShowPrintPreview(title,'A4 landscape',null);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
     }
   };
 
