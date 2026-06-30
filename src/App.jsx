@@ -18506,9 +18506,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     {(() => {
                       const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
                       const exVals = latest.exercises || {};
-                      // ◯=その月の設定数値 / 数値=そのまま / ×・ー・空=表示しない
+                      const allIndItems = appData.systemSettings?.individualExerciseItems || [];
+                      // 個別運動スロット {itemId,value} の場合、選択された運動メニューを返す
+                      const slotSel = (rec, it) => { const v = rec?.exercises?.[it.id]; return (v && typeof v==='object' && v.itemId) ? allIndItems.find(x=>x.id===v.itemId) : null; };
+                      // ◯=その月の設定数値 / 数値=そのまま / ×・ー・空=表示しない / 個別運動オブジェクトは value
                       const resolveEx = (rec, it) => {
                         let v = rec?.exercises?.[it.id];
+                        if (v && typeof v === 'object') { const val = String(v.value ?? '').trim(); return val || (v.itemId ? '○' : null); }
                         if (v==null||v===''||v==='×'||v==='✕'||v==='x'||v==='ー'||v==='-') return null;
                         if (v==='○'||v==='◯') { const mm=(rec.date||'').match(/(\d+)月/); const ry=rec.year||new Date().getFullYear(); v=getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[it.id]; if(!v||v==='ー') return null; }
                         return v;
@@ -18526,7 +18530,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                             {doneEx.map(it => {
                               const v = resolveEx(latest, it);
                               const pv = resolveEx(prevRec?.r, it);
-                              const unit = it.defaultUnit || '';
+                              const sel = slotSel(latest, it);
+                              const label = sel?.name ? `${it.name}（${sel.name}）` : it.name;
+                              const unit = sel?.defaultUnit || it.defaultUnit || '';
                               const vStr = String(v ?? '');
                               const disp = (unit && /[0-9０-９]/.test(vStr) && !vStr.endsWith(unit)) ? `${vStr}${unit}` : vStr;
                               // 前回比 (主数値で比較)
@@ -18535,7 +18541,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                               const diff = (cur != null && prev != null) ? (cur - prev) : null;
                               return (
                                 <div key={it.id}>
-                                  <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>{it.name}</span>
+                                  <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>{label}</span>
                                   <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,lineHeight:1.3,marginTop:2,display:'flex',alignItems:'baseline',gap:6,flexWrap:'wrap'}}>
                                     <span>{disp}</span>
                                     {diff != null && diff !== 0 && (
