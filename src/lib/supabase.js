@@ -529,14 +529,31 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
           if (!dup) mergedRelated = [...mergedRelated, c];
         });
       }
-      // それ以外のフィールドはマージ (空でない値だけ上書き)
+      // ★ 代表家族(familyName 等の単一フィールド)は「クラウドに既に代表が居る場合は上書きしない」。
+      //   2人目以降の家族登録で代表が最新の人に化ける不具合の対策。 代表が居る時、2人目の情報は
+      //   emergencyContacts に追加する(下の mergedContacts2)。
+      const FAMILY_PRIMARY = ['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+      const cloudHasPrimary = !!(p.familyName && String(p.familyName).trim());
+      let mergedContacts2 = mergedContacts;
       const filteredPatch = {};
       Object.keys(patientPatch).forEach(k => {
         if (k === 'emergencyContacts' || k === 'relatedParties') return;
         const v = patientPatch[k];
-        if (v !== undefined && v !== null && v !== '') filteredPatch[k] = v;
+        if (v === undefined || v === null || v === '') return;
+        // 既に代表が居るのに、別人で代表フィールドを上書きしようとしている → 上書きせず緊急連絡先へ
+        if (FAMILY_PRIMARY.includes(k) && cloudHasPrimary && k === 'familyName' && String(v).trim() !== String(p.familyName).trim()) {
+          const incName = String(patientPatch.familyName||'').trim();
+          const incRel = String(patientPatch.familyRelation||'').trim();
+          const dup2 = mergedContacts2.some(c => (c.name||'').trim() === incName && (c.relation||'').trim() === incRel);
+          if (incName && !dup2) {
+            mergedContacts2 = [...mergedContacts2, { name: incName, relation: incRel, phone: patientPatch.familyPhone||'', phoneMobile: patientPatch.familyPhoneMobile||'', email: patientPatch.familyEmail||'' }];
+          }
+          return; // familyName は上書きしない
+        }
+        if (FAMILY_PRIMARY.includes(k) && cloudHasPrimary) return; // 代表が居る時は代表フィールドを上書きしない
+        filteredPatch[k] = v;
       });
-      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts, relatedParties: mergedRelated };
+      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated };
     });
     // ★ ケアマネ事業所/担当者マスタ (systemSettings) も、家族(関係者)登録で増えた分を統合 (重複は追加しない)
     let nextSettings = currentData.systemSettings || {};
