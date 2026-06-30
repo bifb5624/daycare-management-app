@@ -30476,6 +30476,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [activeSelection, setActiveSelection] = React.useState(null);
   const [monitorSort, setMonitorSort] = React.useState('kana'); // 'kana'|'careLevel'|'cmOffice'|'schedule'
   const [sheetModal, setSheetModal] = React.useState(null); // {patientId} 正式モニタリング表の編集
+  const [editTextCell, setEditTextCell] = React.useState(null); // `${pid}:${key}` 一覧で本文を直接編集中のセル
 
   // 対象月が変わったらその月の保存済みデータで更新
   React.useEffect(() => {
@@ -30786,6 +30787,63 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     cancelRef.current = false;
   };
 
+  // ★ 一覧で直接編集: 既存記録(なければ既定)に1項目だけ反映して保存(個人ファイルへ即格納)
+  const getOrInitSheetFor = (patient) => {
+    const rec = getSheetRecord(patient.id);
+    if (rec?.sheet) return rec.sheet;
+    const sel = buildAutoSel(patient); const noAtt = !hasAttendance(patient);
+    return { implDate: new Date().toISOString().slice(0,10), recorder: getActiveRecorderName()||'',
+      s1:{sel: sel.s1||(noAtt?'実施できなかった':'実施できた'), text: buildAutoStatus(patient)},
+      goal:{sel: sel.goal||'', text: noAtt?'当月は通所がなく評価が困難。':''},
+      s2:{sel:'',text:''}, s3:{sel:'変化なし',text: buildAutoChange(patient)}, s4:{sel:'このまま継続',text:''} };
+  };
+  const upsertSheet = (patient, sheet, opts) => {
+    let existing = [...(appData.monitoringRecords||[])];
+    existing = existing.filter(r => !(r.patientId===patient.id && r.period===monthLabelStr));
+    const sm = _monSummary(sheet);
+    existing.push({ id:`${patient.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`, patientId:patient.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
+    onSave({...appData, monitoringRecords: existing}, opts);
+    setResults(prev=>({...prev,[patient.id]:{text:sm, confirmed:true, loading:false, error:null, editing:false}}));
+  };
+  const updateSheetInline = (patient, key, field, value) => {
+    const base = getOrInitSheetFor(patient);
+    const sheet = { ...base, [key]: { ..._monCell(base[key]), [field]: value } };
+    upsertSheet(patient, sheet); // デバウンス自動保存(トースト無し)
+  };
+  // ★ 一括作成(既定): 全員にモニタリング表を作成(通所ありは下書き文/通所なしは実施できなかった)。 AI不要・即保存
+  const createAllDefault = () => {
+    const targets = ([...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id)).length
+      ? [...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id))
+      : [...attendedPats, ...absentPats]);
+    if (!targets.length) { alert('対象の利用者がいません'); return; }
+    if (!window.confirm(`${targets.length}名にモニタリング表を作成し、個人ファイルへ保存します。\n（既に作成済みの月は上書き）よろしいですか？`)) return;
+    let existing = [...(appData.monitoringRecords||[])];
+    const newResults = {};
+    for (const p of targets) {
+      const sheet = getOrInitSheetFor(p);
+      existing = existing.filter(r => !(r.patientId===p.id && r.period===monthLabelStr));
+      const sm = _monSummary(sheet);
+      existing.push({ id:`${p.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}_${p.id}`, patientId:p.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
+      newResults[p.id] = { text:sm, confirmed:true, loading:false, error:null, editing:false };
+    }
+    onSave({ ...appData, monitoringRecords: existing }, { manual:true, message:`✓ ${targets.length}名のモニタリング表を作成・保存しました` });
+    setResults(prev => ({ ...prev, ...newResults }));
+  };
+  // ★ 一括FAX: 作成済み(または既定)のモニタリング表を全員ぶん1つの印刷HTML(複数ページ)にまとめてプレビュー→印刷/PDF/FAX
+  const batchFax = () => {
+    const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
+    const targets = checked.length ? checked : [...attendedPats, ...absentPats];
+    const withSheet = targets.filter(p => getSheetRecord(p.id));
+    if (!withSheet.length) { alert('作成済みのモニタリング表がありません。先に「一括作成」または各表を作成してください。'); return; }
+    const pages = withSheet.map(p => buildSheetHtml(p, getSheetRecord(p.id).sheet, true)).join('');
+    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${pages}</div>`;
+    const title = `通所介護モニタリング表_${monthLabelStr}_${withSheet.length}名`;
+    if (onShowPrintPreview) {
+      onShowPrintPreview(title,'A4 landscape',null);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
+    }
+  };
+
   const copyText = (id, text) => {
     try {
       const el = document.createElement('textarea');
@@ -30952,7 +31010,7 @@ ${optionsDesc}
     onSave({...appData, monitoringRecords: existing});
     setResults(prev=>({...prev,[patient.id]:{text:sm, confirmed:true, loading:false, error:null, editing:false}}));
   };
-  const printSheet = (patient, sheet, forFax) => {
+  const buildSheetHtml = (patient, sheet, forFax, pageBreak) => {
     const f = appData.systemSettings?.facilityInfo || {};
     const bd = 'border:1px solid #000;';
     const infoLab = `style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11.5px;white-space:nowrap;"`;
@@ -30969,7 +31027,7 @@ ${optionsDesc}
         <td style="${bd}padding:7px 9px;font-size:11px;vertical-align:top;line-height:1.7;">${escSheet(c.text)||'&nbsp;'}</td>
       </tr>`;
     }).join('');
-    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:297mm;min-height:210mm;box-sizing:border-box;padding:10mm 12mm;background:white;">
+    return `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:297mm;min-height:210mm;box-sizing:border-box;padding:10mm 12mm;background:white;${pageBreak?'page-break-after:always;page-break-inside:avoid;':''}">
       <div style="text-align:center;font-size:19px;font-weight:bold;margin-bottom:12px;">通所介護モニタリング表</div>
       ${faxLine}
       <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
@@ -30999,6 +31057,9 @@ ${optionsDesc}
         ${itemRows}
       </table>
     </div>`;
+  };
+  const printSheet = (patient, sheet, forFax) => {
+    const html = buildSheetHtml(patient, sheet, forFax, false);
     const title = `通所介護モニタリング表_${patient.name}_${monthLabelStr}`;
     if (onShowPrintPreview) {
       onShowPrintPreview(title,'A4 landscape',null);
@@ -31090,9 +31151,17 @@ ${optionsDesc}
         ) : (
           <button type="button" onClick={generateAllSheets} title="チェックした(無ければ全員の)モニタリング表をAIで一括下書きし個人ファイルに保存"
             style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
-            🤖 表を一括下書き
+            🤖 表を一括下書き(AI)
           </button>
         )}
+        <button type="button" onClick={createAllDefault} title="チェックした(無ければ全員の)モニタリング表を作成し個人ファイルに保存(AIなし)"
+          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
+          📋 一括作成・保存
+        </button>
+        <button type="button" onClick={batchFax} title="作成済みのモニタリング表を全員ぶん1つにまとめて印刷/PDF/FAX(ケアマネ宛先つき)"
+          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer'}}>
+          📠 一括FAX/印刷
+        </button>
         <button type="button" onClick={()=>{
           const targets=[...attendedPats,...absentPats].filter(p=>checkedIds.has(p.id)&&!results[p.id]?.confirmed);
           targets.forEach(p=>setResults(prev=>({...prev,[p.id]:{...(prev[p.id]||{}),text:prev[p.id]?.text||'',editing:true}})));
@@ -31148,42 +31217,41 @@ ${optionsDesc}
                   {(() => {
                     const sheetRec = getSheetRecord(patient.id);
                     const sh = sheetRec?.sheet;
-                    if (sh) {
+                    if (res?.loading) return <div style={{display:'flex',alignItems:'center',gap:8,color:'#0284c7',fontSize:12}}><span style={{fontSize:16}}>⟳</span> AI生成中...</div>;
+                    if (res?.error) return <div style={{color:'#dc2626',fontSize:11}}>{res.error}</div>;
+                    if (!sh) {
+                      // ★ 未作成: 重い既定計算は押した時だけ。 「作成」で既定シートを作り、その場で編集できるように
                       return (
-                        <div style={{fontSize:11,lineHeight:1.55,color:'#1e293b'}}>
-                          {MON_ITEMS.map(it => { const c=_monCell(sh[it.key]); return (
-                            <div key={it.key} style={{marginBottom:2}}>
-                              <span style={{fontWeight:'bold',color:'#0369a1'}}>{it.no}</span>
-                              {c.sel && <span style={{fontWeight:'bold',background:'#e0f2fe',borderRadius:4,padding:'0 4px',marginLeft:2}}>{c.sel}</span>}
-                              {c.text && <span style={{color:'#475569'}}> {c.text}</span>}
-                            </div>
-                          );})}
-                          <div style={{fontSize:9,color:'#94a3b8',marginTop:3}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}　<span style={{color:'#0c4a6e',fontWeight:'bold'}}>（📋表 から編集）</span></div>
+                        <div style={{display:'flex',alignItems:'center',gap:8}}>
+                          <span style={{color:'#cbd5e1',fontSize:11}}>未作成</span>
+                          <button type="button" onClick={()=>{ const sheet=getOrInitSheetFor(patient); upsertSheet(patient, sheet, {manual:true, message:'✓ モニタリング表を作成しました'}); }}
+                            style={{padding:'3px 10px',borderRadius:14,fontSize:11,fontWeight:'bold',border:'1px solid #93c5fd',background:'#eff6ff',color:'#1d4ed8',cursor:'pointer'}}>＋作成</button>
                         </div>
                       );
                     }
-                    return (<>
-                      {res?.loading ? (
-                        <div style={{display:'flex',alignItems:'center',gap:8,color:'#0284c7',fontSize:12}}>
-                          <span style={{fontSize:16}}>⟳</span> AI生成中...
-                        </div>
-                      ) : res?.error ? (
-                        <div style={{color:'#dc2626',fontSize:11}}>{res.error}</div>
-                      ) : null}
-                      {confirmed && res?.text && (
-                        <div style={{fontSize:13,lineHeight:1.7,color:'#1e293b',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{res.text}</div>
-                      )}
-                      {!confirmed && (editing || res?.text) ? (
-                        <input type="text"
-                          value={res?.text||''}
-                          onChange={e=>setResults(prev=>({...prev,[patient.id]:{...prev[patient.id],text:e.target.value,editing:true}}))}
-                          placeholder="手入力または生成..."
-                          style={{width:'100%',fontSize:13,border:'1px solid #e2e8f0',borderRadius:8,padding:'7px 10px',outline:'none',background:'white',fontFamily:'inherit',boxSizing:'border-box'}}
-                        />
-                      ) : !confirmed && !res?.text && (
-                        <div style={{color:'#cbd5e1',fontSize:11}}>未作成（📋表 か ⚡生成）</div>
-                      )}
-                    </>);
+                    // ★ 作成済み: その場でプルダウン変更＋本文クリック編集 (表を開かなくてもOK)
+                    return (
+                      <div style={{fontSize:11,lineHeight:1.5,color:'#1e293b'}}>
+                        {MON_ITEMS.map(it => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; return (
+                          <div key={it.key} style={{display:'flex',alignItems:'flex-start',gap:4,marginBottom:3}}>
+                            <span style={{fontWeight:'bold',color:'#0369a1',flexShrink:0}}>{it.no}</span>
+                            <select value={c.sel} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
+                              style={{flexShrink:0,fontSize:10,fontWeight:'bold',border:'1px solid #bae6fd',borderRadius:6,padding:'1px 2px',background:'#f0f9ff',maxWidth:110}}>
+                              <option value="">—</option>
+                              {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
+                            </select>
+                            {editing2 ? (
+                              <textarea autoFocus defaultValue={c.text} rows={2}
+                                onBlur={e=>{ updateSheetInline(patient, it.key, 'text', e.target.value); setEditTextCell(null); }}
+                                style={{flex:1,minWidth:80,fontSize:11,border:'1px solid #93c5fd',borderRadius:6,padding:'2px 5px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
+                            ) : (
+                              <span onClick={()=>setEditTextCell(cellId)} title="クリックで編集" style={{flex:1,color:c.text?'#475569':'#cbd5e1',cursor:'text',minHeight:14}}>{c.text||'（タップで内容を入力）'}</span>
+                            )}
+                          </div>
+                        );})}
+                        <div style={{fontSize:9,color:'#94a3b8',marginTop:2}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}</div>
+                      </div>
+                    );
                   })()}
                 </td>
                 {/* 操作列（横並び） */}
