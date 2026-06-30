@@ -22941,35 +22941,17 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
           }
         }
       }
-      // ★ 連絡帳: ×・ー・空は空欄。 ◯ はその月の設定数値を表示。 数値はそのまま。
-      {
-        const _rt = String(rawVal ?? '').trim();
-        if (_rt==='×'||_rt==='✕'||_rt==='x'||_rt==='ー'||_rt==='-'||_rt==='') return '';
-        if (_rt==='○'||_rt==='◯') {
-          const _mm=(record.date||'').match(/(\d+)月/);
-          const _ry=record.year||new Date().getFullYear();
-          let _li = exerciseItemMap[item.linkedField];
-          if (!_li && item.label) { const lk=_normalizeName(item.label); _li=_exItems.find(it=>_normalizeName(it.name)===lk); }
-          const _pv = _li ? getPlannedExercisesForMonth(patient, _ry, _mm?+_mm[1]:1)[_li.id] : '';
-          if (!_pv || _pv==='ー') return '';
-          rawVal = _pv;
-        }
+      // ★ 連絡帳: 運動を実施した場合は ○ をそのまま表示する (数値や設定値には変換しない)。
+      //   ×・✕・ー・- ・空欄 は表示しない (空欄)。 個別運動などオブジェクト値は value/itemId を見て判定。
+      let _rt;
+      if (rawVal && typeof rawVal === 'object') {
+        // 個別運動スロット {itemId,value}: 値か運動が入っていれば実施とみなす
+        _rt = (String(rawVal.value ?? '').trim() || (rawVal.itemId ? '○' : ''));
+      } else {
+        _rt = String(rawVal ?? '').trim();
       }
-      const raw = dispEx(rawVal);
-      if (!raw) return '';
-      // ★ defaultUnit を後ろに付与 (内部値が数値だけでも「3分」と表示)
-      //   linkedField の id で取れなければ、 名前マッチで現在の項目から単位を引く
-      let linkedItem = exerciseItemMap[item.linkedField];
-      if (!linkedItem && item.label) {
-        const labelKey = _normalizeName(item.label);
-        linkedItem = _exItems.find(it => _normalizeName(it.name) === labelKey);
-      }
-      const unit = linkedItem?.defaultUnit
-        || appSettings.exerciseItems.find(it => it.name === linkedItem?.name)?.defaultUnit
-        || appSettings.exerciseItems.find(it => _normalizeName(it.name) === _normalizeName(item.label||''))?.defaultUnit
-        || '';
-      const rawStr = String(raw);
-      return (unit && /[0-9０-９]/.test(rawStr) && !rawStr.endsWith(unit)) ? `${rawStr}${unit}` : rawStr;
+      if (_rt===''||_rt==='×'||_rt==='✕'||_rt==='x'||_rt==='ー'||_rt==='-') return '';
+      return '○';
     }
     // fixed: 利用者ごと設定があれば優先、なければ全体の値
     if (item.perPatient && Object.prototype.hasOwnProperty.call(patientValues, item.id)) return patientValues[item.id];
@@ -30741,11 +30723,17 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // ★ モニタリング表(正式シート)をAIで一括下書き → まとめて個人ファイルに保存
   const [sheetBatchProg, setSheetBatchProg] = React.useState(null); // {done,total} | null
   const generateAllSheets = async () => {
-    if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('APIキーが未設定です。各種設定 → モニタリング でAPIキーを入力・保存してください。'); return; }
+    // ★ 通所がある人はAI下書き、 通所が無い人(一度も来ていない人)はAI不要で「実施できなかった」既定で作成。
+    const noKey = !(appData.systemSettings?.anthropicApiKey||'').trim();
     const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
     const targets = checked.length ? checked : [...attendedPats, ...absentPats];
     if (!targets.length) { alert('対象の利用者がいません'); return; }
-    if (!window.confirm(`${targets.length}名のモニタリング表をAIで一括下書きし、個人ファイルに保存します。\n（既に作成済みの月は上書きされます）よろしいですか？`)) return;
+    const attCount = targets.filter(p => hasAttendance(p)).length;
+    if (noKey && attCount > 0) {
+      if (!window.confirm(`APIキーが未設定のため、通所がある ${attCount}名 はスキップし、通所が無い方のみ「実施できなかった」で作成します。\n（通所がある方もAIで作成するには 各種設定→モニタリング でAPIキーを設定してください）\n続行しますか？`)) return;
+    } else {
+      if (!window.confirm(`${targets.length}名のモニタリング表を作成し、個人ファイルに保存します。\n（通所がある方はAI下書き／一度も来ていない方は「実施できなかった」。既に作成済みの月は上書き）よろしいですか？`)) return;
+    }
     cancelRef.current = false;
     setSheetBatchProg({ done:0, total:targets.length });
     let existing = [...(appData.monitoringRecords||[])];
@@ -30756,7 +30744,21 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     for (const p of targets) {
       if (cancelRef.current) break;
       try {
-        const out = await aiDraftSheet(p);
+        const noAtt = !hasAttendance(p);
+        let out;
+        if (noAtt) {
+          const sel = buildAutoSel(p);
+          out = {
+            s1:   { sel: sel.s1 || '実施できなかった', text: buildAutoStatus(p) },
+            goal: { sel: sel.goal || '評価困難',       text: '当月は通所がなく、目標の評価が困難。' },
+            s2:   { sel: '',                           text: '' },
+            s3:   { sel: '経過観察を要する',            text: buildAutoChange(p) },
+            s4:   { sel: 'このまま継続',                text: '' },
+          };
+        } else {
+          if (noKey) { done++; setSheetBatchProg({ done, total:targets.length }); continue; } // 通所ありはAPIキー必須 → スキップ
+          out = await aiDraftSheet(p);
+        }
         const sheet = { implDate: today, recorder: rec, ...out };
         existing = existing.filter(r => !(r.patientId===p.id && r.period===monthLabelStr));
         const sm = _monSummary(sheet);
