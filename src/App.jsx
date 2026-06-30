@@ -17896,6 +17896,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                           // ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー=除外
                           const resolveExVal = (r, exItem)=>{
                             let raw = r.exercises?.[exItem.id];
+                            if (raw && typeof raw === 'object') raw = raw.value != null ? String(raw.value) : ''; // 個別運動スロット {itemId,value}
                             if (raw==null||raw===''||raw==='×'||raw==='✕'||raw==='x'||raw==='ー'||raw==='-') return null;
                             if (raw==='○'||raw==='◯') {
                               const mm=(r.date||'').match(/(\d+)月/); const ry=r.year||new Date().getFullYear();
@@ -19442,9 +19443,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const selEx = allExItems.find(e=>e.id===_selExId);
             if(!selEx) return null;
 
-            // ★ 値の解決: ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー・空=反映しない('')
+            // ★ 値の解決: ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー・空=反映しない('') / 個別運動オブジェクトは value
             const _exMonthVal = (r) => {
-              const raw = r.exercises?.[selEx.id];
+              let raw = r.exercises?.[selEx.id];
+              if (raw && typeof raw === 'object') raw = raw.value != null ? String(raw.value) : (raw.itemId ? '○' : ''); // 個別運動スロット {itemId,value}
               if (raw == null || raw === '' || raw === '×' || raw === '✕' || raw === 'x' || raw === 'ー' || raw === '-') return '';
               if (raw === '○' || raw === '◯') {
                 const mm = (r.date||'').match(/(\d+)月/);
