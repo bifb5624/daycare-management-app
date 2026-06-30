@@ -10761,7 +10761,8 @@ function FamilyView() {
   const _inviteInfo = (() => {
     if (!_urlInvite) return {};
     const local = (data.familyInvites||[]).find(i => i.code === _urlInvite);
-    if (local) return { email: local.email || '', relation: local.relation || '' };
+    const _tokF = (()=>{ const t=decodeInviteToken(_urlToken); return (t&&t.c===_urlInvite)?t:null; })();
+    if (local) return { email: local.email || '', relation: local.relation || '', facilityName: (_tokF?.fn)||'', facilityPhone: (_tokF?.fp)||'' };
     // URL token から復元 (端末越し対応)
     const tok = decodeInviteToken(_urlToken);
     if (tok && tok.c === _urlInvite) {
@@ -10783,7 +10784,7 @@ function FamilyView() {
           localStorage.setItem('daycareAppData_v3', JSON.stringify(saved));
         }
       } catch {}
-      return { email: tok.e || '', relation: tok.r || '' };
+      return { email: tok.e || '', relation: tok.r || '', facilityName: tok.fn || '', facilityPhone: tok.fp || '' };
     }
     return {};
   })();
@@ -11559,7 +11560,7 @@ function FamilyView() {
                     <div style={{fontSize:12,fontWeight:'bold',color:'#166534',marginBottom:8}}>📜 利用規約・プライバシーポリシー</div>
                     <div style={{maxHeight:160,overflow:'auto',background:'white',border:'1px solid #d1fae5',borderRadius:8,padding:'10px 12px',fontSize:11,color:'#334155',lineHeight:1.7,marginBottom:10}}>
                       <b style={{color:'#166534'}}>【利用規約】</b><br/>
-                      1. 本サービスは「{facility.name||'当事業所'}」の利用者ご家族・関係者専用です。<br/>
+                      1. 本サービスは「{_inviteInfo.facilityName||facility.name||'当事業所'}」の利用者ご家族・関係者専用です。<br/>
                       2. アカウント情報は他人に譲渡・貸与できません。<br/>
                       3. ご利用者の医療・介護情報を不正に開示・利用しないでください。<br/>
                       4. システム停止・不具合により生じた損害について事業所は責任を負いません。<br/>
@@ -11571,7 +11572,7 @@ function FamilyView() {
                       4. 委託先: メール送信のためメール配信サービス (Brevo) を利用します。<br/>
                       5. 保管期間: 退所後 5年間、または法令で定める期間。<br/>
                       6. 開示・訂正・削除: 事業所窓口までお問い合わせください。<br/>
-                      7. お問い合わせ: {facility.name||'当事業所'}{facility.phone?` / TEL ${facility.phone}`:''}<br/>
+                      7. お問い合わせ: {_inviteInfo.facilityName||facility.name||'当事業所'}{(_inviteInfo.facilityPhone||facility.phone)?` / TEL ${_inviteInfo.facilityPhone||facility.phone}`:''}<br/>
                     </div>
                     <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'#166534',cursor:'pointer',marginBottom:6}}>
                       <input type="checkbox" checked={signupForm.agreedTerms||false} onChange={e=>setSignupForm(f=>({...f,agreedTerms:e.target.checked,error:''}))}
@@ -12819,7 +12820,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       }).catch(err => console.warn('[supabase] invite push failed', err));
                     }
                     const baseUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '');
-                    const tk = encodeInviteToken({ c: code, p: patient.id, s: _inviteStoreId||'', e: em, r: inviteFamForm.relation||'', x: newInvite.expiresAt||'' });
+                    const tk = encodeInviteToken({ c: code, p: patient.id, s: _inviteStoreId||'', e: em, r: inviteFamForm.relation||'', x: newInvite.expiresAt||'', fn: (appData.systemSettings?.facilityInfo?.name)||'', fp: (appData.systemSettings?.facilityInfo?.phone)||'' });
                     const url = `${baseUrl}/?family&invite=${encodeURIComponent(code)}&t=${tk}`;
                     setInviteFamForm(f=>({...f, createdUrl: url, sending: true, sendError: ''}));
                     // Brevo 経由で自動送信
@@ -26005,7 +26006,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     const relation = window.prompt('続柄を入力してください (例: 配偶者、長男、長女、ケアマネージャー など。空欄可):') || '';
                     const inv = issueNewInvite({ email: email.trim(), relation: relation.trim() });
                     // URL に招待データを埋め込み (端末越し用)
-                    const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'' });
+                    const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'', fn: (appData.systemSettings?.facilityInfo?.name)||'', fp: (appData.systemSettings?.facilityInfo?.phone)||'' });
                     const inviteUrl = `${baseUrlLocal}/?family&invite=${encodeURIComponent(inv.code)}&t=${tk}`;
                     const facility = appData.systemSettings?.facilityInfo || {};
                     // Brevo 経由で自動送信を試みる
@@ -26039,7 +26040,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     window.location.href = `mailto:${encodeURIComponent(email.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                   };
                   const inviteUrlOf = (inv) => {
-                    const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'' });
+                    const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'', fn: (appData.systemSettings?.facilityInfo?.name)||'', fp: (appData.systemSettings?.facilityInfo?.phone)||'' });
                     return `${baseUrlLocal}/?family&invite=${encodeURIComponent(inv.code)}&t=${tk}`;
                   };
                   const copyInviteUrl = (inv) => {
