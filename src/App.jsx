@@ -11113,6 +11113,12 @@ function FamilyView() {
                   if (!code) { setSignupForm(f=>({...f, error:'招待コードを入力してください'})); return; }
                   if (uname.length < 4) { setSignupForm(f=>({...f, error:'IDは4文字以上必要です'})); return; }
                   if (!/^[a-zA-Z0-9_\-]+$/.test(uname)) { setSignupForm(f=>({...f, error:'IDは半角英数字・ハイフン・アンダースコアのみ使用できます'})); return; }
+                  // ★ 全事業所でIDが重複していないか確認 (重複すると別店舗の利用者と取り違え=点滅するため禁止)
+                  if (isSupabaseEnabled) {
+                    setSignupForm(f=>({...f, error:''}));
+                    const _dup = await supabaseFamilyUsernameExists(uname);
+                    if (_dup === true) { setSignupForm(f=>({...f, error:'このIDは既に使われています。別のIDを設定してください。'})); return; }
+                  }
                   if (pw.length < 8) { setSignupForm(f=>({...f, error:'パスワードは8文字以上必要です'})); return; }
                   if (!/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) { setSignupForm(f=>({...f, error:'パスワードは英字と数字を組み合わせてください'})); return; }
                   if (pw !== signupForm.password2) { setSignupForm(f=>({...f, error:'パスワードが一致しません'})); return; }
@@ -23932,6 +23938,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (newUser === origUser) { setAccountEditId(null); setAccountEditOrig(null); return; }
     setAccountEditSaving(true);
     try {
+      // ★ 全店舗で重複チェック: 同じIDが既にあると利用者が取り違え(点滅)になるため発行・変更を禁止
+      const exists = await supabaseFamilyUsernameExists(newUser, acc.id);
+      if (exists === true) { alert(`ログインID「${newUser}」は既に他で使われています。\n別のIDにしてください（全事業所で重複しないIDが必要です）。`); try{ revert && revert(origUser); }catch{} setAccountEditSaving(false); return; }
+      if (exists === null) { if (!window.confirm('重複確認の通信に失敗しました。このまま変更するとIDが重複する可能性があります。続行しますか？')) { try{ revert && revert(origUser); }catch{} setAccountEditSaving(false); return; } }
       await supabaseUpdateFamilyAccount(acc.id, { username: newUser }, { matchUsername: origUser });
       setAccountEditId(null); setAccountEditOrig(null);
       alert(`ログインIDを「${newUser}」に変更しました。\nご本人へ新しいIDをお伝えください。`);

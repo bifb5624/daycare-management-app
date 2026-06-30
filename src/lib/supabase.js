@@ -134,6 +134,22 @@ export async function supabaseSignupFamily({
 // =========================================================
 // ログイン
 // =========================================================
+// ★ 家族アカウントID(username)が全店舗で既に使われているか確認 (重複ログイン=取り違え防止)。
+//   excludeId を渡すと、そのアカウント自身は重複扱いしない(編集時用)。
+//   返り値: true=既に使われている / false=未使用 / null=確認できなかった(通信エラー等→安全側で発行は止める運用)
+export async function supabaseFamilyUsernameExists(username, excludeId) {
+  if (!supabase) return null;
+  const u = String(username || '').trim();
+  if (!u) return false;
+  try {
+    let q = supabase.from('family_accounts').select('id').eq('username', u).is('deleted_at', null).limit(2);
+    const { data, error } = await q;
+    if (error) return null;
+    const rows = (data || []).filter(r => String(r.id) !== String(excludeId || ''));
+    return rows.length > 0;
+  } catch { return null; }
+}
+
 export async function supabaseLoginFamily({ username, password }) {
   if (!supabase) throw new Error('Supabase 未接続');
   const password_hash = await hashPassword(password);
