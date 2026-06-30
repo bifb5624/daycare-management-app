@@ -14417,8 +14417,11 @@ export default function App() {
             const prevEC = p.emergencyContacts || [];
             const inEC = inp.emergencyContacts || [];
             if (inEC.length <= prevEC.length) return p;
+            // ★ 墓石(_deletedEC)にある連絡先は復活させない
+            const _ecKey = c => `${(c.name||'').trim()}|${(c.relation||'').trim()}|${(c.phone||'').trim()}|${(c.phoneMobile||'').trim()}`;
+            const tomb = new Set([...(p._deletedEC||[]), ...(inp._deletedEC||[])]);
             const seen = new Set(prevEC.map(c => `${c.name}|${c.relation}`));
-            const newOnes = inEC.filter(c => !seen.has(`${c.name}|${c.relation}`));
+            const newOnes = inEC.filter(c => !seen.has(`${c.name}|${c.relation}`) && !tomb.has(_ecKey(c)));
             if (newOnes.length === 0) return p;
             return {...p, emergencyContacts: [...prevEC, ...newOnes]};
           });
@@ -25273,7 +25276,15 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   {(localPatient.emergencyContacts||[]).length===0&&<div className="text-xs text-slate-400 py-2">追加の緊急連絡先なし</div>}
                   {(localPatient.emergencyContacts||[]).map((ec,ei)=>(
                     <div key={ei} className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                      <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400">{ei+1}件目</span>{!isOff&&<button type="button" onClick={()=>updateLP('emergencyContacts',(localPatient.emergencyContacts||[]).filter((_,i)=>i!==ei))} className="text-slate-300 hover:text-red-400 text-xs font-bold">✕</button>}</div>
+                      <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400">{ei+1}件目</span>{!isOff&&<button type="button" onClick={()=>{
+                        // ★ 削除した緊急連絡先は「墓石(_deletedEC)」に記録 → 加算マージで復活しないようにする
+                        const _ec = (localPatient.emergencyContacts||[])[ei] || {};
+                        const _key = `${(_ec.name||'').trim()}|${(_ec.relation||'').trim()}|${(_ec.phone||'').trim()}|${(_ec.phoneMobile||'').trim()}`;
+                        updateLPFields({
+                          emergencyContacts: (localPatient.emergencyContacts||[]).filter((_,i)=>i!==ei),
+                          _deletedEC: [...(localPatient._deletedEC||[]).filter(k=>k!==_key), _key],
+                        });
+                      }} className="text-slate-300 hover:text-red-400 text-xs font-bold">✕</button>}</div>
                       <div className="grid grid-cols-2 gap-3 mb-2"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">氏名</label><input disabled={isOff} value={ec.name} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],name:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="氏名"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">続柄</label><input disabled={isOff} value={ec.relation} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],relation:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="例: 長男"/></div></div>
                       <div className="grid grid-cols-3 gap-3"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話（固定）</label><input type="tel" disabled={isOff} value={formatJpPhone(ec.phone||'')} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],phone:toHankaku(e.target.value).replace(/[^0-9]/g,'')};updateLP('emergencyContacts',a);}} inputMode="numeric" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="03-XXXX-XXXX"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話（携帯）</label><input type="tel" disabled={isOff} value={formatJpPhone(ec.phoneMobile||'')} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],phoneMobile:toHankaku(e.target.value).replace(/[^0-9]/g,'')};updateLP('emergencyContacts',a);}} inputMode="numeric" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="090-XXXX-XXXX"/></div><div><label className="block text-sm font-bold text-slate-600 mb-1.5">メール</label><input type="email" disabled={isOff} value={ec.email||''} onChange={e=>{const a=[...(localPatient.emergencyContacts||[])];a[ei]={...a[ei],email:e.target.value};updateLP('emergencyContacts',a);}} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-60" placeholder="mail@example.com"/></div></div>
                     </div>

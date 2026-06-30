@@ -522,11 +522,14 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
     const currentData = row.data;
     const patients = (currentData.patients || []).map(p => {
       if (String(p.id) !== String(patientId)) return p;
-      // emergencyContacts は配列マージ (重複防止)
-      let mergedContacts = p.emergencyContacts || [];
+      // emergencyContacts は配列マージ (重複防止)。 ★ 墓石(_deletedEC: 事業所側で削除した連絡先)は復活させない
+      const _ecKey = c => `${(c.name||'').trim()}|${(c.relation||'').trim()}|${(c.phone||'').trim()}|${(c.phoneMobile||'').trim()}`;
+      const _ecTomb = new Set(p._deletedEC || []);
+      let mergedContacts = (p.emergencyContacts || []).filter(c => !_ecTomb.has(_ecKey(c)));
       if (patientPatch.emergencyContacts) {
         const incoming = patientPatch.emergencyContacts || [];
         incoming.forEach(c => {
+          if (_ecTomb.has(_ecKey(c))) return; // 削除済み(墓石)は追加しない
           const dup = mergedContacts.some(ex =>
             (ex.name||'').trim() === (c.name||'').trim() &&
             (ex.relation||'').trim() === (c.relation||'').trim()
