@@ -16967,11 +16967,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         ? allIndItems.map(it => ({itemId: it.id, defaultValue: ''}))
                         : rawIndEx;
                       const cur = (p.exercises && typeof p.exercises[item.id] === 'object') ? p.exercises[item.id] : { itemId:'', value:'' };
-                      const selItem = allIndItems.find(it => it.id === cur.itemId);
+                      // ★ スロット既定(利用者マスタで「個別運動①=屋外歩行」等を設定)を反映。 未選択ならこの既定を採用
+                      const slotDefaultId = targetPatient?.individualExerciseSlotDefaults?.[item.id] || '';
+                      const effItemId = cur.itemId || slotDefaultId;
+                      const selItem = allIndItems.find(it => it.id === effItemId);
                       const patDefault = selItem ? (patSettings.find(x => x.itemId === selItem.id)?.defaultValue || '') : '';
                       return (
                         <td key={item.id} data-ind-cell className={`px-1 py-1 align-top border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
-                          <select value={cur.itemId || ''} disabled={isAbsent || isReadOnly || isPause}
+                          <select value={effItemId} disabled={isAbsent || isReadOnly || isPause}
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: e.target.value})}
                             className="w-full px-1 py-0.5 mb-1 text-[10px] font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
                             style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center'}}>
@@ -16979,7 +16982,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
                           <input type="text" value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
-                            onChange={e=>updateExercise(p.id, item.id, {...cur, value: e.target.value})}
+                            onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: e.target.value})}
                             placeholder={selItem?`${patDefault||''}${selItem.defaultUnit?` ${selItem.defaultUnit}`:''}`:'未選択'}
                             style={{fontSize:13,padding:'3px 4px'}}
                             className="w-full text-center border border-emerald-300 rounded font-bold bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-emerald-300"/>
@@ -25325,6 +25328,32 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         );
                       })}
                     </div>
+                    {/* ★ 個別運動スロットの既定: 提供記録の「個別運動①②③」で、最初からこの運動が選ばれた状態にする */}
+                    {(() => {
+                      const slots = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems).filter(it => it.type === 'individual');
+                      if (slots.length === 0) return null;
+                      const enabledMenu = indItems.filter(it => patIndEx.some(x => x.itemId === it.id));
+                      const slotDefaults = localPatient.individualExerciseSlotDefaults || {};
+                      const setSlotDefault = (slotId, indId) => updateLP('individualExerciseSlotDefaults', { ...slotDefaults, [slotId]: indId });
+                      return (
+                        <div className="mt-4 pt-3 border-t border-slate-200">
+                          <h3 className="text-sm font-bold text-slate-600 mb-1">個別運動の既定（提供記録での初期選択）<span className="text-[10px] text-slate-400 font-normal">　提供記録入力でいちいち選ばなくて済むよう、各スロットの運動を決めておけます</span></h3>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mt-2">
+                            {slots.map(slot => (
+                              <div key={slot.id} className="p-2 rounded-xl border-2 border-emerald-200 bg-white">
+                                <div className="text-xs font-bold text-emerald-700 mb-1">{slot.name}</div>
+                                <select disabled={isOff} value={slotDefaults[slot.id] || ''} onChange={e=>setSlotDefault(slot.id, e.target.value)}
+                                  className="w-full px-2 py-1.5 bg-white border border-emerald-300 rounded text-xs font-bold outline-none focus:border-emerald-500 disabled:opacity-60">
+                                  <option value="">（未設定）</option>
+                                  {enabledMenu.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                                </select>
+                              </div>
+                            ))}
+                          </div>
+                          {enabledMenu.length === 0 && <div className="text-[11px] text-slate-400 mt-1">※ 上で個別運動メニューを選択すると、ここで既定に設定できます。</div>}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
