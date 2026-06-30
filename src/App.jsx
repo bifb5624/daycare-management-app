@@ -31154,20 +31154,47 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const d = buildPatientData(patient);
     const fitnessText = (d.fitnessRecs && d.fitnessRecs.length)
       ? d.fitnessRecs.map(r => { const vals=(d.fitnessItems||[]).map(it=> r.values?.[it.id]?`${it.name}:${r.values[it.id]}${it.unit||''}`:null).filter(Boolean).join('、'); return `${r.date}（${vals||'データあり'}）`; }).join(' / ')
-      : '記録なし';
+      : '記録なし（体力測定を行わない事業所もあるため、運動の記録から評価してください）';
+    // ★ 運動の記録(運動メニュー)と前月からの変化を集計 (体力測定に依存せず評価できるように)
+    const _exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+    const _allInd = appData.systemSettings?.individualExerciseItems || [];
+    const _monthAttended = (mm) => (appData.ticketRecords||[]).filter(r => { const _m=r.date?.match(/(\d+)月/); return r.patientId===patient.id && _m && parseInt(_m[1])===mm && (r.status==='出席'||(r.status&&r.status.startsWith('振'))); });
+    const _exDoneNames = (recs) => { const s=new Set(); recs.forEach(r=>_exItems.forEach(it=>{ const v=r.exercises?.[it.id]; let nm=it.name, has=false; if(v&&typeof v==='object'){ const _v=String(v.value??'').trim(); has=(_v&&!['×','✕','x','ー','-'].includes(_v))||!!v.itemId; const sel=_allInd.find(x=>x.id===v.itemId); if(sel)nm=`${it.name}(${sel.name})`; } else { const _v=String(v??'').trim(); has=!!_v&&!['×','✕','x','ー','-'].includes(_v); } if(has)s.add(nm); })); return s; };
+    const _nowRecs = _monthAttended(tM);
+    const _prevM = tM===1?12:tM-1;
+    const _nowSet = _exDoneNames(_nowRecs), _prevSet = _exDoneNames(_monthAttended(_prevM));
+    const _baseName = (x)=>x.split('(')[0];
+    const _added = [...(_nowSet)].filter(x=>![..._prevSet].some(p=>_baseName(p)===_baseName(x)));
+    const _removed = [..._prevSet].filter(x=>![..._nowSet].some(n=>_baseName(n)===_baseName(x)));
+    const exerciseNowText = [..._nowSet].join('、') || '記録なし';
+    const exerciseChangeText = (_added.length||_removed.length)
+      ? `${_added.length?'今月から追加/再開: '+_added.join('、'):''}${_added.length&&_removed.length?' / ':''}${_removed.length?'今月は実施なし: '+_removed.join('、'):''}`
+      : '前月から運動メニューに大きな変更なし';
+    // ★ 個別機能訓練計画書(あれば)の目標 → ②目標の達成・進捗の評価に使う
+    const _kk = (appData.kinouKeikakuRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>String(b.createdAt||b.createdDate||'').localeCompare(String(a.createdAt||a.createdDate||'')));
+    const _goalText = _kk.length ? [_kk[0].shortKinou&&`短期(機能): ${_kk[0].shortKinou}`, _kk[0].shortKatsudo&&`短期(活動): ${_kk[0].shortKatsudo}`, _kk[0].longKinou&&`長期(機能): ${_kk[0].longKinou}`].filter(Boolean).join(' / ') : '';
     const optionsDesc = MON_ITEMS.map(it=>`${it.key}（${it.no}${it.title}）: 選択肢=[${it.options.join(' / ')}]`).join('\n');
-    const prompt = `あなたは通所介護（リハビリ特化・半日型デイサービス／入浴・食事の提供は無し）の機能訓練指導員です。以下の利用者データをもとに「通所介護モニタリング表」の各項目を作成してください。
+    const prompt = `あなたは通所介護（リハビリ特化・半日型デイサービス）の【機能訓練指導員 兼 生活相談員】です。以下のデータをもとに「通所介護モニタリング表」の各項目を作成してください。
+
+■ 文体・観点（重要）
+・当事業所は医療機関ではありません。診断・医学的判断・治療的表現（病名・治療効果の評価 等）は使わないでください。
+・機能訓練（運動）と生活機能・生活の様子の観点で、利用者本位にやさしく記述してください。
+・所見は「〜の様子がみられた」「今後も見守りが必要」「継続して支援していく」等の、見守り・支援の語調にしてください。
+・体力測定の数値が無くても構いません。運動の記録・通所の様子・気分・特記から柔軟に評価してください（体力測定にこだわらない）。
+・運動メニューの変更（マシンの増減等）があれば、その点に触れてください。
 
 利用者: ${d.name}（${d.careLevel||''}）
 対象月: ${d.month}
 通所実績: 計画${d.planned}回中${d.attended}回参加（出席率${d.rate!=null?d.rate+'%':'不明'}）${d.attended===0?'　※当月は一度も通所なし':''}
-血圧平均: ${d.avgBp||'不明'}mmHg（前月${d.prevAvgBp||'不明'}）
-体温平均: ${d.avgTemp||'不明'}℃
+取り組んだ運動メニュー: ${exerciseNowText}
+運動メニューの変化: ${exerciseChangeText}
+バイタル(参考): 血圧平均${d.avgBp||'不明'}mmHg（前月${d.prevAvgBp||'不明'}）、体温平均${d.avgTemp||'不明'}℃
 通所時の気分: ${d.avgMoodLabel||'不明'}
-体力測定: ${fitnessText}
+体力測定(任意・行わない事業所もあり): ${fitnessText}
 特記事項: ${d.tokki||'なし'}
+${_goalText ? `個別機能訓練計画の目標: ${_goalText}\n（②目標の達成・進捗は、この目標に対する取り組み状況・達成度を書いてください）` : '個別機能訓練計画の目標: 未設定（一般的な生活機能の維持・向上の観点で評価してください）'}
 
-各項目で、必ず下記の選択肢から最も適切なものを1つ"sel"に選び、"text"に2〜3文の専門的で具体的な所見を書いてください。提供サービスは「個別機能訓練（運動プログラム）・健康チェック（バイタル測定）・送迎」のみ。当月に通所が無い場合は①を必ず「実施できなかった」にしてください。
+各項目で、必ず下記の選択肢から最も適切なものを1つ"sel"に選び、"text"に2〜3文の所見を上記の文体・観点で書いてください。当月に通所が無い場合は①を必ず「実施できなかった」にしてください。
 ${optionsDesc}
 
 出力は次のJSONのみ（前後に説明文やコードブロックを付けない）:
@@ -31175,7 +31202,7 @@ ${optionsDesc}
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:900, messages:[{role:'user', content:prompt}] })
+      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1000, messages:[{role:'user', content:prompt}] })
     });
     let data; try { data = await resp.json(); } catch { throw new Error(`レスポンス解析エラー (HTTP ${resp.status})`); }
     if (!resp.ok) throw new Error(data?.error?.message || `APIエラー (HTTP ${resp.status})`);
