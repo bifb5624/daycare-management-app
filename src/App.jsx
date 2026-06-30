@@ -12960,8 +12960,10 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
       if (mode === 'set') {
         if (pw.length < 4) { setErr('パスワードは4文字以上にしてください'); setBusy(false); return; }
         if (pw !== pw2) { setErr('確認用パスワードが一致しません'); setBusy(false); return; }
+        const em = (email||'').trim();
+        if (!em || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { setErr('再設定用メールアドレスを正しく入力してください（必須）'); setBusy(false); return; }
         const hash = await sha256Hex(pw);
-        await onSetAuth({ passwordHash: hash, email: (email||'').trim() });
+        await onSetAuth({ passwordHash: hash, email: em });
         onSuccess();
       } else {
         const hash = await sha256Hex(pw);
@@ -13011,9 +13013,9 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
         {mode==='set' && <>
           <input type="password" value={pw2} onChange={e=>setPw2(e.target.value)} placeholder="パスワード(確認用)"
             style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
-          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="再設定用メールアドレス(任意・推奨)"
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="再設定用メールアドレス（必須）"
             style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
-          <div style={{fontSize:10,color:'#94a3b8',marginBottom:10}}>※ メールを登録すると、忘れた時に再設定メールを送れます（後で追加も可）。</div>
+          <div style={{fontSize:10,color:'#94a3b8',marginBottom:10}}>※ パスワードを忘れた時の再設定に使います。<b style={{color:'#dc2626'}}>必須</b>です。</div>
         </>}
         {err && <div style={{color:'#dc2626',fontSize:12,fontWeight:'bold',marginBottom:10}}>{err}</div>}
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
@@ -16538,9 +16540,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const statePM = shiftPM !== undefined ? shiftPM : (base==='PM'||base==='1日' ? '〇' : '空欄');
       const comingAM = stateAM==='〇'||stateAM==='出席'||stateAM.startsWith('振');
       const comingPM = statePM==='〇'||statePM==='出席'||statePM.startsWith('振');
-      // ★ 欠席/休業/休止 は時間帯フィルタ(AM/PM)で隠さない (誰が休んだか確認できるように)。
-      //   ここに無いと「振替=欠席」にした人が AM/PM 表示で消えてしまう。
-      if (p.status==='欠席'||p.status==='休業'||p.status==='休止'||stateAM==='欠席'||statePM==='欠席'||stateAM==='休業'||statePM==='休業') return true;
+      // ★ 欠席/休業/休止 でも、その人が属する時間帯(AM/PM)のみに表示する。
+      //   (午前のみの人を欠席にした時、午後にも出てしまう不具合の対策)。 所属枠は 基本利用日(base) と当日シフト状態から判定。
+      const isAbsentLike = p.status==='欠席'||p.status==='休業'||p.status==='休止'||stateAM==='欠席'||statePM==='欠席'||stateAM==='休業'||statePM==='休業';
+      if (isAbsentLike) {
+        const schedAM = base==='AM'||base==='1日' || ['欠席','休業','休止','〇','出席'].includes(stateAM) || (typeof stateAM==='string'&&stateAM.startsWith('振'));
+        const schedPM = base==='PM'||base==='1日' || ['欠席','休業','休止','〇','出席'].includes(statePM) || (typeof statePM==='string'&&statePM.startsWith('振'));
+        if (!schedAM && !schedPM) return true; // 判定不能時のみ従来どおり両方に表示
+        if (timeFilter === 'AM') return schedAM;
+        if (timeFilter === 'PM') return schedPM;
+        return true;
+      }
       if (timeFilter === 'AM') return comingAM;
       if (timeFilter === 'PM') return comingPM;
       return true;
