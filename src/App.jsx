@@ -11415,9 +11415,21 @@ function FamilyView() {
                   </div>
                   <div style={{marginBottom:12}}>
                     <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>ログインID</label>
-                    <input value={signupForm.username} onChange={e=>setSignupForm(f=>({...f,username:toHalfWidth(e.target.value),error:''}))}
+                    <input value={signupForm.username} onChange={e=>setSignupForm(f=>({...f,username:toHalfWidth(e.target.value),error:'',unameStatus:''}))}
+                      onBlur={async (e)=>{
+                        const u = (e.target.value||'').trim();
+                        if (u.length < 4 || !/^[a-zA-Z0-9_\-]+$/.test(u)) { setSignupForm(f=>({...f, unameStatus:''})); return; }
+                        if (!isSupabaseEnabled) return;
+                        setSignupForm(f=>({...f, unameStatus:'checking'}));
+                        let dup = null;
+                        try { dup = await Promise.race([ supabaseFamilyUsernameExists(u), new Promise(res=>setTimeout(()=>res('timeout'), 6000)) ]); } catch { dup = null; }
+                        setSignupForm(f=> f.username.trim()===u ? {...f, unameStatus: dup===true?'taken':(dup===false?'ok':'')} : f);
+                      }}
                       placeholder="例: inoue_family (4文字以上、半角英数字)" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false}
-                      style={{width:'100%',padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
+                      style={{width:'100%',padding:'12px 14px',border:`1px solid ${signupForm.unameStatus==='taken'?'#fca5a5':signupForm.unameStatus==='ok'?'#86efac':'#e2e8f0'}`,borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
+                    {signupForm.unameStatus==='checking' && <div style={{fontSize:11,color:'#64748b',marginTop:4}}>確認中...</div>}
+                    {signupForm.unameStatus==='taken' && <div style={{fontSize:11,color:'#dc2626',fontWeight:'bold',marginTop:4}}>このIDは使えません（既に使われています）。別のIDにしてください。</div>}
+                    {signupForm.unameStatus==='ok' && <div style={{fontSize:11,color:'#16a34a',fontWeight:'bold',marginTop:4}}>✓ このIDは使えます</div>}
                   </div>
                   <div style={{marginBottom:12}}>
                     <label style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>
@@ -26080,22 +26092,20 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           };
           onSave({ ...appData, familyAccounts: [...(appData.familyAccounts||[]), newAcc] });
         };
-        const removeAccount = async (accId) => {
-          if (!window.confirm('このアカウントを削除します。\n同じIDで再登録できるようになります。\nよろしいですか?')) return;
-          // Supabase からも物理削除 (username を即時解放)
-          if (isSupabaseEnabled) {
-            const ok = await supabaseDeleteFamilyAccount(accId);
-            if (!ok) {
-              alert('Supabase 側の削除に失敗しました。ネットワーク状況を確認してください。');
-              return;
-            }
-          }
-          // localStorage 側も削除 + 関連 invite も削除
+        const removeAccount = (accId) => {
+          if (!window.confirm('このアカウントを削除します。\n紐づく招待コードも削除され、同じIDで再登録できるようになります。\nよろしいですか?')) return;
+          // ★ まず画面に即時反映 (固まらないように)。 アカウント削除＋紐づく招待コードも削除(unlinkではなく物理削除)。
           onSave({
             ...appData,
             familyAccounts: (appData.familyAccounts||[]).filter(a => a.id !== accId),
-            familyInvites: (appData.familyInvites||[]).map(i => i.usedBy === accId ? { ...i, usedBy: null, usedAt: null } : i),
-          });
+            familyInvites: (appData.familyInvites||[]).filter(i => i.usedBy !== accId),
+          }, { manual: true, message: '✓ アカウントと招待コードを削除しました' });
+          // ★ Supabase は背景で物理削除 (UIを待たせない)。 失敗時のみ後から通知。
+          if (isSupabaseEnabled) {
+            supabaseDeleteFamilyAccount(accId)
+              .then(ok => { if (!ok) alert('クラウド側の削除に失敗しました。通信状況を確認のうえ、もう一度お試しください。'); })
+              .catch(() => {});
+          }
         };
         const resetPw = (accId) => {
           const newPw = genPw();
