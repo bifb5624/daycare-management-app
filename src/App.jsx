@@ -25927,8 +25927,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           w.document.close();
         };
         return (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-auto" onClick={e=>e.stopPropagation()}>
+          <div className="fixed inset-0 bg-slate-900/70 z-50 flex items-center justify-center p-0 sm:p-4">
+            <div className="bg-white sm:rounded-3xl shadow-2xl w-full h-full sm:h-auto sm:max-w-2xl max-h-full sm:max-h-[90vh] overflow-auto" onClick={e=>e.stopPropagation()}>
               <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
                 <h2 className="text-base font-bold text-slate-800 flex items-center gap-2"><QrCode size={18} className="text-violet-600"/>家族・関係者アカウント発行・管理</h2>
                 <button onClick={()=>setFamilyShareModal(null)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
@@ -26021,10 +26021,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     const body = `${pat.name} 様のご家族のみなさま\n\n下記URLからご家族専用ページにご登録ください (有効期限 14日)\n\n${inviteUrl}\n\n${facility.name||''}${facility.phone?` / TEL ${facility.phone}`:''}`;
                     window.location.href = `mailto:${encodeURIComponent(email.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                   };
-                  const copyInviteUrl = (inv) => {
+                  const inviteUrlOf = (inv) => {
                     const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'' });
-                    const url = `${baseUrlLocal}/?family&invite=${encodeURIComponent(inv.code)}&t=${tk}`;
-                    navigator.clipboard?.writeText(url);
+                    return `${baseUrlLocal}/?family&invite=${encodeURIComponent(inv.code)}&t=${tk}`;
+                  };
+                  const copyInviteUrl = (inv) => {
+                    navigator.clipboard?.writeText(inviteUrlOf(inv));
                     setShowToast(true);
                   };
                   const deleteInvite = async (invId) => {
@@ -26056,34 +26058,48 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                           {invitesForPat.map(inv => {
                             const usedAcc = inv.usedBy ? (appData.familyAccounts||[]).find(a => a.id === inv.usedBy) : null;
                             const isExpired = inv.expiresAt && new Date(inv.expiresAt) < new Date() && !inv.usedBy;
+                            const showCodeTools = !inv.usedBy && !isExpired;
                             return (
-                              <div key={inv.id} className={`flex items-center justify-between gap-2 bg-white border ${isExpired?'border-red-200 opacity-70':'border-amber-200'} rounded-lg px-3 py-2`}>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <div className="text-sm font-bold text-amber-900 tracking-wider" style={{fontFamily:'Menlo,monospace'}}>{inv.code}</div>
-                                    {inv.email && <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">📧 {inv.email}</div>}
-                                    {inv.relation && <div className="text-[10px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">{inv.relation}</div>}
+                              <div key={inv.id} className={`bg-white border ${isExpired?'border-red-200 opacity-70':'border-amber-200'} rounded-lg px-3 py-2`}>
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <div className="text-base font-bold text-amber-900 tracking-widest" style={{fontFamily:'Menlo,monospace'}}>{inv.code}</div>
+                                      {inv.email && <div className="text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">📧 {inv.email}</div>}
+                                      {inv.relation && <div className="text-[10px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">{inv.relation}</div>}
+                                    </div>
+                                    <div className="text-[9px] text-amber-700 mt-0.5">
+                                      発行: {new Date(inv.createdAt).toLocaleString('ja-JP',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                                      {inv.usedBy ? (
+                                        <span className="ml-2 text-emerald-700 font-bold">✓ 使用済 {usedAcc?.username ? `(${usedAcc.username})` : ''}</span>
+                                      ) : isExpired ? (
+                                        <span className="ml-2 text-red-600 font-bold">⚠ 期限切れ</span>
+                                      ) : (
+                                        <span className="ml-2 text-amber-700 font-bold">● 未使用</span>
+                                      )}
+                                    </div>
                                   </div>
-                                  <div className="text-[9px] text-amber-700 mt-0.5">
-                                    発行: {new Date(inv.createdAt).toLocaleString('ja-JP',{year:'2-digit',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
-                                    {inv.usedBy ? (
-                                      <span className="ml-2 text-emerald-700 font-bold">✓ 使用済 {usedAcc?.username ? `(${usedAcc.username})` : ''}</span>
-                                    ) : isExpired ? (
-                                      <span className="ml-2 text-red-600 font-bold">⚠ 期限切れ</span>
-                                    ) : (
-                                      <span className="ml-2 text-amber-700 font-bold">● 未使用</span>
+                                  <div className="flex gap-1 shrink-0">
+                                    {showCodeTools && (
+                                      <button onClick={()=>{navigator.clipboard?.writeText(inv.code); setShowToast(true);}} className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-[10px] font-bold" title="コードをコピー">📋 コード</button>
                                     )}
+                                    <button onClick={()=>deleteInvite(inv.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold">削除</button>
                                   </div>
                                 </div>
-                                <div className="flex gap-1 shrink-0">
-                                  {!inv.usedBy && !isExpired && (
-                                    <>
-                                      <button onClick={()=>copyInviteUrl(inv)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold" title="招待URLをコピー">🔗 URL</button>
-                                      <button onClick={()=>{navigator.clipboard?.writeText(inv.code); setShowToast(true);}} className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-[10px] font-bold">コード</button>
-                                    </>
-                                  )}
-                                  <button onClick={()=>deleteInvite(inv.id)} className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold">削除</button>
-                                </div>
+                                {/* ★ 未使用コード: 新規登録URL + QR (このQRを読むと登録画面が開く) */}
+                                {showCodeTools && (
+                                  <div className="mt-2 pt-2 border-t border-amber-100 flex items-start gap-2.5">
+                                    <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=6&data=${encodeURIComponent(inviteUrlOf(inv))}`} width={84} height={84} className="border border-amber-200 rounded bg-white p-1 shrink-0" alt="登録QR"/>
+                                    <div className="flex-1 min-w-0 space-y-1.5">
+                                      <div className="text-[10px] font-bold text-amber-800">新規登録ページ（このQRを読み取ると、コード入力済みで登録画面が開きます）</div>
+                                      <div className="flex gap-1">
+                                        <input readOnly value={inviteUrlOf(inv)} onClick={e=>e.target.select()} className="flex-1 min-w-0 px-2 py-1 bg-white border border-amber-200 rounded text-[10px] font-mono outline-none"/>
+                                        <button onClick={()=>copyInviteUrl(inv)} className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-[10px] font-bold whitespace-nowrap">🔗 URLコピー</button>
+                                      </div>
+                                      <div className="text-[9px] text-slate-500">メールが無いご家族には、この<b>QR</b>を見せて読み取ってもらうか、<b>コード</b>と<b>共通ログインURL</b>をお伝えください。</div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
