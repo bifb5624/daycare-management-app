@@ -27068,6 +27068,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   // ★ 管理者ロック: ログイン情報/パスワード変更は「管理者として認証済み」の時のみ操作可。 未設定なら従来どおり(=最初の管理者設定を促す)
   const _adminAuth = appData.systemSettings?.adminAuth;
   const [adminUnlocked, setAdminUnlocked] = useState(()=>{ try { return sessionStorage.getItem('tsumugiAdminVerified')==='1'; } catch { return false; } });
+  // ★ 重要設定(ログイン情報/管理者設定/APIキー)は「現在のスタッフが管理者」の時のみ表示。
+  //   管理者がまだ1人もいない(初期設定)時のみ全員に開放。
+  const _hasAnyAdmin = (appData.storeMembers||[]).some(m => m && (m.isAdmin || (m.roleLabel||'') === '管理者'));
+  const canAdmin = adminUnlocked || !_hasAnyAdmin;
   const [showSettingsAdminGate, setShowSettingsAdminGate] = useState(false);
   const settingsSaveAdminAuth = (auth) => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth:{ ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }); };
   const [exerciseItems, setExerciseItems] = useState(appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
@@ -28174,12 +28178,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               </div>
             </SectionCard>
             <SectionCard title="ログイン情報">
-              {(_adminAuth?.passwordHash && !adminUnlocked) ? (
+              {(!canAdmin) ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
                   <div className="text-3xl mb-2">🔒</div>
-                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ操作できます</div>
-                  <div className="text-xs text-amber-700 mb-3">ログイン情報・パスワードの変更には管理者パスワードが必要です。</div>
-                  <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">🔑 管理者として認証</button>
+                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ表示・操作できます</div>
+                  <div className="text-xs text-amber-700 mb-3">サイドバーの「スタッフ切替」で管理者を選択してください{_adminAuth?.passwordHash?'（管理者パスワードの認証が必要です）':''}。</div>
+                  {_adminAuth?.passwordHash && <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">🔑 管理者として認証</button>}
                 </div>
               ) : (() => {
                 const allCreds = appData.systemSettings?.loginCredentials || [];
@@ -28246,24 +28250,32 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               )}
             </SectionCard>
             <SectionCard title="管理者の設定">
-              {(_adminAuth?.passwordHash && !adminUnlocked) ? (
+              {(!canAdmin) ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
                   <div className="text-3xl mb-2">🔒</div>
-                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ操作できます</div>
-                  <div className="text-xs text-amber-700 mb-3">管理者パスワードの変更・譲渡などには管理者パスワードが必要です。</div>
-                  <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">🔑 管理者として認証</button>
+                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ表示・操作できます</div>
+                  <div className="text-xs text-amber-700 mb-3">サイドバーの「スタッフ切替」で管理者を選択してください{_adminAuth?.passwordHash?'（管理者パスワードの認証が必要です）':''}。</div>
+                  {_adminAuth?.passwordHash && <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">🔑 管理者として認証</button>}
                 </div>
               ) : (
                 <AdminSettingsSection appData={appData} onSave={onSave} />
               )}
             </SectionCard>
             <SectionCard title="モニタリング用APIキー">
-              <label className="block text-sm font-bold text-slate-600 mb-1.5">APIキー</label>
-              <p className="text-xs text-slate-400 mb-2">モニタリング文章の自動生成に使用します。</p>
-              <input type="password" value={anthropicApiKey} onChange={e => setAnthropicApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-sm outline-none"/>
-              {anthropicApiKey && <p className="text-xs text-emerald-600 font-bold mt-1">✓ 設定済み（末尾: ...{anthropicApiKey.slice(-6)}）</p>}
+              {(!canAdmin) ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+                  <div className="text-3xl mb-2">🔒</div>
+                  <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ表示・操作できます</div>
+                  <div className="text-xs text-amber-700">サイドバーの「スタッフ切替」で管理者を選択してください{_adminAuth?.passwordHash?'（管理者パスワードの認証が必要です）':''}。</div>
+                </div>
+              ) : (<>
+                <label className="block text-sm font-bold text-slate-600 mb-1.5">APIキー</label>
+                <p className="text-xs text-slate-400 mb-2">モニタリング文章の自動生成に使用します。</p>
+                <input type="password" value={anthropicApiKey} onChange={e => setAnthropicApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-sm outline-none"/>
+                {anthropicApiKey && <p className="text-xs text-emerald-600 font-bold mt-1">✓ 設定済み（末尾: ...{anthropicApiKey.slice(-6)}）</p>}
+              </>)}
             </SectionCard>
             <SectionCard title="データ管理">
               {(() => {
