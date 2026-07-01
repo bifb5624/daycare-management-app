@@ -446,8 +446,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         if (!r || r.patientId == null || !r.date) return;
         const k = keyOf(r); const ex = best.get(k);
         if (!ex) { best.set(k, r); return; }
-        const rs = score(r), es = score(ex);
-        if (rs > es || (rs === es && (Number(r._savedAt)||0) >= (Number(ex._savedAt)||0))) best.set(k, r);
+        // ★ 同一「患者+日付」が複数idに分かれていても、丸ごと片方を捨てずフィールド単位で統合する。
+        //   (旧: score が高い方のレコードを採用 → 次回お迎え時間など score 対象外のフィールドが消えていた)
+        best.set(k, mergeRecordFields(ex, r));
       });
       merged.ticketRecords = [...best.values()];
     }
