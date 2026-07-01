@@ -1230,6 +1230,31 @@ if (typeof window !== 'undefined' && !window.__tsumugiErrInit) {
   window.addEventListener('error', (e) => { _pushErr(`${e.message || 'error'} @ ${(e.filename||'').split('/').pop()}:${e.lineno||''}`); });
   window.addEventListener('unhandledrejection', (e) => { _pushErr(`unhandled: ${(e.reason && (e.reason.message || e.reason)) || 'rejection'}`); });
 }
+// ★ 印刷プレビュー用: 要素の outerHTML を取得する際、 制御された input/textarea/select の【現在値】を
+//   HTML属性に焼き込む。 (Reactの制御フォームは value を属性に反映しないため、 素の outerHTML だと
+//   selectは先頭option・inputは空 になってしまう。 → 選んだ担当者などが印刷で消える不具合の対策)
+function captureElHtmlWithValues(el) {
+  if (!el) return null;
+  try {
+    const clone = el.cloneNode(true);
+    const src = el.querySelectorAll('input,textarea,select');
+    const dst = clone.querySelectorAll('input,textarea,select');
+    src.forEach((s, i) => {
+      const d = dst[i]; if (!d) return;
+      const tag = s.tagName.toLowerCase();
+      if (tag === 'select') {
+        const v = s.value;
+        Array.from(d.options || []).forEach(o => { if (o.value === v) o.setAttribute('selected', 'selected'); else o.removeAttribute('selected'); });
+      } else if (tag === 'textarea') {
+        d.textContent = s.value;
+      } else {
+        d.setAttribute('value', s.value == null ? '' : s.value);
+        if (s.type === 'checkbox' || s.type === 'radio') { if (s.checked) d.setAttribute('checked', 'checked'); else d.removeAttribute('checked'); }
+      }
+    });
+    return clone.outerHTML;
+  } catch { return el.outerHTML; }
+}
 // ★ QR画像はメモ化して「同じURLなら再描画・再読込しない」(モーダルがポーリング等で頻繁に再描画されても
 //   リモートQR画像が点滅(チカチカ)しないようにする)。
 const QRImg = React.memo(function QRImg({ url, size = 100, className, style, alt }) {
@@ -15683,8 +15708,8 @@ export default function App() {
              currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'diary' ? <DailyLogView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} dirtyRef={diaryDirtyRef} saveFnRef={diarySaveFnRef} /> :
-             currentView === 'absence_fax' ? <AbsenceFaxView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={absenceDirtyRef} saveFnRef={absenceSaveFnRef} /> :
-             currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
+             currentView === 'absence_fax' ? <AbsenceFaxView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={absenceDirtyRef} saveFnRef={absenceSaveFnRef} /> :
+             currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'fitness' ? <FitnessView appData={appData} onSave={handleSaveToCloud} selectedDate={selectedDate} sharedAmpm={sharedAmpm} navigateTo={navigateTo} targetPatientId={targetPatientId} onPatientChange={setTargetPatientId} dirtyRef={fitnessDirtyRef} saveFnRef={fitnessSaveFnRef} /> :
              currentView === 'monitoring' ? <MonitoringView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={monitoringDirtyRef} saveFnRef={monitoringSaveFnRef} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
