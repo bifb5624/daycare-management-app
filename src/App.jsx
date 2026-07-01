@@ -16509,7 +16509,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     //   既存値で末尾が既に単位なら二重付与しない。 空のときは付けない。
     const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
     const _exItm = _exItems.find(i => i.id === keypad.field);
-    if (_exItm) {
+    if (_exItm && _exItm.type === 'individual') {
+      // ★ 個別運動: オブジェクト構造 {itemId,value} を保持して value のみ更新 (テンキー対応)
+      const _srcArr = (filterMode === 'single') ? localPatients : localTicketRecords;
+      const _rec = _srcArr.find(x => x.id === keypad.recordId);
+      const _cur = (_rec && _rec.exercises && typeof _rec.exercises[keypad.field] === 'object') ? _rec.exercises[keypad.field] : { itemId:'', value:'' };
+      updateExercise(keypad.recordId, keypad.field, { ...(_cur||{}), value: formatted });
+    } else if (_exItm) {
       const _unit = _exItm.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(_exItm.name))?.defaultUnit || '';
       let toSave = formatted;
       if (toSave && _unit && /[0-9０-９]/.test(String(toSave)) && !String(toSave).endsWith(_unit)) toSave = `${toSave}${_unit}`;
@@ -17179,12 +17185,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             <option value="">— 選択 —</option>
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
-                          {/* ★ 他の運動メニューと同様: 規定値(個別運動デフォルト)を薄グレーのプレースホルダーで背景表示。 値を直接入力 */}
-                          <input type="text" value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
-                            onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: e.target.value})}
+                          {/* ★ 他の運動メニューと同様: 規定値(個別運動デフォルト)を薄グレーのプレースホルダーで背景表示。 タップでテンキーを開く */}
+                          <input type="text" readOnly value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
+                            onClick={()=>{ if(isAbsent||isReadOnly||isPause||!selItem) return; if(!cur.itemId && effItemId) updateExercise(p.id, item.id, {...cur, itemId: effItemId}); openKeypad(p.id, item.id, cur.value||'', isAbsent); setActiveCell(`${p.id}-${item.id}`); }}
                             placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${selItem.defaultUnit}`:''}`:'未選択'}
-                            style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1}}
-                            className="w-full text-center border border-emerald-300 rounded bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-slate-400"/>
+                            style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
+                            className={`w-full text-center border rounded bg-white outline-none disabled:opacity-40 placeholder-slate-400 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-emerald-300 focus:border-emerald-500'}`}/>
                         </td>
                       );
                     }
@@ -22090,14 +22096,16 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               const _indPlanDisp = (it) => {
                 const allInd = appData.systemSettings?.individualExerciseItems || [];
                 const rawIndEx = Array.isArray(sp?.individualExercises) ? sp.individualExercises : [];
-                const selId = (sp?.individualExerciseSlotDefaults?.[it.id]) || (rawIndEx.find(x=>x.itemId)?.itemId) || '';
+                // ★ そのスロット固有の既定のみ参照 (未設定のスロット2・3に他スロットの種目が波及しないように)
+                const selId = (sp?.individualExerciseSlotDefaults?.[it.id]) || '';
+                if (!selId) return null;
                 const sel = allInd.find(ii => ii.id === selId);
                 if (!sel) return null;
                 const dv = (rawIndEx.find(x=>x.itemId===selId)?.defaultValue) || '';
                 return { name: sel.name, val: dv ? `${dv}${sel.defaultUnit||''}` : '' };
               };
               return (
-            <table className="w-full border-collapse border border-slate-600 mb-1 shrink-0" style={{tableLayout:'fixed',width:'100%'}}>
+            <table className="w-full border-collapse border border-slate-600 mb-1 shrink-0" style={{tableLayout:'fixed',width:'100%',marginTop:6}}>
               <colgroup>
                 <col style={{width:`${_labelPct}%`}}/>
                 {ex.map(it=><col key={it.id}/>)}
@@ -22135,33 +22143,34 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               <style>{`
                 /* 行高さを完全固定 — 入力内容の有無にかかわらず一定 (6日表示で1日あたりを拡大) */
                 .tp table { table-layout: fixed; }
-                .tp table tbody tr.data-row { height:44px!important; max-height:44px!important; }
-                .tp table tbody tr.tokki-row { height:38px!important; max-height:38px!important; }
-                .tp table tbody tr.bikou-row { height:46px!important; max-height:46px!important; }
+                .tp table tbody tr.data-row { height:46px!important; max-height:46px!important; }
+                .tp table tbody tr.tokki-row { height:36px!important; max-height:36px!important; }
+                .tp table tbody tr.bikou-gap td { border:none!important; background:transparent!important; height:14px!important; padding:0!important; }
+                .tp table tbody tr.bikou-row { height:30px!important; max-height:30px!important; }
                 .tp table tbody td {
                   box-sizing:border-box!important;
                   vertical-align:middle!important;
                   overflow:hidden!important;
                 }
-                .tp table tbody tr.data-row td { height:44px!important; max-height:44px!important; }
-                .tp table tbody tr.tokki-row td { height:38px!important; max-height:38px!important; }
-                .tp table tbody tr.bikou-row td { height:46px!important; max-height:46px!important; }
+                .tp table tbody tr.data-row td { height:46px!important; max-height:46px!important; }
+                .tp table tbody tr.tokki-row td { height:36px!important; max-height:36px!important; }
+                .tp table tbody tr.bikou-row td { height:30px!important; max-height:30px!important; }
                 .tp table tbody tr.data-row td>div.cell-wrap {
-                  height:40px; max-height:40px; overflow:hidden;
+                  height:42px; max-height:42px; overflow:hidden;
                   display:flex; align-items:center; justify-content:center;
                   word-break:break-all; flex-wrap:wrap; text-align:center;
                   line-height:1.15;
                 }
                 .tp table tbody tr.tokki-row td>div.cell-wrap {
-                  height:34px; max-height:34px; overflow:hidden;
+                  height:32px; max-height:32px; overflow:hidden;
                   display:flex; align-items:center; justify-content:flex-start;
-                  line-height:1.25; white-space:pre-wrap; word-break:break-all;
+                  line-height:1.2; white-space:nowrap; word-break:keep-all;
                   text-align:left; padding-left:4px;
                 }
                 .tp table tbody tr.bikou-row td>div.cell-wrap {
-                  height:42px; max-height:42px; overflow:hidden;
+                  height:26px; max-height:26px; overflow:hidden;
                   display:flex; align-items:center; justify-content:flex-start;
-                  line-height:1.2; white-space:pre-wrap; word-break:break-all;
+                  line-height:1.2; white-space:nowrap; word-break:keep-all;
                   text-align:left; padding-left:4px;
                 }
               `}</style>
@@ -22209,7 +22218,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',height:44,maxHeight:44,minWidth:90}}>
+                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',height:46,maxHeight:46,minWidth:90}}>
                             {(() => {
                               const MOODS = {'excellent':'🤩','good':'😊','normal':'😐','bad':'😞','terrible':'😫'};
                               const arr = v(r.kibunArrival);
@@ -22219,7 +22228,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                               if(!arr && !dep) return '';
                               // ★ 行高さは固定 (41px)。 文字数が多い場合は文字サイズを縮小して全部表示
                               //    両方ある場合 縦 20px / 行、 片方なら 41px。
-                              const lineH = (arr && dep) ? 22 : 44;
+                              const lineH = (arr && dep) ? 23 : 46;
                               const totalReasonLen = (arrR||'').length + (depR||'').length;
                               const reasonFs = totalReasonLen > 24 ? 6 : totalReasonLen > 12 ? 7 : 8;
                               const renderLine = (label, mood, reason) => (
@@ -22242,7 +22251,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   )}
                                 </div>
                               );
-                              return (<div style={{display:'flex',flexDirection:'column',height:44,overflow:'hidden',justifyContent:'center'}}>
+                              return (<div style={{display:'flex',flexDirection:'column',height:46,overflow:'hidden',justifyContent:'center'}}>
                                 {arr && renderLine('通', arr, arrR)}
                                 {dep && renderLine('帰', dep, depR)}
                               </div>);
@@ -22312,10 +22321,12 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       </tr>
                     </Fragment>
                   ))}
-                  {/* ★ 7日目の位置: 備考欄 (特記より少し大きめ)。 当月にサービス提供内容の変更があれば自動記載、手動編集も可 */}
+                  {/* ★ 日付表と備考の間に余白 */}
+                  <tr className="bikou-gap"><td colSpan={tc}></td></tr>
+                  {/* ★ 7日目の位置: 備考欄 (基本1行。長い場合は縮小)。 当月にサービス提供内容の変更があれば自動記載、手動編集も可 */}
                   <tr className="bikou-row">
                     <td className="border border-slate-500 px-1 py-0 bg-amber-50 text-center text-[10px] text-amber-700 font-bold" style={{width:50}}>備考</td>
-                    <td colSpan={tc - 1} className="border border-slate-500 px-1.5 py-0 text-[10px] text-slate-800" style={{background:_bikouText?'#fffdf5':'white'}}><div className="cell-wrap">{_bikouText}</div></td>
+                    <td colSpan={tc - 1} className="border border-slate-500 px-1.5 py-0 text-slate-800" style={{background:_bikouText?'#fffdf5':'white',fontSize:(_bikouText||'').length>60?8:(_bikouText||'').length>44?9:10}}><div className="cell-wrap">{_bikouText}</div></td>
                   </tr>
                 </tbody>
               </table>
@@ -32631,19 +32642,19 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             <div style={{border:'2px solid black',padding:'24px 28px',lineHeight:2.2,fontSize:13,flex:1,display:'flex',flexDirection:'column'}}>
 
               {/* 利用者名 */}
-              <div style={{fontSize:19,fontWeight:'bold',marginBottom:20,borderBottom:'1px solid #e2e8f0',paddingBottom:14,display:'flex',alignItems:'center',gap:8}}>
+              <div style={{fontSize:19,fontWeight:'bold',marginBottom:10,display:'flex',alignItems:'center',gap:8}}>
                 <span style={{color:'#475569',fontWeight:'bold',whiteSpace:'nowrap'}}>利用者名：</span>
                 <span style={{borderBottom:'2px solid #1e293b',paddingBottom:2,letterSpacing:2}}>{maskedName}</span>
                 <span>様</span>
               </div>
 
               {/* 欠席情報 */}
-              <div style={{marginBottom:20}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
+              <div style={{marginBottom:10}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
                   <span style={{fontWeight:'bold',whiteSpace:'nowrap',minWidth:80,fontSize:17}}>欠席日：</span>
                   <span style={{fontSize:17,fontWeight:'bold',letterSpacing:1}}>{absDate}</span>
                 </div>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
                   <span style={{fontWeight:'bold',whiteSpace:'nowrap',minWidth:80,fontSize:17}}>理由：</span>
                   {isPrint ? (
                     <span style={{flex:1,borderBottom:'1px solid #334155',minHeight:26,fontSize:16}}>{fax.reason ?? defaultReason}</span>
@@ -32670,7 +32681,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   <span>連絡事項</span>
                 </div>
                 {isPrint ? (
-                  <div style={{flex:1,border:'1px solid #e2e8f0',borderRadius:4,padding:'8px 12px',fontSize:16,whiteSpace:'pre-wrap',lineHeight:1.8}}>
+                  <div style={{flex:1,border:'none',borderRadius:0,padding:'4px 0',fontSize:16,whiteSpace:'pre-wrap',lineHeight:1.8}}>
                     {fax.memo ?? defaultMemo}
                   </div>
                 ) : (
@@ -32678,7 +32689,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                     value={fax.memo ?? defaultMemo}
                     onChange={e=>updateFax(key,{memo:e.target.value})}
                     placeholder="連絡事項を自由に入力してください"
-                    style={{width:'100%',flex:1,border:'1px solid #e2e8f0',borderRadius:4,padding:'8px 12px',fontSize:16,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.8,boxSizing:'border-box'}}
+                    style={{width:'100%',flex:1,border:'none',borderRadius:0,padding:'4px 0',fontSize:16,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.8,boxSizing:'border-box'}}
                   />
                 )}
               </div>
