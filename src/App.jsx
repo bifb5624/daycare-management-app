@@ -30928,44 +30928,15 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     });
   }, [targetMonth]);
 
-  // 未確定テキストがある場合はdirtyをセット
-  React.useEffect(() => {
-    const hasUnconfirmed = Object.values(results).some(r => r.text && !r.confirmed);
-    if (dirtyRef) dirtyRef.current = hasUnconfirmed;
-  }, [results, dirtyRef]);
+  // ★ 一覧のプルダウン変更・本文入力・AI下書きは upsertSheet で即保存されるため、未保存(dirty)は持たない。
 
-  // 保存ボタン押下時: 確定済みの全テキスト(未保存分含む) と未確定テキスト も併せて appData に commit
+  // 保存ボタン押下時: 一覧のプルダウン変更・手入力・AI下書きは updateSheetInline/upsertSheet で
+  //   その都度 monitoringRecords に保存済み(シート構造を保持)。 ここで要約のみのレコードで
+  //   上書きするとシート(①〜⑤・AI下書き)が消えるため、 dirty を落とすだけにする。
   React.useEffect(() => {
     if (!saveFnRef) return;
-    saveFnRef.current = () => {
-      const month = `${tY}年${tM}月`;
-      let existing = [...(appData.monitoringRecords||[])];
-      const newResults = {...results};
-      let changed = false;
-      // 確定済み + テキストありの全件を保存対象に (新規 / 既存上書き 両方)
-      Object.entries(results).forEach(([pid, res]) => {
-        if (!res.text) return;
-        const patientId = Number(pid);
-        const newRec = {
-          id: `${patientId}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`,
-          patientId,
-          period: month,
-          createdDate: new Date().toLocaleDateString('ja-JP'),
-          createdAt: Date.now(),
-          summary: res.text,
-        };
-        existing = existing.filter(r => !(r.patientId === patientId && r.period === month));
-        existing.push(newRec);
-        if (!res.confirmed) newResults[pid] = {...res, confirmed: true};
-        changed = true;
-      });
-      if (changed) {
-        setResults(newResults);
-        onSave({...appData, monitoringRecords: existing});
-      }
-      if (dirtyRef) dirtyRef.current = false;
-    };
-  }); // 毎レンダリング時に最新のclosureで更新
+    saveFnRef.current = () => { if (dirtyRef) dirtyRef.current = false; };
+  });
 
   const [tY, tM] = targetMonth.split('-').map(Number);
 
@@ -31168,9 +31139,9 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const generateAllSheets = async () => {
     // ★ 通所がある人はAI下書き、 通所が無い人(一度も来ていない人)はAI不要で「実施できなかった」既定で作成。
     const noKey = !(appData.systemSettings?.anthropicApiKey||'').trim();
-    const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
-    const targets = checked.length ? checked : [...attendedPats, ...absentPats];
-    if (!targets.length) { alert('対象の利用者がいません'); return; }
+    // ★ 利用者を選択していない場合は全員生成せず、選択を促す
+    const targets = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
+    if (!targets.length) { alert('利用者を選択してください（チェックを付けた方のみ下書きします）'); return; }
     const attCount = targets.filter(p => hasAttendance(p)).length;
     if (noKey && attCount > 0) {
       if (!window.confirm(`APIキーが未設定のため、通所がある ${attCount}名 はスキップし、通所が無い方のみ「実施できなかった」で作成します。\n（通所がある方もAIで作成するには 各種設定→モニタリング でAPIキーを設定してください）\n続行しますか？`)) return;
@@ -31202,11 +31173,15 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           if (noKey) { done++; setSheetBatchProg({ done, total:targets.length }); continue; } // 通所ありはAPIキー必須 → スキップ
           out = await aiDraftSheet(p);
         }
-        const sheet = { implDate: today, recorder: rec, ...out };
+        // ★ 既存(手入力含む)を残し、AIは空欄のみ補完。 確定はしない。
+        const prevRec = existing.find(r => r.patientId===p.id && r.period===monthLabelStr);
+        const base = (prevRec && prevRec.sheet) ? prevRec.sheet : { implDate: today, recorder: rec };
+        const sheet = { implDate: base.implDate||today, recorder: base.recorder||rec };
+        MON_ITEMS.forEach(it => { const b=_monCell(base[it.key]); const o=out[it.key]||{}; sheet[it.key] = { sel: b.sel || o.sel || '', text: b.text || o.text || '' }; });
         existing = existing.filter(r => !(r.patientId===p.id && r.period===monthLabelStr));
         const sm = _monSummary(sheet);
-        existing.push({ id:`${p.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}_${ok}`, patientId:p.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
-        newResults[p.id] = { text:sm, confirmed:true, loading:false, error:null, editing:false };
+        existing.push({ id:(prevRec&&prevRec.id)||`${p.id}_${tY}-${String(tM).padStart(2,'0')}`, patientId:p.id, period:monthLabelStr, createdDate:(prevRec&&prevRec.createdDate)||new Date().toLocaleDateString('ja-JP'), createdAt:(prevRec&&prevRec.createdAt)||Date.now(), summary:sm, sheet, confirmed:false });
+        newResults[p.id] = { text:sm, loading:false, error:null };
         ok++;
       } catch(e) { /* この利用者はスキップ */ }
       done++; setSheetBatchProg({ done, total:targets.length });
@@ -31227,34 +31202,60 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       goal:{sel: sel.goal||'', text: noAtt?'当月は通所がなく評価が困難。':''},
       s2:{sel:'',text:''}, s3:{sel:'変化なし',text: buildAutoChange(patient)}, s4:{sel:'このまま継続',text:''} };
   };
-  const upsertSheet = (patient, sheet, opts) => {
+  // ★ シートを保存。 confirmedFlag=省略時は既存の確定状態を維持(=自動で確定済みにしない)。
+  const upsertSheet = (patient, sheet, opts, confirmedFlag) => {
     let existing = [...(appData.monitoringRecords||[])];
+    const prev = existing.find(r => r.patientId===patient.id && r.period===monthLabelStr);
     existing = existing.filter(r => !(r.patientId===patient.id && r.period===monthLabelStr));
     const sm = _monSummary(sheet);
-    existing.push({ id:`${patient.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`, patientId:patient.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
+    const conf = (confirmedFlag != null) ? confirmedFlag : !!(prev && prev.confirmed);
+    existing.push({ id: (prev&&prev.id) || `${patient.id}_${tY}-${String(tM).padStart(2,'0')}`, patientId:patient.id, period:monthLabelStr, createdDate:(prev&&prev.createdDate)||new Date().toLocaleDateString('ja-JP'), createdAt:(prev&&prev.createdAt)||Date.now(), summary:sm, sheet, confirmed: conf });
     onSave({...appData, monitoringRecords: existing}, opts);
-    setResults(prev=>({...prev,[patient.id]:{text:sm, confirmed:true, loading:false, error:null, editing:false}}));
+    setResults(prev2=>({...prev2,[patient.id]:{text:sm, loading:false, error:null}}));
+    if (dirtyRef) dirtyRef.current = false;
   };
   const updateSheetInline = (patient, key, field, value) => {
+    const rec = getSheetRecord(patient.id);
+    if (rec && rec.confirmed) return; // ★ 確定済みは編集不可
     const base = getOrInitSheetFor(patient);
     const sheet = { ...base, [key]: { ..._monCell(base[key]), [field]: value } };
-    upsertSheet(patient, sheet); // デバウンス自動保存(トースト無し)
+    upsertSheet(patient, sheet); // 確定状態は維持(=未確定のまま)
+  };
+  // ★ 確定/解除トグル (レコードの confirmed を反転)。 未作成なら既定シートを作って確定。
+  const toggleConfirm = (patient) => {
+    const rec = getSheetRecord(patient.id);
+    if (!rec || !rec.sheet) { const sheet = getOrInitSheetFor(patient); upsertSheet(patient, sheet, {manual:true, message:'✓ 確定しました'}, true); return; }
+    upsertSheet(patient, rec.sheet, {manual:true, message: rec.confirmed ? '確定を解除しました' : '✓ 確定しました'}, !rec.confirmed);
+  };
+  // ★ 一覧の1行をAIで下書き (手入力済みの内容は残してAIは空欄のみ補完)。 確定はしない。
+  const aiDraftRow = async (patient) => {
+    if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('各種設定→モニタリングでAPIキーを設定してください'); return; }
+    setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
+    try {
+      const out = await aiDraftSheet(patient);
+      const base = getOrInitSheetFor(patient);
+      const merged = { ...base };
+      MON_ITEMS.forEach(it => { const b=_monCell(base[it.key]); const o=out[it.key]||{}; merged[it.key] = { sel: b.sel || o.sel || '', text: b.text || o.text || '' }; });
+      upsertSheet(patient, merged, {manual:true, message:'✓ AIで下書きしました'}, false);
+    } catch(e) {
+      setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:false, error:String(e.message||e)}}));
+    }
   };
   // ★ 一括作成(既定): 全員にモニタリング表を作成(通所ありは下書き文/通所なしは実施できなかった)。 AI不要・即保存
   const createAllDefault = () => {
-    const targets = ([...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id)).length
-      ? [...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id))
-      : [...attendedPats, ...absentPats]);
-    if (!targets.length) { alert('対象の利用者がいません'); return; }
-    if (!window.confirm(`${targets.length}名にモニタリング表を作成し、個人ファイルへ保存します。\n（既に作成済みの月は上書き）よろしいですか？`)) return;
+    // ★ 未選択なら全員作成せず選択を促す
+    const targets = [...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id));
+    if (!targets.length) { alert('利用者を選択してください（チェックを付けた方のみ作成します）'); return; }
+    if (!window.confirm(`${targets.length}名にモニタリング表を作成し、個人ファイルへ保存します。\n（既存の手入力は残します。確定はしません）よろしいですか？`)) return;
     let existing = [...(appData.monitoringRecords||[])];
     const newResults = {};
     for (const p of targets) {
-      const sheet = getOrInitSheetFor(p);
+      const prevRec = existing.find(r => r.patientId===p.id && r.period===monthLabelStr);
+      const sheet = (prevRec && prevRec.sheet) ? prevRec.sheet : getOrInitSheetFor(p); // 既存があれば温存
       existing = existing.filter(r => !(r.patientId===p.id && r.period===monthLabelStr));
       const sm = _monSummary(sheet);
-      existing.push({ id:`${p.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}_${p.id}`, patientId:p.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
-      newResults[p.id] = { text:sm, confirmed:true, loading:false, error:null, editing:false };
+      existing.push({ id:(prevRec&&prevRec.id)||`${p.id}_${tY}-${String(tM).padStart(2,'0')}`, patientId:p.id, period:monthLabelStr, createdDate:(prevRec&&prevRec.createdDate)||new Date().toLocaleDateString('ja-JP'), createdAt:(prevRec&&prevRec.createdAt)||Date.now(), summary:sm, sheet, confirmed:(prevRec?!!prevRec.confirmed:false) });
+      newResults[p.id] = { text:sm, loading:false, error:null };
     }
     onSave({ ...appData, monitoringRecords: existing }, { manual:true, message:`✓ ${targets.length}名のモニタリング表を作成・保存しました` });
     setResults(prev => ({ ...prev, ...newResults }));
@@ -31628,8 +31629,8 @@ ${optionsDesc}
         {(() => {
           const renderRow = (patient, i, isAbsent) => {
             const res = results[patient.id];
-            const confirmed = res?.confirmed;
-            const editing = res?.editing;
+            const sheetRec = getSheetRecord(patient.id);
+            const confirmed = !!(sheetRec && sheetRec.confirmed);
             const checked = checkedIds.has(patient.id);
             return (
               <tr key={patient.id} style={{borderBottom:'2px solid #cbd5e1',background:confirmed?'#f0fdf4':isAbsent?'#fafafa':i%2===0?'white':'#f8fafc'}}>
@@ -31648,42 +31649,36 @@ ${optionsDesc}
                   </div>
                   <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{patient.careLevel||''}</div>
                 </td>
-                {/* 内容列 — ★ モニタリング表(正式シート)があれば全項目をインライン表示。 無ければ従来の要約 */}
+                {/* 内容列 — ★ ①〜⑤を既定表示。 プルダウン変更・本文入力でその場保存。 確定済みは編集不可 */}
                 <td style={{padding:'10px 14px',verticalAlign:'middle'}}>
                   {(() => {
-                    const sheetRec = getSheetRecord(patient.id);
-                    const sh = sheetRec?.sheet;
                     if (res?.loading) return <div style={{display:'flex',alignItems:'center',gap:8,color:'#0284c7',fontSize:12}}><span style={{fontSize:16}}>⟳</span> AI生成中...</div>;
                     if (res?.error) return <div style={{color:'#dc2626',fontSize:11}}>{res.error}</div>;
-                    if (!sh) {
-                      // ★ 未作成: 重い既定計算は押した時だけ。 「作成」で既定シートを作り、その場で編集できるように
-                      return (
-                        <div style={{display:'flex',alignItems:'center',gap:8}}>
-                          <span style={{color:'#cbd5e1',fontSize:11}}>未作成</span>
-                          <button type="button" onClick={()=>{ const sheet=getOrInitSheetFor(patient); upsertSheet(patient, sheet, {manual:true, message:'✓ モニタリング表を作成しました'}); }}
-                            style={{padding:'3px 10px',borderRadius:14,fontSize:11,fontWeight:'bold',border:'1px solid #93c5fd',background:'#eff6ff',color:'#1d4ed8',cursor:'pointer'}}>＋作成</button>
-                        </div>
-                      );
-                    }
-                    // ★ 作成済み: その場でプルダウン変更＋本文クリック編集 (表を開かなくてもOK)
+                    const persisted = !!(sheetRec && sheetRec.sheet);
+                    const sh = persisted ? sheetRec.sheet : getOrInitSheetFor(patient);
                     return (
                       <div style={{fontSize:12,lineHeight:1.5,color:'#1e293b'}}>
-                        {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; return (
+                        {!persisted && <div style={{fontSize:10,color:'#94a3b8',marginBottom:4}}>（既定の下書き。プルダウンや本文を変更すると保存されます）</div>}
+                        {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; const copyId=`${patient.id}:${it.key}`; return (
                           <div key={it.key} style={{marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'}}>
                             <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:2}}>
                               <span style={{fontWeight:'bold',color:'#0c4a6e',background:'#e0f2fe',borderRadius:5,padding:'1px 7px',fontSize:11}}>{it.no}{it.title}</span>
-                              <select value={c.sel} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
-                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:'white',color:'#0369a1'}}>
+                              <select value={c.sel} disabled={confirmed} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
+                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:confirmed?'#f1f5f9':'white',color:'#0369a1'}}>
                                 <option value="">— 選択 —</option>
                                 {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
                               </select>
+                              <button type="button" title="この項目をコピー" onClick={()=>copyText(copyId, `${it.no}${it.title}：${c.sel}${c.text?` / ${c.text}`:''}`)}
+                                style={{background:copiedId===copyId?'#d1fae5':'#f8fafc',border:'1px solid #e2e8f0',color:copiedId===copyId?'#059669':'#94a3b8',borderRadius:6,padding:'2px 6px',fontSize:10,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',gap:2}}>
+                                {copiedId===copyId?'✓':<Copy size={9}/>}
+                              </button>
                             </div>
-                            {editing2 ? (
+                            {(!confirmed && editing2) ? (
                               <textarea autoFocus defaultValue={c.text} rows={2}
                                 onBlur={e=>{ updateSheetInline(patient, it.key, 'text', e.target.value); setEditTextCell(null); }}
                                 style={{width:'100%',boxSizing:'border-box',fontSize:12,border:'1px solid #93c5fd',borderRadius:6,padding:'4px 6px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
                             ) : (
-                              <div onClick={()=>setEditTextCell(cellId)} title="クリックで編集" style={{color:c.text?'#334155':'#cbd5e1',cursor:'text',minHeight:16,paddingLeft:2,whiteSpace:'pre-wrap'}}>{c.text||'（タップで内容を入力）'}</div>
+                              <div onClick={()=>{ if(!confirmed) setEditTextCell(cellId); }} title={confirmed?'確定済み（編集不可）':'クリックで編集'} style={{color:c.text?'#334155':'#cbd5e1',cursor:confirmed?'default':'text',minHeight:16,paddingLeft:2,whiteSpace:'pre-wrap'}}>{c.text || (confirmed?'—':'（タップで内容を入力）')}</div>
                             )}
                           </div>
                         );})}
@@ -31692,47 +31687,24 @@ ${optionsDesc}
                     );
                   })()}
                 </td>
-                {/* 操作列（横並び） */}
+                {/* 操作列（縦並び） */}
                 {!isPrintMode && (
-                  <td style={{padding:'8px 10px',verticalAlign:'middle',width:260}} className="no-print">
-                    <div style={{display:'flex',flexDirection:'row',gap:4,alignItems:'center',flexWrap:'nowrap',justifyContent:'center'}}>
-                      <button type="button" onClick={()=>setSheetModal({patientId:patient.id})} title="モニタリング表（1人1枚）を作成・保管・FAX"
-                        style={{background:'#0c4a6e',border:'none',color:'white',borderRadius:8,padding:'5px 9px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:3}}>
-                        📋 表
+                  <td style={{padding:'8px 10px',verticalAlign:'middle',width:150}} className="no-print">
+                    <div style={{display:'flex',flexDirection:'column',gap:6,alignItems:'stretch'}}>
+                      {!confirmed && (
+                        <button type="button" onClick={()=>aiDraftRow(patient)} disabled={res?.loading}
+                          style={{background:'#f5f3ff',border:'1px solid #c4b5fd',color:'#6d28d9',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                          {res?.loading ? '⟳ 生成中...' : '🤖 AIで下書き'}
+                        </button>
+                      )}
+                      <button type="button" onClick={()=>toggleConfirm(patient)} title={confirmed?'クリックで確定を解除':'内容を確定します（確定後は編集ロック）'}
+                        style={{background:confirmed?'#d1fae5':'#10b981',border:confirmed?'1px solid #6ee7b7':'none',color:confirmed?'#059669':'white',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                        {confirmed ? '✓ 確定済（解除）' : '✓ 確定する'}
                       </button>
-                      {!confirmed && (
-                        <button type="button"
-                          onClick={()=>{
-                            if (!editing && !res?.text) setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}),text:'',editing:true}}));
-                            else generateOne(patient);
-                          }}
-                          disabled={res?.loading}
-                          style={{background:'#eff6ff',border:'1px solid #bfdbfe',color:'#1d4ed8',borderRadius:8,padding:'5px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-                          {res?.loading ? '生成中...' : (editing||res?.text) ? '再生成' : '編集/生成'}
-                        </button>
-                      )}
-                      {!confirmed && (
-                        <button type="button" onClick={()=>{ if(res?.text) confirmResult(patient.id); else { setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}),text:prev[patient.id]?.text||'',editing:true}})); setTimeout(()=>confirmResult(patient.id),0); } }}
-                          disabled={!res?.text}
-                          style={{background:res?.text?'#10b981':'#e2e8f0',border:'none',color:res?.text?'white':'#94a3b8',borderRadius:8,padding:'5px 8px',fontSize:11,fontWeight:'bold',cursor:res?.text?'pointer':'default',whiteSpace:'nowrap'}}>
-                          ✓ 確定
-                        </button>
-                      )}
-                      {confirmed && (
-                        <span style={{fontSize:11,fontWeight:'bold',color:'#059669',background:'#d1fae5',border:'1px solid #6ee7b7',borderRadius:8,padding:'5px 8px',whiteSpace:'nowrap'}}>✓ 確定済</span>
-                      )}
-                      {confirmed && (
-                        <button type="button" onClick={()=>unconfirmResult(patient.id)}
-                          style={{background:'#f1f5f9',border:'1px solid #e2e8f0',color:'#64748b',borderRadius:8,padding:'5px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-                          解除
-                        </button>
-                      )}
-                      {res?.text && (
-                        <button type="button" onClick={()=>copyText(patient.id, res.text)}
-                          style={{background:copiedId===patient.id?'#d1fae5':'#f0fdf4',border:`1px solid ${copiedId===patient.id?'#6ee7b7':'#bbf7d0'}`,color:copiedId===patient.id?'#059669':'#10b981',borderRadius:8,padding:'5px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',gap:3,whiteSpace:'nowrap'}}>
-                          {copiedId===patient.id ? '✓ 済' : <><Copy size={10}/> コピー</>}
-                        </button>
-                      )}
+                      <button type="button" onClick={()=>{ const s=(sheetRec&&sheetRec.sheet)||getOrInitSheetFor(patient); const txt=MON_ITEMS.map(it=>{const c=_monCell(s[it.key]);return `${it.no}${it.title}：${c.sel}${c.text?` ${c.text}`:''}`;}).join('\n'); copyText(patient.id, txt); }}
+                        style={{background:copiedId===patient.id?'#d1fae5':'#f0fdf4',border:`1px solid ${copiedId===patient.id?'#6ee7b7':'#bbf7d0'}`,color:copiedId===patient.id?'#059669':'#10b981',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:3,whiteSpace:'nowrap'}}>
+                        {copiedId===patient.id ? '✓ コピー済' : <><Copy size={10}/> 全文コピー</>}
+                      </button>
                     </div>
                   </td>
                 )}
@@ -31745,7 +31717,7 @@ ${optionsDesc}
               {/* 通所あり */}
               <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.08)',border:'1px solid #e2e8f0',marginBottom:16}}>
                 <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                  <colgroup><col style={{width:36}}/><col style={{width:160}}/><col/>{!isPrintMode&&<col style={{width:260}}/>}</colgroup>
+                  <colgroup><col style={{width:36}}/><col style={{width:160}}/><col/>{!isPrintMode&&<col style={{width:150}}/>}</colgroup>
                   <thead>
                     <tr style={{background:'#0284c7',color:'white'}} className="thp">
                       <th style={{padding:'10px 8px',textAlign:'center',width:36,position:'sticky',top:0,zIndex:20,background:'#0284c7'}}></th>
@@ -31770,7 +31742,7 @@ ${optionsDesc}
                     📋 今月の通所なし（{absentPats.length}名）— 必要な場合のみ手入力・生成
                   </div>
                   <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                    <colgroup><col style={{width:36}}/><col style={{width:160}}/><col/>{!isPrintMode&&<col style={{width:260}}/>}</colgroup>
+                    <colgroup><col style={{width:36}}/><col style={{width:160}}/><col/>{!isPrintMode&&<col style={{width:150}}/>}</colgroup>
                     <thead>
                       <tr style={{background:'#94a3b8',color:'white'}}>
                         <th style={{padding:'8px',width:36}}></th>
