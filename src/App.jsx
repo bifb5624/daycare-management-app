@@ -21899,6 +21899,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const [patDropOpen, setPatDropOpen] = useState(false);
   const [patSearch, setPatSearch] = useState('');
   const [showFaxHist, setShowFaxHist] = useState(false);
+  const [bikouEdit, setBikouEdit] = useState(null); // {text} 当月の備考を手動編集中
   // ★ 個人ファイルから「年月を選んで開く」ディープリンク (sessionStorage 経由でその月を表示)
   React.useEffect(() => {
     try {
@@ -22011,6 +22012,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               <input type="month" value={periodTo} min={periodFrom||undefined} onChange={e=>setPeriodTo(e.target.value)} className="text-xs font-bold text-slate-700 outline-none"/>
             </div>
           )}
+          <button onClick={()=>{ const mk=`${tY}-${String(tM).padStart(2,'0')}`; const cur = (sp.bikouOverrides && sp.bikouOverrides[mk] != null) ? sp.bikouOverrides[mk] : computeServiceChangeBikou(sp, tY, tM, appData); setBikouEdit({ text: cur }); }} className="bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap" title="この月の備考欄を手動で編集します"><PenTool size={15} className="mr-1.5"/>備考編集</button>
           <button onClick={()=>{if(onShowPrintPreview){onShowPrintPreview(periodMode?`サービス提供記録_${periodFrom}〜${periodTo}_${sp?.name||''}`:`サービス提供記録_${tY}年${tM}月_${sp?.name||''}`, 'A4 landscape', 'print-content-ticket')}else{window.print();}}} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm"><Printer size={16} className="mr-1.5"/>プレビュー</button>
         </div>
       </div>
@@ -22328,6 +22330,32 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
 
       </div>{/* end scroll container */}
       {showFaxHist && <FaxHistoryListModal history={ticketHistory} typeLabel="サービス提供記録" onDelete={deleteFaxHist} onClose={()=>setShowFaxHist(false)}/>}
+      {bikouEdit && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={()=>setBikouEdit(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',padding:24,boxShadow:'0 10px 40px rgba(0,0,0,0.3)'}}>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>備考の編集　<span style={{fontSize:12,color:'#64748b'}}>{tY}年{tM}月 ／ {sp.name} 様</span></div>
+            <div style={{fontSize:11,color:'#94a3b8',marginBottom:12}}>この月の備考欄に表示される内容です。空にして保存すると空欄になります（自動記載に戻したい場合は本文を空にせず「自動に戻す」を押してください）。</div>
+            <textarea value={bikouEdit.text} onChange={e=>setBikouEdit({text:e.target.value})} rows={5}
+                      placeholder="例: 6/15 重さ3→4に変更"
+                      style={{width:'100%',boxSizing:'border-box',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',lineHeight:1.7,marginBottom:14}}/>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>{
+                const mk=`${tY}-${String(tM).padStart(2,'0')}`;
+                const ov = { ...(sp.bikouOverrides||{}), [mk]: bikouEdit.text };
+                onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===sp.id ? { ...p, bikouOverrides: ov } : p) }, { manual:true, message:'✓ 備考を保存しました' });
+                setBikouEdit(null);
+              }} style={{flex:1,background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
+              <button onClick={()=>{
+                const mk=`${tY}-${String(tM).padStart(2,'0')}`;
+                const ov = { ...(sp.bikouOverrides||{}) }; delete ov[mk];
+                onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===sp.id ? { ...p, bikouOverrides: ov } : p) }, { manual:true, message:'✓ 自動記載に戻しました' });
+                setBikouEdit(null);
+              }} style={{background:'#f1f5f9',border:'1px solid #cbd5e1',color:'#334155',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>自動に戻す</button>
+              <button onClick={()=>setBikouEdit(null)} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
