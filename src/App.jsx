@@ -17981,12 +17981,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             ))}
           </div>
           {period!=='custom'&&
-            <input type="date" value={`${baseMonth}-01`} onChange={e=>setBaseMonth(e.target.value.substring(0,7))}
+            <input type="month" value={baseMonth} onChange={e=>setBaseMonth(e.target.value)}
               style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>}
           {period==='custom'&&<>
-            <input type="date" value={`${customFrom}-01`} onChange={e=>setCustomFrom(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+            <input type="month" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
             <span style={{color:'#1e293b',fontWeight:'bold'}}>〜</span>
-            <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+            <input type="month" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
           </>}
           </>)}
           {/* ★ 期間ラベル: compactMode (家族・ケアマネ) では親ヘッダで持つので非表示 */}
@@ -18404,17 +18404,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             {period!=='custom' ? (
               <div style={{marginBottom:16}}>
                 <div style={{fontSize:13,fontWeight:'bold',color:'#475569',marginBottom:6}}>基準月（その月を含む過去 {period==='1'?'1ヶ月':period==='3'?'3ヶ月':period==='6'?'半年':'1年'} 分）</div>
-                <input type="date" value={`${baseMonth}-01`} onChange={e=>setBaseMonth(e.target.value.substring(0,7))}
+                <input type="month" value={baseMonth} onChange={e=>setBaseMonth(e.target.value)}
                        style={{background:'#f8fafc',border:'1px solid #94a3b8',borderRadius:8,padding:'8px 12px',fontSize:13,fontWeight:'bold',color:'#1e293b',outline:'none',cursor:'pointer',width:'100%',boxSizing:'border-box'}}/>
               </div>
             ) : (
               <div style={{marginBottom:16}}>
                 <div style={{fontSize:13,fontWeight:'bold',color:'#475569',marginBottom:6}}>期間指定</div>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <input type="date" value={`${customFrom}-01`} onChange={e=>setCustomFrom(e.target.value.substring(0,7))}
+                  <input type="month" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
                          style={{background:'#f8fafc',border:'1px solid #94a3b8',borderRadius:8,padding:'8px 12px',fontSize:13,fontWeight:'bold',color:'#1e293b',outline:'none',cursor:'pointer',flex:1}}/>
                   <span style={{color:'#64748b',fontWeight:'bold'}}>〜</span>
-                  <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))}
+                  <input type="month" value={customTo} onChange={e=>setCustomTo(e.target.value)}
                          style={{background:'#f8fafc',border:'1px solid #94a3b8',borderRadius:8,padding:'8px 12px',fontSize:13,fontWeight:'bold',color:'#1e293b',outline:'none',cursor:'pointer',flex:1}}/>
                 </div>
               </div>
@@ -21145,7 +21145,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           </div>
           {period!=='custom'&&(
             <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <input type="date" value={`${baseMonth}-01`} onChange={e=>{setBaseMonth(e.target.value.substring(0,7));setOpenDow(null);}}
+              <input type="month" value={baseMonth} onChange={e=>{setBaseMonth(e.target.value);setOpenDow(null);}}
                 style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
               <span style={{background:'white',color:'#ea580c',borderRadius:8,padding:'6px 12px',fontSize:13,fontWeight:'bold',whiteSpace:'nowrap'}}>
                 {(()=>{
@@ -21157,10 +21157,10 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
           )}
           {period==='custom'&&(
             <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <input type="date" value={`${customFrom}-01`} onChange={e=>setCustomFrom(e.target.value.substring(0,7))}
+              <input type="month" value={customFrom} onChange={e=>setCustomFrom(e.target.value)}
                 style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
               <span style={{color:'#1e293b',fontSize:12,fontWeight:'bold'}}>〜</span>
-              <input type="date" value={`${customTo}-01`} onChange={e=>setCustomTo(e.target.value.substring(0,7))}
+              <input type="month" value={customTo} onChange={e=>setCustomTo(e.target.value)}
                 style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
               <span style={{background:'white',color:'#ea580c',borderRadius:8,padding:'6px 12px',fontSize:13,fontWeight:'bold',whiteSpace:'nowrap'}}>
                 {(()=>{const [fy,fm]=customFrom.split('-');const [ty,tm]=customTo.split('-');return `${fy}年${parseInt(fm)}月〜${ty}年${parseInt(tm)}月`;})()}
@@ -22005,7 +22005,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
             )}
             {patDropOpen && <div style={{position:'fixed',inset:0,zIndex:9998}} onClick={()=>setPatDropOpen(false)}/>}
           </div>
-          <input type="date" value={`${curMonth}-01`} onChange={e=>setCurMonth(e.target.value.substring(0,7))} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700"/>
+          <input type="month" value={curMonth} onChange={e=>setCurMonth(e.target.value)} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700"/>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={()=>{ setPeriodMode(p=>{ const np=!p; if(np && (!periodFrom||!periodTo)){ // 既定: 最古の記録月〜当月
@@ -31546,7 +31546,7 @@ ${optionsDesc}
           <span style={{fontSize:13,fontWeight:'bold',background:'rgba(255,255,255,0.2)',padding:'3px 10px',borderRadius:8}}>{tY}年{tM}月分</span>
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-          <input type="date" value={`${targetMonth}-01`} onChange={e=>setTargetMonth(e.target.value.substring(0,7))}
+          <input type="month" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)}
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
           <div style={{display:'flex',alignItems:'center',background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',borderRadius:10,padding:'4px 10px',gap:6}}>
             <Search size={14} style={{color:'#1e293b',flexShrink:0}}/>
