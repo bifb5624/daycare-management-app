@@ -31173,6 +31173,10 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     // ★ 個別機能訓練計画書(あれば)の目標 → ②目標の達成・進捗の評価に使う
     const _kk = (appData.kinouKeikakuRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>String(b.createdAt||b.createdDate||'').localeCompare(String(a.createdAt||a.createdDate||'')));
     const _goalText = _kk.length ? [_kk[0].shortKinou&&`短期(機能): ${_kk[0].shortKinou}`, _kk[0].shortKatsudo&&`短期(活動): ${_kk[0].shortKatsudo}`, _kk[0].longKinou&&`長期(機能): ${_kk[0].longKinou}`].filter(Boolean).join(' / ') : '';
+    // ★ 欠席・休みの状況(回数・理由) → 休みが多い場合の④⑤判断に使う
+    const _absRecs = (appData.ticketRecords||[]).filter(r => { const _m=r.date?.match(/(\d+)月/); return r.patientId===patient.id && _m && parseInt(_m[1])===tM && (r.status==='欠席'||r.status==='休止'||r.status==='休業'); });
+    const _absCount = _absRecs.length;
+    const _absReasons = [...new Set(_absRecs.map(r=>(r.tokki||'').trim()).filter(Boolean))].join('、') || '理由の記録なし';
     const optionsDesc = MON_ITEMS.map(it=>`${it.key}（${it.no}${it.title}）: 選択肢=[${it.options.join(' / ')}]`).join('\n');
     const prompt = `あなたは通所介護（リハビリ特化・半日型デイサービス）の【機能訓練指導員 兼 生活相談員】です。以下のデータをもとに「通所介護モニタリング表」の各項目を作成してください。
 
@@ -31181,11 +31185,16 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 ・機能訓練（運動）と生活機能・生活の様子の観点で、利用者本位にやさしく記述してください。
 ・所見は「〜の様子がみられた」「今後も見守りが必要」「継続して支援していく」等の、見守り・支援の語調にしてください。
 ・体力測定の数値が無くても構いません。運動の記録・通所の様子・気分・特記から柔軟に評価してください（体力測定にこだわらない）。
-・運動メニューの変更（マシンの増減等）があれば、その点に触れてください。
+・運動メニューの変更（マシンの増減等）があれば、その点に触れてください。運動機能・筋力・気分の観点を重視してください。
+・通所が無い/少ない場合: ①②は「記録がなく評価が難しい」旨を無理なく記載し、断定しない。④⑤は【休みの量と理由】で柔軟に判断すること。
+　- 入院・長期の体調不良で休んだ場合 → 筋力・運動機能の低下が想定されるため、再開時に運動プログラムの見直し(負荷・内容の調整)を検討する方向。
+　- 私用・通院など一時的な休み → 日程調整や、通所機会を増やす働きかけの方向。
+　（いずれも医学的判断はせず、機能訓練・生活支援・見守りの観点で記載）
 
 利用者: ${d.name}（${d.careLevel||''}）
 対象月: ${d.month}
 通所実績: 計画${d.planned}回中${d.attended}回参加（出席率${d.rate!=null?d.rate+'%':'不明'}）${d.attended===0?'　※当月は一度も通所なし':''}
+欠席・休みの状況: 当月 欠席/休み ${_absCount}回。 理由: ${_absReasons}
 取り組んだ運動メニュー: ${exerciseNowText}
 運動メニューの変化: ${exerciseChangeText}
 バイタル(参考): 血圧平均${d.avgBp||'不明'}mmHg（前月${d.prevAvgBp||'不明'}）、体温平均${d.avgTemp||'不明'}℃
@@ -31329,10 +31338,9 @@ ${optionsDesc}
         <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1',marginRight:2}}>選択：</span>
         {[
           ['全員','all',checkAll],
-          ['未入力のみ','unentered',checkUnentered],
-          ['確定以外','unconfirmed',checkUnconfirmed],
+          ['未作成のみ','unentered',checkUnentered],
           ['通所なし','absent',checkAbsent],
-          ['解除','none',uncheckAll],
+          ['選択解除','none',uncheckAll],
         ].map(([label,key,fn]) => {
           const isAct = activeSelection===key;
           return (
@@ -31349,57 +31357,26 @@ ${optionsDesc}
           <span style={{fontSize:11,fontWeight:'bold',color:'#0284c7',margin:'0 6px'}}>{checkedIds.size}名選択中</span>
         )}
         <span style={{borderLeft:'1px solid #bae6fd',height:18,margin:'0 4px'}}/>
-        {isGeneratingAll ? (
-          <button type="button" onClick={cancelGenerate}
-            style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>
-            <X size={11}/> 中止
-          </button>
-        ) : (
-          <button type="button" onClick={generateAll}
-            style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #93c5fd',background:'#eff6ff',color:'#1d4ed8',cursor:'pointer'}}>
-            ⚡ 生成
-          </button>
-        )}
-        {/* ★ モニタリング表(正式シート)を全員ぶんAIで一括下書き → 個人ファイル保存 */}
+        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1',marginRight:2}}>{checkedIds.size>0?`選んだ${checkedIds.size}名を：`:'全員を：'}</span>
+        {/* ★ AIで下書き (チェックした人、無ければ全員) */}
         {sheetBatchProg ? (
           <button type="button" onClick={cancelGenerate}
-            style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
-            ⟳ 表 {sheetBatchProg.done}/{sheetBatchProg.total}（中止）
+            style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
+            ⟳ {sheetBatchProg.done}/{sheetBatchProg.total}（中止）
           </button>
         ) : (
-          <button type="button" onClick={generateAllSheets} title="チェックした(無ければ全員の)モニタリング表をAIで一括下書きし個人ファイルに保存"
-            style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
-            🤖 表を一括下書き(AI)
+          <button type="button" onClick={generateAllSheets} title="選んだ(無ければ全員の)モニタリング表をAIで下書きして個人ファイルに保存"
+            style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
+            🤖 AIで下書き
           </button>
         )}
-        <button type="button" onClick={createAllDefault} title="チェックした(無ければ全員の)モニタリング表を作成し個人ファイルに保存(AIなし)"
-          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
-          📋 一括作成・保存
+        <button type="button" onClick={createAllDefault} title="選んだ(無ければ全員の)モニタリング表を作成して個人ファイルに保存(AIなし)"
+          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
+          📋 作成・保存
         </button>
-        <button type="button" onClick={batchFax} title="作成済みのモニタリング表を全員ぶん1つにまとめて印刷/PDF/FAX(ケアマネ宛先つき)"
-          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer'}}>
-          📠 一括FAX/印刷
-        </button>
-        <button type="button" onClick={()=>{
-          const targets=[...attendedPats,...absentPats].filter(p=>checkedIds.has(p.id)&&!results[p.id]?.confirmed);
-          targets.forEach(p=>setResults(prev=>({...prev,[p.id]:{...(prev[p.id]||{}),text:prev[p.id]?.text||'',editing:true}})));
-        }}
-          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #bae6fd',background:'white',color:'#0369a1',cursor:'pointer'}}>
-          ✏ 編集
-        </button>
-        <button type="button" onClick={()=>{
-          const targets=[...attendedPats,...absentPats].filter(p=>checkedIds.has(p.id)&&results[p.id]?.text&&!results[p.id]?.confirmed);
-          targets.forEach(p=>confirmResult(p.id));
-        }}
-          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#f0fdf4',color:'#059669',cursor:'pointer'}}>
-          ✓ 確定
-        </button>
-        <button type="button" onClick={()=>{
-          const targets=[...attendedPats,...absentPats].filter(p=>checkedIds.has(p.id)&&results[p.id]?.confirmed);
-          targets.forEach(p=>unconfirmResult(p.id));
-        }}
-          style={{padding:'4px 12px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #e2e8f0',background:'#f8fafc',color:'#475569',cursor:'pointer'}}>
-          確定解除
+        <button type="button" onClick={batchFax} title="作成済みのモニタリング表をまとめて印刷/PDF/FAX(ケアマネ宛先つき)"
+          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer'}}>
+          📠 FAX・印刷
         </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
@@ -31414,7 +31391,7 @@ ${optionsDesc}
             const editing = res?.editing;
             const checked = checkedIds.has(patient.id);
             return (
-              <tr key={patient.id} style={{borderBottom:'1px solid #f1f5f9',background:confirmed?'#f0fdf4':isAbsent?'#fafafa':i%2===0?'white':'#f8fafc'}}>
+              <tr key={patient.id} style={{borderBottom:'2px solid #cbd5e1',background:confirmed?'#f0fdf4':isAbsent?'#fafafa':i%2===0?'white':'#f8fafc'}}>
                 {/* チェック列 */}
                 <td style={{padding:'10px 8px',textAlign:'center',verticalAlign:'middle',width:36}}>
                   {!isAbsent && (
@@ -31449,25 +31426,27 @@ ${optionsDesc}
                     }
                     // ★ 作成済み: その場でプルダウン変更＋本文クリック編集 (表を開かなくてもOK)
                     return (
-                      <div style={{fontSize:11,lineHeight:1.5,color:'#1e293b'}}>
-                        {MON_ITEMS.map(it => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; return (
-                          <div key={it.key} style={{display:'flex',alignItems:'flex-start',gap:4,marginBottom:3}}>
-                            <span style={{fontWeight:'bold',color:'#0369a1',flexShrink:0}}>{it.no}</span>
-                            <select value={c.sel} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
-                              style={{flexShrink:0,fontSize:10,fontWeight:'bold',border:'1px solid #bae6fd',borderRadius:6,padding:'1px 2px',background:'#f0f9ff',maxWidth:110}}>
-                              <option value="">—</option>
-                              {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
-                            </select>
+                      <div style={{fontSize:12,lineHeight:1.5,color:'#1e293b'}}>
+                        {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; return (
+                          <div key={it.key} style={{marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:2}}>
+                              <span style={{fontWeight:'bold',color:'#0c4a6e',background:'#e0f2fe',borderRadius:5,padding:'1px 7px',fontSize:11}}>{it.no}{it.title}</span>
+                              <select value={c.sel} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
+                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:'white',color:'#0369a1'}}>
+                                <option value="">— 選択 —</option>
+                                {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </div>
                             {editing2 ? (
                               <textarea autoFocus defaultValue={c.text} rows={2}
                                 onBlur={e=>{ updateSheetInline(patient, it.key, 'text', e.target.value); setEditTextCell(null); }}
-                                style={{flex:1,minWidth:80,fontSize:11,border:'1px solid #93c5fd',borderRadius:6,padding:'2px 5px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
+                                style={{width:'100%',boxSizing:'border-box',fontSize:12,border:'1px solid #93c5fd',borderRadius:6,padding:'4px 6px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
                             ) : (
-                              <span onClick={()=>setEditTextCell(cellId)} title="クリックで編集" style={{flex:1,color:c.text?'#475569':'#cbd5e1',cursor:'text',minHeight:14}}>{c.text||'（タップで内容を入力）'}</span>
+                              <div onClick={()=>setEditTextCell(cellId)} title="クリックで編集" style={{color:c.text?'#334155':'#cbd5e1',cursor:'text',minHeight:16,paddingLeft:2,whiteSpace:'pre-wrap'}}>{c.text||'（タップで内容を入力）'}</div>
                             )}
                           </div>
                         );})}
-                        <div style={{fontSize:9,color:'#94a3b8',marginTop:2}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}</div>
+                        <div style={{fontSize:10,color:'#94a3b8'}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}</div>
                       </div>
                     );
                   })()}
