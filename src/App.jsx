@@ -10784,7 +10784,7 @@ function FamilyView() {
   })();
   const [mode, setMode] = useState(_urlInvite ? 'signup' : 'login'); // 'login' | 'signup'
   // 招待時の続柄が標準リストに無い場合は「その他」を選択 + 入力欄に自動反映
-  const _stdRelations = ['配偶者','長男','長女','次男','次女','兄','弟','姉','妹','ケアマネージャー'];
+  const _stdRelations = ['本人','配偶者','長男','長女','次男','次女','兄','弟','姉','妹','ケアマネージャー'];
   const _invRel = (_inviteInfo.relation || '').trim();
   const _isCustomRel = _invRel && !_stdRelations.includes(_invRel);
   const [signupForm, setSignupForm] = useState({
@@ -11250,7 +11250,9 @@ function FamilyView() {
                       // ★ 1件目に登録した人 (役割を問わず) を主要連絡先 (familyName 等) にセット。
                       //   2人目以降は追加緊急連絡先 (emergencyContacts 配列) に自動追加。
                       //   関係者 (ケアマネ/その他関係者) は家族の主要連絡先にしない。
-                      const isPrimary = !isCmKind && !p.familyName;
+                      // ★ 続柄が「本人」= 利用者ご本人が閲覧用に登録 → 緊急連絡先にも代表家族にも入れない
+                      const isSelf = (ecRelation||'').trim() === '本人' || (ecRelation||'').includes('本人');
+                      const isPrimary = !isCmKind && !isSelf && !p.familyName;
                       let primaryFields = {};
                       if (isPrimary) {
                         primaryFields = {
@@ -11269,9 +11271,9 @@ function FamilyView() {
                       const existingContacts = p.emergencyContacts || [];
                       const dup = existingContacts.some(c => (c.name||'').trim() === ecName && (c.relation||'').trim() === ecRelation);
                       let updatedContacts;
-                      if (isPrimary || isCmKind) {
-                        // ★ 代表家族は familyName 等に反映済み。 ケアマネ/その他関係者は「担当ケアマネ/その他関係者」に入れるので
-                        //   緊急連絡先(emergencyContacts)には追加しない。
+                      if (isPrimary || isCmKind || isSelf) {
+                        // ★ 代表家族は familyName 等に反映済み。 ケアマネ/その他関係者は担当欄へ。 本人は閲覧用のため
+                        //   いずれも緊急連絡先(emergencyContacts)には追加しない。
                         updatedContacts = existingContacts;
                       } else {
                         updatedContacts = dup ? existingContacts : [...existingContacts, newEmergencyContact];
@@ -11471,6 +11473,7 @@ function FamilyView() {
                         <select value={signupForm.ecRelation} onChange={e=>setSignupForm(f=>({...f,ecRelation:e.target.value,error:''}))}
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',fontWeight:'bold'}}>
                           <option value="">— 選択 —</option>
+                          <option value="本人">本人（ご利用者ご自身・緊急連絡先には登録しません）</option>
                           <option value="配偶者">配偶者</option>
                           <option value="長男">長男</option>
                           <option value="長女">長女</option>
@@ -26230,7 +26233,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     // 既存アカウントの重複チェック
                     // メール重複は許容 (夫婦の子・複数利用者担当ケアマネ等のため)
                     // 未使用招待の重複は許容
-                    const relation = window.prompt('続柄を入力してください (例: 配偶者、長男、長女、ケアマネージャー など。空欄可):') || '';
+                    const relation = window.prompt('続柄を入力してください (例: 本人、配偶者、長男、長女、ケアマネージャー など。空欄可)\n※「本人」にすると緊急連絡先には登録されません（ご本人閲覧用）:') || '';
                     const inv = issueNewInvite({ email: email.trim(), relation: relation.trim() });
                     // URL に招待データを埋め込み (端末越し用)
                     const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'', fn: (appData.systemSettings?.facilityInfo?.name)||'', fp: (appData.systemSettings?.facilityInfo?.phone)||'' });
