@@ -17163,26 +17163,36 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const effItemId = cur.itemId || slotDefaultId;
                       const selItem = allIndItems.find(it => it.id === effItemId);
                       const patDefault = selItem ? (patSettings.find(x => x.itemId === selItem.id)?.defaultValue || '') : '';
+                      // ★ 種目名はセル幅(60px)に合わせて可変フォント: 短い名前は大きく、3〜4文字以上は縮小して収める
+                      const _indName = selItem?.name || '';
+                      const _indNameFs = _indName.length<=2 ? 15 : _indName.length===3 ? 13 : _indName.length===4 ? 11 : _indName.length<=6 ? 10 : 9;
+                      // ★ 値の表示フォント: ○ は大きく太く、数値は桁数で縮小
+                      const _indIsCircle = cur.value==='○'||cur.value==='◯';
+                      const _indValLen = String(cur.value||'').length;
+                      const _indValFs = _indIsCircle ? 22 : (_indValLen>5 ? 10 : _indValLen>3 ? 12 : 15);
                       return (
                         <td key={item.id} data-ind-cell className={`px-1 py-1 align-top border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
                           <select value={effItemId} disabled={isAbsent || isReadOnly || isPause}
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: e.target.value})}
-                            className="w-full px-1 py-0.5 mb-1 text-[10px] font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
-                            style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center'}}>
+                            className="w-full px-0.5 mb-1 font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
+                            style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center',fontSize:_indNameFs,height:24,boxSizing:'border-box',lineHeight:1}}>
                             <option value="">— 選択 —</option>
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
                           <input type="text" value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: e.target.value})}
                             placeholder={selItem?`${patDefault||''}${selItem.defaultUnit?` ${selItem.defaultUnit}`:''}`:'未選択'}
-                            style={{fontSize:13,padding:'3px 4px'}}
-                            className="w-full text-center border border-emerald-300 rounded font-bold bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-emerald-300"/>
-                          {/* ★ ○ ボタン: 押すと「○」を記録(実施)。 分析/トレンドでは基準値の数値に変換表示、連絡帳は○表示 */}
+                            style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1}}
+                            className="w-full text-center border border-emerald-300 rounded bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-emerald-300"/>
+                          {/* ★ ○ ボタン: 押すと「○」を記録(実施)。 高さ枠は常に確保して 未入力/実施 でセル高が変わらないように */}
+                          <div style={{height:24,marginTop:2}}>
                           {selItem && !isReadOnly && !isAbsent && !isPause && (
                             <button type="button" onClick={()=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: (cur.value==='○'?'':'○')})}
                               title={patDefault?`○（実施。分析では基準値「${patDefault}${selItem.defaultUnit||''}」で表示）`:'○（実施）'}
-                              className={`w-full mt-0.5 py-0.5 text-[13px] font-bold leading-none rounded border active:scale-95 ${cur.value==='○'?'bg-emerald-500 border-emerald-500 text-white':'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-100'}`}>○</button>
+                              style={{height:'100%',boxSizing:'border-box'}}
+                              className={`w-full text-[13px] font-bold leading-none rounded border active:scale-95 ${cur.value==='○'?'bg-emerald-500 border-emerald-500 text-white':'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-100'}`}>○</button>
                           )}
+                          </div>
                         </td>
                       );
                     }
