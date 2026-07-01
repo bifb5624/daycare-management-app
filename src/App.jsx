@@ -1233,6 +1233,36 @@ if (typeof window !== 'undefined' && !window.__tsumugiErrInit) {
 // ★ 印刷プレビュー用: 要素の outerHTML を取得する際、 制御された input/textarea/select の【現在値】を
 //   HTML属性に焼き込む。 (Reactの制御フォームは value を属性に反映しないため、 素の outerHTML だと
 //   selectは先頭option・inputは空 になってしまう。 → 選んだ担当者などが印刷で消える不具合の対策)
+// ★ 気分の理由(既定)。 各種設定で systemSettings.kibunReasons があればそれを優先し、無ければこれを使う。
+const KIBUN_MOOD_META = [
+  { key: 'excellent', label: 'とても良い', emoji: '🤩' },
+  { key: 'good',      label: '良い',       emoji: '😊' },
+  { key: 'normal',    label: '普通',       emoji: '😐' },
+  { key: 'bad',       label: 'イマイチ',   emoji: '😞' },
+  { key: 'terrible',  label: 'とても悪い', emoji: '😫' },
+];
+const DEFAULT_KIBUN_REASONS = {
+  arrival: {
+    excellent: ['よく眠れた','体調がいい','気分がいい','調子がいい','楽しみ','体が軽い','すっきりしている','元気いっぱい','うれしい','ごきげん'],
+    good:      ['よく眠れた','体調はいい','気分はいい','落ち着いている','体が軽い','まあまあ元気','調子はいい','穏やかな気分','痛みはない','気分が明るい'],
+    normal:    ['いつも通り','特に変わりない','まあまあ','ふつう','落ち着いている','可もなく不可もなく','体調はふつう','よく眠れた方','特に問題なし','変わりない'],
+    bad:       ['あまり眠れなかった','少しだるい','体が重い','疲れ気味','痛むところがある','気分が乗らない','少し不安','体調がいまいち','すっきりしない','元気が出ない'],
+    terrible:  ['よく眠れなかった','体調が悪い','痛みがある','体がだるい','つらい','めまいがする','気分が悪い','不安が強い','吐き気がする','起きるのがつらかった'],
+  },
+  departure: {
+    excellent: ['とても楽しかった','体操をがんばれた','会話が楽しかった','たくさん体を動かせた','たくさん笑えた','よく動けた','満足した','うれしかった','元気に過ごせた','また来たい'],
+    good:      ['楽しかった','体を動かせた','落ち着いて過ごせた','おしゃべりできた','運動できた','穏やかに過ごせた','よく休めた','まあまあ楽しめた','痛みなく過ごせた','気分よく過ごせた'],
+    normal:    ['いつも通りだった','特に変わりなかった','まあまあだった','ふつうに過ごせた','落ち着いて過ごせた','可もなく不可もなく','問題なく過ごせた','静かに過ごせた','特に問題なし','変わりなかった'],
+    bad:       ['体が動かなかった','痛みがあった','疲れてしまった','あまり楽しめなかった','気分が乗らなかった','少しだるかった','うとうとしてしまった','落ち着かなかった','早く帰りたかった','元気が出なかった'],
+    terrible:  ['力が出なかった','とても痛かった','体調を崩した','つらかった','めまいがした','ぐったりした','気分が悪かった','不安だった','吐き気がした','途中で休んだ'],
+  },
+};
+const getKibunReasonsFrom = (systemSettings, timing, mood) => {
+  const t = timing === 'departure' ? 'departure' : 'arrival';
+  const custom = systemSettings?.kibunReasons;
+  if (custom && custom[t] && Array.isArray(custom[t][mood])) return custom[t][mood];
+  return DEFAULT_KIBUN_REASONS[t]?.[mood] || [];
+};
 function captureElHtmlWithValues(el) {
   if (!el) return null;
   try {
@@ -16070,25 +16100,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     { key: 'bad',       label: 'イマイチ',   emoji: '😞', color: 'bg-orange-400', textColor: 'text-orange-900' },
     { key: 'terrible',  label: 'とても悪い', emoji: '😫', color: 'bg-red-500',    textColor: 'text-red-900' },
   ];
-  // ★ ご利用者ご本人の「気持ち」ベースの言い回し。
-  //   通所時(arrival)=来た時の今の気持ち(非過去)、帰宅時(departure)=一日の振り返りの気持ち(過去)。
-  const KIBUN_REASONS_BY_TIMING = {
-    arrival: {
-      excellent: ['よく眠れた','体調がいい','気分がいい','調子がいい','楽しみ','体が軽い','すっきりしている','元気いっぱい','うれしい','ごきげん'],
-      good:      ['よく眠れた','体調はいい','気分はいい','落ち着いている','体が軽い','まあまあ元気','調子はいい','穏やかな気分','痛みはない','気分が明るい'],
-      normal:    ['いつも通り','特に変わりない','まあまあ','ふつう','落ち着いている','可もなく不可もなく','体調はふつう','よく眠れた方','特に問題なし','変わりない'],
-      bad:       ['あまり眠れなかった','少しだるい','体が重い','疲れ気味','痛むところがある','気分が乗らない','少し不安','体調がいまいち','すっきりしない','元気が出ない'],
-      terrible:  ['よく眠れなかった','体調が悪い','痛みがある','体がだるい','つらい','めまいがする','気分が悪い','不安が強い','吐き気がする','起きるのがつらかった'],
-    },
-    departure: {
-      excellent: ['とても楽しかった','体操をがんばれた','会話が楽しかった','たくさん体を動かせた','たくさん笑えた','よく動けた','満足した','うれしかった','元気に過ごせた','また来たい'],
-      good:      ['楽しかった','体を動かせた','落ち着いて過ごせた','おしゃべりできた','運動できた','穏やかに過ごせた','よく休めた','まあまあ楽しめた','痛みなく過ごせた','気分よく過ごせた'],
-      normal:    ['いつも通りだった','特に変わりなかった','まあまあだった','ふつうに過ごせた','落ち着いて過ごせた','可もなく不可もなく','問題なく過ごせた','静かに過ごせた','特に問題なし','変わりなかった'],
-      bad:       ['体が動かなかった','痛みがあった','疲れてしまった','あまり楽しめなかった','気分が乗らなかった','少しだるかった','うとうとしてしまった','落ち着かなかった','早く帰りたかった','元気が出なかった'],
-      terrible:  ['力が出なかった','とても痛かった','体調を崩した','つらかった','めまいがした','ぐったりした','気分が悪かった','不安だった','吐き気がした','途中で休んだ'],
-    },
-  };
-  const getKibunReasons = (timing, mood) => (KIBUN_REASONS_BY_TIMING[timing==='departure'?'departure':'arrival']?.[mood]) || [];
+  // ★ 気分の理由: 各種設定でカスタマイズ(systemSettings.kibunReasons)があればそれを、無ければ既定を使う。
+  const getKibunReasons = (timing, mood) => getKibunReasonsFrom(appData.systemSettings, timing, mood);
 
   const openKibunModal = (recordId, timing) => {
     setKibunModal({ isOpen: true, recordId, timing });
@@ -27318,6 +27331,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   const [holidayName, setHolidayName] = useState("");
   const [massageInput, setMassageInput] = useState((appData.systemSettings?.massageTypes || []).join('、'));
   const [anthropicApiKey, setAnthropicApiKey] = useState(appData.systemSettings?.anthropicApiKey || '');
+  const [kibunReasonInputs, setKibunReasonInputs] = useState({}); // 気分の理由 追加用入力 (timing_mood → 文字列)
+  // 気分の理由: 既定/カスタムを全moodぶん取得して1つの構造にし、編集して保存する
+  const _kibunAllReasons = () => { const base = { arrival:{}, departure:{} }; ['arrival','departure'].forEach(t => KIBUN_MOOD_META.forEach(m => { base[t][m.key] = getKibunReasonsFrom(appData.systemSettings, t, m.key).slice(); })); return base; };
+  const _saveKibunReasons = (all) => onSave({ ...appData, systemSettings: { ...appData.systemSettings, kibunReasons: all } }, { manual:true, message:'✓ 気分の理由を保存しました' });
+  const _addKibunReason = (t, mood) => { const v=(kibunReasonInputs[`${t}_${mood}`]||'').trim(); if(!v) return; const all=_kibunAllReasons(); if(!all[t][mood].includes(v)) all[t][mood]=[...all[t][mood], v]; _saveKibunReasons(all); setKibunReasonInputs(p=>({...p,[`${t}_${mood}`]:''})); };
+  const _delKibunReason = (t, mood, idx) => { const all=_kibunAllReasons(); all[t][mood]=all[t][mood].filter((_,i)=>i!==idx); _saveKibunReasons(all); };
+  const _resetKibunReasons = () => { if(!window.confirm('気分の理由を既定に戻しますか？')) return; onSave({ ...appData, systemSettings: { ...appData.systemSettings, kibunReasons: undefined } }, { manual:true, message:'既定に戻しました' }); };
   const [massageStaffInput, setMassageStaffInput] = useState((appData.systemSettings?.massageStaff || appSettings.massageStaff).join('、'));
   const [onyokuInput, setOnyokuInput] = useState((appData.systemSettings?.onyokuTypes || []).join('、'));
   // ★ 初期値は空 (介護整体含めユーザーが事業所単位で追加)
@@ -28539,6 +28559,45 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-sm outline-none"/>
                 {anthropicApiKey && <p className="text-xs text-emerald-600 font-bold mt-1">✓ 設定済み（末尾: ...{anthropicApiKey.slice(-6)}）</p>}
               </>)}
+            </SectionCard>
+            <SectionCard title="気分の理由（カスタマイズ）">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-slate-500">提供記録で気分を選んだ後に出る「理由」の選択肢を、<b>通所時・帰宅時・気分ごと</b>に追加・削除できます。空欄にしても自由入力は常に使えます。</p>
+                <button type="button" onClick={_resetKibunReasons} className="shrink-0 ml-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold whitespace-nowrap">既定に戻す</button>
+              </div>
+              <div className="space-y-4">
+                {[['arrival','🏢 通所時'],['departure','🏠 帰宅時']].map(([timing,tlabel]) => (
+                  <div key={timing} className="border border-slate-200 rounded-xl overflow-hidden">
+                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-700">{tlabel}</div>
+                    <div className="p-3 space-y-3">
+                      {KIBUN_MOOD_META.map(m => {
+                        const reasons = getKibunReasonsFrom(appData.systemSettings, timing, m.key);
+                        const ikey = `${timing}_${m.key}`;
+                        return (
+                          <div key={m.key}>
+                            <div className="text-xs font-bold text-slate-600 mb-1">{m.emoji} {m.label}</div>
+                            <div className="flex flex-wrap gap-1.5 items-center">
+                              {reasons.map((r,ri) => (
+                                <span key={ri} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-full pl-3 pr-1 py-1 text-xs font-bold text-slate-700">
+                                  {r}
+                                  <button type="button" onClick={()=>_delKibunReason(timing, m.key, ri)} className="w-4 h-4 flex items-center justify-center rounded-full bg-slate-300 hover:bg-red-400 text-white text-[10px]" title="削除">✕</button>
+                                </span>
+                              ))}
+                              {reasons.length===0 && <span className="text-[11px] text-slate-400">（なし）</span>}
+                              <span className="inline-flex items-center gap-1">
+                                <input value={kibunReasonInputs[ikey]||''} onChange={e=>setKibunReasonInputs(p=>({...p,[ikey]:e.target.value}))}
+                                  onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); _addKibunReason(timing, m.key); } }}
+                                  placeholder="理由を追加..." className="px-2 py-1 w-32 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-400"/>
+                                <button type="button" onClick={()=>_addKibunReason(timing, m.key)} className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">＋</button>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </SectionCard>
             <SectionCard title="データ管理">
               {(() => {
