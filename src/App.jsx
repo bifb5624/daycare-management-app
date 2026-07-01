@@ -16285,7 +16285,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         const newHistory = [...(pt.pauseHistory||[]), newEntry];
         return { ...pt, status: '休止', pauseHistory: newHistory };
       });
-      onSave({ ...appData, patients: updatedPatients });
+      // ★ その日の提供記録(ticketRecord)も「休止」にする → 分析で出席扱いにならず欠席と同等に集計される
+      const _sd = new Date(selectedDate);
+      const _dateLabel = `${_sd.getMonth()+1}月${_sd.getDate()}日`;
+      const _yr = _sd.getFullYear();
+      const _recs = [...(appData.ticketRecords||[])];
+      const _ridx = _recs.findIndex(r => r.patientId === targetPatientId && recMatchesDateYear(r, _dateLabel, _yr));
+      if (_ridx >= 0) _recs[_ridx] = { ..._recs[_ridx], status: '休止', tokki: reason || _recs[_ridx].tokki || '休止', _savedAt: Date.now() };
+      else _recs.push({ id: `tr_${targetPatientId}_${_yr}_${_sd.getMonth()+1}_${_sd.getDate()}`, patientId: targetPatientId, date: _dateLabel, year: _yr, status: '休止', tokki: reason || '休止', _savedAt: Date.now() });
+      onSave({ ...appData, patients: updatedPatients, ticketRecords: _recs }, { manual: true, message: '✓ 休止に設定しました' });
       // 画面上の localPatients も即時反映
       setLocalPatients(prev => prev.map(p => p.id===id ? {...p, status: '休止', tokki: reason||'休止'} : p));
       if (dirtyRef) dirtyRef.current = false; // 即時保存済み
