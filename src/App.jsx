@@ -21870,6 +21870,23 @@ ${allPages}
 </body></html>`;
 }
 
+// ★ 月別提供記録の「備考」テキスト算出。
+//   - patient.bikouOverrides['YYYY-MM'] が設定されていれば手動編集を優先 (空文字なら空欄)。
+//   - 無ければ patient.serviceChanges からその月に発生した変更を自動整形 ("6/15 重さ3→4に変更")。
+//   - 変更は「その月のみ」表示 (翌月は該当月の変更が無ければ空欄)。
+function computeServiceChangeBikou(patient, y, m, appData) {
+  if (!patient) return '';
+  const mk = `${y}-${String(m).padStart(2,'0')}`;
+  const ov = patient.bikouOverrides && patient.bikouOverrides[mk];
+  if (ov != null) return ov;
+  const changes = (patient.serviceChanges || []).filter(c => {
+    if (!c || !c.date) return false;
+    const d = new Date(c.date);
+    return !isNaN(d) && d.getFullYear() === y && (d.getMonth() + 1) === m;
+  }).sort((a,b)=> new Date(a.date) - new Date(b.date));
+  if (!changes.length) return '';
+  return changes.map(c => { const d = new Date(c.date); return `${d.getMonth()+1}/${d.getDate()} ${c.text||''}`.trim(); }).join('　/　');
+}
 // === TicketView (サービス提供記録) ===
 function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientChange, dirtyRef, onShowPrintPreview }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
@@ -21903,7 +21920,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
     if (!sp) return [];
     return generateMonthlySchedule([sp], tY, tM, appData.monthlyShifts, appData.ticketRecords || [], appData.holidays, (appData.systemSettings?.facilityInfo?.closedDays||[0])).sort((a, b) => a.dayNum - b.dayNum);
   }, [appData, sp, tY, tM]);
-  const PER_PAGE = 7; // ★ 設定数値の行を足した分、8→7日表示に
+  const PER_PAGE = 6; // ★ 7日目の位置に「備考欄」を設けるため 7→6日表示に (余白は各日の行高へ均等配分)
   const pages = []; for (let i = 0; i < records.length; i += PER_PAGE) pages.push(records.slice(i, i + PER_PAGE));
   if (pages.length === 0) pages.push([]);
   const getDefTime = (p) => { if (!p?.scheduleAmPm) return fi.serviceTimeAM||""; const h=p.scheduleAmPm; if(h.some(s=>s==='1日')||(h.some(s=>s==='AM')&&h.some(s=>s==='PM'))) return fi.serviceTimeFullDay||""; if(h.some(s=>s==='PM')) return fi.serviceTimePM||""; return fi.serviceTimeAM||""; };
@@ -22004,6 +22021,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
 
         {renderList.flatMap(({ mY: tY, mM: tM, ex, plannedM, tc, pages }) => pages.map((pr, pi) => {
           const fill = Math.max(0, PER_PAGE - pr.length);
+          const _bikouText = pi === 0 ? computeServiceChangeBikou(sp, tY, tM, appData) : '';
           return (
           <div key={`${tY}-${tM}-${pi}`} className="tp bg-white px-5 py-3 shadow-xl border border-slate-300 rounded-xl flex flex-col">
             {/* ヘッダー */}
@@ -22065,7 +22083,18 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
             })()}
 
             {/* ★ 運動メニュー（設定数値）独立表 — 黒ヘッダーの上。 ラベルは日付列と同比率、運動名は残り幅を均等割り */}
-            {(() => { const _uW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42; const _mainTotal = 308 + (ex.length+1)*_uW; const _labelPct = (50/_mainTotal*100); return (
+            {(() => { const _uW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42; const _mainTotal = 308 + (ex.length+1)*_uW; const _labelPct = (50/_mainTotal*100);
+              // ★ 個別運動列の設定値: 患者マスタで設定した「種目名＋規定値」を表示 (通常メニューは planned 値)
+              const _indPlanDisp = (it) => {
+                const allInd = appData.systemSettings?.individualExerciseItems || [];
+                const rawIndEx = Array.isArray(sp?.individualExercises) ? sp.individualExercises : [];
+                const selId = (sp?.individualExerciseSlotDefaults?.[it.id]) || (rawIndEx.find(x=>x.itemId)?.itemId) || '';
+                const sel = allInd.find(ii => ii.id === selId);
+                if (!sel) return null;
+                const dv = (rawIndEx.find(x=>x.itemId===selId)?.defaultValue) || '';
+                return { name: sel.name, val: dv ? `${dv}${sel.defaultUnit||''}` : '' };
+              };
+              return (
             <table className="w-full border-collapse border border-slate-600 mb-1 shrink-0" style={{tableLayout:'fixed',width:'100%'}}>
               <colgroup>
                 <col style={{width:`${_labelPct}%`}}/>
@@ -22078,7 +22107,22 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 </tr>
                 <tr style={{height:30}}>
                   <td className="border border-slate-600 px-0 text-center overflow-hidden" style={{background:'#f1f5f9'}}><AutoFitText text="設定数値" max={11} bold/></td>
-                  {ex.map(it=>(<td key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden"><AutoFitText text={_planUnit(plannedM[it.id], it.defaultUnit)} max={13} bold/></td>))}
+                  {ex.map(it=>{
+                    if (it.type === 'individual') {
+                      const d = _indPlanDisp(it);
+                      return (
+                        <td key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden">
+                          {d ? (
+                            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',lineHeight:1.05,height:30,overflow:'hidden',padding:'0 1px'}}>
+                              <span style={{fontSize:8,fontWeight:'bold',color:'#334155',maxWidth:'100%',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{d.name}</span>
+                              {d.val && <span style={{fontSize:9,fontWeight:'bold'}}>{d.val}</span>}
+                            </div>
+                          ) : null}
+                        </td>
+                      );
+                    }
+                    return (<td key={it.id} className="border border-slate-600 px-0 text-center overflow-hidden"><AutoFitText text={_planUnit(plannedM[it.id], it.defaultUnit)} max={13} bold/></td>);
+                  })}
                 </tr>
               </tbody>
             </table>
@@ -22087,27 +22131,35 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
             {/* メインテーブル: print 時の flex 計算問題を避けるためフロー配置 */}
             <div className="flex flex-col" style={{overflowX:'auto'}}>
               <style>{`
-                /* 行高さを完全固定 — 入力内容の有無にかかわらず一定 */
+                /* 行高さを完全固定 — 入力内容の有無にかかわらず一定 (6日表示で1日あたりを拡大) */
                 .tp table { table-layout: fixed; }
-                .tp table tbody tr.data-row { height:40px!important; max-height:40px!important; }
-                .tp table tbody tr.tokki-row { height:36px!important; max-height:36px!important; }
+                .tp table tbody tr.data-row { height:44px!important; max-height:44px!important; }
+                .tp table tbody tr.tokki-row { height:38px!important; max-height:38px!important; }
+                .tp table tbody tr.bikou-row { height:46px!important; max-height:46px!important; }
                 .tp table tbody td {
                   box-sizing:border-box!important;
                   vertical-align:middle!important;
                   overflow:hidden!important;
                 }
-                .tp table tbody tr.data-row td { height:40px!important; max-height:40px!important; }
-                .tp table tbody tr.tokki-row td { height:36px!important; max-height:36px!important; }
+                .tp table tbody tr.data-row td { height:44px!important; max-height:44px!important; }
+                .tp table tbody tr.tokki-row td { height:38px!important; max-height:38px!important; }
+                .tp table tbody tr.bikou-row td { height:46px!important; max-height:46px!important; }
                 .tp table tbody tr.data-row td>div.cell-wrap {
-                  height:36px; max-height:36px; overflow:hidden;
+                  height:40px; max-height:40px; overflow:hidden;
                   display:flex; align-items:center; justify-content:center;
                   word-break:break-all; flex-wrap:wrap; text-align:center;
                   line-height:1.15;
                 }
                 .tp table tbody tr.tokki-row td>div.cell-wrap {
-                  height:32px; max-height:32px; overflow:hidden;
+                  height:34px; max-height:34px; overflow:hidden;
                   display:flex; align-items:center; justify-content:flex-start;
                   line-height:1.25; white-space:pre-wrap; word-break:break-all;
+                  text-align:left; padding-left:4px;
+                }
+                .tp table tbody tr.bikou-row td>div.cell-wrap {
+                  height:42px; max-height:42px; overflow:hidden;
+                  display:flex; align-items:center; justify-content:flex-start;
+                  line-height:1.2; white-space:pre-wrap; word-break:break-all;
                   text-align:left; padding-left:4px;
                 }
               `}</style>
@@ -22144,7 +22196,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       <Fragment key={r.id}>
                         {/* データ行 */}
                         <tr className={`data-row ${rc}`} style={{height:40}}>
-                          <td rowSpan={2} className={`border border-slate-400 px-1 text-center ${rc}`} style={{verticalAlign:'middle',overflow:'hidden',maxWidth:80,padding:0,height:76}}>
+                          <td rowSpan={2} className={`border border-slate-400 px-1 text-center ${rc}`} style={{verticalAlign:'middle',overflow:'hidden',maxWidth:80,padding:0,height:82}}>
                             <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',padding:'2px 0'}}>
                               <div className="font-bold leading-tight" style={{fontSize:24}}>{r.dayNum}</div>
                               <div className="font-normal leading-tight" style={{fontSize:13,color:'#475569',marginTop:2}}>（{r.dayOfWeek}）</div>
@@ -22155,7 +22207,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',height:41,maxHeight:41,minWidth:90}}>
+                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',height:44,maxHeight:44,minWidth:90}}>
                             {(() => {
                               const MOODS = {'excellent':'🤩','good':'😊','normal':'😐','bad':'😞','terrible':'😫'};
                               const arr = v(r.kibunArrival);
@@ -22165,7 +22217,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                               if(!arr && !dep) return '';
                               // ★ 行高さは固定 (41px)。 文字数が多い場合は文字サイズを縮小して全部表示
                               //    両方ある場合 縦 20px / 行、 片方なら 41px。
-                              const lineH = (arr && dep) ? 20 : 41;
+                              const lineH = (arr && dep) ? 22 : 44;
                               const totalReasonLen = (arrR||'').length + (depR||'').length;
                               const reasonFs = totalReasonLen > 24 ? 6 : totalReasonLen > 12 ? 7 : 8;
                               const renderLine = (label, mood, reason) => (
@@ -22188,7 +22240,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   )}
                                 </div>
                               );
-                              return (<div style={{display:'flex',flexDirection:'column',height:41,overflow:'hidden',justifyContent:'center'}}>
+                              return (<div style={{display:'flex',flexDirection:'column',height:44,overflow:'hidden',justifyContent:'center'}}>
                                 {arr && renderLine('通', arr, arrR)}
                                 {dep && renderLine('帰', dep, depR)}
                               </div>);
@@ -22242,22 +22294,27 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                   {/* 空行 */}
                   {Array.from({length:fill}).map((_,i)=>(
                     <Fragment key={`e${i}`}>
-                      <tr className="data-row" style={{height:40}}>
-                        <td rowSpan={2} className="border border-slate-400 px-1" style={{height:76}}></td>
-                        <td className="border border-slate-400" style={{height:40}}></td>
-                        <td className="border border-slate-400" style={{height:40}}></td>
-                        <td className="border border-slate-400" style={{height:40}}></td>
-                        <td className="border border-slate-400" style={{height:40}}></td>
-                        <td className="border border-slate-400" style={{height:40}}></td>
-                        {ex.map(it=><td key={it.id} className="border border-slate-400" style={{height:40}}></td>)}
-                        <td className="border border-slate-400" style={{height:40}}></td>
+                      <tr className="data-row" style={{height:44}}>
+                        <td rowSpan={2} className="border border-slate-400 px-1" style={{height:82}}></td>
+                        <td className="border border-slate-400" style={{height:44}}></td>
+                        <td className="border border-slate-400" style={{height:44}}></td>
+                        <td className="border border-slate-400" style={{height:44}}></td>
+                        <td className="border border-slate-400" style={{height:44}}></td>
+                        <td className="border border-slate-400" style={{height:44}}></td>
+                        {ex.map(it=><td key={it.id} className="border border-slate-400" style={{height:44}}></td>)}
+                        <td className="border border-slate-400" style={{height:44}}></td>
                       </tr>
-                      <tr className="tokki-row" style={{height:36}}>
-                        <td className="border-l border-b border-slate-400 px-1 py-0 bg-slate-100 text-center text-[9px] text-slate-400 font-bold" style={{height:36}}>特記</td>
-                        <td colSpan={tc - 2} className="border-r border-b border-slate-400" style={{height:36}}></td>
+                      <tr className="tokki-row" style={{height:38}}>
+                        <td className="border-l border-b border-slate-400 px-1 py-0 bg-slate-100 text-center text-[9px] text-slate-400 font-bold" style={{height:38}}>特記</td>
+                        <td colSpan={tc - 2} className="border-r border-b border-slate-400" style={{height:38}}></td>
                       </tr>
                     </Fragment>
                   ))}
+                  {/* ★ 7日目の位置: 備考欄 (特記より少し大きめ)。 当月にサービス提供内容の変更があれば自動記載、手動編集も可 */}
+                  <tr className="bikou-row">
+                    <td className="border border-slate-500 px-1 py-0 bg-amber-50 text-center text-[10px] text-amber-700 font-bold" style={{width:50}}>備考</td>
+                    <td colSpan={tc - 1} className="border border-slate-500 px-1.5 py-0 text-[10px] text-slate-800" style={{background:_bikouText?'#fffdf5':'white'}}><div className="cell-wrap">{_bikouText}</div></td>
+                  </tr>
                 </tbody>
               </table>
             </div>
