@@ -24579,8 +24579,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     //    キー順・空値の差で誤検知しないよう正規化して比較 (運動メニュー以外の編集では出さない)
     const _normPE = (o) => { const r={}; Object.keys(o||{}).forEach(k=>{ const v=o[k]; if(v!==''&&v!=null) r[k]=String(v); }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
     const peChanged = _normPE(prev.plannedExercises) !== _normPE(pat.plannedExercises);
-    const hasRecords = (appData.ticketRecords||[]).some(r => r.patientId === pat.id);
-    if (peChanged && hasRecords) {
+    // ★ 運動メニュー(設定値)が変わったら、過去の記録の有無に関わらず「何月から適用するか」を確認する。
+    //   (これから予定の項目を先に追加する等、記録がまだ無い利用者でも適用開始月を選べるように)
+    if (peChanged) {
       const t = new Date();
       setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], fromY: t.getFullYear(), fromM: t.getMonth()+1 });
       return;
