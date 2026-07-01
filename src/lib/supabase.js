@@ -370,6 +370,41 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     });
     return [...map.values()];
   };
+  // ★ 同一idのレコードを「フィールド単位」でマージ (提供記録・日誌の送迎など)。
+  //   別端末で違う項目(例: PCで気分/次回時間、iPadで体温)を入力した時、 レコード全体で新しい方を
+  //   採用すると片方が消える。 → 非空を優先し、両方非空で異なる時だけ _savedAt が新しい方を採る。
+  //   オブジェクト値(exercises・送迎の pick/drop 等)は中身をキー単位で結合する。
+  const _isEmptyVal = (v) => v == null || v === '';
+  const mergeRecordFields = (a, b) => {
+    if (!a) return b; if (!b) return a;
+    const aNewer = (Number(a._savedAt) || 0) >= (Number(b._savedAt) || 0);
+    const out = {};
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    keys.forEach(k => {
+      if (k === '_savedAt') return;
+      const av = a[k], bv = b[k];
+      const aObj = av && typeof av === 'object' && !Array.isArray(av);
+      const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
+      if (aObj || bObj) {
+        const ao = aObj ? av : {}, bo = bObj ? bv : {};
+        const older = aNewer ? bo : ao, newer = aNewer ? ao : bo;
+        const mo = { ...older };
+        Object.keys(newer).forEach(kk => { if (!_isEmptyVal(newer[kk])) mo[kk] = newer[kk]; else if (!(kk in mo)) mo[kk] = newer[kk]; });
+        out[k] = mo; return;
+      }
+      if (_isEmptyVal(av)) { out[k] = bv; return; }
+      if (_isEmptyVal(bv)) { out[k] = av; return; }
+      out[k] = aNewer ? av : bv; // 両方非空の競合 → 新しい方
+    });
+    out._savedAt = Math.max(Number(a._savedAt) || 0, Number(b._savedAt) || 0);
+    return out;
+  };
+  const mergeByIdFieldLevel = (localArr, cloudArr) => {
+    const map = new Map();
+    (Array.isArray(cloudArr) ? cloudArr : []).forEach(r => { if (r && r.id != null) map.set(String(r.id), r); });
+    (Array.isArray(localArr) ? localArr : []).forEach(r => { if (r && r.id != null) { const ex = map.get(String(r.id)); map.set(String(r.id), ex ? mergeRecordFields(ex, r) : r); } });
+    return [...map.values()];
+  };
   try {
     let cloud = null;
     try { const row = await supabaseLoadStateForStore(storeId); cloud = row && row.data ? row.data : null; }
@@ -393,9 +428,12 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     const mergedTomb = {};
     ARRAY_KEYS.forEach(k => { mergedTomb[k] = { ...(cloudTomb[k] || {}), ...(localTomb[k] || {}) }; });
     const merged = { ...localData, deletedIds: mergedTomb };
+    // ★ 提供記録・日誌はフィールド単位でマージ (別端末で違う項目を入力しても消えない)。 他はid単位。
+    const FIELD_MERGE_KEYS = new Set(['ticketRecords','dailyLogs']);
     ARRAY_KEYS.forEach(k => {
       const tomb = mergedTomb[k] || {};
-      merged[k] = mergeById(localData[k], cloud[k]).filter(r => !(r && r.id != null && tomb[String(r.id)]));
+      const arr = FIELD_MERGE_KEYS.has(k) ? mergeByIdFieldLevel(localData[k], cloud[k]) : mergeById(localData[k], cloud[k]);
+      merged[k] = arr.filter(r => !(r && r.id != null && tomb[String(r.id)]));
     });
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
     //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
