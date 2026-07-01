@@ -32733,6 +32733,28 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [recipientOffice, setRecipientOffice] = React.useState(draft.recipientOffice || '');
   const [recipientName, setRecipientName] = React.useState(draft.recipientName || '');
   const [customPatientName, setCustomPatientName] = React.useState(draft.customPatientName || '');
+  // ★ 定型文（連絡事項に挿入できる登録・編集・削除可能なテンプレート）
+  const [showTemplates, setShowTemplates] = React.useState(false);
+  const [tplEdit, setTplEdit] = React.useState(null); // {id?, title, body} を編集中
+  const faxTemplates = appData.generalFaxTemplates || [];
+  const _saveTemplates = (list) => onSave && onSave({ ...appData, generalFaxTemplates: list });
+  const _upsertTemplate = () => {
+    if (!tplEdit) return;
+    const title = (tplEdit.title || '').trim();
+    const body = tplEdit.body || '';
+    if (!title && !body.trim()) { setTplEdit(null); return; }
+    let list = faxTemplates.slice();
+    if (tplEdit.id) list = list.map(t => t.id === tplEdit.id ? { ...t, title, body } : t);
+    else list = [...list, { id: `tpl_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, title, body }];
+    _saveTemplates(list);
+    setTplEdit(null);
+  };
+  const _deleteTemplate = (id) => { _saveTemplates(faxTemplates.filter(t => t.id !== id)); };
+  const _insertTemplate = (t) => {
+    setMemo(m => (m && m.trim()) ? (m.replace(/\s+$/, '') + '\n' + (t.body || '')) : (t.body || ''));
+    markDirty && markDirty();
+    setShowTemplates(false);
+  };
   const staffList = (appData.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
   // ★ デフォルト優先順位: 1) draft 保存値 → 2) 現在のアクティブ記録者 → 3) 管理者 → 4) リスト先頭
   const _activeRec = getActiveRecorderName();
@@ -32908,6 +32930,10 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           ))}
         </div>
         <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+          <button type="button" onClick={()=>{setTplEdit(null);setShowTemplates(true);}}
+                  style={{background:'#0369a1',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
+            📄 定型文
+          </button>
           <button type="button" onClick={handlePreview}
                   style={{background:'#0f766e',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
             📋 プレビュー
@@ -33097,6 +33123,50 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
         </div>
       </div>
       {showFaxHist && <FaxHistoryListModal history={genHistory} typeLabel="各種連絡" onDelete={deleteGenHist} onClose={()=>setShowFaxHist(false)}/>}
+      {showTemplates && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}
+             onClick={()=>{setShowTemplates(false);setTplEdit(null);}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:560,maxWidth:'100%',maxHeight:'85vh',overflow:'auto',padding:24,boxShadow:'0 10px 40px rgba(0,0,0,0.3)'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>📄 定型文</div>
+              <button onClick={()=>{setShowTemplates(false);setTplEdit(null);}} style={{background:'none',border:'none',fontSize:20,cursor:'pointer',color:'#64748b'}}>✕</button>
+            </div>
+            {!tplEdit && (
+              <>
+                {faxTemplates.length === 0 && (
+                  <div style={{fontSize:13,color:'#94a3b8',padding:'16px 0',textAlign:'center'}}>定型文がありません。「＋ 新規追加」から登録してください。</div>
+                )}
+                {faxTemplates.map(t => (
+                  <div key={t.id} style={{border:'1px solid #e2e8f0',borderRadius:10,padding:12,marginBottom:10}}>
+                    <div style={{fontWeight:'bold',marginBottom:4,color:'#1e293b'}}>{t.title || '（無題）'}</div>
+                    <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginBottom:10,maxHeight:96,overflow:'hidden'}}>{t.body}</div>
+                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                      <button onClick={()=>_insertTemplate(t)} style={{background:'#0f766e',border:'none',color:'white',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>連絡事項に挿入</button>
+                      <button onClick={()=>setTplEdit({...t})} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>編集</button>
+                      <button onClick={()=>{ if(window.confirm('この定型文を削除しますか？')) _deleteTemplate(t.id); }} style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
+                    </div>
+                  </div>
+                ))}
+                <button onClick={()=>setTplEdit({title:'',body:''})} style={{width:'100%',marginTop:6,background:'#0369a1',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>＋ 新規追加</button>
+              </>
+            )}
+            {tplEdit && (
+              <div>
+                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>タイトル</label>
+                <input value={tplEdit.title} onChange={e=>setTplEdit(v=>({...v,title:e.target.value}))} placeholder="例: 介護計画書送付のご案内"
+                       style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
+                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>本文</label>
+                <textarea value={tplEdit.body} onChange={e=>setTplEdit(v=>({...v,body:e.target.value}))} rows={7} placeholder="連絡事項に挿入される本文を入力してください"
+                          style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',lineHeight:1.7,marginBottom:12}}/>
+                <div style={{display:'flex',gap:8}}>
+                  <button onClick={_upsertTemplate} style={{flex:1,background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
+                  <button onClick={()=>setTplEdit(null)} style={{flex:1,background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
