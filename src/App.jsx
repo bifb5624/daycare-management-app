@@ -17045,11 +17045,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       );
                     })()}
                   </td>
-                  <td className={`px-1 py-3 text-center whitespace-nowrap border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
+                  <td className={`px-1 py-1 text-center whitespace-nowrap border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                     {isReadOnly || isPause ? (
-                      <span className={`px-2 py-1 rounded-lg text-xs font-bold ${config.lightColor} ${config.textColor}`}>{p.status || '出席'}</span>
+                      <span className={`px-2 rounded-lg text-xs font-bold flex items-center justify-center ${config.lightColor} ${config.textColor}`} style={{height:42}}>{p.status || '出席'}</span>
                     ) : (
-                      <select value={p.status || "出席"} onChange={(e) => handleStatusChange(p.id, e.target.value)} style={{appearance:'none',WebkitAppearance:'none',MozAppearance:'none'}} className={`px-1 py-1.5 rounded-lg text-xs font-bold border-0 shadow-sm outline-none cursor-pointer w-full text-center ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>
+                      <select value={p.status || "出席"} onChange={(e) => handleStatusChange(p.id, e.target.value)} style={{appearance:'none',WebkitAppearance:'none',MozAppearance:'none',height:42}} className={`px-1 rounded-lg text-xs font-bold border-0 shadow-sm outline-none cursor-pointer w-full text-center ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>
                         {p.status === '振替' ? (
                           <>
                             <option value="振替">振替</option>
@@ -17084,13 +17084,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     })}
                     </div>
                   </td>
-                  <td className={`px-1 py-3 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
+                  <td className={`px-1 py-1 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                     {(() => { const fT=`temp_${timeFilter}`, fBu=`bpUpSt_${timeFilter}`, fBd=`bpDnSt_${timeFilter}`, fPl=`plSt_${timeFilter}`; const vT=p[fT]||"";
                     return (
-                    <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vT} onClick={() => { openKeypad(p.id, fT, vT, isAbsent); setActiveCell(`${p.id}-${fT}`); }} style={{fontSize:14,padding:'3px 1px'}} className={`w-full border rounded-lg text-center font-bold shadow-inner outline-none cursor-pointer disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'bg-transparent border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fT}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'} ${getTempColorClass(vT)}`} />
+                    <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vT} onClick={() => { openKeypad(p.id, fT, vT, isAbsent); setActiveCell(`${p.id}-${fT}`); }} style={{fontSize:14,padding:'0 1px',height:42,boxSizing:'border-box'}} className={`w-full border rounded-lg text-center font-bold shadow-inner outline-none cursor-pointer disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'bg-transparent border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fT}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'} ${getTempColorClass(vT)}`} />
                     );})()}
                   </td>
-                  <td className={`px-1 py-3 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
+                  <td className={`px-1 py-1 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                     {(() => { const fBu=`bpUpSt_${timeFilter}`, fBd=`bpDnSt_${timeFilter}`, fPl=`plSt_${timeFilter}`; const vBu=p[fBu]||"", vBd=p[fBd]||"", vPl=p[fPl]||"";
                     const fBpCombo = `bpSt_combo_${timeFilter}`;
                     // ★ 表示: keypad で編集中はその値、そうでなければ vBu と vBd を / で結合 (両方あるときのみ)
@@ -17102,22 +17102,22 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       {isEditingThis ? (
                         <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
                           onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',minHeight:32,boxSizing:'border-box'}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',height:42,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
                       ) : (
                         <div onClick={() => { if (isAbsent || isReadOnly || isPause) return; openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1,minHeight:32,boxSizing:'border-box'}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1,height:42,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none shadow-inner ${(isAbsent||isReadOnly||isPause)?'opacity-50':''} ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
                           {vBu && vBd ? (
                             <><span className={getBpUpColorClass(vBu)}>{vBu}</span><span className="text-slate-400">/</span><span className={getBpDnColorClass(vBd)}>{vBd}</span></>
                           ) : (vBu ? <span className={getBpUpColorClass(vBu)}>{vBu}</span> : <span className="text-slate-300">　　　</span>)}
                         </div>
                       )}
-                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'3px 1px',width:55}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
+                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'0 1px',width:55,height:42,boxSizing:'border-box'}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
                     </div>
                     );})()}
                   </td>
-                  <td className={`px-1 py-3 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
+                  <td className={`px-1 py-1 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                     {(() => { const fBu=`bpUpEn_${timeFilter}`, fBd=`bpDnEn_${timeFilter}`, fPl=`plEn_${timeFilter}`; const vBu=p[fBu]||"", vBd=p[fBd]||"", vPl=p[fPl]||"";
                     const fBpCombo = `bpEn_combo_${timeFilter}`;
                     const isEditingThis = keypad.isOpen && keypad.recordId === p.id && keypad.field === fBpCombo;
@@ -17127,18 +17127,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       {isEditingThis ? (
                         <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
                           onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',minHeight:32,boxSizing:'border-box'}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',height:42,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`} />
                       ) : (
                         <div onClick={() => { if (isAbsent || isReadOnly || isPause) return; openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
-                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1,minHeight:32,boxSizing:'border-box'}}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',display:'flex',alignItems:'center',justifyContent:'center',gap:1,height:42,boxSizing:'border-box'}}
                           className={`border rounded-lg cursor-pointer outline-none shadow-inner ${(isAbsent||isReadOnly||isPause)?'opacity-50':''} ${isReadOnly ? 'border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fBpCombo}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
                           {vBu && vBd ? (
                             <><span className={getBpUpColorClass(vBu)}>{vBu}</span><span className="text-slate-400">/</span><span className={getBpDnColorClass(vBd)}>{vBd}</span></>
                           ) : (vBu ? <span className={getBpUpColorClass(vBu)}>{vBu}</span> : <span className="text-slate-300">　　　</span>)}
                         </div>
                       )}
-                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'3px 1px',width:55}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
+                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'0 1px',width:55,height:42,boxSizing:'border-box'}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
                     </div>
                     );})()}
                   </td>
@@ -17206,7 +17206,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const _isDash = displayVal==='ー';
                     const _isSym = _isCircle || _isCross || _isDash;
                     return (
-                    <td key={item.id} className={`px-0.5 py-2 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
+                    <td key={item.id} className={`px-0.5 py-1 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
                         <button disabled={isAbsent || isReadOnly || isPause} onClick={() => toggleMark(p.id, item.id, val, isAbsent)}
                           className={`w-8 h-8 rounded-full font-bold text-base flex items-center justify-center mx-auto transition-all disabled:opacity-60 border
@@ -17227,7 +17227,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             if (v && _unit && /[0-9０-９]/.test(v) && !v.endsWith(_unit)) v = `${v}${_unit}`;
                             updateExercise(p.id, item.id, v);
                           }}
-                          style={{width:64,height:34,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
+                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
                           className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
