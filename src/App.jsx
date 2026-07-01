@@ -29397,13 +29397,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                   <span style={{fontSize:_statusFontSize,fontWeight:'bold',color:statusColor}}>{statusLabel}</span>
                 </td>
                 {(() => {
-                  // 様子・欠席理由 cell: 通常は「状態」と同じ大きさ。 長文になったら段階的に縮小し、折り返して全体が収まるように
+                  // 様子・欠席理由 cell: 1行に収まる短文はしっかり大きく(名前と同等)。 2行→3行と長くなるほど段階的に縮小し、折り返して全体が収まるように
                   const tk = (pt?.tokki) || '';
                   const len = tk.length;
-                  const fs = len > 52 ? Math.min(6, _statusFontSize)
-                           : len > 38 ? Math.min(7, _statusFontSize)
-                           : len > 22 ? Math.min(8, _statusFontSize)
-                           : _statusFontSize;
+                  const bigFs = _patientRowH >= 34 ? 13 : _patientRowH >= 30 ? 12 : _patientRowH >= 26 ? 11 : 10;
+                  const fs = len > 52 ? Math.min(8, bigFs)   // ~3行超: 最小
+                           : len > 38 ? Math.min(9, bigFs)   // 3行程度
+                           : len > 26 ? Math.min(10, bigFs)  // 2行程度
+                           : len > 14 ? Math.min(11, bigFs)  // 1〜2行
+                           : bigFs;                          // 1行以内: 大きく
                   return (
                     <td style={{...tdH, border:'1px solid #555', fontSize: fs, color:'#333',
                                 whiteSpace:'normal', wordBreak:'break-word', overflowWrap:'anywhere',
