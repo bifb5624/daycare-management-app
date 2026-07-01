@@ -455,9 +455,9 @@ ${body}</body></html>`;
                   <colgroup><col style="width:5%;"/><col style="width:45%;"/><col style="width:5%;"/><col style="width:45%;"/></colgroup>
                   <tbody>
                     <tr>
-                      <th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">既往</th>
+                      <th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">既往歴</th>
                       <td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${pat.kiou||''}</td>
-                      <th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">留意</th>
+                      <th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">留意点</th>
                       <td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${pat.ryui||''}</td>
                     </tr>
                   </tbody>
@@ -17179,20 +17179,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             <option value="">— 選択 —</option>
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
+                          {/* ★ 他の運動メニューと同様: 規定値(個別運動デフォルト)を薄グレーのプレースホルダーで背景表示。 値を直接入力 */}
                           <input type="text" value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: e.target.value})}
-                            placeholder={selItem?`${patDefault||''}${selItem.defaultUnit?` ${selItem.defaultUnit}`:''}`:'未選択'}
+                            placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${selItem.defaultUnit}`:''}`:'未選択'}
                             style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1}}
-                            className="w-full text-center border border-emerald-300 rounded bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-emerald-300"/>
-                          {/* ★ ○ ボタン: 押すと「○」を記録(実施)。 高さ枠は常に確保して 未入力/実施 でセル高が変わらないように */}
-                          <div style={{height:24,marginTop:2}}>
-                          {selItem && !isReadOnly && !isAbsent && !isPause && (
-                            <button type="button" onClick={()=>updateExercise(p.id, item.id, {...cur, itemId: effItemId, value: (cur.value==='○'?'':'○')})}
-                              title={patDefault?`○（実施。分析では基準値「${patDefault}${selItem.defaultUnit||''}」で表示）`:'○（実施）'}
-                              style={{height:'100%',boxSizing:'border-box'}}
-                              className={`w-full text-[13px] font-bold leading-none rounded border active:scale-95 ${cur.value==='○'?'bg-emerald-500 border-emerald-500 text-white':'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-100'}`}>○</button>
-                          )}
-                          </div>
+                            className="w-full text-center border border-emerald-300 rounded bg-white outline-none focus:border-emerald-500 disabled:opacity-40 placeholder-slate-400"/>
                         </td>
                       );
                     }
@@ -21857,7 +21849,7 @@ function buildAllPeriodTicketHtml(appData, patient) {
       const emptyRowsHtml = Array.from({length: emptyRows}).map(() => `<tr style="height:38px;"><td rowspan="2" style="border:1px solid #475569;background:#f8fafc;height:74px;"></td>${Array.from({length: 5 + exerciseItems.length + 1}).map(() => '<td style="border:1px solid #94a3b8;"></td>').join('')}</tr><tr style="height:30px;"><td style="border:1px solid #94a3b8;background:#f1f5f9;text-align:center;font-size:10px;color:#cbd5e1;padding:1px;">特記</td><td colspan="${5 + exerciseItems.length + 1}" style="border:1px solid #94a3b8;"></td></tr>`).join('');
       return `<div class="tp" style="width:297mm;min-height:210mm;box-sizing:border-box;padding:4mm 6mm;page-break-after:always;display:flex;flex-direction:column;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div><div style="font-size:17px;font-weight:bold;letter-spacing:0.1em;line-height:1.1;">${tY}年${tM}月 サービス提供記録</div><div style="font-size:26px;font-weight:bold;margin-top:8px;line-height:1.1;">${patient.name} <span style="font-size:18px;font-weight:normal;">様</span></div></div><div style="font-size:10px;color:#475569;text-align:right;line-height:1.5;"><div>提供責任者: <b>${facility.serviceResponsible||'—'}</b>　　実施時間: <b>${jisshiTime}</b></div><div style="color:#1d4ed8;font-weight:bold;margin-top:2px;">通所曜日: ${schedText||'—'}</div></div></div>
-        <table style="width:100%;border-collapse:collapse;margin-bottom:0;table-layout:fixed;"><colgroup><col style="width:5%;"/><col style="width:45%;"/><col style="width:5%;"/><col style="width:45%;"/></colgroup><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">既往</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.kiou||''}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">留意</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.ryui||''}</td></tr></tbody></table>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:0;table-layout:fixed;"><colgroup><col style="width:5%;"/><col style="width:45%;"/><col style="width:5%;"/><col style="width:45%;"/></colgroup><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">既往歴</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.kiou||''}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">留意点</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.ryui||''}</td></tr></tbody></table>
         <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px;table-layout:fixed;"><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;width:8%;">マッサージ</th><td style="border:1px solid #475569;font-size:11px;font-weight:bold;padding:1px 6px;width:42%;">${patient.massageNeed||'—'}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;width:8%;">温浴時電療</th><td style="border:1px solid #475569;font-size:11px;font-weight:bold;padding:1px 6px;width:42%;">${patient.onyokuDenryo||'—'}</td></tr></tbody></table>
         <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;"><thead><tr style="background:#1e293b;color:white;"><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:50px;">日付</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:34px;">状態</th><th style="border:1px solid #475569;padding:3px 1px;font-size:9px;width:60px;">気分</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:48px;">体温</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">開始 血圧(脈)</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">終了 血圧(脈)</th>${exerciseItems.map(it => `<th style="border:1px solid #475569;padding:3px 1px;font-size:9px;line-height:1.1;">${it.name}</th>`).join('')}<th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:42px;">介護整体</th></tr></thead><tbody>${tableRows}${emptyRowsHtml}</tbody></table>
       </div>`;
@@ -22038,9 +22030,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               <colgroup><col style={{width:'5%'}}/><col style={{width:'45%'}}/><col style={{width:'5%'}}/><col style={{width:'45%'}}/></colgroup>
               <tbody>
                 <tr>
-                  <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:10,fontWeight:"normal"}}>既往</th>
+                  <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:10,fontWeight:"normal"}}>既往歴</th>
                   <td className="border border-slate-600 px-1.5 py-0.5" style={{height:'32px',overflow:'hidden',fontSize:10,lineHeight:1.3,wordBreak:'break-all',verticalAlign:'top'}}>{sp.kiou}</td>
-                  <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:10,fontWeight:"normal"}}>留意</th>
+                  <th className="border border-slate-600 px-1 py-0 text-center" style={{background:'white',color:'black',fontSize:10,fontWeight:"normal"}}>留意点</th>
                   <td className="border border-slate-600 px-1.5 py-0.5" style={{height:'32px',overflow:'hidden',fontSize:10,lineHeight:1.3,wordBreak:'break-all',verticalAlign:'top'}}>{sp.ryui}</td>
                 </tr>
               </tbody>
@@ -32234,8 +32226,11 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const staffList = (appData.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
   const activeRecName = getActiveRecorderName();
   const activeInList = activeRecName && staffList.find(s => s.name === activeRecName);
-  const defaultManagerName = (activeInList?.name) || (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
-  const [selectedManager, setSelectedManager] = React.useState(defaultManagerName);
+  // ★ 同名で役職違いの担当者を区別できるよう、選択値は「名前::役職」の複合キーにする
+  const _mgrKey = (s) => s ? `${s.name}::${s.role||''}` : '';
+  const _defMgr = activeInList || staffList.find(s => s.role === '管理者') || staffList[0] || null;
+  const defaultManagerKey = _mgrKey(_defMgr);
+  const [selectedManager, setSelectedManager] = React.useState(defaultManagerKey);
 
   const facility = appData.systemSettings?.facilityInfo || {};
   const patients = appData.patients || [];
@@ -32362,7 +32357,28 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const parsed = parseFurikaeTokki(rawTokki);
 
     const defaultReason = fax.reason !== undefined ? fax.reason : parsed.reason || rawTokki;
-    const defaultMemo = fax.memo !== undefined ? fax.memo : (parsed.isFurikae && parsed.furikaeNote ? parsed.furikaeNote : '');
+    // ★ 連絡事項のデフォルト文面: 欠席日の通所開始(既定 午前9時)を過ぎていれば過去形、前なら未来形。 振替がある場合は下段に振替日を未来/過去形で追記。 いずれも編集可能(編集後は fax.memo が優先)。
+    const _defaultMemoTemplate = (() => {
+      const now = new Date();
+      const absD = new Date(date + 'T00:00:00');
+      const sessionStart = new Date(absD.getFullYear(), absD.getMonth(), absD.getDate(), 9, 0, 0);
+      const pastOrDuring = now >= sessionStart; // 通所開始を過ぎている(=通所中/後)
+      const lines = ['いつもお世話になっております。', `上記理由でお休みされ${pastOrDuring ? 'ました' : 'ます'}。`];
+      if (parsed.isFurikae && parsed.furikaeNote) {
+        const fm = parsed.furikaeNote.match(/(\d+)月(\d+)日\s*(AM|PM|午前|午後)?/);
+        if (fm) {
+          const fMonth = parseInt(fm[1], 10), fDay = parseInt(fm[2], 10);
+          const isPm = fm[3] === 'PM' || fm[3] === '午後';
+          const timeLabel = isPm ? '午後' : '午前中';
+          const fDate = new Date(now.getFullYear(), fMonth - 1, fDay);
+          const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const furiFuture = fDate >= todayMidnight;
+          lines.push(`（なお、${fMonth}月${fDay}日${timeLabel}に${furiFuture ? '振替予定です' : '振替いたしました'}。）`);
+        }
+      }
+      return lines.join('\n');
+    })();
+    const defaultMemo = fax.memo !== undefined ? fax.memo : _defaultMemoTemplate;
 
     return (
       <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
@@ -32492,7 +32508,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                     style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:0,margin:0,cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left',textAlignLast:'left'}}>
                     {staffList.length === 0 && <option value="">（従業員未登録）</option>}
                     {staffList.map((s, i) => (
-                      <option key={s.id || i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
+                      <option key={s.id || i} value={_mgrKey(s)}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
                     ))}
                   </select>
                 </div>
@@ -32580,7 +32596,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 )}
               </div>
 
-              <div style={{fontSize:13,marginTop:8}}>今後ともよろしくお願いいたします。</div>
+              <div style={{fontSize:16,marginTop:8}}>今後ともよろしくお願いいたします。</div>
             </div>
           </div>
         </div>
@@ -32719,8 +32735,16 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // ★ デフォルト優先順位: 1) draft 保存値 → 2) 現在のアクティブ記録者 → 3) 管理者 → 4) リスト先頭
   const _activeRec = getActiveRecorderName();
   const _activeInList = _activeRec && staffList.find(s => s.name === _activeRec);
-  const defaultManagerName = (_activeInList?.name) || (staffList.find(s => s.role === '管理者')?.name) || staffList[0]?.name || (appData.systemSettings?.facilityInfo?.manager) || '';
-  const [selectedManager, setSelectedManager] = React.useState(draft.selectedManager || defaultManagerName);
+  // ★ 同名で役職違いを区別できるよう「名前::役職」の複合キーで管理
+  const _mgrKey = (s) => s ? `${s.name}::${s.role||''}` : '';
+  const _defMgr = _activeInList || staffList.find(s => s.role === '管理者') || staffList[0] || null;
+  const defaultManagerKey = _mgrKey(_defMgr);
+  const [selectedManager, setSelectedManager] = React.useState(() => {
+    const d = draft.selectedManager || '';
+    if (d.includes('::')) return d;               // 既に複合キー
+    const m = d && staffList.find(s => s.name === d); // 旧形式(名前のみ)からの移行
+    return m ? _mgrKey(m) : defaultManagerKey;
+  });
 
   // ★ 個人ファイルの履歴から「その各種連絡を開く」ディープリンク (保存済み内容を復元)
   React.useEffect(() => {
@@ -33001,7 +33025,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
               <div style={{marginBottom:10,fontSize:17,borderBottom:'1px solid black',paddingBottom:5,display:'flex',alignItems:'flex-end',gap:8}}>
                 <input type="text" value={recipientName} onChange={e=>setRecipientName(e.target.value)}
                        placeholder="(担当者名)" className="fax-inline-input"
-                       style={{flex:1,minWidth:0,fontSize:17,border:'none',outline:'none',background:'transparent',padding:'2px 4px',fontFamily:'inherit'}}/>
+                       style={{flex:1,minWidth:0,fontSize:(recipientName||'').length>22?12:(recipientName||'').length>16?14:17,border:'none',outline:'none',background:'transparent',padding:'2px 4px',fontFamily:'inherit'}}/>
                 <span style={{fontWeight:'bold',flexShrink:0,whiteSpace:'nowrap',display:'inline-block',width:'2.5em',textAlign:'left'}}>様</span>
               </div>
               {patient?.cmFax && (
@@ -33024,7 +33048,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   style={{fontSize:16,fontFamily:'inherit',border:'none',outline:'none',background:'transparent',padding:0,margin:0,cursor:'pointer',appearance:'none',WebkitAppearance:'none',MozAppearance:'none',color:'inherit',textAlign:'left',textAlignLast:'left'}}>
                   {staffList.length === 0 && <option value="">（従業員未登録）</option>}
                   {staffList.map((s, i) => (
-                    <option key={s.id || i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
+                    <option key={s.id || i} value={_mgrKey(s)}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
                   ))}
                 </select>
               </div>
@@ -33066,7 +33090,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                       placeholder="ここに連絡事項を直接入力してください"
                       className="fax-inline-input"
                       style={{flex:1,fontSize:16,lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%'}}/>
-            <div style={{fontSize:13,marginTop:8}}>今後ともよろしくお願いいたします。</div>
+            <div style={{fontSize:16,marginTop:8}}>今後ともよろしくお願いいたします。</div>
           </div>
         </div>
       </div>
