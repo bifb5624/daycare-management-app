@@ -973,17 +973,11 @@ function AutoFitText({ text, max = 13, min = 6, bold, color }) {
 // 利用者の予定運動メニューを「指定年月」時点の値で返す (月別バージョン対応)
 //   plannedExercisesHistory: [{from:'YYYY-MM', values:{itemId:val}}]（from の月以降に有効）。
 //   履歴が無ければ現在値 plannedExercises をそのまま返す。
-const getPlannedExercisesForMonth = (patient, year, month) => {
-  if (!patient) return {};
-  const hist = patient.plannedExercisesHistory;
-  if (!Array.isArray(hist) || hist.length === 0) return patient.plannedExercises || {};
-  const ym = `${year}-${String(month).padStart(2, '0')}`;
-  // from は 'YYYY-MM' か 'YYYY-MM-DD'。 年月(先頭7文字)で比較して、その月までに有効な最新を採用。
-  const sorted = hist.slice().sort((a, b) => String(a.from).localeCompare(String(b.from)));
-  let chosen = sorted[0];
-  for (const h of sorted) { if (String(h.from).slice(0,7) <= ym) chosen = h; }
-  return (chosen && chosen.values) || patient.plannedExercises || {};
-};
+// 月別提供記録の「設定数値」用。 ★ その月の初日(1日)時点で有効な値を返す。
+//   → 月途中(例 6/15)の変更は、その月(6月)は旧値のまま、翌月(7月)から新値になる。
+//   (提供記録入力のグレー数値は getPlannedExercisesForDate で「選んだ日当日から」反映し、月別とは基準日が異なる)
+const getPlannedExercisesForMonth = (patient, year, month) =>
+  getPlannedExercisesForDate(patient, `${year}-${String(month).padStart(2, '0')}-01`);
 // ★ 指定「日付(YYYY-MM-DD)」時点で有効な予定運動メニューを返す (日付単位のサービス内容変更に対応)。
 //   plannedExercisesHistory の from は 'YYYY-MM'(=月初) か 'YYYY-MM-DD'。
 const getPlannedExercisesForDate = (patient, dateISO) => {
@@ -24628,8 +24622,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const { pat, next, prevPlanned, prevHistory, prevIndividual, prevIndHistory } = plannedExModal;
     const fd = String(fromDate || new Date().toISOString().slice(0,10)).slice(0,10);
     const dd = new Date(fd);
-    const nm = new Date(dd.getFullYear(), dd.getMonth()+1, 1); // 翌月1日
-    const effFrom = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,'0')}-01`;
+    // ★ 履歴の from は「選んだ日付」。 提供記録入力のグレー数値は当日から反映、月別提供記録の設定数値は月初判定なので翌月から反映される。
+    const effFrom = fd;
     const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems || [];
     const indItems = appData.systemSettings?.individualExerciseItems || [];
     const nameOf = (k) => (exItems.find(i=>i.id===k)?.name) || k;
@@ -24664,12 +24658,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     }
     // 備考(serviceChanges): 記載日は選んだ日、末尾に「（◯月から）」
     let sc = Array.isArray(pat.serviceChanges) ? pat.serviceChanges.slice() : [];
-    if (diffs.length) sc.push({ id:`sc_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date: fd, text: `${diffs.join('、')}（${nm.getMonth()+1}月から）` });
+    if (diffs.length) sc.push({ id:`sc_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date: fd, text: diffs.join('、') });
     pat2.serviceChanges = sc;
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
     setPlannedExModal(null);
-    onSave(next2, { manual: true, message: `✓ 保存しました（規定値は${nm.getMonth()+1}月から適用／備考は${dd.getMonth()+1}月${dd.getDate()}日で記載）` });
+    onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
   };
 
   const handleStatusChange = (val) => {
@@ -25908,14 +25902,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="text-base font-bold text-slate-800 mb-1">サービス提供内容の変更を反映</h3>
-            <p className="text-xs text-slate-500 mb-4">運動メニュー／個別運動の設定値が変わりました。<b>変更を決めた日</b>を選んでください。その日付で月別提供記録の<b>備考</b>に自動記載され（例:「6/15 重さ 3→4に変更（7月から）」）、<b>規定値（グレー数値）は翌月1日から</b>切り替わります。</p>
+            <p className="text-xs text-slate-500 mb-4">運動メニュー／個別運動の設定値が変わりました。<b>変更日</b>を選んでください。<br/>・<b>提供記録入力のグレー数値</b>＝選んだ<b>日から</b>新値<br/>・<b>月別提供記録の設定数値</b>＝<b>翌月から</b>新値（当月は旧値のまま）<br/>・<b>備考</b>＝選んだ日付で「◯/◯ 重さ 3→4に変更」と自動記載</p>
             <div className="flex items-center gap-2 mb-5">
               <span className="text-sm text-slate-500">変更日：</span>
               <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="履歴で分けず、今の値を全期間に適用（備考にも記載しない）">分けない</button>
-              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">保存（翌月から適用）</button>
+              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この変更日で保存</button>
             </div>
           </div>
         </div>
