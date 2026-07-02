@@ -27503,6 +27503,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
   const [massageInput, setMassageInput] = useState((appData.systemSettings?.massageTypes || []).join('、'));
   const [anthropicApiKey, setAnthropicApiKey] = useState(appData.systemSettings?.anthropicApiKey || '');
   const [kibunReasonInputs, setKibunReasonInputs] = useState({}); // 気分の理由 追加用入力 (timing_mood → 文字列)
+  const [kibunTiming, setKibunTiming] = useState('arrival'); // 気分の理由タブ: 通所時/帰宅時 切替
   // 気分の理由: 既定/カスタムを全moodぶん取得して1つの構造にし、編集して保存する
   const _kibunAllReasons = () => { const base = { arrival:{}, departure:{} }; ['arrival','departure'].forEach(t => KIBUN_MOOD_META.forEach(m => { base[t][m.key] = getKibunReasonsFrom(appData.systemSettings, t, m.key).slice(); })); return base; };
   const _saveKibunReasons = (all) => onSave({ ...appData, systemSettings: { ...appData.systemSettings, kibunReasons: all } }, { manual:true, message:'✓ 気分の理由を保存しました' });
@@ -27675,6 +27676,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
     { id: 'diary', label: '日誌' },
     { id: 'cm', label: 'ケアマネ事業所・担当者' },
     { id: 'fitness', label: '体力測定' },
+    { id: 'kibun', label: '気分の理由' },
     { id: 'addon', label: 'アドオン' },
     { id: 'system', label: 'システム' },
   ];
@@ -27738,6 +27740,56 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
       <div className="flex-1 overflow-y-auto p-6 pb-8">
         <div className="max-w-4xl mx-auto space-y-6 pb-6">
 
+          {/* 気分の理由 (カスタマイズ) */}
+          {activeTab === 'kibun' && (
+            <SectionCard title="気分の理由（カスタマイズ）">
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <p className="text-xs text-slate-500">提供記録で気分を選んだ後に出る「理由」の選択肢を、<b>通所時・帰宅時・気分ごと</b>に追加・削除できます。空欄でも自由入力は常に使えます。</p>
+                <button type="button" onClick={_resetKibunReasons} className="shrink-0 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold whitespace-nowrap">既定に戻す</button>
+              </div>
+              {/* 通所時 / 帰宅時 切替 */}
+              <div className="inline-flex bg-slate-100 rounded-xl p-1 mb-4">
+                {[['arrival','🏢 通所時'],['departure','🏠 帰宅時']].map(([t,l])=>(
+                  <button type="button" key={t} onClick={()=>setKibunTiming(t)}
+                    className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${kibunTiming===t?'bg-white shadow text-blue-700':'text-slate-500 hover:text-slate-700'}`}>{l}</button>
+                ))}
+              </div>
+              <div className="space-y-3">
+                {KIBUN_MOOD_META.map(m => {
+                  const timing = kibunTiming;
+                  const reasons = getKibunReasonsFrom(appData.systemSettings, timing, m.key);
+                  const ikey = `${timing}_${m.key}`;
+                  const col = ({excellent:{bg:'#fffbeb',bd:'#fde68a',tx:'#b45309'}, good:{bg:'#f0fdf4',bd:'#bbf7d0',tx:'#15803d'}, normal:{bg:'#f0f9ff',bd:'#bae6fd',tx:'#0369a1'}, bad:{bg:'#fff7ed',bd:'#fed7aa',tx:'#c2410c'}, terrible:{bg:'#fef2f2',bd:'#fecaca',tx:'#b91c1c'}})[m.key] || {bg:'#f8fafc',bd:'#e2e8f0',tx:'#475569'};
+                  return (
+                    <div key={m.key} className="rounded-xl border overflow-hidden" style={{borderColor:col.bd}}>
+                      <div className="px-4 py-2 flex items-center gap-2" style={{background:col.bg}}>
+                        <span className="text-lg">{m.emoji}</span>
+                        <span className="text-sm font-bold" style={{color:col.tx}}>{m.label}</span>
+                        <span className="text-[11px] text-slate-400 ml-1">{reasons.length}件</span>
+                      </div>
+                      <div className="p-3 bg-white">
+                        <div className="flex flex-wrap gap-2 mb-2.5">
+                          {reasons.length===0 && <span className="text-xs text-slate-400 py-1">まだ理由がありません（自由入力は使えます）</span>}
+                          {reasons.map((r,ri)=>(
+                            <span key={ri} className="inline-flex items-center gap-1.5 bg-slate-50 border border-slate-300 rounded-full pl-3 pr-1.5 py-1.5 text-sm font-bold text-slate-700">
+                              {r}
+                              <button type="button" onClick={()=>_delKibunReason(timing,m.key,ri)} className="w-5 h-5 flex items-center justify-center rounded-full bg-slate-200 hover:bg-red-500 hover:text-white text-slate-500 text-xs" title="削除">✕</button>
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input value={kibunReasonInputs[ikey]||''} onChange={e=>setKibunReasonInputs(p=>({...p,[ikey]:e.target.value}))}
+                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); _addKibunReason(timing,m.key); } }}
+                            placeholder="理由を入力して追加..." className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
+                          <button type="button" onClick={()=>_addKibunReason(timing,m.key)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold whitespace-nowrap">＋ 追加</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </SectionCard>
+          )}
           {/* アドオン (オプション機能) */}
           {activeTab === 'addon' && (
             <SectionCard title="アドオン（オプション機能）">
@@ -28734,45 +28786,6 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                   className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono text-sm outline-none"/>
                 {anthropicApiKey && <p className="text-xs text-emerald-600 font-bold mt-1">✓ 設定済み（末尾: ...{anthropicApiKey.slice(-6)}）</p>}
               </>)}
-            </SectionCard>
-            <SectionCard title="気分の理由（カスタマイズ）">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-slate-500">提供記録で気分を選んだ後に出る「理由」の選択肢を、<b>通所時・帰宅時・気分ごと</b>に追加・削除できます。空欄にしても自由入力は常に使えます。</p>
-                <button type="button" onClick={_resetKibunReasons} className="shrink-0 ml-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold whitespace-nowrap">既定に戻す</button>
-              </div>
-              <div className="space-y-4">
-                {[['arrival','🏢 通所時'],['departure','🏠 帰宅時']].map(([timing,tlabel]) => (
-                  <div key={timing} className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-700">{tlabel}</div>
-                    <div className="p-3 space-y-3">
-                      {KIBUN_MOOD_META.map(m => {
-                        const reasons = getKibunReasonsFrom(appData.systemSettings, timing, m.key);
-                        const ikey = `${timing}_${m.key}`;
-                        return (
-                          <div key={m.key}>
-                            <div className="text-xs font-bold text-slate-600 mb-1">{m.emoji} {m.label}</div>
-                            <div className="flex flex-wrap gap-1.5 items-center">
-                              {reasons.map((r,ri) => (
-                                <span key={ri} className="inline-flex items-center gap-1 bg-slate-100 border border-slate-200 rounded-full pl-3 pr-1 py-1 text-xs font-bold text-slate-700">
-                                  {r}
-                                  <button type="button" onClick={()=>_delKibunReason(timing, m.key, ri)} className="w-4 h-4 flex items-center justify-center rounded-full bg-slate-300 hover:bg-red-400 text-white text-[10px]" title="削除">✕</button>
-                                </span>
-                              ))}
-                              {reasons.length===0 && <span className="text-[11px] text-slate-400">（なし）</span>}
-                              <span className="inline-flex items-center gap-1">
-                                <input value={kibunReasonInputs[ikey]||''} onChange={e=>setKibunReasonInputs(p=>({...p,[ikey]:e.target.value}))}
-                                  onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); _addKibunReason(timing, m.key); } }}
-                                  placeholder="理由を追加..." className="px-2 py-1 w-32 bg-white border border-slate-300 rounded-lg text-xs outline-none focus:border-blue-400"/>
-                                <button type="button" onClick={()=>_addKibunReason(timing, m.key)} className="px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">＋</button>
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </SectionCard>
             <SectionCard title="データ管理">
               {(() => {
