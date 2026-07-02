@@ -14144,9 +14144,12 @@ export default function App() {
   //   (本部は確認用で記録には使わないため。 管理者が居なければ未選択のまま=選択画面)
   React.useEffect(() => {
     if (staffSession?.role !== 'super_admin' || !staffSession?.storeId) return;
-    if (activeRecorder && !activeRecorder.isSuperAdmin) return; // 既に店舗担当者を選択済みなら触らない
     const staff = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
     if (!staff.length) return; // 店舗データ未読込/スタッフ未登録 → 選択画面に任せる
+    // ★ 現在の記録者が「この店舗のスタッフに実在する」場合のみ維持する。
+    //   (他店舗から持ち越した記録者や本部名が残っていたら、この店舗の管理者を選び直す)
+    const _norm = (n) => normalizeName(n || '').trim();
+    if (activeRecorder && !activeRecorder.isSuperAdmin && staff.some(s => _norm(s.name) === _norm(activeRecorder.name))) return;
     const mgr = staff.find(s => s.role === '管理者') || staff[0];
     const r = { id: `rec_${mgr.id}`, name: mgr.name, roleLabel: mgr.role || '' };
     try { sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(r)); } catch {}
