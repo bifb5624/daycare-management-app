@@ -22860,23 +22860,47 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       return `${h}時${m}分`;
   };
 
+  // ★ 次回情報を即 appData.ticketRecords に反映して保存 (記録が無い利用者は作成)。 _savedAt を付けて同期で正しく優先。
+  const persistOverride = (recordId, patch) => {
+      const now = Date.now();
+      let recs = [...(appData.ticketRecords || [])];
+      const idx = recs.findIndex(r => String(r.id) === String(recordId));
+      if (idx >= 0) {
+        recs[idx] = { ...recs[idx], ...patch, _savedAt: now };
+      } else if (String(recordId).startsWith('auto-')) {
+        const pid = Number(String(recordId).slice(5));
+        const pat = (appData.patients || []).find(p => p.id === pid);
+        if (!pat) return;
+        const d = new Date(selectedDate);
+        recs.push({ id: `tr_${pid}_${targetYear}_${d.getMonth()+1}_${d.getDate()}`, patientId: pid, date: targetDateStr, year: targetYear, status: '出席', ...patch, _savedAt: now });
+      } else { return; }
+      markClean();
+      onSave({ ...appData, ticketRecords: recs });
+  };
   const handleOverrideBlur = (recordId, field, value) => {
       let finalValue = value;
       if (field === 'nextDateOverride' && value && value !== "未定") finalValue = formatShortDate(value);
       else if (field === 'nextTimeOverride') finalValue = formatTimeString(value);
-      
       setLocalOverrides(prev => ({ ...prev, [recordId]: { ...prev[recordId], [field]: finalValue } }));
-      // onSaveは呼ばない（保存ボタンで一括保存）
+      // ★ 即保存 (連絡事項と同様に相互反映・更新ボタン不要)
+      persistOverride(recordId, { [field]: finalValue });
   };
 
   const saveAllOverrides = () => {
-      const newRecords = appData.ticketRecords.map(r => {
-        const ov = localOverrides[r.id];
-        if (!ov) return r;
-        return { ...r, ...ov };
+      const now = Date.now();
+      let recs = [...(appData.ticketRecords || [])];
+      Object.entries(localOverrides).forEach(([rid, ov]) => {
+        if (!ov) return;
+        const idx = recs.findIndex(r => String(r.id) === String(rid));
+        if (idx >= 0) { recs[idx] = { ...recs[idx], ...ov, _savedAt: now }; }
+        else if (String(rid).startsWith('auto-')) {
+          const pid = Number(String(rid).slice(5));
+          const pat = (appData.patients || []).find(p => p.id === pid);
+          if (pat) { const d = new Date(selectedDate); recs.push({ id:`tr_${pid}_${targetYear}_${d.getMonth()+1}_${d.getDate()}`, patientId:pid, date:targetDateStr, year:targetYear, status:'出席', ...ov, _savedAt:now }); }
+        }
       });
       markClean();
-      onSave({ ...appData, ticketRecords: newRecords });
+      onSave({ ...appData, ticketRecords: recs });
   };
 
   const handleKeypadInput = (newValue, isFirst) => {
