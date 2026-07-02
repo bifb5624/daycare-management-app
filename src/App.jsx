@@ -30793,6 +30793,35 @@ const MON_ITEMS = [
   { key:'s4',   no:'⑤', title:'今後の方向性',                       explain:'計画の変更が必要な新たな課題が生じていないか等による判断。',   options:['このまま継続','一部内容を変更して継続','サービス中止'] },
 ];
 const _monNorm = (v, autoText) => (v && typeof v === 'object') ? { sel: v.sel||'', text: v.text||'' } : { sel:'', text: (v!=null && v!=='') ? v : (autoText||'') };
+// ★ モニタリング表を「表形式HTML」で生成 (モニタリング画面・個人ファイル 共通で使用)
+const _escMon = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+function buildMonitoringTableHtml(patient, sheet, facility, monthLabel) {
+  const f = facility || {}; const s = sheet || {};
+  const cell = (v) => (v && typeof v==='object') ? v : { sel:'', text:(v!=null?String(v):'') };
+  const bd = 'border:1px solid #000;';
+  const fmt = (ymd) => { if(!ymd) return ''; try { return new Date(ymd).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}); } catch { return ymd; } };
+  const rows = MON_ITEMS.map(it => { const c = cell(s[it.key]); return `<tr>
+    <td style="${bd}background:#d9d9d9;padding:6px 8px;font-weight:bold;font-size:11px;width:170px;vertical-align:top;line-height:1.4;">${it.no}${it.title}<div style="font-weight:normal;font-size:9px;color:#444;margin-top:2px;">${_escMon(it.explain)}</div></td>
+    <td style="${bd}padding:6px;font-size:11px;font-weight:bold;text-align:center;width:96px;vertical-align:top;">${_escMon(c.sel)||'　'}</td>
+    <td style="${bd}padding:6px 9px;font-size:11px;vertical-align:top;line-height:1.6;">${_escMon(c.text)||'&nbsp;'}</td></tr>`; }).join('');
+  return `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;background:white;">
+    <div style="text-align:center;font-size:17px;font-weight:bold;margin-bottom:10px;">通所介護モニタリング表</div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
+      <tr><td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;white-space:nowrap;">利用者名</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(patient.name)} 様</td>
+          <td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;white-space:nowrap;">事業所名</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(f.name)||''}</td></tr>
+      <tr><td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;">居宅介護支援事業者</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(patient.cmOffice)||''}</td>
+          <td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;">担当ケアマネ</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(patient.cmName)||''} 様</td></tr>
+      <tr><td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;">対象期間</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(monthLabel)}</td>
+          <td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;">実施日</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(fmt(s.implDate))}</td></tr>
+      <tr><td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;">実施者</td><td style="${bd}padding:5px 8px;font-size:11px;" colspan="3">${_escMon(s.recorder)||''}</td></tr>
+    </table>
+    <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
+      <tr><td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:170px;">項目</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:96px;">結果</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;">内容</td></tr>
+      ${rows}
+    </table></div>`;
+}
 function MonitoringSheetModal({ patient, facility, period, record, autoStatus, autoChange, autoSel, noAttendance, defaultRecorder, defaultDate, onClose, onSave, onPrint, onAiDraft, hasApiKey }) {
   const init = record?.sheet || {};
   const hasRec = !!record;
@@ -31582,7 +31611,7 @@ ${optionsDesc}
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
             <Printer size={14}/> プレビュー
           </button>
-          <button type="button" onClick={()=>{ if(saveFnRef?.current) saveFnRef.current(); else { markClean(); onSave({...appData}); } }}
+          <button type="button" onClick={()=>{ markClean(); onSave({...appData}, {manual:true, message:'✓ 保存しました'}); }}
             style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
             <Save size={14}/> 保存
           </button>
@@ -31625,9 +31654,9 @@ ${optionsDesc}
             🤖 AIで下書き
           </button>
         )}
-        <button type="button" onClick={createAllDefault} title="選んだ利用者のモニタリング表を個別ファイル(個人ファイル)へ保存(AIなし)"
+        <button type="button" onClick={createAllDefault} title="選んだ利用者のモニタリング表を、利用者マスタの個人ファイル(ケアマネジメント)に表形式で保存(同月は最新で上書き)"
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
-          📁 個別ファイルに保存
+          📁 個人ファイルに保存
         </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
@@ -33990,16 +34019,27 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           )}
           {/* ケアマネジメントタブのみ: モニタリング表（保管・閲覧） */}
           {isCMTab && (() => {
-            const mons = (appData.monitoringRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+            // ★ 同じ月が複数あれば最新(createdAt)のみに集約して表示
+            const _byPeriod = {};
+            (appData.monitoringRecords||[]).filter(r=>r.patientId===patient.id).forEach(r=>{ const k=r.period||''; if(!_byPeriod[k] || (r.createdAt||0) > (_byPeriod[k].createdAt||0)) _byPeriod[k]=r; });
+            const mons = Object.values(_byPeriod).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+            const _fac = appData.systemSettings?.facilityInfo || {};
+            const _printMon = (r) => {
+              const html = buildMonitoringTableHtml(patient, r.sheet||{}, _fac, r.period);
+              const w = window.open('', '_blank');
+              if (!w) { alert('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
+              w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>通所介護モニタリング表_${patient.name}_${r.period}</title><style>@page{size:A4 landscape;margin:10mm}body{margin:0;padding:10mm;box-sizing:border-box}</style></head><body>${html}</body></html>`);
+              w.document.close();
+              setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} }, 350);
+            };
             return (
               <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
                 <div className="text-sm font-bold text-sky-900 mb-2 flex items-center gap-1.5"><ClipboardList size={15}/>モニタリング表（保管）</div>
                 {mons.length === 0 ? (
-                  <div className="text-xs text-slate-500">まだモニタリング表がありません。「モニタリング」画面で対象者を選び「📁 個別ファイルに保存」から保存できます。</div>
+                  <div className="text-xs text-slate-500">まだモニタリング表がありません。「モニタリング」画面で対象者を選び「📁 個人ファイルに保存」から保存できます。</div>
                 ) : (
                   <div className="space-y-2">
                     {mons.map(r => {
-                      const s = r.sheet;
                       const open = expandedMon === r.id;
                       return (
                         <div key={r.id} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -34008,14 +34048,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                             <span className="text-[11px] text-slate-400">{r.createdDate||''} {open?'▲':'▼'}</span>
                           </button>
                           {open && (
-                            <div className="px-3 pb-3 text-xs text-slate-700 space-y-1.5 border-t border-slate-100 pt-2">
-                              {s ? (<>
-                                {MON_ITEMS.map(it => { const c = s[it.key]; const sel=(c&&typeof c==='object')?c.sel:''; const text=(c&&typeof c==='object')?c.text:(c||''); return (
-                                  <div key={it.key}><span className="font-bold text-slate-500">{it.no}{it.title}：</span>{sel && <span className="font-bold text-sky-700">{sel}</span>}{text && <span className="whitespace-pre-wrap"> {text}</span>}{!sel && !text && <span>—</span>}</div>
-                                );})}
-                                <div className="text-right text-slate-400">{s.implDate?`実施日：${s.implDate}　`:''}{s.recorder?`実施者：${s.recorder}`:''}</div>
-                              </>) : (
-                                <div className="whitespace-pre-wrap">{r.summary||'—'}</div>
+                            <div className="px-3 pb-3 border-t border-slate-100 pt-2">
+                              <div className="flex justify-end mb-2">
+                                <button onClick={()=>_printMon(r)} className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1"><Printer size={13}/>印刷 / PDF保存</button>
+                              </div>
+                              {r.sheet ? (
+                                <div className="overflow-x-auto" dangerouslySetInnerHTML={{__html: buildMonitoringTableHtml(patient, r.sheet, _fac, r.period)}} />
+                              ) : (
+                                <div className="text-xs text-slate-700 whitespace-pre-wrap">{r.summary||'—'}</div>
                               )}
                             </div>
                           )}
