@@ -14709,6 +14709,16 @@ export default function App() {
     setActiveRecorder(m);
     try { if (isAdminMember) sessionStorage.setItem('tsumugiAdminVerified','1'); else sessionStorage.removeItem('tsumugiAdminVerified'); } catch {}
   };
+  // ★ スタッフ切替と日誌「担当職員」を相互反映: 両リストを統合(同名+同役職は1件に集約)。
+  //   スタッフ切替でも担当職員でも登録すれば、どちらにも出る。
+  const mergedStaffMembers = React.useMemo(() => {
+    const seen = new Set();
+    const mk = (name, role) => `${normalizeName(name||'').trim()}|${role||''}`;
+    const out = [];
+    (appData.storeMembers||[]).forEach(m => { if(!m||!m.name||!m.name.trim()) return; const k=mk(m.name,m.roleLabel); if(seen.has(k))return; seen.add(k); out.push({ id:m.id, name:m.name, lastName:m.lastName, firstName:m.firstName, roleLabel:m.roleLabel||'', isAdmin: m.isAdmin||m.roleLabel==='管理者' }); });
+    (appData.diarySettings?.staff||[]).forEach(s => { if(!s||!s.name||!s.name.trim()) return; const k=mk(s.name,s.role); if(seen.has(k))return; seen.add(k); out.push({ id:s.id, name:s.name, roleLabel:s.role||'', isAdmin: s.role==='管理者' }); });
+    return out;
+  }, [appData.storeMembers, appData.diarySettings?.staff]);
   // ★ 起動/更新時に「今の時刻」とサービス提供時間(各種設定)から AM/PM を自動選択。
   //   午前の時間帯=AM、午後の時間帯(PM開始以降)=PM。 一度だけ(以降は手動切替を尊重)。
   const _ampmInitRef = useRef(false);
@@ -14976,7 +14986,7 @@ export default function App() {
     return <RecorderPickerGate
       storeName={staffSession.storeName || staffSession.storeShortName}
       storeId={staffSession.storeId}
-      members={appData.storeMembers || []}
+      members={mergedStaffMembers}
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
       adminAuth={appData.systemSettings?.adminAuth || null}
       onSetAdminAuth={(auth)=>{ const nd={ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }; setAppData(nd); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseMergeAndSyncStateForStore(staffSession.storeId, nd); }catch(e){} } }}
@@ -15581,14 +15591,15 @@ export default function App() {
                   </span>
                 </button>
                 {staffDropdownOpen && (() => {
-                  const members = appData.storeMembers || [];
+                  const members = mergedStaffMembers;
+                  const _nn = (n)=>normalizeName(n||'').trim();
                   return (
                     <div className="bg-emerald-900/30 border-t border-emerald-700/30 max-h-[280px] overflow-y-auto">
                       {members.length === 0 ? (
                         <div className="px-4 py-3 text-[10px] text-emerald-300/70">登録メンバーがいません</div>
                       ) : (
                         members.map(m => {
-                          const isCurrent = m.id === activeRecorder.id;
+                          const isCurrent = _nn(m.name)===_nn(activeRecorder.name) && (m.roleLabel||'')===(activeRecorder.roleLabel||'');
                           return (
                             <div key={m.id} className={`flex items-stretch border-b border-emerald-700/20 ${isCurrent ? 'bg-emerald-700/60' : 'hover:bg-emerald-800/60'}`}>
                               <button
@@ -15842,12 +15853,11 @@ export default function App() {
                   return;
                 }
                 const _normFull = normalizeName(fullName).trim();
-                // ★ 重複チェック: スタッフ切替(店舗メンバー)に同名+同役職があれば登録しない。
-                //   日誌にだけ居る人はスタッフ切替に居ないので追加を許可する(日誌へは重複追加しない)。
-                const dupStore = (appData.storeMembers || []).some(m => normalizeName(m.name).trim() === _normFull && (m.roleLabel||'') === staffAddForm.role);
+                // ★ 重複チェック: スタッフ切替・担当職員のどちらかに同名+同役職があれば登録しない(相互反映・1件集約)。
+                const dupAny = mergedStaffMembers.some(m => normalizeName(m.name).trim() === _normFull && (m.roleLabel||'') === staffAddForm.role);
                 const dupDiary = (appData.diarySettings?.staff || []).some(s => normalizeName(s.name).trim() === _normFull && (s.role||'') === staffAddForm.role);
-                if (dupStore) {
-                  alert(`「${fullName} (${staffAddForm.role})」はスタッフ切替に既に登録されています`);
+                if (dupAny) {
+                  alert(`「${fullName} (${staffAddForm.role})」は既に登録されています`);
                   return;
                 }
                 const newMember = {
