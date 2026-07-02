@@ -33486,6 +33486,8 @@ const DEFAULT_PF_CATEGORIES = [
     note: '初回通所時のケアマネ向け報告 (バイタル・ご利用の様子)' },
   { id: 'cat_8', name: '8. 連絡・体力測定の記録', emoji: '🗒️', isDefault: true,
     note: '休み連絡 / 各種連絡 の送付履歴 / 体力測定の記録' },
+  { id: 'cat_9', name: '9. 支援経過表', emoji: '📈', isDefault: true,
+    note: '日付・担当者・連絡元・内容の経過記録 (年ごと・A4縦で出力)' },
 ];
 
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange }) {
@@ -33509,17 +33511,13 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     onSave({ ...appData, patients: (appData.patients || []).map(p => p.id === patient.id ? newPatient : p) }, opts);
   };
 
-  // ★ 支援経過表 (個人ファイル最後)。 personalFile.supportProgress に保存。
+  // ★ 支援経過表 (カテゴリ9)。 既存データを自動でマージ表示し、手動編集・追加もできる。
+  //   保存構造: personalFile.supportProgress = [手動行 or 自動行の上書き(srcKey付)], supportProgressHidden = [削除した自動行のsrcKey]
   const _spActiveRec = (()=>{ try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || ''; } catch { return ''; } })();
-  const spUpd = (id, patch) => updatePatient({ supportProgress: (personalFile.supportProgress||[]).map(e=>e.id===id?{...e,...patch}:e) });
-  const spDel = (id) => { if(!window.confirm('この行を削除しますか？')) return; updatePatient({ supportProgress: (personalFile.supportProgress||[]).filter(e=>e.id!==id) }, {manual:true, message:'✓ 削除しました'}); };
-  const spAdd = () => { const t=new Date().toISOString().slice(0,10); updatePatient({ supportProgress: [...(personalFile.supportProgress||[]), {id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date:t, staff:_spActiveRec, from:'', content:''}] }, {manual:true, message:'✓ 行を追加しました'}); };
-  // 既存データ(休み連絡/各種連絡/体力測定/モニタリング/担当者会議/ケアマネ変更/介護度/サービス内容/基本情報/休止/初回報告)を取り込み(重複はsrcKeyで防止)
-  const spImport = () => {
-    const existing = personalFile.supportProgress || [];
-    const seen = new Set(existing.map(e=>e.srcKey).filter(Boolean));
-    const add = [];
-    const push = (srcKey, date, from, content) => { if(!srcKey||seen.has(srcKey)||!content) return; seen.add(srcKey); add.push({ id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, date:String(date||'').slice(0,10), staff:'', from:from||'', content, srcKey }); };
+  // 既存データから自動生成される行(srcKey付き)
+  const spAutoEvents = () => {
+    const out = [];
+    const push = (srcKey, date, from, content) => { if(!srcKey||!content) return; out.push({ id:srcKey, srcKey, date:String(date||'').slice(0,10), staff:'', from:from||'', content, _auto:true }); };
     const fh = appData.faxHistory||[];
     fh.filter(h=>h.type==='absence' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_abs_${h.id}`, (h.dateIso||h.timestamp), 'ご家族/ご本人', `休み連絡${h.subject?`（${h.subject}）`:''}`));
     fh.filter(h=>h.type==='general' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_gen_${h.id}`, h.timestamp, '当事業所', `各種連絡${h.subject?`：${h.subject}`:''}`));
@@ -33532,12 +33530,44 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     (patient.changeLog||[]).forEach((c,i)=>push(`chg_${c.date}_${i}`, c.date, '当事業所', `${c.label||''}変更：${c.oldValue||''}→${c.newValue||''}`));
     (patient.pauseHistory||[]).forEach((p,i)=>push(`pause_${p.fromDate||i}`, p.fromDate, 'ご家族/ケアマネ', `利用休止：${p.reason||''}`));
     (appData.initialReports||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`ir_${r.firstDate||r.id}`, (r.firstDate||r.sentAt), '当事業所', '初回ご利用報告'));
-    if (!add.length) { alert('新たに取り込む項目はありませんでした。'); return; }
-    updatePatient({ supportProgress: [...existing, ...add] }, { manual:true, message:`✓ ${add.length}件を取り込みました` });
+    return out;
   };
+  // 表示用: 自動行(上書き反映) + 手動行 をマージ(削除済みは除外)
+  const spMergedList = () => {
+    const stored = personalFile.supportProgress || [];
+    const hidden = new Set(personalFile.supportProgressHidden || []);
+    const overrideByKey = {}; stored.forEach(e=>{ if(e.srcKey) overrideByKey[e.srcKey]=e; });
+    const rows = [];
+    spAutoEvents().forEach(a => { if(hidden.has(a.srcKey)) return; const o=overrideByKey[a.srcKey]; rows.push(o ? {...a, ...o, _auto:true} : a); });
+    stored.forEach(e => { if(!e.srcKey) rows.push({...e, _auto:false}); });
+    return rows.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  };
+  // 行の編集: 自動行は srcKey で上書き保存、手動行は id で更新
+  const spEditRow = (row, patch) => {
+    const stored = personalFile.supportProgress || [];
+    if (row.srcKey) {
+      const exists = stored.some(e=>e.srcKey===row.srcKey);
+      const next = exists ? stored.map(e=>e.srcKey===row.srcKey?{...e,...patch}:e)
+                          : [...stored, { id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, srcKey:row.srcKey, date:row.date, staff:row.staff||'', from:row.from||'', content:row.content||'', ...patch }];
+      updatePatient({ supportProgress: next });
+    } else {
+      updatePatient({ supportProgress: stored.map(e=>e.id===row.id?{...e,...patch}:e) });
+    }
+  };
+  const spDel = (row) => {
+    if(!window.confirm('この行を削除しますか？')) return;
+    const stored = personalFile.supportProgress || [];
+    if (row.srcKey) {
+      const hidden = Array.from(new Set([...(personalFile.supportProgressHidden||[]), row.srcKey]));
+      updatePatient({ supportProgress: stored.filter(e=>e.srcKey!==row.srcKey), supportProgressHidden: hidden }, {manual:true, message:'✓ 削除しました'});
+    } else {
+      updatePatient({ supportProgress: stored.filter(e=>e.id!==row.id) }, {manual:true, message:'✓ 削除しました'});
+    }
+  };
+  const spAdd = () => { const t=new Date().toISOString().slice(0,10); updatePatient({ supportProgress: [...(personalFile.supportProgress||[]), {id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date:t, staff:_spActiveRec, from:'', content:''}] }, {manual:true, message:'✓ 行を追加しました'}); };
   const printSupportProgress = () => {
     const esc = (s)=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-    const list = [...(personalFile.supportProgress||[])].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    const list = spMergedList();
     if (!list.length) { alert('支援経過の記録がありません。'); return; }
     const byYear = {}; list.forEach(e=>{ const y=(String(e.date||'').slice(0,4))||'未設定'; (byYear[y]=byYear[y]||[]).push(e); });
     const years = Object.keys(byYear).sort();
@@ -33556,8 +33586,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
         </table>
       </div>`).join('');
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>支援経過表_${esc(patient.name)}</title>
-      <style>@page{size:A4 portrait;margin:12mm}body{font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;color:#1e293b;margin:0}
-      h1{font-size:18px;margin:0 0 2px}.sub{font-size:12px;color:#475569;margin-bottom:10px}tr{page-break-inside:avoid}thead{display:table-header-group}</style></head>
+      <style>@page{size:A4 portrait;margin:0}/* ★ margin:0 でブラウザ既定のヘッダー/フッター(日時・URL・ページ番号)を非表示に */
+      body{font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;color:#1e293b;margin:0;padding:12mm 12mm 14mm;box-sizing:border-box}
+      h1{font-size:20px;margin:0;text-align:center;letter-spacing:2px}.sub{font-size:12px;color:#475569;margin:4px 0 10px;text-align:left}tr{page-break-inside:avoid}thead{display:table-header-group}</style></head>
       <body><h1>支援経過表</h1><div class="sub">利用者名：${esc(patient.name)} 様　　${esc(patient.careLevel||'')}</div>${sections}</body></html>`;
     const w = window.open('', '_blank');
     if (!w) { alert('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
@@ -33661,6 +33692,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const isServiceTab = activeCat === 'cat_6'; // ★ サービス提供記録は cat_6 へ移動
   const isInitialReportTab = activeCat === 'cat_7'; // ★ 初回ご利用報告
   const isRecordsTab = activeCat === 'cat_8'; // ★ 連絡・体力測定の記録
+  const isSpTab = activeCat === 'cat_9'; // ★ 支援経過表
   const activeCategory = allCategories.find(c => c.id === activeCat) || allCategories[0];
   // ★ 初回ご利用報告: 初回通所記録を検出し、バイタルを自動取得
   const _irKey = (t) => { const d=String(t.date||''); if(/^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0,10); const m=d.match(/(\d+)月(\d+)日/); if(m&&t.year) return `${t.year}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; return null; };
@@ -34279,20 +34311,20 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               </div>
             );
           })()}
-          {/* ★ 支援経過表 (個人ファイルの最後) */}
+          {/* ★ 支援経過表 (カテゴリ「9. 支援経過表」タブ) */}
+          {isSpTab && (
           <div className="bg-white border-2 border-slate-300 rounded-xl p-4 mb-4 mt-4">
             <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5"><ClipboardList size={15}/>支援経過表</div>
               <div className="flex gap-2 flex-wrap">
-                <button onClick={spImport} className="px-3 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-700 rounded-lg text-[11px] font-bold">既存データから取り込み</button>
                 <button onClick={spAdd} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">＋ 行を追加</button>
                 <button onClick={printSupportProgress} className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1"><Printer size={13}/>印刷 / PDF</button>
               </div>
             </div>
-            <p className="text-[11px] text-slate-400 mb-2">基本情報・休み/各種連絡・体力測定・担当者会議・ケアマネ変更・サービス内容変更・トラブル等の経過を記録します。日付・担当者・連絡元・内容はすべて編集できます（年ごとに区切って表示／印刷はA4縦・複数ページ）。</p>
+            <p className="text-[11px] text-slate-400 mb-2">休み/各種連絡・体力測定・モニタリング・担当者会議・ケアマネ/介護度変更・サービス内容変更・基本情報変更・休止・初回報告などが<b>自動で表に反映</b>されます。日付・担当者・連絡元・内容はすべて編集でき、トラブルや利用者の変化は「＋ 行を追加」で追記できます（年ごとに区切り／印刷はA4縦・複数ページ）。</p>
             {(() => {
-              const list = [...(personalFile.supportProgress||[])].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-              if (!list.length) return <div className="text-xs text-slate-400 py-3 text-center">記録がありません。「＋ 行を追加」または「既存データから取り込み」で作成できます。</div>;
+              const list = spMergedList();
+              if (!list.length) return <div className="text-xs text-slate-400 py-3 text-center">記録がありません。「＋ 行を追加」で追記できます（既存データがあれば自動で表示されます）。</div>;
               const byYear={}; list.forEach(e=>{ const y=(String(e.date||'').slice(0,4))||'未設定'; (byYear[y]=byYear[y]||[]).push(e); });
               const years=Object.keys(byYear).sort();
               return years.map(y=>(
@@ -34309,12 +34341,12 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       </tr></thead>
                       <tbody>
                         {byYear[y].map(e=>(
-                          <tr key={e.id}>
-                            <td className="border border-slate-300 p-0.5 align-top"><input type="date" defaultValue={e.date} onBlur={ev=>ev.target.value!==e.date&&spUpd(e.id,{date:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
-                            <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.staff} placeholder="担当者" onBlur={ev=>ev.target.value!==(e.staff||'')&&spUpd(e.id,{staff:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
-                            <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.from} placeholder="連絡元" onBlur={ev=>ev.target.value!==(e.from||'')&&spUpd(e.id,{from:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
-                            <td className="border border-slate-300 p-0.5 align-top"><textarea defaultValue={e.content} placeholder="内容・特記事項" rows={2} onBlur={ev=>ev.target.value!==(e.content||'')&&spUpd(e.id,{content:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded resize-y leading-relaxed"/></td>
-                            <td className="border border-slate-300 text-center align-top"><button onClick={()=>spDel(e.id)} className="text-red-400 hover:text-red-600 p-1"><X size={13}/></button></td>
+                          <tr key={e.srcKey||e.id}>
+                            <td className="border border-slate-300 p-0.5 align-top"><input type="date" defaultValue={e.date} onBlur={ev=>ev.target.value!==e.date&&spEditRow(e,{date:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
+                            <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.staff} placeholder="担当者" onBlur={ev=>ev.target.value!==(e.staff||'')&&spEditRow(e,{staff:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
+                            <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.from} placeholder="連絡元" onBlur={ev=>ev.target.value!==(e.from||'')&&spEditRow(e,{from:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
+                            <td className="border border-slate-300 p-0.5 align-top"><textarea defaultValue={e.content} placeholder="内容・特記事項" rows={2} onBlur={ev=>ev.target.value!==(e.content||'')&&spEditRow(e,{content:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded resize-y leading-relaxed"/></td>
+                            <td className="border border-slate-300 text-center align-top"><button onClick={()=>spDel(e)} className="text-red-400 hover:text-red-600 p-1"><X size={13}/></button></td>
                           </tr>
                         ))}
                       </tbody>
@@ -34324,6 +34356,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               ));
             })()}
           </div>
+          )}
         </div>
       </div>
       {/* 担当者会議 入力モーダル */}
