@@ -33025,17 +33025,6 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   style={{width:24,height:26,border:'1px solid rgba(255,255,255,0.25)',borderRadius:6,background:'rgba(255,255,255,0.1)',color:'white',fontWeight:'bold',fontSize:14,cursor:'pointer'}}>+</button>
           <span style={{fontSize:12,fontWeight:'bold',color:'#cbd5e1'}}>枚</span>
         </label>
-        {/* マーク */}
-        <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
-          <span style={{fontSize:12,fontWeight:'bold',color:'#cbd5e1'}}>マーク:</span>
-          {[['kyuukyuu','至急！'],['kakunin','ご確認ください'],['orikaesu','折り返しご連絡ください']].map(([k,label])=>(
-            <label key={k} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-              <input type="checkbox" checked={checks[k]} onChange={e=>setChecks(c=>({...c,[k]:e.target.checked}))}
-                     style={{width:14,height:14,accentColor:'#22c55e',cursor:'pointer'}}/>
-              <span style={{color:checks[k]?'white':'#94a3b8'}}>{label}</span>
-            </label>
-          ))}
-        </div>
         <div style={{marginLeft:'auto',display:'flex',gap:8}}>
           <button type="button" onClick={()=>{setTplEdit(null);setShowTemplates(true);}}
                   style={{background:'#0369a1',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
@@ -33199,13 +33188,14 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                    style={{flex:1,fontSize:20,fontWeight:'bold',letterSpacing:2,border:'none',outline:'none',background:'transparent',padding:'2px 4px',fontFamily:'inherit'}}/>
           </div>
 
-          {/* チェックボックス（表示用） */}
+          {/* チェックボックス（タップで選択切替） */}
           <div style={{display:'flex',gap:28,marginBottom:12,fontSize:13,fontWeight:'bold',alignItems:'center'}}>
             {[['kyuukyuu','至急！'],['kakunin','ご確認ください'],['orikaesu','折り返しご連絡ください']].map(([k,label])=>(
-              <span key={k} style={{display:'flex',alignItems:'center',gap:6}}>
+              <button key={k} type="button" onClick={()=>{ setChecks(c=>({...c,[k]:!c[k]})); markDirty(); }}
+                style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',background:'none',border:'none',padding:0,fontWeight:'bold',fontSize:13}}>
                 <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,border:`2px solid ${checks[k]?'#1e293b':'#94a3b8'}`,borderRadius:3,background:checks[k]?'#1e293b':'white',color:'white',fontSize:11,fontWeight:'bold',flexShrink:0}}>{checks[k]?'✓':''}</span>
                 <span style={{color:checks[k]?'#1e293b':'#94a3b8'}}>{label}</span>
-              </span>
+              </button>
             ))}
           </div>
 
