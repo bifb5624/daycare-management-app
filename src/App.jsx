@@ -27649,7 +27649,11 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
     const newMassageStaff = massageStaffInput.split(/[、,]+/).map(s => s.trim()).filter(s => s);
     if (dirtyRef) dirtyRef.current = false;
     const diarySettings = diarySettingsRef.current || appData.diarySettings;
-    onSave({ ...appData, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    // ★ 担当職員(diarySettings.staff)を master としてスタッフ切替(storeMembers)を同期。
+    //   担当職員から削除した人はスタッフ切替からも消え、残った人は維持(相互反映・重複は集約)。
+    const _staffKeys = new Set((diarySettings.staff||[]).filter(s=>s&&s.name&&s.name.trim()).map(s => `${normalizeName(s.name||'').trim()}|${s.role||''}`));
+    const _syncedStoreMembers = (appData.storeMembers||[]).filter(m => m && m.name && _staffKeys.has(`${normalizeName(m.name||'').trim()}|${m.roleLabel||''}`));
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -29149,6 +29153,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: localLog }};
     if (pendingStaff) {
       next.diarySettings = { ..._baseDs, staff: pendingStaff };
+      // ★ スタッフ切替(storeMembers)も担当職員に合わせて同期(削除の相互反映)
+      const _sk = new Set((pendingStaff||[]).filter(s=>s&&s.name&&s.name.trim()).map(s=>`${normalizeName(s.name||'').trim()}|${s.role||''}`));
+      next.storeMembers = (appData.storeMembers||[]).filter(m => m && m.name && _sk.has(`${normalizeName(m.name||'').trim()}|${m.roleLabel||''}`));
     }
     // ★ manual:true でトースト表示
     onSave(next, { manual: true, message: '✓ 日誌を保存しました' });
