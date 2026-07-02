@@ -997,6 +997,20 @@ const getPlannedExercisesForDate = (patient, dateISO) => {
   for (const h of sorted) { if (norm(h.from) <= d) chosen = h; }
   return (chosen && chosen.values) || patient.plannedExercises || {};
 };
+// ★ 指定日時点で有効な「個別運動の規定値リスト([{itemId,defaultValue}])」を返す。
+//   individualExercisesHistory が無ければ現在の individualExercises。
+const getIndividualExercisesForDate = (patient, dateISO) => {
+  if (!patient) return [];
+  const hist = patient.individualExercisesHistory;
+  const cur = Array.isArray(patient.individualExercises) ? patient.individualExercises : [];
+  if (!Array.isArray(hist) || hist.length === 0) return cur;
+  const norm = (f) => (String(f).length === 7 ? `${f}-01` : String(f));
+  const d = String(dateISO || '').slice(0,10);
+  const sorted = hist.slice().sort((a, b) => norm(a.from).localeCompare(norm(b.from)));
+  let chosen = sorted[0];
+  for (const h of sorted) { if (norm(h.from) <= d) chosen = h; }
+  return (chosen && Array.isArray(chosen.values)) ? chosen.values : cur;
+};
 // 有効なアドオンのラベル配列 (チップ表示用)
 const activeAddonLabels = (addonsObj) => ADDONS.filter(a => addonsObj?.[a.key]).map(a => a.label);
 // record から年を取り出す (無ければ null)
@@ -17182,7 +17196,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const slotDefaultId = targetPatient?.individualExerciseSlotDefaults?.[item.id] || '';
                       const effItemId = cur.itemId || slotDefaultId;
                       const selItem = allIndItems.find(it => it.id === effItemId);
-                      const patDefault = selItem ? (patSettings.find(x => x.itemId === selItem.id)?.defaultValue || '') : '';
+                      // ★ 規定値(グレー数値)は「選択日時点」の設定値を使用 (日付単位のサービス内容変更に連動・翌月から切替)
+                      const _datedInd = getIndividualExercisesForDate(targetPatient, selectedDate);
+                      const patDefault = selItem ? (((_datedInd.find(x => x.itemId === selItem.id)?.defaultValue) ?? (patSettings.find(x => x.itemId === selItem.id)?.defaultValue)) || '') : '';
                       // ★ 種目名はセル幅(60px)に合わせて可変フォント: 短い名前は大きく、3〜4文字以上は縮小して収める
                       const _indName = selItem?.name || '';
                       const _indNameFs = _indName.length<=2 ? 15 : _indName.length===3 ? 13 : _indName.length===4 ? 11 : _indName.length<=6 ? 10 : 9;
@@ -22109,7 +22125,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               // ★ 個別運動列の設定値: 患者マスタで設定した「種目名＋規定値」を表示 (通常メニューは planned 値)
               const _indPlanDisp = (it) => {
                 const allInd = appData.systemSettings?.individualExerciseItems || [];
-                const rawIndEx = Array.isArray(sp?.individualExercises) ? sp.individualExercises : [];
+                // ★ その月時点の規定値 (日付単位のサービス内容変更に連動)
+                const rawIndEx = getIndividualExercisesForDate(sp, `${tY}-${String(tM).padStart(2,'0')}-01`) || [];
                 // ★ そのスロット固有の既定のみ参照 (未設定のスロット2・3に他スロットの種目が波及しないように)
                 const selId = (sp?.individualExerciseSlotDefaults?.[it.id]) || '';
                 if (!selId) return null;
@@ -24592,48 +24609,67 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合のみ「何月から適用するか」を確認。
     //    キー順・空値の差で誤検知しないよう正規化して比較 (運動メニュー以外の編集では出さない)
     const _normPE = (o) => { const r={}; Object.keys(o||{}).forEach(k=>{ const v=o[k]; if(v!==''&&v!=null) r[k]=String(v); }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
+    // 個別運動の規定値(defaultValue)だけを比較 (有効/無効の切替は日付連動の対象外)
+    const _normIND = (arr) => { const r={}; (Array.isArray(arr)?arr:[]).forEach(x=>{ if(x&&x.itemId){ const v=(x.defaultValue==null?'':String(x.defaultValue)); if(v!=='') r[x.itemId]=v; } }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
     const peChanged = _normPE(prev.plannedExercises) !== _normPE(pat.plannedExercises);
-    // ★ 運動メニュー(設定値)が変わったら、過去の記録の有無に関わらず「何月から適用するか」を確認する。
-    //   (これから予定の項目を先に追加する等、記録がまだ無い利用者でも適用開始月を選べるように)
-    if (peChanged) {
-      setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) });
+    const indChanged = _normIND(prev.individualExercises) !== _normIND(pat.individualExercises);
+    // ★ 運動メニュー/個別運動(設定値)が変わったら「いつから」を確認 (規定値は翌月から適用・備考へ自動記載)
+    if (peChanged || indChanged) {
+      setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) });
       return;
     }
     // ★ manual:true でトースト表示
     onSave(next, { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
-  // 運動メニュー値の変更を「指定日以降」に適用 (それ以前の提供記録・グレー数値は旧値のまま)。
-  //   変更差分を serviceChanges に記録 → 月別提供記録の備考に「6/15 重さ3→4に変更」等が自動で載る(その月のみ)。
+  // サービス提供内容(運動メニュー・個別運動の規定値)の変更を適用。
+  //   ★ 規定値の切替は【翌月1日から】。 備考(serviceChanges)は選んだ日付で記載 → その月の月別提供記録に「6/15 …（7月から）」と自動掲載。
   const applyPlannedExChange = (fromDate) => {
     if (!plannedExModal) return;
-    const { pat, next, prevPlanned, prevHistory } = plannedExModal;
+    const { pat, next, prevPlanned, prevHistory, prevIndividual, prevIndHistory } = plannedExModal;
     const fd = String(fromDate || new Date().toISOString().slice(0,10)).slice(0,10);
-    let hist = (prevHistory && prevHistory.length) ? prevHistory.slice() : [{ from: '1900-01', values: prevPlanned }];
-    hist = hist.filter(h => String(h.from) !== fd); // 同日は置き換え
-    hist.push({ from: fd, values: pat.plannedExercises || {} });
-    hist.sort((a,b) => String(a.from).localeCompare(String(b.from)));
-    // ★ 変更差分の文言を作成
+    const dd = new Date(fd);
+    const nm = new Date(dd.getFullYear(), dd.getMonth()+1, 1); // 翌月1日
+    const effFrom = `${nm.getFullYear()}-${String(nm.getMonth()+1).padStart(2,'0')}-01`;
     const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems || [];
+    const indItems = appData.systemSettings?.individualExerciseItems || [];
     const nameOf = (k) => (exItems.find(i=>i.id===k)?.name) || k;
-    const prevV = prevPlanned || {}, newV = pat.plannedExercises || {};
-    const keys = [...new Set([...Object.keys(prevV), ...Object.keys(newV)])];
+    const indNameOf = (k) => (indItems.find(i=>i.id===k)?.name) || k;
     const diffs = [];
-    keys.forEach(k => {
-      const a = (prevV[k]==null?'':String(prevV[k])).trim();
-      const b = (newV[k]==null?'':String(newV[k])).trim();
-      if (a === b) return;
-      if (!a && b) diffs.push(`${nameOf(k)} ${b} を追加`);
-      else if (a && !b) diffs.push(`${nameOf(k)} を中止`);
-      else diffs.push(`${nameOf(k)} ${a}→${b}に変更`);
-    });
+    const pat2 = { ...pat };
+    // 通常の運動メニュー
+    const prevV = prevPlanned || {}, newV = pat.plannedExercises || {};
+    const pKeys = [...new Set([...Object.keys(prevV), ...Object.keys(newV)])];
+    let planDiff = false;
+    pKeys.forEach(k => { const a=(prevV[k]==null?'':String(prevV[k])).trim(); const b=(newV[k]==null?'':String(newV[k])).trim(); if(a===b)return; planDiff=true; if(!a&&b)diffs.push(`${nameOf(k)} ${b} を追加`); else if(a&&!b)diffs.push(`${nameOf(k)} を中止`); else diffs.push(`${nameOf(k)} ${a}→${b}に変更`); });
+    if (planDiff) {
+      let hist = (prevHistory && prevHistory.length) ? prevHistory.slice() : [{ from: '1900-01', values: prevPlanned }];
+      hist = hist.filter(h => String(h.from) !== effFrom);
+      hist.push({ from: effFrom, values: newV });
+      hist.sort((a,b) => String(a.from).localeCompare(String(b.from)));
+      pat2.plannedExercisesHistory = hist;
+    }
+    // 個別運動の規定値
+    const prevIndMap = {}; (Array.isArray(prevIndividual)?prevIndividual:[]).forEach(x=>{ if(x&&x.itemId) prevIndMap[x.itemId]=(x.defaultValue==null?'':String(x.defaultValue)).trim(); });
+    const newIndArr = Array.isArray(pat.individualExercises)?pat.individualExercises:[];
+    const newIndMap = {}; newIndArr.forEach(x=>{ if(x&&x.itemId) newIndMap[x.itemId]=(x.defaultValue==null?'':String(x.defaultValue)).trim(); });
+    const iKeys = [...new Set([...Object.keys(prevIndMap), ...Object.keys(newIndMap)])];
+    let indDiff = false;
+    iKeys.forEach(k => { const a=prevIndMap[k]||''; const b=newIndMap[k]||''; if(a===b)return; indDiff=true; if(!a&&b)diffs.push(`${indNameOf(k)} ${b} を追加`); else if(a&&!b)diffs.push(`${indNameOf(k)} を中止`); else diffs.push(`${indNameOf(k)} ${a}→${b}に変更`); });
+    if (indDiff) {
+      let ihist = (prevIndHistory && prevIndHistory.length) ? prevIndHistory.slice() : [{ from: '1900-01', values: (Array.isArray(prevIndividual)?prevIndividual:[]) }];
+      ihist = ihist.filter(h => String(h.from) !== effFrom);
+      ihist.push({ from: effFrom, values: newIndArr });
+      ihist.sort((a,b) => String(a.from).localeCompare(String(b.from)));
+      pat2.individualExercisesHistory = ihist;
+    }
+    // 備考(serviceChanges): 記載日は選んだ日、末尾に「（◯月から）」
     let sc = Array.isArray(pat.serviceChanges) ? pat.serviceChanges.slice() : [];
-    if (diffs.length) sc.push({ id:`sc_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date: fd, text: diffs.join('、') });
-    const pat2 = { ...pat, plannedExercisesHistory: hist, serviceChanges: sc };
+    if (diffs.length) sc.push({ id:`sc_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date: fd, text: `${diffs.join('、')}（${nm.getMonth()+1}月から）` });
+    pat2.serviceChanges = sc;
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
     setPlannedExModal(null);
-    const d = new Date(fd);
-    onSave(next2, { manual: true, message: `✓ 保存しました（${d.getMonth()+1}月${d.getDate()}日から適用）` });
+    onSave(next2, { manual: true, message: `✓ 保存しました（規定値は${nm.getMonth()+1}月から適用／備考は${dd.getMonth()+1}月${dd.getDate()}日で記載）` });
   };
 
   const handleStatusChange = (val) => {
@@ -25871,15 +25907,15 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       {plannedExModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-bold text-slate-800 mb-1">運動メニューの変更を反映</h3>
-            <p className="text-xs text-slate-500 mb-4">運動メニューの設定値が変わりました。<b>いつから</b>適用しますか？選んだ日より前の提供記録・グレー表示の設定値は<b>変更前の値のまま</b>になります。変更内容は月別提供記録の<b>備考</b>に自動で記載されます。</p>
+            <h3 className="text-base font-bold text-slate-800 mb-1">サービス提供内容の変更を反映</h3>
+            <p className="text-xs text-slate-500 mb-4">運動メニュー／個別運動の設定値が変わりました。<b>変更を決めた日</b>を選んでください。その日付で月別提供記録の<b>備考</b>に自動記載され（例:「6/15 重さ 3→4に変更（7月から）」）、<b>規定値（グレー数値）は翌月1日から</b>切り替わります。</p>
             <div className="flex items-center gap-2 mb-5">
+              <span className="text-sm text-slate-500">変更日：</span>
               <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
-              <span className="text-sm text-slate-500">から適用</span>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="日付で分けず、今の値で全期間に適用">分けない</button>
-              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この日から適用</button>
+              <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="履歴で分けず、今の値を全期間に適用（備考にも記載しない）">分けない</button>
+              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">保存（翌月から適用）</button>
             </div>
           </div>
         </div>
