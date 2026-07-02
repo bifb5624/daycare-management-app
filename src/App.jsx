@@ -33509,6 +33509,62 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     onSave({ ...appData, patients: (appData.patients || []).map(p => p.id === patient.id ? newPatient : p) }, opts);
   };
 
+  // ★ 支援経過表 (個人ファイル最後)。 personalFile.supportProgress に保存。
+  const _spActiveRec = (()=>{ try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || ''; } catch { return ''; } })();
+  const spUpd = (id, patch) => updatePatient({ supportProgress: (personalFile.supportProgress||[]).map(e=>e.id===id?{...e,...patch}:e) });
+  const spDel = (id) => { if(!window.confirm('この行を削除しますか？')) return; updatePatient({ supportProgress: (personalFile.supportProgress||[]).filter(e=>e.id!==id) }, {manual:true, message:'✓ 削除しました'}); };
+  const spAdd = () => { const t=new Date().toISOString().slice(0,10); updatePatient({ supportProgress: [...(personalFile.supportProgress||[]), {id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date:t, staff:_spActiveRec, from:'', content:''}] }, {manual:true, message:'✓ 行を追加しました'}); };
+  // 既存データ(休み連絡/各種連絡/体力測定/モニタリング/担当者会議/ケアマネ変更/介護度/サービス内容/基本情報/休止/初回報告)を取り込み(重複はsrcKeyで防止)
+  const spImport = () => {
+    const existing = personalFile.supportProgress || [];
+    const seen = new Set(existing.map(e=>e.srcKey).filter(Boolean));
+    const add = [];
+    const push = (srcKey, date, from, content) => { if(!srcKey||seen.has(srcKey)||!content) return; seen.add(srcKey); add.push({ id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, date:String(date||'').slice(0,10), staff:'', from:from||'', content, srcKey }); };
+    const fh = appData.faxHistory||[];
+    fh.filter(h=>h.type==='absence' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_abs_${h.id}`, (h.dateIso||h.timestamp), 'ご家族/ご本人', `休み連絡${h.subject?`（${h.subject}）`:''}`));
+    fh.filter(h=>h.type==='general' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_gen_${h.id}`, h.timestamp, '当事業所', `各種連絡${h.subject?`：${h.subject}`:''}`));
+    (appData.fitnessRecords||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`fit_${r.date}`, r.date, '当事業所', '体力測定を実施'));
+    (appData.monitoringRecords||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`mon_${r.period}`, (r.createdAt?new Date(r.createdAt).toISOString().slice(0,10):''), '当事業所', `モニタリング（${r.period}）を実施`));
+    (personalFile.meetings||[]).forEach(m=>push(`mtg_${m.id}`, (m.date||''), '当事業所', `サービス担当者会議${m.location?`（${m.location}）`:''}`));
+    (patient.cmHistory||[]).forEach((h,i)=>push(`cm_${h.from||i}`, h.from, 'ケアマネ', `担当ケアマネ変更：${h.office||''} ${h.name||''}`.trim()));
+    (patient.careLevelHistory||[]).forEach((h,i)=>push(`cl_${h.from||i}`, h.from, 'ケアマネ', `介護度変更：${h.value||''}`));
+    (patient.serviceChanges||[]).forEach(c=>push(`sc_${c.id||c.date}`, c.date, '当事業所', `サービス内容変更：${c.text||''}`));
+    (patient.changeLog||[]).forEach((c,i)=>push(`chg_${c.date}_${i}`, c.date, '当事業所', `${c.label||''}変更：${c.oldValue||''}→${c.newValue||''}`));
+    (patient.pauseHistory||[]).forEach((p,i)=>push(`pause_${p.fromDate||i}`, p.fromDate, 'ご家族/ケアマネ', `利用休止：${p.reason||''}`));
+    (appData.initialReports||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`ir_${r.firstDate||r.id}`, (r.firstDate||r.sentAt), '当事業所', '初回ご利用報告'));
+    if (!add.length) { alert('新たに取り込む項目はありませんでした。'); return; }
+    updatePatient({ supportProgress: [...existing, ...add] }, { manual:true, message:`✓ ${add.length}件を取り込みました` });
+  };
+  const printSupportProgress = () => {
+    const esc = (s)=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+    const list = [...(personalFile.supportProgress||[])].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    if (!list.length) { alert('支援経過の記録がありません。'); return; }
+    const byYear = {}; list.forEach(e=>{ const y=(String(e.date||'').slice(0,4))||'未設定'; (byYear[y]=byYear[y]||[]).push(e); });
+    const years = Object.keys(byYear).sort();
+    const rowH = (e)=>`<tr><td style="border:1px solid #000;padding:4px 6px;white-space:nowrap;text-align:center;">${esc(e.date)}</td><td style="border:1px solid #000;padding:4px 6px;white-space:nowrap;text-align:center;">${esc(e.staff)}</td><td style="border:1px solid #000;padding:4px 6px;white-space:nowrap;text-align:center;">${esc(e.from)}</td><td style="border:1px solid #000;padding:4px 8px;line-height:1.5;">${esc(e.content)}</td></tr>`;
+    const sections = years.map(y=>`
+      <div style="page-break-inside:auto;margin-bottom:10px;">
+        <div style="font-size:14px;font-weight:bold;margin:10px 0 4px;border-bottom:2px solid #334155;padding-bottom:2px;">${esc(y)}年</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+          <thead><tr style="background:#e2e8f0;">
+            <th style="border:1px solid #000;padding:4px 6px;width:92px;">日付</th>
+            <th style="border:1px solid #000;padding:4px 6px;width:90px;">担当者</th>
+            <th style="border:1px solid #000;padding:4px 6px;width:96px;">連絡元</th>
+            <th style="border:1px solid #000;padding:4px 6px;">内容・特記事項</th>
+          </tr></thead>
+          <tbody>${byYear[y].map(rowH).join('')}</tbody>
+        </table>
+      </div>`).join('');
+    const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>支援経過表_${esc(patient.name)}</title>
+      <style>@page{size:A4 portrait;margin:12mm}body{font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;color:#1e293b;margin:0}
+      h1{font-size:18px;margin:0 0 2px}.sub{font-size:12px;color:#475569;margin-bottom:10px}tr{page-break-inside:avoid}thead{display:table-header-group}</style></head>
+      <body><h1>支援経過表</h1><div class="sub">利用者名：${esc(patient.name)} 様　　${esc(patient.careLevel||'')}</div>${sections}</body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} }, 350);
+  };
+
   const handleFileUpload = async (e) => {
     const files = rejectVideos(e.target.files);
     if (files.length === 0) { e.target.value=''; return; }
@@ -34223,6 +34279,51 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               </div>
             );
           })()}
+          {/* ★ 支援経過表 (個人ファイルの最後) */}
+          <div className="bg-white border-2 border-slate-300 rounded-xl p-4 mb-4 mt-4">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5"><ClipboardList size={15}/>支援経過表</div>
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={spImport} className="px-3 py-1.5 bg-sky-100 hover:bg-sky-200 text-sky-700 rounded-lg text-[11px] font-bold">既存データから取り込み</button>
+                <button onClick={spAdd} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">＋ 行を追加</button>
+                <button onClick={printSupportProgress} className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1"><Printer size={13}/>印刷 / PDF</button>
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-2">基本情報・休み/各種連絡・体力測定・担当者会議・ケアマネ変更・サービス内容変更・トラブル等の経過を記録します。日付・担当者・連絡元・内容はすべて編集できます（年ごとに区切って表示／印刷はA4縦・複数ページ）。</p>
+            {(() => {
+              const list = [...(personalFile.supportProgress||[])].sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+              if (!list.length) return <div className="text-xs text-slate-400 py-3 text-center">記録がありません。「＋ 行を追加」または「既存データから取り込み」で作成できます。</div>;
+              const byYear={}; list.forEach(e=>{ const y=(String(e.date||'').slice(0,4))||'未設定'; (byYear[y]=byYear[y]||[]).push(e); });
+              const years=Object.keys(byYear).sort();
+              return years.map(y=>(
+                <div key={y} className="mb-4">
+                  <div className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-2 py-1 mb-1">{y}年</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-xs" style={{minWidth:640}}>
+                      <thead><tr className="bg-slate-50">
+                        <th className="border border-slate-300 px-1 py-1 font-bold" style={{width:120}}>日付</th>
+                        <th className="border border-slate-300 px-1 py-1 font-bold" style={{width:90}}>担当者</th>
+                        <th className="border border-slate-300 px-1 py-1 font-bold" style={{width:100}}>連絡元</th>
+                        <th className="border border-slate-300 px-1 py-1 font-bold">内容・特記事項</th>
+                        <th className="border border-slate-300 px-1 py-1" style={{width:34}}></th>
+                      </tr></thead>
+                      <tbody>
+                        {byYear[y].map(e=>(
+                          <tr key={e.id}>
+                            <td className="border border-slate-300 p-0.5 align-top"><input type="date" defaultValue={e.date} onBlur={ev=>ev.target.value!==e.date&&spUpd(e.id,{date:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
+                            <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.staff} placeholder="担当者" onBlur={ev=>ev.target.value!==(e.staff||'')&&spUpd(e.id,{staff:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
+                            <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.from} placeholder="連絡元" onBlur={ev=>ev.target.value!==(e.from||'')&&spUpd(e.id,{from:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
+                            <td className="border border-slate-300 p-0.5 align-top"><textarea defaultValue={e.content} placeholder="内容・特記事項" rows={2} onBlur={ev=>ev.target.value!==(e.content||'')&&spUpd(e.id,{content:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded resize-y leading-relaxed"/></td>
+                            <td className="border border-slate-300 text-center align-top"><button onClick={()=>spDel(e.id)} className="text-red-400 hover:text-red-600 p-1"><X size={13}/></button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
         </div>
       </div>
       {/* 担当者会議 入力モーダル */}
