@@ -16149,6 +16149,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const getKibunReasonKey = (timing) => timing === 'arrival' ? 'kibunArrivalReason' : 'kibunDepartureReason';
 
   // selectedDateが変わったときだけデータを再読み込み（filterMode/timeFilter切替では再読み込みしない）
+  // ★ 選択月の提供記録の「内容」署名。 件数が変わらない値だけの更新(他端末の保存)でも再反映できるように、
+  //   件数ではなく中身の変化を検知する。
+  const _trSig = React.useMemo(() => {
+    const selM = new Date(selectedDate).getMonth() + 1;
+    try { return JSON.stringify((appData.ticketRecords || []).filter(r => { const m = r.date?.match(/(\d+)月/); return m && parseInt(m[1]) === selM; })); }
+    catch { return String((appData.ticketRecords || []).length); }
+  }, [appData.ticketRecords, selectedDate]);
   useEffect(() => {
     if (!appData || !appData.patients) return;
     // ★ ユーザーが編集中 (dirty) の場合はリセットしない (入力途中で値が消えるバグ防止)
@@ -16272,7 +16279,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (dirtyRef) dirtyRef.current = false;
     // ★ patients (基本利用日 等の変更) / monthlyShifts / ticketRecords も依存に追加するが、
     //   ユーザーが編集中 (dirty) の時はリセットしない (打ち消されるバグ防止)
-  }, [selectedDate, appData.patients?.length, appData.monthlyShifts, appData.ticketRecords?.length]);
+  }, [selectedDate, appData.patients?.length, appData.monthlyShifts, _trSig]);
 
   const updateRecord = (id, field, value) => {
     if (filterMode === 'single') setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
@@ -16969,10 +16976,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   );})}
                 </div>
                 <div className="grid grid-cols-3 gap-2 mb-2">
-                  {[['体温',`temp_${tf}`,vT,getTempColorClass(vT),vT?`${vT}℃`:'＋'],
+                  {(() => { const vPlSt=p[`plSt_${tf}`]||'', vPlEn=p[`plEn_${tf}`]||''; return [
+                    ['体温',`temp_${tf}`,vT,getTempColorClass(vT),vT?`${vT}℃`:'＋'],
                     ['開始 血圧',`bpSt_combo_${tf}`,(vBuSt&&vBdSt)?`${vBuSt}/${vBdSt}`:'','text-slate-800',(vBuSt||vBdSt)?`${vBuSt}/${vBdSt}`:'＋'],
-                    ['終了 血圧',`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋']
-                  ].map(([lbl,field,cur,colorCls,shown])=>(
+                    ['開始 脈',`plSt_${tf}`,vPlSt,getPulseColorClass(vPlSt,true),vPlSt?`${vPlSt}`:'＋'],
+                    ['終了 血圧',`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋'],
+                    ['終了 脈',`plEn_${tf}`,vPlEn,getPulseColorClass(vPlEn,true),vPlEn?`${vPlEn}`:'＋']
+                  ]; })().map(([lbl,field,cur,colorCls,shown])=>(
                     <button key={field} disabled={dis} onClick={()=>{openKeypad(p.id,field,cur,isAbsent);setActiveCell(`${p.id}-${field}`);}} className="rounded-lg border border-slate-300 bg-white py-1.5 px-1 disabled:opacity-40 flex flex-col items-center">
                       <span className="text-[10px] font-bold text-slate-500">{lbl}</span>
                       <span className={`text-base font-bold ${colorCls}`}>{shown}</span>
