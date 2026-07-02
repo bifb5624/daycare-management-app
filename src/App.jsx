@@ -33514,6 +33514,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   // ★ 支援経過表 (カテゴリ9)。 既存データを自動でマージ表示し、手動編集・追加もできる。
   //   保存構造: personalFile.supportProgress = [手動行 or 自動行の上書き(srcKey付)], supportProgressHidden = [削除した自動行のsrcKey]
   const _spActiveRec = (()=>{ try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || ''; } catch { return ''; } })();
+  const [spYear, setSpYear] = useState(null); // 支援経過表: 選択中の年
   // 既存データから自動生成される行(srcKey付き)
   const spAutoEvents = () => {
     const out = [];
@@ -33564,10 +33565,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
       updatePatient({ supportProgress: stored.filter(e=>e.id!==row.id) }, {manual:true, message:'✓ 削除しました'});
     }
   };
-  const spAdd = () => { const t=new Date().toISOString().slice(0,10); updatePatient({ supportProgress: [...(personalFile.supportProgress||[]), {id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date:t, staff:_spActiveRec, from:'', content:''}] }, {manual:true, message:'✓ 行を追加しました'}); };
-  const printSupportProgress = () => {
+  const spAdd = () => { const t=new Date().toISOString().slice(0,10); updatePatient({ supportProgress: [...(personalFile.supportProgress||[]), {id:`sp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date:t, staff:_spActiveRec, from:'', content:''}] }, {manual:true, message:'✓ 行を追加しました'}); if(!spYear) setSpYear(String(new Date().getFullYear())); };
+  // 支援経過表: 選択できる年の一覧(記録のある年+当年) と 現在の選択年
+  const spYearList = () => { const list=spMergedList(); const ys=new Set(list.map(e=>String(e.date||'').slice(0,4)||'未設定')); ys.add(String(new Date().getFullYear())); return Array.from(ys).filter(Boolean).sort(); };
+  const spSelectedYear = () => { const ys=spYearList(); const cur=String(new Date().getFullYear()); return (spYear && ys.includes(spYear)) ? spYear : (ys.includes(cur)?cur:ys[ys.length-1]); };
+  const printSupportProgress = (onlyYear) => {
     const esc = (s)=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-    const list = spMergedList();
+    const listAll = spMergedList();
+    const list = onlyYear ? listAll.filter(e=>String(e.date||'').slice(0,4)===String(onlyYear)) : listAll;
     if (!list.length) { alert('支援経過の記録がありません。'); return; }
     const byYear = {}; list.forEach(e=>{ const y=(String(e.date||'').slice(0,4))||'未設定'; (byYear[y]=byYear[y]||[]).push(e); });
     const years = Object.keys(byYear).sort();
@@ -33588,8 +33593,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>支援経過表_${esc(patient.name)}</title>
       <style>@page{size:A4 portrait;margin:0}/* ★ margin:0 でブラウザ既定のヘッダー/フッター(日時・URL・ページ番号)を非表示に */
       body{font-family:'Hiragino Sans','Yu Gothic','Noto Sans JP',sans-serif;color:#1e293b;margin:0;padding:12mm 12mm 14mm;box-sizing:border-box}
-      h1{font-size:20px;margin:0;text-align:center;letter-spacing:2px}.sub{font-size:12px;color:#475569;margin:4px 0 10px;text-align:left}tr{page-break-inside:avoid}thead{display:table-header-group}</style></head>
-      <body><h1>支援経過表</h1><div class="sub">利用者名：${esc(patient.name)} 様　　${esc(patient.careLevel||'')}</div>${sections}</body></html>`;
+      h1{font-size:20px;margin:0;text-align:center;letter-spacing:2px}.sub{font-size:13px;color:#334155;margin:6px 0 10px;text-align:left}.sub .nm{font-size:18px;font-weight:bold;color:#1e293b}tr{page-break-inside:avoid}thead{display:table-header-group}</style></head>
+      <body><h1>支援経過表</h1><div class="sub">利用者名：<span class="nm">${esc(patient.name)} 様</span>　　${esc(patient.careLevel||'')}${onlyYear?`　　（${esc(onlyYear)}年）`:''}</div>${sections}</body></html>`;
     const w = window.open('', '_blank');
     if (!w) { alert('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
     w.document.write(html); w.document.close();
@@ -34318,18 +34323,29 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5"><ClipboardList size={15}/>支援経過表</div>
               <div className="flex gap-2 flex-wrap">
                 <button onClick={spAdd} className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[11px] font-bold">＋ 行を追加</button>
-                <button onClick={printSupportProgress} className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1"><Printer size={13}/>印刷 / PDF</button>
+                <button onClick={()=>printSupportProgress(spSelectedYear())} className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-lg text-[11px] font-bold flex items-center gap-1"><Printer size={13}/>この年を印刷 / PDF</button>
               </div>
             </div>
-            <p className="text-[11px] text-slate-400 mb-2">休み/各種連絡・体力測定・モニタリング・担当者会議・ケアマネ/介護度変更・サービス内容変更・基本情報変更・休止・初回報告などが<b>自動で表に反映</b>されます。日付・担当者・連絡元・内容はすべて編集でき、トラブルや利用者の変化は「＋ 行を追加」で追記できます（年ごとに区切り／印刷はA4縦・複数ページ）。</p>
+            <p className="text-[11px] text-slate-400 mb-2">休み/各種連絡・体力測定・モニタリング・担当者会議・ケアマネ/介護度変更・サービス内容変更・基本情報変更・休止・初回報告などが<b>自動で表に反映</b>されます。日付・担当者・連絡元・内容はすべて編集でき、トラブルや利用者の変化は「＋ 行を追加」で追記できます。<b>下の年ボタンで対象の年を選ぶ</b>とその年の表が表示されます（印刷はA4縦・複数ページ）。</p>
             {(() => {
               const list = spMergedList();
-              if (!list.length) return <div className="text-xs text-slate-400 py-3 text-center">記録がありません。「＋ 行を追加」で追記できます（既存データがあれば自動で表示されます）。</div>;
               const byYear={}; list.forEach(e=>{ const y=(String(e.date||'').slice(0,4))||'未設定'; (byYear[y]=byYear[y]||[]).push(e); });
-              const years=Object.keys(byYear).sort();
-              return years.map(y=>(
-                <div key={y} className="mb-4">
-                  <div className="text-xs font-bold text-slate-600 bg-slate-100 rounded px-2 py-1 mb-1">{y}年</div>
+              const years = spYearList();
+              const sel = spSelectedYear();
+              const rows = byYear[sel] || [];
+              return (<>
+                {/* 年タブ */}
+                <div className="flex gap-1.5 flex-wrap mb-3">
+                  {years.map(y => (
+                    <button key={y} onClick={()=>setSpYear(y)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${sel===y?'bg-emerald-600 text-white border-emerald-600':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                      {y}年{byYear[y]?`（${byYear[y].length}）`:''}
+                    </button>
+                  ))}
+                </div>
+                {rows.length===0 ? (
+                  <div className="text-xs text-slate-400 py-3 text-center">{sel}年の記録はありません。「＋ 行を追加」で追記できます（既存データがあれば自動で表示されます）。</div>
+                ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-xs" style={{minWidth:640}}>
                       <thead><tr className="bg-slate-50">
@@ -34340,7 +34356,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         <th className="border border-slate-300 px-1 py-1" style={{width:34}}></th>
                       </tr></thead>
                       <tbody>
-                        {byYear[y].map(e=>(
+                        {rows.map(e=>(
                           <tr key={e.srcKey||e.id}>
                             <td className="border border-slate-300 p-0.5 align-top"><input type="date" defaultValue={e.date} onBlur={ev=>ev.target.value!==e.date&&spEditRow(e,{date:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
                             <td className="border border-slate-300 p-0.5 align-top"><input defaultValue={e.staff} placeholder="担当者" onBlur={ev=>ev.target.value!==(e.staff||'')&&spEditRow(e,{staff:ev.target.value})} className="w-full px-1 py-1 text-[11px] outline-none border border-transparent focus:border-blue-300 rounded"/></td>
@@ -34352,8 +34368,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       </tbody>
                     </table>
                   </div>
-                </div>
-              ));
+                )}
+              </>);
             })()}
           </div>
           )}
