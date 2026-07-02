@@ -978,9 +978,23 @@ const getPlannedExercisesForMonth = (patient, year, month) => {
   const hist = patient.plannedExercisesHistory;
   if (!Array.isArray(hist) || hist.length === 0) return patient.plannedExercises || {};
   const ym = `${year}-${String(month).padStart(2, '0')}`;
+  // from は 'YYYY-MM' か 'YYYY-MM-DD'。 年月(先頭7文字)で比較して、その月までに有効な最新を採用。
   const sorted = hist.slice().sort((a, b) => String(a.from).localeCompare(String(b.from)));
   let chosen = sorted[0];
-  for (const h of sorted) { if (String(h.from) <= ym) chosen = h; }
+  for (const h of sorted) { if (String(h.from).slice(0,7) <= ym) chosen = h; }
+  return (chosen && chosen.values) || patient.plannedExercises || {};
+};
+// ★ 指定「日付(YYYY-MM-DD)」時点で有効な予定運動メニューを返す (日付単位のサービス内容変更に対応)。
+//   plannedExercisesHistory の from は 'YYYY-MM'(=月初) か 'YYYY-MM-DD'。
+const getPlannedExercisesForDate = (patient, dateISO) => {
+  if (!patient) return {};
+  const hist = patient.plannedExercisesHistory;
+  if (!Array.isArray(hist) || hist.length === 0) return patient.plannedExercises || {};
+  const norm = (f) => (String(f).length === 7 ? `${f}-01` : String(f));
+  const d = String(dateISO || '').slice(0,10);
+  const sorted = hist.slice().sort((a, b) => norm(a.from).localeCompare(norm(b.from)));
+  let chosen = sorted[0];
+  for (const h of sorted) { if (norm(h.from) <= d) chosen = h; }
   return (chosen && chosen.values) || patient.plannedExercises || {};
 };
 // 有効なアドオンのラベル配列 (チップ表示用)
@@ -16908,7 +16922,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           {displayRecords.length===0 && <div className="text-center text-slate-400 font-bold py-8">対象の利用者がいません</div>}
           {displayRecords.map((p) => {
             const masterData = (appData.patients||[]).find(pt => pt.id === p.patientId || pt.id === p.id || pt.name === p.name) || {};
-            const plannedEx = masterData.plannedExercises || {};
+            const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
             const isReadOnly = !isEditMode;
             const isAbsent = p.status === '欠席' || p.status === '休業';
             const isPause = masterData.status === '休止';
@@ -17001,7 +17015,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           <tbody>
             {displayRecords.map((p) => {
               const masterData = (appData.patients||[]).find(pt => pt.id === p.patientId || pt.id === p.id || pt.name === p.name) || {};
-              const plannedEx = masterData.plannedExercises || {};
+              const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
               const isReadOnly = !isEditMode; 
               const isAbsent = p.status === '欠席' || p.status === '休業';
               const isPause = masterData.status === '休止';
@@ -24582,27 +24596,44 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ 運動メニュー(設定値)が変わったら、過去の記録の有無に関わらず「何月から適用するか」を確認する。
     //   (これから予定の項目を先に追加する等、記録がまだ無い利用者でも適用開始月を選べるように)
     if (peChanged) {
-      const t = new Date();
-      setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], fromY: t.getFullYear(), fromM: t.getMonth()+1 });
+      setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) });
       return;
     }
     // ★ manual:true でトースト表示
     onSave(next, { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
-  // 運動メニュー値の変更を「指定月以降」に適用 (それ以前の提供記録は旧値のまま)
-  const applyPlannedExChange = (fromY, fromM) => {
+  // 運動メニュー値の変更を「指定日以降」に適用 (それ以前の提供記録・グレー数値は旧値のまま)。
+  //   変更差分を serviceChanges に記録 → 月別提供記録の備考に「6/15 重さ3→4に変更」等が自動で載る(その月のみ)。
+  const applyPlannedExChange = (fromDate) => {
     if (!plannedExModal) return;
     const { pat, next, prevPlanned, prevHistory } = plannedExModal;
-    const ym = `${fromY}-${String(fromM).padStart(2,'0')}`;
+    const fd = String(fromDate || new Date().toISOString().slice(0,10)).slice(0,10);
     let hist = (prevHistory && prevHistory.length) ? prevHistory.slice() : [{ from: '1900-01', values: prevPlanned }];
-    hist = hist.filter(h => String(h.from) !== ym); // 同月は置き換え
-    hist.push({ from: ym, values: pat.plannedExercises || {} });
+    hist = hist.filter(h => String(h.from) !== fd); // 同日は置き換え
+    hist.push({ from: fd, values: pat.plannedExercises || {} });
     hist.sort((a,b) => String(a.from).localeCompare(String(b.from)));
-    const pat2 = { ...pat, plannedExercisesHistory: hist };
+    // ★ 変更差分の文言を作成
+    const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems || [];
+    const nameOf = (k) => (exItems.find(i=>i.id===k)?.name) || k;
+    const prevV = prevPlanned || {}, newV = pat.plannedExercises || {};
+    const keys = [...new Set([...Object.keys(prevV), ...Object.keys(newV)])];
+    const diffs = [];
+    keys.forEach(k => {
+      const a = (prevV[k]==null?'':String(prevV[k])).trim();
+      const b = (newV[k]==null?'':String(newV[k])).trim();
+      if (a === b) return;
+      if (!a && b) diffs.push(`${nameOf(k)} ${b} を追加`);
+      else if (a && !b) diffs.push(`${nameOf(k)} を中止`);
+      else diffs.push(`${nameOf(k)} ${a}→${b}に変更`);
+    });
+    let sc = Array.isArray(pat.serviceChanges) ? pat.serviceChanges.slice() : [];
+    if (diffs.length) sc.push({ id:`sc_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, date: fd, text: diffs.join('、') });
+    const pat2 = { ...pat, plannedExercisesHistory: hist, serviceChanges: sc };
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
     setPlannedExModal(null);
-    onSave(next2, { manual: true, message: `✓ 保存しました（運動メニューは${fromY}年${fromM}月から適用）` });
+    const d = new Date(fd);
+    onSave(next2, { manual: true, message: `✓ 保存しました（${d.getMonth()+1}月${d.getDate()}日から適用）` });
   };
 
   const handleStatusChange = (val) => {
@@ -25841,19 +25872,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="text-base font-bold text-slate-800 mb-1">運動メニューの変更を反映</h3>
-            <p className="text-xs text-slate-500 mb-4">運動メニューの設定値が変わりました。<b>何月から</b>適用しますか？選んだ月より前の提供記録は<b>変更前の値のまま</b>になります。</p>
+            <p className="text-xs text-slate-500 mb-4">運動メニューの設定値が変わりました。<b>いつから</b>適用しますか？選んだ日より前の提供記録・グレー表示の設定値は<b>変更前の値のまま</b>になります。変更内容は月別提供記録の<b>備考</b>に自動で記載されます。</p>
             <div className="flex items-center gap-2 mb-5">
-              <select value={plannedExModal.fromY} onChange={e=>setPlannedExModal(m=>({...m,fromY:Number(e.target.value)}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none">
-                {(()=>{const y=new Date().getFullYear();return [y-1,y,y+1].map(yy=><option key={yy} value={yy}>{yy}年</option>);})()}
-              </select>
-              <select value={plannedExModal.fromM} onChange={e=>setPlannedExModal(m=>({...m,fromM:Number(e.target.value)}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none">
-                {Array.from({length:12},(_,i)=>i+1).map(mm=><option key={mm} value={mm}>{mm}月</option>)}
-              </select>
+              <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
               <span className="text-sm text-slate-500">から適用</span>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="月を分けず、今の値で全期間に適用">月を分けない</button>
-              <button onClick={()=>applyPlannedExChange(plannedExModal.fromY, plannedExModal.fromM)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この月から適用</button>
+              <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="日付で分けず、今の値で全期間に適用">分けない</button>
+              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この日から適用</button>
             </div>
           </div>
         </div>
