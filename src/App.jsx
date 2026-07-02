@@ -27779,8 +27779,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                         </div>
                         <div className="flex items-center gap-2">
                           <input value={kibunReasonInputs[ikey]||''} onChange={e=>setKibunReasonInputs(p=>({...p,[ikey]:e.target.value}))}
-                            onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); _addKibunReason(timing,m.key); } }}
-                            placeholder="理由を入力して追加..." className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
+                            placeholder="理由を入力して「＋ 追加」を押す..." className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
                           <button type="button" onClick={()=>_addKibunReason(timing,m.key)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold whitespace-nowrap">＋ 追加</button>
                         </div>
                       </div>
