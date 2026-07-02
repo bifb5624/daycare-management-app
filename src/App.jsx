@@ -31274,6 +31274,19 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
     }
   };
+  // ★ プレビュー: 選択した利用者(無ければ全員)の「モニタリング表(表形式)」を複数ページで表示。 このプレビュー画面から印刷/PDF/FAXできる。
+  const previewSheets = () => {
+    const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
+    const targets = checked.length ? checked : [...attendedPats, ...absentPats];
+    if (!targets.length) { alert('対象の利用者がいません'); return; }
+    const pages = targets.map(p => { const rec=getSheetRecord(p.id); const sheet = (rec&&rec.sheet) ? rec.sheet : getOrInitSheetFor(p); return buildSheetHtml(p, sheet, true, true); }).join('');
+    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${pages}</div>`;
+    const title = `通所介護モニタリング表_${monthLabelStr}_${targets.length}名`;
+    if (onShowPrintPreview) {
+      onShowPrintPreview(title,'A4 landscape',null);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
+    }
+  };
 
   const copyText = (id, text) => {
     try {
@@ -31565,7 +31578,7 @@ ${optionsDesc}
               </button>
             ))}
           </div>
-          <button type="button" onClick={handlePrint}
+          <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
             <Printer size={14}/> プレビュー
           </button>
@@ -31612,13 +31625,9 @@ ${optionsDesc}
             🤖 AIで下書き
           </button>
         )}
-        <button type="button" onClick={createAllDefault} title="選んだ(無ければ全員の)モニタリング表を作成して個人ファイルに保存(AIなし)"
+        <button type="button" onClick={createAllDefault} title="選んだ利用者のモニタリング表を個別ファイル(個人ファイル)へ保存(AIなし)"
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
-          📋 作成・保存
-        </button>
-        <button type="button" onClick={batchFax} title="作成済みのモニタリング表をまとめて印刷/PDF/FAX(ケアマネ宛先つき)"
-          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fcd34d',background:'#fffbeb',color:'#b45309',cursor:'pointer'}}>
-          📠 FAX・印刷
+          📁 個別ファイルに保存
         </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
@@ -33986,7 +33995,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
                 <div className="text-sm font-bold text-sky-900 mb-2 flex items-center gap-1.5"><ClipboardList size={15}/>モニタリング表（保管）</div>
                 {mons.length === 0 ? (
-                  <div className="text-xs text-slate-500">まだモニタリング表がありません。「モニタリング」画面の「📋 表」から作成・保存できます。</div>
+                  <div className="text-xs text-slate-500">まだモニタリング表がありません。「モニタリング」画面で対象者を選び「📁 個別ファイルに保存」から保存できます。</div>
                 ) : (
                   <div className="space-y-2">
                     {mons.map(r => {
