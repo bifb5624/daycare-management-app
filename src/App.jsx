@@ -9422,7 +9422,8 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
       if (e.isComposing || e.nativeEvent?.isComposing) return;
       const key = e.key;
       if (key === 'Escape') { onClose(); return; }
-      if (key === 'Enter') { if (onEnter) onEnter(value); else if (onInput) onInput(value, false); onClose(); return; }
+      // ★ onEnter がある場合は閉じない (呼び出し側で「確定→次セル移動」等を制御)。 無い場合は従来通り確定して閉じる。
+      if (key === 'Enter') { e.preventDefault(); if (onEnter) { onEnter(value); } else { if (onInput) onInput(value, false); onClose(); } return; }
       if (key === 'Tab') { e.preventDefault(); if (onTab) onTab(); return; }
       if (key === 'Backspace') { const nv=(value||'').toString().slice(0,-1); if(onInput) onInput(nv, false); return; }
       if (key === 'Delete') { if(onInput) onInput('', false); return; }
@@ -16083,6 +16084,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const timeFilter = (sharedAmpm === 'all' || !sharedAmpm) ? 'AM' : sharedAmpm;
   const setTimeFilter = (v) => setSharedAmpm && setSharedAmpm(v);
   const [keypad, setKeypad] = useState({ isOpen: false, recordId: null, field: null, value: "", isFirstInput: false });
+  const kpConfirmRef = React.useRef(false); // ★ PC Enter: 1回目=確定 / 2回目=右のセルへ移動
   const [kibunModal, setKibunModal] = useState({ isOpen: false, recordId: null, timing: null }); // timing: 'arrival'|'departure'
   const [kibunStep, setKibunStep] = useState('mood'); // 'mood' | 'reason'
   const [kibunTempMood, setKibunTempMood] = useState('');
@@ -16520,11 +16522,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 
   const openKeypad = (recordId, field, currentValue, isAbsent) => {
     if (isAbsent) return;
+    kpConfirmRef.current = false; // 新しいセルを開いたら未確定に
     const isEx = !!(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(i => i.id === field);
     setKeypad({ isOpen: true, recordId, field, value: currentValue || "", isFirstInput: !currentValue, mode: isEx ? 'exercise' : 'record' });
   };
+  // ★ PC Enter: 1回目は確定(キーパッドは開いたまま)、続けてEnterで右のセルへ移動(Tab相当)
+  const handleKeypadEnter = () => {
+    if (!kpConfirmRef.current) { kpConfirmRef.current = true; setKeypad(prev => ({ ...prev, isFirstInput: false })); }
+    else { kpConfirmRef.current = false; handleTab(); }
+  };
 
   const handleKeypadInput = (newValue, isFirst) => {
+    kpConfirmRef.current = false; // 入力があれば未確定に戻す(次のEnterは確定)
     let formatted = newValue;
     // temp / temp_AM / temp_PM のいずれも体温として扱う
     if (keypad.field === 'temp' || keypad.field === 'temp_AM' || keypad.field === 'temp_PM') {
@@ -17411,7 +17420,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </div>
         );
       })(), document.body)}
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
       {statusModal.isOpen && ReactDOM.createPortal(
