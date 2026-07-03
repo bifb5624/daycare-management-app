@@ -32309,7 +32309,7 @@ function FaxHistoryListModal({ history, typeLabel, onDelete, onClose }) {
                     </span>
                     {h.patientName && <span style={{fontSize:11,fontWeight:'bold',color:'#1e40af',background:'#dbeafe',padding:'2px 6px',borderRadius:4}}>👤 {h.patientName}</span>}
                   </div>
-                  {h.subject && <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',marginBottom:2}}>📄 {h.subject}</div>}
+                  <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',marginBottom:2}}>📄 件名: {h.subject || '（件名なし）'}</div>
                   <div style={{fontSize:12,color:'#475569'}}>
                     {(h.recipientName || h.recipientFax) ? (
                       <>📠 宛先: <b>{h.recipientName||'(名前なし)'}</b>{h.recipientFax && <span style={{fontFamily:'Menlo,monospace',marginLeft:6,color:'#7c3aed'}}>{h.recipientFax}</span>}</>
@@ -32317,6 +32317,7 @@ function FaxHistoryListModal({ history, typeLabel, onDelete, onClose }) {
                       <span style={{color:'#94a3b8',fontStyle:'italic'}}>📠 宛先情報なし</span>
                     )}
                   </div>
+                  {h.memo && <div style={{fontSize:12,color:'#334155',marginTop:3,whiteSpace:'pre-wrap'}}>📝 {String(h.memo).slice(0,120)}{String(h.memo).length>120?'…':''}</div>}
                   {h.note && <div style={{fontSize:11,color:'#64748b',marginTop:3,fontStyle:'italic'}}>💬 {h.note}</div>}
                 </div>
                 <button onClick={()=>{ if(window.confirm('この履歴を削除しますか?')) onDelete(h.id); }} className="text-slate-300 hover:text-red-500 text-sm">🗑</button>
