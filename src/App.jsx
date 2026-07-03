@@ -16191,7 +16191,7 @@ export default function App() {
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
              currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} /> :
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
-             currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} /> :
+             currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'diary' ? <DailyLogView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} dirtyRef={diaryDirtyRef} saveFnRef={diarySaveFnRef} /> :
              currentView === 'absence_fax' ? <AbsenceFaxView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={absenceDirtyRef} saveFnRef={absenceSaveFnRef} /> :
@@ -28006,9 +28006,12 @@ function AdminSettingsSection({ appData, onSave }) {
   );
 }
 
-function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
+function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const [activeTab, setActiveTab] = useState('facility');
+  // ★ 一括削除(管理者用): 選択中の利用者ID / ケアマネ事業所名
+  const [bulkDelPatients, setBulkDelPatients] = useState(() => new Set());
+  const [bulkDelOffices, setBulkDelOffices] = useState(() => new Set());
   // ★ アドオン (本部のみ ON/OFF)。 即時保存。
   const toggleAddon = (key) => {
     const cur = appData.systemSettings?.addons || {};
@@ -29436,6 +29439,78 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
               {/* 📦 データ一括エクスポート (ZIP) */}
               <DataExportSection appData={appData} />
             </SectionCard>
+            {/* 🗑 一括削除 (管理者用) — 利用者 / ケアマネ事業所 */}
+            {isAdmin && (() => {
+              const patients = [...(appData.patients||[])].sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja'));
+              const offices = (appData.systemSettings?.cmOffices||[]);
+              const togglePat = (id) => setBulkDelPatients(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
+              const toggleOff = (name) => setBulkDelOffices(prev => { const n=new Set(prev); n.has(name)?n.delete(name):n.add(name); return n; });
+              const doDeletePatients = () => {
+                const ids = [...bulkDelPatients]; if(!ids.length){ alert('削除する利用者を選択してください'); return; }
+                const names = (appData.patients||[]).filter(p=>ids.includes(p.id)).map(p=>p.name);
+                if(!window.confirm(`次の ${ids.length}名 の利用者を削除します。関連する提供記録などは残りますが、名簿からは完全に消えます。元に戻せません。\n\n${names.slice(0,15).join('、')}${names.length>15?' ほか':''}\n\n本当に削除しますか？`)) return;
+                if(!window.confirm('最終確認：この操作は取り消せません。削除を実行しますか？')) return;
+                const remain = (appData.patients||[]).filter(p=>!ids.includes(p.id));
+                onSave({ ...appData, patients: remain }, { manual:true, message:`✓ ${ids.length}名の利用者を削除しました` });
+                setBulkDelPatients(new Set());
+              };
+              const doDeleteOffices = () => {
+                const nm = [...bulkDelOffices]; if(!nm.length){ alert('削除するケアマネ事業所を選択してください'); return; }
+                const usedBy = (appData.patients||[]).filter(p=>nm.includes((p.cmOffice||'').trim())).map(p=>p.name);
+                let warn = `次の ${nm.length}件 のケアマネ事業所を削除します。元に戻せません。\n\n${nm.slice(0,15).join('、')}${nm.length>15?' ほか':''}`;
+                if(usedBy.length) warn += `\n\n⚠ この事業所を担当に設定している利用者が ${usedBy.length}名 います（${usedBy.slice(0,5).join('、')}${usedBy.length>5?' ほか':''}）。利用者側の担当ケアマネ欄はそのまま残ります。`;
+                if(!window.confirm(warn+'\n\n本当に削除しますか？')) return;
+                const nextOffices = offices.filter(o=>!nm.includes((o.name||'').trim()));
+                const nextManagers = (appData.systemSettings?.careManagers||[]).filter(c=>!nm.includes((c.office||'').trim()));
+                onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), cmOffices: nextOffices, careManagers: nextManagers } }, { manual:true, message:`✓ ${nm.length}件のケアマネ事業所を削除しました` });
+                setBulkDelOffices(new Set());
+              };
+              return (
+                <SectionCard title="🗑 一括削除（管理者用）">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-700 font-bold">⚠ ここでの削除は<b>元に戻せません</b>。チェックを付けて「選択した◯件を削除」を押すと、まとめて削除できます（1件ずつの削除も可）。この機能は<b>管理者のみ</b>に表示されます。</div>
+                  {/* 利用者 */}
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                      <div className="text-sm font-bold text-slate-700">利用者（{patients.length}名）</div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={()=>setBulkDelPatients(new Set(patients.map(p=>p.id)))} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全選択</button>
+                        <button type="button" onClick={()=>setBulkDelPatients(new Set())} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全解除</button>
+                        <button type="button" onClick={doDeletePatients} disabled={!bulkDelPatients.size} className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 px-3 py-1 rounded">選択した{bulkDelPatients.size||''}件を削除</button>
+                      </div>
+                    </div>
+                    <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                      {patients.length===0 ? <div className="text-xs text-slate-400 p-3">利用者がいません</div> : patients.map(p=>(
+                        <label key={p.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                          <input type="checkbox" checked={bulkDelPatients.has(p.id)} onChange={()=>togglePat(p.id)} className="w-4 h-4" style={{accentColor:'#dc2626'}}/>
+                          <span className="text-sm font-bold text-slate-700 flex-1">{p.name}</span>
+                          <span className="text-[11px] text-slate-400">{p.status||''}{p.careLevel?`・${p.careLevel}`:''}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* ケアマネ事業所 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                      <div className="text-sm font-bold text-slate-700">ケアマネ事業所（{offices.length}件）</div>
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={()=>setBulkDelOffices(new Set(offices.map(o=>(o.name||'').trim())))} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全選択</button>
+                        <button type="button" onClick={()=>setBulkDelOffices(new Set())} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全解除</button>
+                        <button type="button" onClick={doDeleteOffices} disabled={!bulkDelOffices.size} className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 px-3 py-1 rounded">選択した{bulkDelOffices.size||''}件を削除</button>
+                      </div>
+                    </div>
+                    <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                      {offices.length===0 ? <div className="text-xs text-slate-400 p-3">登録なし</div> : offices.map((o,i)=>(
+                        <label key={i} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                          <input type="checkbox" checked={bulkDelOffices.has((o.name||'').trim())} onChange={()=>toggleOff((o.name||'').trim())} className="w-4 h-4" style={{accentColor:'#dc2626'}}/>
+                          <span className="text-sm font-bold text-slate-700 flex-1">{o.name}</span>
+                          <span className="text-[11px] text-slate-400">{o.phone||''}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </SectionCard>
+              );
+            })()}
           </>)}
 
         </div>
