@@ -10272,7 +10272,7 @@ function ScheduleView({ appData, onSave }) {
     if (!modal.title || !modal.title.trim()) { alert('予定のタイトルを入力してください'); return; }
     if (!modal.date) { alert('日付を選んでください'); return; }
     const evId = modal.id || `ev_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-    const ev = { ...modal, id: evId, title: modal.title.trim() };
+    const ev = { ...modal, id: evId, title: modal.title.trim(), _savedAt: Date.now() };
     const list = modal.id ? events.map(e=>e.id===modal.id?ev:e) : [...events, ev];
     // ★ お知らせ配信: 利用者を選び「お知らせとして配信」ON → その利用者(ご家族)＋担当ケアマネの閲覧画面のお知らせに掲載
     const annId = `schednews_${evId}`;
@@ -10289,7 +10289,9 @@ function ScheduleView({ appData, onSave }) {
   const del = (id) => {
     if(!window.confirm('この予定を削除しますか？')) return;
     const annId = `schednews_${id}`;
-    onSave({ ...appData, scheduleEvents: events.filter(e=>e.id!==id), familyPersonalAnnouncements: (appData.familyPersonalAnnouncements||[]).filter(a=>a.id!==annId) }, { manual:true, message:'✓ 削除しました' });
+    // ★ 端末間の id 単位マージで削除済み予定が復活しないよう、墓石(tombstone)を記録する
+    const _td = { ...(appData.deletedIds||{}), scheduleEvents: { ...((appData.deletedIds||{}).scheduleEvents||{}), [String(id)]: Date.now() } };
+    onSave({ ...appData, scheduleEvents: events.filter(e=>e.id!==id), familyPersonalAnnouncements: (appData.familyPersonalAnnouncements||[]).filter(a=>a.id!==annId), deletedIds: _td }, { manual:true, message:'✓ 削除しました' });
     setModal(null);
   };
   const evOf = (dstr) => events.filter(e=>e.date===dstr).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));

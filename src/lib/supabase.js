@@ -457,7 +457,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
     //   上書きする恐れがあるためマージ対象に含めない (= 従来どおり編集端末の値を採用)。
-    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords'];
+    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','scheduleEvents'];
     // ★ 削除した記録の墓石(tombstone)を local+cloud で統合。 これが無いと「id単位の和集合マージ」で
     //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
     const localTomb = (localData && localData.deletedIds) || {};
@@ -493,6 +493,30 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
           else outLogs[k] = (JSON.stringify(lv).length >= JSON.stringify(cv).length) ? lv : cv;
         });
         merged.diaryLogs = outLogs;
+      }
+    }
+    // ★ 月別シフト(monthlyShifts)は { 月キー: { 利用者ID: シフト } } の入れ子。 端末間で別々の月/利用者を
+    //   編集しても消えないよう、月→利用者 単位で統合する。 同じ月+利用者の衝突は「項目数が多い方(同点はローカル)」を採用。
+    {
+      const lMs = (localData.monthlyShifts && typeof localData.monthlyShifts === 'object') ? localData.monthlyShifts : null;
+      const cMs = (cloud.monthlyShifts && typeof cloud.monthlyShifts === 'object') ? cloud.monthlyShifts : null;
+      if (lMs || cMs) {
+        const outMs = {};
+        const monthKeys = new Set([...Object.keys(lMs || {}), ...Object.keys(cMs || {})]);
+        monthKeys.forEach(mk => {
+          const lm = (lMs && lMs[mk] && typeof lMs[mk] === 'object') ? lMs[mk] : {};
+          const cm = (cMs && cMs[mk] && typeof cMs[mk] === 'object') ? cMs[mk] : {};
+          const om = { ...cm };
+          Object.keys(lm).forEach(pid => {
+            const lv = lm[pid], cv = cm[pid];
+            if (cv == null) { om[pid] = lv; return; }
+            const ln = (lv && typeof lv === 'object') ? Object.keys(lv).length : 0;
+            const cn = (cv && typeof cv === 'object') ? Object.keys(cv).length : 0;
+            om[pid] = (ln >= cn) ? lv : cv;
+          });
+          outMs[mk] = om;
+        });
+        merged.monthlyShifts = outMs;
       }
     }
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
