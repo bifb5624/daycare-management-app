@@ -478,6 +478,23 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const cloudPatMap = new Map((Array.isArray(cloud.patients) ? cloud.patients : []).map(p => [String(p.id), p]));
       merged.patients = localData.patients.map(lp => { if (!lp || lp.id == null) return lp; const cp = cloudPatMap.get(String(lp.id)); return cp ? mergePatientBackfill(lp, cp) : lp; });
     }
+    // ★ 日誌(diaryLogs)は「日付_AMPM」キーのオブジェクト。 端末間で別々の日を編集しても消えないよう、
+    //   キー単位で統合し、同じキーは _savedAt が新しい方(無ければ内容が多い方)を採用する。
+    {
+      const lLogs = (localData.diaryLogs && typeof localData.diaryLogs === 'object') ? localData.diaryLogs : null;
+      const cLogs = (cloud.diaryLogs && typeof cloud.diaryLogs === 'object') ? cloud.diaryLogs : null;
+      if (lLogs || cLogs) {
+        const outLogs = { ...(cLogs || {}) };
+        Object.keys(lLogs || {}).forEach(k => {
+          const lv = lLogs[k], cv = (cLogs || {})[k];
+          if (!cv) { outLogs[k] = lv; return; }
+          const lt = Number(lv && lv._savedAt) || 0, ct = Number(cv && cv._savedAt) || 0;
+          if (lt || ct) outLogs[k] = (lt >= ct) ? lv : cv;
+          else outLogs[k] = (JSON.stringify(lv).length >= JSON.stringify(cv).length) ? lv : cv;
+        });
+        merged.diaryLogs = outLogs;
+      }
+    }
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
     //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
     if (Array.isArray(merged.ticketRecords)) {

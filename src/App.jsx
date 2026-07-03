@@ -29691,6 +29691,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   // ローカルバッファ：保存ボタンを押すまでappDataに書かない
   const logKeyRef = React.useRef(logKey);
   const [localLog, setLocalLog] = useState({});
+  // ★ 直近にリモート(appData)から読み込んだ日誌の内容シグネチャ。 他端末の保存が pull で届いたかの判定に使う。
+  const lastRemoteSigRef = React.useRef(null);
   // ★ アクティブ記録者の id を記憶 (スタッフ切替で前のチェックを外すため)
   const prevAutoCheckIdRef = React.useRef(null);
 
@@ -29706,6 +29708,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       onSave(nextAppData);
     }
     const latest = (nextAppData.diaryLogs||{})[logKey] || {};
+    lastRemoteSigRef.current = JSON.stringify(latest);
     const loaded = JSON.parse(JSON.stringify(latest));
     // ★ 新規ログ (担当職員 / 記録者未指定) のときは アクティブ記録者を両方に自動チェック
     const activeName = getActiveRecorderName();
@@ -29787,8 +29790,20 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   // 初回マウント時にも読み込む
   React.useEffect(() => {
     const latest = (appData.diaryLogs||{})[logKey] || {};
+    lastRemoteSigRef.current = JSON.stringify(latest);
     setLocalLog(JSON.parse(JSON.stringify(latest)));
   }, []); // eslint-disable-line
+
+  // ★ 他端末の保存が pull で届いたら、表示中の日誌を即時更新する (編集中は上書きしない)。
+  //   logKey は変わらないため従来の読込effectでは反映されず「同期しない」ように見えていた。
+  const _remoteLogSig = JSON.stringify((appData.diaryLogs||{})[logKey] || {});
+  React.useEffect(() => {
+    if (logKeyRef.current !== logKey) return; // 日付/AM切替時は読込effectが担当
+    if (_remoteLogSig === lastRemoteSigRef.current) return; // リモートに変化なし(自分のローカル変更のみ)
+    lastRemoteSigRef.current = _remoteLogSig; // リモートが更新された
+    if (dirtyRef?.current) return; // 編集中は表示を保持(保存で上書きされないように)
+    setLocalLog(JSON.parse(JSON.stringify((appData.diaryLogs||{})[logKey] || {})));
+  }, [_remoteLogSig]); // eslint-disable-line
 
   const log = localLog;
   const updateLog = (patch) => {
@@ -29796,7 +29811,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     markDirty();
   };
   const saveLog = () => {
-    const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: localLog }};
+    // ★ _savedAt を付与 (端末間マージで新しい方を採用するため)
+    const _logToSave = { ...localLog, _savedAt: Date.now() };
+    const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: _logToSave }};
     if (pendingStaff) {
       next.diarySettings = { ..._baseDs, staff: pendingStaff };
       // ★ スタッフ切替(storeMembers)も担当職員に合わせて同期(削除の相互反映)
