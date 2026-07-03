@@ -10070,6 +10070,115 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
   );
 }
 
+// === ホーム / ダッシュボード ===
+function DashboardView({ appData, navigateTo, activeRecorder }) {
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const dow = ['日','月','火','水','木','金','土'][now.getDay()];
+  const todayEvents = (appData.scheduleEvents||[]).filter(e=>e.date===todayStr).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
+  // お知らせ (事業所が投稿したお知らせ) 直近
+  const news = [
+    ...(appData.familyAnnouncements||[]).map(a=>({...a,_kind:'全体'})),
+    ...(appData.familyPersonalAnnouncements||[]).map(a=>({...a,_kind:'個別'})),
+  ].filter(a=>a.title||a.body).sort((a,b)=>(b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||'')).slice(0,4);
+  const patName = (pid) => (appData.patients||[]).find(p=>p.id===pid)?.name || '';
+  const Card = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
+  const Tile = ({icon, label, sub, color, view}) => (
+    <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
+      onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,0.1)';e.currentTarget.style.transform='translateY(-2px)';}}
+      onMouseLeave={e=>{e.currentTarget.style.boxShadow='none';e.currentTarget.style.transform='none';}}>
+      <div style={{width:44,height:44,borderRadius:12,background:color,display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}>{icon}</div>
+      <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{label}</div>
+      {sub && <div style={{fontSize:10,color:'#94a3b8'}}>{sub}</div>}
+    </button>
+  );
+  return (
+    <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
+      <div style={{maxWidth:1040,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
+        {/* 挨拶 */}
+        <div style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',borderRadius:16,color:'white',padding:'18px 22px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+          <div>
+            <div style={{fontSize:20,fontWeight:'bold'}}>{now.getFullYear()}年{now.getMonth()+1}月{now.getDate()}日（{dow}）</div>
+            <div style={{fontSize:13,opacity:0.9,marginTop:2}}>{activeRecorder?.name ? `${activeRecorder.name} さん、今日もよろしくお願いします。` : 'ようこそ'}</div>
+          </div>
+          <div style={{fontSize:34}}>🍀</div>
+        </div>
+        {/* 本日のスケジュール + お知らせ */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:16}}>
+          <Card>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{display:'flex',alignItems:'center',gap:6}}><Clock size={16}/>本日のスケジュール</span>
+              <button onClick={()=>navigateTo('schedule')} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'#eef2ff',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>カレンダー →</button>
+            </div>
+            {todayEvents.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>今日の予定はありません。</div> : (
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {todayEvents.map(e=>(
+                  <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px'}}>
+                    <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',minWidth:88,fontVariantNumeric:'tabular-nums'}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
+                    <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+          <Card>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#0369a1',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{display:'flex',alignItems:'center',gap:6}}>📢 お知らせ</span>
+              <button onClick={()=>navigateTo('family_admin')} style={{fontSize:11,fontWeight:'bold',color:'#0369a1',background:'#e0f2fe',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>投稿管理 →</button>
+            </div>
+            {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
+              <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                {news.map(a=>(
+                  <div key={a.id} style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'7px 10px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
+                      <span style={{fontSize:9,fontWeight:'bold',color:a._kind==='個別'?'#b45309':'#1d4ed8',background:a._kind==='個別'?'#fef3c7':'#dbeafe',borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
+                      <span style={{fontSize:10,color:'#94a3b8'}}>{a.date||''}</span>
+                    </div>
+                    <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{a.title||'(写真)'}</div>
+                    {a.body && <div style={{fontSize:11,color:'#64748b',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+        {/* 記録類 */}
+        <Card>
+          <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>📋 記録・入力</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10}}>
+            <Tile icon={<ClipboardList size={22}/>} label="提供記録入力" color="#3b82f6" view="record"/>
+            <Tile icon={<Printer size={22}/>} label="連絡帳" color="#0ea5e9" view="print"/>
+            <Tile icon={<PenTool size={22}/>} label="日誌" color="#8b5cf6" view="diary"/>
+            <Tile icon={<Activity size={22}/>} label="体力測定" color="#10b981" view="fitness"/>
+            <Tile icon={<FileText size={22}/>} label="休み連絡" color="#f59e0b" view="absence_fax"/>
+            <Tile icon={<FileText size={22}/>} label="各種連絡" color="#f97316" view="general_fax"/>
+            <Tile icon={<ClipboardList size={22}/>} label="モニタリング" color="#0891b2" view="monitoring"/>
+            <Tile icon={<Users size={22}/>} label="利用者マスタ" color="#64748b" view="master"/>
+          </div>
+        </Card>
+        {/* 計画書 (アドオン) */}
+        {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'seikatsu_kinou') || hasAddon(appData,'kyomi_kanshin')) && (
+          <Card>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>📝 計画書（アドオン）</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
+              {hasAddon(appData,'kinou_keikaku') && <Tile icon={<FileText size={22}/>} label="個別機能訓練計画書" color="#6366f1" view="kinou_keikaku"/>}
+              {hasAddon(appData,'seikatsu_kinou') && <Tile icon={<FileText size={22}/>} label="生活機能" color="#8b5cf6" view="seikatsu_kinou"/>}
+              {hasAddon(appData,'kyomi_kanshin') && <Tile icon={<FileText size={22}/>} label="興味関心" color="#ec4899" view="kyomi_kanshin"/>}
+            </div>
+          </Card>
+        )}
+        {/* 分析・家族・設定 */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10}}>
+          <Tile icon={<BarChart3 size={22}/>} label="分析（個人）" color="#2563eb" view="dash_personal"/>
+          <Tile icon={<TrendingUp size={22}/>} label="分析（稼働）" color="#16a34a" view="dash_operation"/>
+          <Tile icon={<QrCode size={22}/>} label="家族関係者 投稿" color="#db2777" view="family_admin"/>
+          <Tile icon={<CalendarRange size={22}/>} label="スケジュール" color="#7c3aed" view="schedule"/>
+          <Tile icon={<Settings size={22}/>} label="各種設定" color="#475569" view="settings"/>
+        </div>
+      </div>
+    </div>
+  );
+}
 // === スケジュール管理 ===
 function ScheduleView({ appData, onSave }) {
   const today = new Date();
@@ -14294,7 +14403,7 @@ export default function App() {
       return { kind, email, ts };
     } catch { return null; }
   }, []);
-  const [currentView, setCurrentView] = useState('master');
+  const [currentView, setCurrentView] = useState('dashboard');
   const [appData, setAppData] = useState(()=>{
     // localStorage 復元: 過去にセッション中で保存したデータがあれば優先
     try {
@@ -15833,6 +15942,7 @@ export default function App() {
               </div>
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
+              <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
@@ -15897,7 +16007,8 @@ export default function App() {
             <div className="flex items-center min-w-0 flex-1">
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
               <h1 className="text-base md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
-                {currentView === 'record' ? `サービス提供記録 入力　${formatDateDisplay(selectedDate)}` :
+                {currentView === 'dashboard' ? 'ホーム' :
+                 currentView === 'record' ? `サービス提供記録 入力　${formatDateDisplay(selectedDate)}` :
                  currentView === 'ticket' ? 'サービス提供記録' :
                  currentView === 'print' ? '連絡帳 作成・印刷' :
                  currentView === 'fitness' ? '体力測定' :
@@ -15953,7 +16064,8 @@ export default function App() {
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
             <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
-            {currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
+            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} /> :
+             currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
              currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} /> :
@@ -31290,6 +31402,10 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   });
 
   const [tY, tM] = targetMonth.split('-').map(Number);
+  // ★ AIコスト管理: 当月分は毎月15日以降のみ 作成・AI下書き・記入 を可能にする (過去月はいつでも可)
+  const _mNow = new Date();
+  const _isCurrentMonth = tY === _mNow.getFullYear() && tM === (_mNow.getMonth()+1);
+  const _monthLocked = _isCurrentMonth && _mNow.getDate() < 15;
 
   // 全利用中患者を通所有無で分類
   const allActive = (appData.patients||[]).filter(p => p.status === '利用中');
@@ -31488,6 +31604,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // ★ モニタリング表(正式シート)をAIで一括下書き → まとめて個人ファイルに保存
   const [sheetBatchProg, setSheetBatchProg] = React.useState(null); // {done,total} | null
   const generateAllSheets = async () => {
+    if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
     // ★ 通所がある人はAI下書き、 通所が無い人(一度も来ていない人)はAI不要で「実施できなかった」既定で作成。
     const noKey = !(appData.systemSettings?.anthropicApiKey||'').trim();
     // ★ 利用者を選択していない場合は全員生成せず、選択を促す
@@ -31566,6 +31683,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     if (dirtyRef) dirtyRef.current = false;
   };
   const updateSheetInline = (patient, key, field, value) => {
+    if (_monthLocked) { alert('当月分のモニタリングは毎月15日以降に記入できます。'); return; }
     const rec = getSheetRecord(patient.id);
     if (rec && rec.confirmed) return; // ★ 確定済みは編集不可
     const base = getOrInitSheetFor(patient);
@@ -31580,6 +31698,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
   // ★ 一覧の1行をAIで下書き (手入力済みの内容は残してAIは空欄のみ補完)。 確定はしない。
   const aiDraftRow = async (patient) => {
+    if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
     if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('各種設定→モニタリングでAPIキーを設定してください'); return; }
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
@@ -31594,6 +31713,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
   // ★ 一括作成(既定): 全員にモニタリング表を作成(通所ありは下書き文/通所なしは実施できなかった)。 AI不要・即保存
   const createAllDefault = () => {
+    if (_monthLocked) { alert('当月分の作成・保存は毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
     // ★ 未選択なら全員作成せず選択を促す
     const targets = [...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id));
     if (!targets.length) { alert('利用者を選択してください（チェックを付けた方のみ作成します）'); return; }
@@ -31983,6 +32103,11 @@ ${optionsDesc}
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
 
+      {_monthLocked && (
+        <div className="no-print" style={{flexShrink:0,background:'#fffbeb',borderBottom:'1px solid #fde68a',color:'#92400e',padding:'8px 16px',fontSize:12,fontWeight:'bold',display:'flex',alignItems:'center',gap:8}}>
+          ⏳ 当月（{tM}月）分のモニタリングは<strong>毎月15日以降</strong>に作成・AI下書き・記入ができます（AIコスト管理のため）。過去月はいつでも編集できます。
+        </div>
+      )}
       {/* テーブル（スクロール可） */}
       <div style={{flex:1,overflow:'auto',padding:'0'}}>
         <div id="print-content-monitoring">
