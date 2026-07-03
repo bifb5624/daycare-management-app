@@ -10153,12 +10153,21 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
             </div>
             {todayEvents.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>今日の予定はありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                {todayEvents.map(e=>(
-                  <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px'}}>
-                    <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',minWidth:88,fontVariantNumeric:'tabular-nums'}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
-                    <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}</span>
+                {todayEvents.map(e=>{
+                  const pt = e.patientId ? (appData.patients||[]).find(x=>x.id===e.patientId) : null;
+                  return (
+                  <div key={e.id} style={{display:'flex',alignItems:'flex-start',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px'}}>
+                    <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',minWidth:88,fontVariantNumeric:'tabular-nums',paddingTop:1}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                        <span>{e.title}</span>
+                        {pt && <span style={{fontSize:10,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:4,padding:'0 5px'}}>{pt.name} 様</span>}
+                      </div>
+                      {e.note && <div style={{fontSize:11,color:'#64748b',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.5}}>{e.note}</div>}
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </Card>
@@ -16023,7 +16032,9 @@ export default function App() {
               </div>
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
-              <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} />
+              {(()=>{ const _ymd=(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;})(); const _todayCnt=(appData.scheduleEvents||[]).filter(e=>e.date===_ymd).length; return (
+                <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_todayCnt||null} />
+              ); })()}
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
