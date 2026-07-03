@@ -16915,8 +16915,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     updateExercise(id, field, marks[nextIndex]);
   };
 
+  // ★ テンキー(点キー)の表示ON/OFF。 OFFの店舗ではセルを直接キーボードで入力する。
+  const _keypadOn = (appData.systemSettings?.keypadDisabled !== true);
   const openKeypad = (recordId, field, currentValue, isAbsent) => {
-    if (isAbsent) return;
+    if (isAbsent || !_keypadOn) return;
     kpConfirmRef.current = false; // 新しいセルを開いたら未確定に
     const isEx = !!(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(i => i.id === field);
     setKeypad({ isOpen: true, recordId, field, value: currentValue || "", isFirstInput: !currentValue, mode: isEx ? 'exercise' : 'record' });
@@ -17386,20 +17388,45 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     ['開始 脈',`plSt_${tf}`,vPlSt,getPulseColorClass(vPlSt,true),vPlSt?`${vPlSt}`:'＋'],
                     ['終了 血圧',`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋'],
                     ['終了 脈',`plEn_${tf}`,vPlEn,getPulseColorClass(vPlEn,true),vPlEn?`${vPlEn}`:'＋']
-                  ]; })().map(([lbl,field,cur,colorCls,shown])=>(
+                  ]; })().map(([lbl,field,cur,colorCls,shown])=>{
+                    const isBp = typeof field==='string' && field.includes('_combo_');
+                    if(!_keypadOn){
+                      return (
+                        <div key={field} className="rounded-lg border border-slate-300 bg-white py-1 px-1 flex flex-col items-center">
+                          <span className="text-[10px] font-bold text-slate-500">{lbl}</span>
+                          <input type="text" inputMode={isBp?'text':'decimal'} placeholder={isBp?'上/下':'—'} disabled={dis}
+                            key={`mk-${p.id}-${field}-${cur}`} defaultValue={cur||''}
+                            onBlur={(e)=>{ const val=e.target.value; if(isBp){ const c=(val||'').replace(/[^0-9/]/g,''); const parts=c.split('/'); const isStart=field.startsWith('bpSt'); const fBu=`${isStart?'bpUpSt':'bpUpEn'}_${tf}`, fBd=`${isStart?'bpDnSt':'bpDnEn'}_${tf}`; updateRecord(p.id,fBu,(parts[0]||'').trim()); updateRecord(p.id,fBd,(parts[1]||'').trim()); } else { updateRecord(p.id, field, (val||'').trim()); } }}
+                            className="w-full text-center text-base font-bold outline-none border border-slate-200 rounded mt-0.5 disabled:opacity-40" style={{height:32}} />
+                        </div>
+                      );
+                    }
+                    return (
                     <button key={field} disabled={dis} onClick={()=>{openKeypad(p.id,field,cur,isAbsent);setActiveCell(`${p.id}-${field}`);}} className="rounded-lg border border-slate-300 bg-white py-1.5 px-1 disabled:opacity-40 flex flex-col items-center">
                       <span className="text-[10px] font-bold text-slate-500">{lbl}</span>
                       <span className={`text-base font-bold ${colorCls}`}>{shown}</span>
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 {!isAbsent && <div className="grid grid-cols-3 gap-1.5">
-                  {exItems.map(item=>{ const v=p.exercises?.[item.id]; const vs=String((typeof v==='object'?'':v)??''); const unit=item.defaultUnit||''; const disp=(vs&&/[0-9０-９]/.test(vs)&&unit&&!vs.endsWith(unit))?`${vs}${unit}`:vs; const ph=plannedEx[item.id]||''; return (
+                  {exItems.map(item=>{ const v=p.exercises?.[item.id]; const vs=String((typeof v==='object'?'':v)??''); const unit=item.defaultUnit||''; const disp=(vs&&/[0-9０-９]/.test(vs)&&unit&&!vs.endsWith(unit))?`${vs}${unit}`:vs; const ph=plannedEx[item.id]||'';
+                    if(!_keypadOn){
+                      return (
+                        <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 py-1 px-1 flex flex-col items-center min-w-0">
+                          <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
+                          <input type="text" inputMode="text" disabled={dis} placeholder={ph||'—'} key={`mke-${p.id}-${item.id}-${vs}`} defaultValue={vs}
+                            onBlur={(e)=>{ let val=e.target.value.trim(); if(val&&unit&&/[0-9０-９]/.test(val)&&!val.endsWith(unit)) val=`${val}${unit}`; updateExercise(p.id,item.id,val); }}
+                            className="w-full text-center text-sm font-bold text-blue-700 outline-none border border-slate-200 rounded mt-0.5 bg-white disabled:opacity-40" style={{height:30}} />
+                        </div>
+                      );
+                    }
+                    return (
                     <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0">
                       <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
                       <span className="text-sm font-bold text-blue-700">{disp||<span className="text-slate-300">{ph||'＋'}</span>}</span>
                     </button>
-                  );})}
+                    );})}
                 </div>}
                 <input type="text" disabled={dis} value={p.tokki||''} onChange={e=>updateRow(p.id,'tokki',e.target.value)} placeholder={isAbsent?'欠席理由...':'特記...'} className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-50"/>
               </div>
@@ -17542,7 +17569,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   <td className={`px-1 py-1 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                     {(() => { const fT=`temp_${timeFilter}`, fBu=`bpUpSt_${timeFilter}`, fBd=`bpDnSt_${timeFilter}`, fPl=`plSt_${timeFilter}`; const vT=p[fT]||"";
                     return (
-                    <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vT} onClick={() => { openKeypad(p.id, fT, vT, isAbsent); setActiveCell(`${p.id}-${fT}`); }} style={{fontSize:14,padding:'0 1px',height:42,boxSizing:'border-box'}} className={`w-full border rounded-lg text-center font-bold shadow-inner outline-none cursor-pointer disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'bg-transparent border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fT}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'} ${getTempColorClass(vT)}`} />
+                    <input type="text" inputMode="decimal" readOnly={_keypadOn} disabled={isAbsent || isReadOnly || isPause} value={vT}
+                      onClick={() => { if(_keypadOn){ openKeypad(p.id, fT, vT, isAbsent); setActiveCell(`${p.id}-${fT}`); } }}
+                      onChange={_keypadOn ? undefined : (e)=>updateRecord(p.id, fT, e.target.value)}
+                      style={{fontSize:14,padding:'0 1px',height:42,boxSizing:'border-box'}} className={`w-full border rounded-lg text-center font-bold shadow-inner outline-none ${_keypadOn?'cursor-pointer':''} disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'bg-transparent border-transparent shadow-none cursor-default' : activeCell===`${p.id}-${fT}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'} ${getTempColorClass(vT)}`} />
                     );})()}
                   </td>
                   <td className={`px-1 py-1 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
@@ -17554,7 +17584,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     return (
                     <div className="flex items-center justify-center gap-1">
                       {/* ★ 編集中は input で文字列を出し、 通常時は div + span × 2 で 上/下 を個別色付け */}
-                      {isEditingThis ? (
+                      {!_keypadOn ? (
+                        <input type="text" inputMode="text" placeholder="上/下" disabled={isAbsent || isReadOnly || isPause}
+                          key={`bpk-${p.id}-${fBpCombo}-${vBu}-${vBd}`} defaultValue={(vBu && vBd) ? `${vBu}/${vBd}` : (vBu||'')}
+                          onBlur={(e)=>{ const c=(e.target.value||'').replace(/[^0-9/]/g,''); const parts=c.split('/'); updateRecord(p.id,fBu,(parts[0]||'').trim()); updateRecord(p.id,fBd,(parts[1]||'').trim()); }}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',height:42,boxSizing:'border-box'}}
+                          className={`border rounded-lg outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none' : 'border-slate-300 bg-white'}`} />
+                      ) : isEditingThis ? (
                         <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
                           onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
                           style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',height:42,boxSizing:'border-box'}}
@@ -17568,7 +17604,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           ) : (vBu ? <span className={getBpUpColorClass(vBu)}>{vBu}</span> : <span className="text-slate-300">　　　</span>)}
                         </div>
                       )}
-                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'0 1px',width:55,height:42,boxSizing:'border-box'}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
+                      <input type="text" inputMode="numeric" readOnly={_keypadOn} disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { if(_keypadOn){ openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); } }} onChange={_keypadOn ? undefined : (e)=>updateRecord(p.id, fPl, e.target.value)} style={{fontSize:14,padding:'0 1px',width:55,height:42,boxSizing:'border-box'}} className={`border rounded-lg text-center ${_keypadOn?'cursor-pointer':''} ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
                     </div>
                     );})()}
                   </td>
@@ -17579,7 +17615,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const display = isEditingThis ? (keypad.value||'') : (vBu && vBd ? `${vBu}/${vBd}` : (vBu || vBd || ''));
                     return (
                     <div className="flex items-center justify-center gap-1">
-                      {isEditingThis ? (
+                      {!_keypadOn ? (
+                        <input type="text" inputMode="text" placeholder="上/下" disabled={isAbsent || isReadOnly || isPause}
+                          key={`bpk-${p.id}-${fBpCombo}-${vBu}-${vBd}`} defaultValue={(vBu && vBd) ? `${vBu}/${vBd}` : (vBu||'')}
+                          onBlur={(e)=>{ const c=(e.target.value||'').replace(/[^0-9/]/g,''); const parts=c.split('/'); updateRecord(p.id,fBu,(parts[0]||'').trim()); updateRecord(p.id,fBd,(parts[1]||'').trim()); }}
+                          style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',height:42,boxSizing:'border-box'}}
+                          className={`border rounded-lg outline-none text-black shadow-inner disabled:bg-transparent disabled:opacity-50 ${isReadOnly ? 'border-transparent shadow-none' : 'border-slate-300 bg-white'}`} />
+                      ) : isEditingThis ? (
                         <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={display}
                           onClick={() => { openKeypad(p.id, fBpCombo, (vBu && vBd) ? `${vBu}/${vBd}` : (vBu||''), isAbsent); setActiveCell(`${p.id}-${fBpCombo}`); }}
                           style={{width:78,padding:'3px 2px',textAlign:'center',fontSize:14,fontWeight:'bold',height:42,boxSizing:'border-box'}}
@@ -17593,7 +17635,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           ) : (vBu ? <span className={getBpUpColorClass(vBu)}>{vBu}</span> : <span className="text-slate-300">　　　</span>)}
                         </div>
                       )}
-                      <input type="text" readOnly disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); }} style={{fontSize:14,padding:'0 1px',width:55,height:42,boxSizing:'border-box'}} className={`border rounded-lg text-center cursor-pointer ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
+                      <input type="text" inputMode="numeric" readOnly={_keypadOn} disabled={isAbsent || isReadOnly || isPause} value={vPl} onClick={() => { if(_keypadOn){ openKeypad(p.id, fPl, vPl, isAbsent); setActiveCell(`${p.id}-${fPl}`); } }} onChange={_keypadOn ? undefined : (e)=>updateRecord(p.id, fPl, e.target.value)} style={{fontSize:14,padding:'0 1px',width:55,height:42,boxSizing:'border-box'}} className={`border rounded-lg text-center ${_keypadOn?'cursor-pointer':''} ml-1 disabled:bg-transparent disabled:opacity-50 outline-none ${getPulseColorClass(vPl, true)} ${isReadOnly ? 'border-transparent bg-transparent cursor-default shadow-none' : activeCell===`${p.id}-${fPl}` ? 'border-blue-500 ring-2 ring-blue-300 bg-emerald-50' : 'border-emerald-200 bg-emerald-50 shadow-inner'}`} />
                     </div>
                     );})()}
                   </td>
@@ -17637,8 +17679,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
                           {/* ★ 他の運動メニューと同様: 規定値(個別運動デフォルト)を薄グレーのプレースホルダーで背景表示。 タップでテンキーを開く */}
-                          <input type="text" readOnly value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
-                            onClick={()=>{ if(isAbsent||isReadOnly||isPause||!selItem) return; if(!cur.itemId && effItemId) updateExercise(p.id, item.id, {...cur, itemId: effItemId}); openKeypad(p.id, item.id, cur.value||'', isAbsent); setActiveCell(`${p.id}-${item.id}`); }}
+                          <input type="text" readOnly={_keypadOn} value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
+                            onClick={()=>{ if(!_keypadOn) return; if(isAbsent||isReadOnly||isPause||!selItem) return; if(!cur.itemId && effItemId) updateExercise(p.id, item.id, {...cur, itemId: effItemId}); openKeypad(p.id, item.id, cur.value||'', isAbsent); setActiveCell(`${p.id}-${item.id}`); }}
+                            onChange={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: e.target.value})}
                             placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${selItem.defaultUnit}`:''}`:'未選択'}
                             style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
                             className={`w-full text-center border rounded bg-white outline-none disabled:opacity-40 placeholder-slate-400 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-emerald-300 focus:border-emerald-500'}`}/>
@@ -17676,10 +17719,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           {val}
                         </button>
                       ) : (
-                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad} value={displayVal}
-                          onClick={() => { if(item.useKeypad) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
+                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad && _keypadOn} value={displayVal}
+                          onClick={() => { if(item.useKeypad && _keypadOn) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
                           onChange={(e) => {
-                            if (item.useKeypad) return;
+                            if (item.useKeypad && _keypadOn) return;
                             // ★ 内部値も単位込みで保存 (空でなく defaultUnit があるとき末尾に補完)
                             //   既に末尾が unit ならそのまま (重複防止)
                             let v = e.target.value.trim();
@@ -17687,7 +17730,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             updateExercise(p.id, item.id, v);
                           }}
                           style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
-                          className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
+                          className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
                     </td>
@@ -28574,8 +28617,15 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                 }} className="px-4 py-2 bg-emerald-700 text-white rounded-xl font-bold text-sm active:scale-95 flex items-center"><Plus size={15} className="mr-1"/>追加</button>
               </div>
             </SectionCard>
+            <SectionCard title="テンキー（点キー）の表示">
+              <p className="text-xs text-slate-500 mb-3">提供記録入力で、体温・血圧・脈・運動などの欄をタップしたときに表示される<b>テンキー（点キー）</b>の表示/非表示を切り替えます。<b>非表示</b>にすると、各欄を<b>スマホ・パソコンの通常キーボードで直接入力</b>できます（テンキーを使わない店舗向け）。</p>
+              <label className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
+                <input type="checkbox" checked={ss.keypadDisabled !== true} onChange={e=>saveSS({ keypadDisabled: !e.target.checked }, e.target.checked ? '✓ テンキーを表示します' : '✓ テンキーを非表示にしました（通常キーボードで入力）')} className="w-5 h-5" style={{accentColor:'#2563eb'}}/>
+                <span className="text-sm font-bold text-slate-700">テンキー（点キー）を表示する{ss.keypadDisabled===true && <span className="ml-2 text-xs font-normal text-amber-600">現在OFF：通常キーボードで入力します</span>}</span>
+              </label>
+            </SectionCard>
             <SectionCard title="テンキー補完ボタンの管理">
-              <p className="text-xs text-slate-500 mb-3">運動入力テンキーの下部に表示される「+◯◯」ボタンを管理します。</p>
+              <p className="text-xs text-slate-500 mb-3">運動入力テンキーの下部に表示される「+◯◯」ボタンを管理します。{ss.keypadDisabled===true && <span className="text-amber-600 font-bold">（テンキー非表示中は使われません）</span>}</p>
               <div className="flex flex-wrap gap-2 mb-4">
                 {exerciseQuickButtons.map((btn, i) => (
                   <div key={i} className="flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-sm font-bold">
