@@ -10086,7 +10086,7 @@ const DEV_ANN_META = {
   info:        { label:'お知らせ',     emoji:'ℹ️', color:'#0369a1', bg:'#f0f9ff' },
 };
 // === ホーム / ダッシュボード ===
-function DashboardView({ appData, navigateTo, activeRecorder }) {
+function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const dow = ['日','月','火','水','木','金','土'][now.getDay()];
@@ -10118,24 +10118,32 @@ function DashboardView({ appData, navigateTo, activeRecorder }) {
           </div>
           <div style={{fontSize:34}}>🍀</div>
         </div>
-        {/* つむぎ運営(開発者)からのお知らせ */}
-        {DEV_ANNOUNCEMENTS.length > 0 && (
-          <Card style={{borderColor:'#c7d2fe'}}>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span></div>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-              {DEV_ANNOUNCEMENTS.slice(0,5).map(a=>{ const m=DEV_ANN_META[a.type]||DEV_ANN_META.info; return (
-                <div key={a.id} style={{border:`1px solid ${m.color}44`,background:m.bg,borderRadius:10,padding:'8px 12px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-                    <span style={{fontSize:10,fontWeight:'bold',color:'white',background:m.color,borderRadius:5,padding:'2px 7px'}}>{m.emoji} {m.label}</span>
-                    <span style={{fontSize:10,color:'#94a3b8'}}>{a.date}</span>
+        {/* つむぎ運営(管理局)からのお知らせ = 管理局で追加したものが全店に配信される + 組み込み告知 */}
+        {(() => {
+          const nowT = Date.now();
+          const sevMeta = { info:{label:'お知らせ',emoji:'ℹ️',color:'#0369a1',bg:'#f0f9ff'}, warning:{label:'メンテナンス',emoji:'🛠',color:'#c2410c',bg:'#fff7ed'}, critical:{label:'重要',emoji:'🚨',color:'#dc2626',bg:'#fef2f2'} };
+          const fromHq = (notices||[]).filter(n=>!(n.ends_at && new Date(n.ends_at).getTime()<nowT)).map(n=>({ id:n.id, date:(n.created_at?String(n.created_at).slice(0,10):''), m: sevMeta[n.severity]||sevMeta.info, title:n.title, body:n.body }));
+          const builtin = DEV_ANNOUNCEMENTS.map(a=>{ const mm=DEV_ANN_META[a.type]||DEV_ANN_META.info; return { id:a.id, date:a.date, m:{label:mm.label,emoji:mm.emoji,color:mm.color,bg:mm.bg}, title:a.title, body:a.body }; });
+          const all = [...fromHq, ...builtin].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
+          if (!all.length) return null;
+          return (
+            <Card style={{borderColor:'#c7d2fe'}}>
+              <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span></div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {all.map(a=>(
+                  <div key={a.id} style={{border:`1px solid ${a.m.color}44`,background:a.m.bg,borderRadius:10,padding:'8px 12px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
+                      <span style={{fontSize:10,fontWeight:'bold',color:'white',background:a.m.color,borderRadius:5,padding:'2px 7px'}}>{a.m.emoji} {a.m.label}</span>
+                      {a.date && <span style={{fontSize:10,color:'#94a3b8'}}>{a.date}</span>}
+                    </div>
+                    <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{a.title}</div>
+                    {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6}}>{a.body}</div>}
                   </div>
-                  <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{a.title}</div>
-                  {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6}}>{a.body}</div>}
-                </div>
-              );})}
-            </div>
-          </Card>
-        )}
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
         {/* 本日のスケジュール + お知らせ */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:16}}>
           <Card>
@@ -10317,6 +10325,7 @@ function ScheduleView({ appData, onSave }) {
                       <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}</div>
+                        {e.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p ? <div style={{fontSize:11,color:'#4338ca',fontWeight:'bold'}}>👤 {p.name}{p.cmOffice?`（${p.cmOffice}${p.cmName?` ${p.cmName}様`:''}）`:''}</div> : null; })()}
                         {e.note && <div style={{fontSize:12,color:'#64748b',whiteSpace:'pre-wrap'}}>{e.note}</div>}
                       </div>
                       <button onClick={()=>setModal({...e})} style={{background:'#e2e8f0',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>編集</button>
@@ -10348,6 +10357,17 @@ function ScheduleView({ appData, onSave }) {
             </div>
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>タイトル</label>
             <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="例: 担当者会議 / 避難訓練 / 面談" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
+            {/* ★ 担当者会議など: 対象の利用者を任意で紐付け → 担当ケアマネ事業所・担当者を表示 */}
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>対象の利用者（任意・担当者会議など）</label>
+            <select value={modal.patientId||''} onChange={e=>setModal(m=>({...m,patientId:e.target.value?Number(e.target.value):undefined}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:8,background:'white'}}>
+              <option value="">— なし —</option>
+              {(appData.patients||[]).filter(p=>getPatientDisplayStatus(p)==='利用中').sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja')).map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+            </select>
+            {modal.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===modal.patientId); if(!p) return null; return (
+              <div style={{fontSize:11,color:'#475569',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',marginBottom:12}}>
+                担当ケアマネ：<b>{p.cmOffice||'（事業所未登録）'}</b>{p.cmName?` / ${p.cmName} 様`:''}{p.cmFax?`　FAX ${p.cmFax}`:''}
+              </div>
+            ); })()}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>メモ（任意）</label>
             <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色</label>
@@ -16099,7 +16119,7 @@ export default function App() {
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
             <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
-            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} /> :
+            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
