@@ -26758,12 +26758,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         };
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center shrink-0">
                 <h2 className="text-base font-bold text-slate-800">利用者名簿 CSV 入出力</h2>
                 <button onClick={()=>setCsvModal({isOpen:false,mode:null,importText:'',error:''})} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
-              <div className="p-6 space-y-4">
+              <div className="p-6 space-y-4 overflow-y-auto">
                 <div className="grid grid-cols-3 gap-3">
                   <button onClick={downloadCsv} className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-left">
                     <div className="text-sm font-bold text-blue-700 mb-1">📥 エクスポート</div>
