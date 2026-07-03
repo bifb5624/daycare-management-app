@@ -11266,6 +11266,36 @@ function FamilyView() {
     return {};
   })();
   const [mode, setMode] = useState(_urlInvite ? 'signup' : 'login'); // 'login' | 'signup'
+  // ★ 招待URLが「登録済み」なら、再登録させずログインへ誘導する (URLを保存して再訪しても登録画面を出さない)
+  const _inviteUsedLocal = (() => {
+    if (!_urlInvite) return false;
+    const inv = (data.familyInvites||[]).find(i => i.code === _urlInvite);
+    return !!(inv && inv.usedBy);
+  })();
+  // 別端末で登録された場合に備え、招待に紐づく店舗のクラウド状態を確認して usedBy を判定
+  const [_inviteUsedRemote, setInviteUsedRemote] = useState(false);
+  React.useEffect(() => {
+    if (!_urlInvite || _inviteUsedLocal) return;
+    if (!isSupabaseEnabled) return;
+    const tok = decodeInviteToken(_urlToken);
+    const sid = (tok && tok.s) || familyStoreId || null;
+    if (!sid) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const st = await supabaseLoadStateForStore(sid);
+        const inv = (st?.familyInvites || []).find(i => i.code === _urlInvite);
+        if (!cancelled && inv && inv.usedBy) setInviteUsedRemote(true);
+      } catch { /* 取得失敗時は従来どおり登録画面 (submit時に二重登録は弾かれる) */ }
+    })();
+    return () => { cancelled = true; };
+  }, [_urlInvite, _inviteUsedLocal]); // eslint-disable-line
+  const _inviteAlreadyUsed = _inviteUsedLocal || _inviteUsedRemote;
+  const _stripInviteUrl = React.useCallback(() => {
+    try { const u = new URL(window.location.href); u.searchParams.delete('invite'); u.searchParams.delete('t'); window.history.replaceState(null, '', u.pathname + u.search + u.hash); } catch {}
+  }, []);
+  // 登録済みと判明したら URL から招待パラメータを消す (再読込時は最初からログイン画面)
+  React.useEffect(() => { if (_inviteAlreadyUsed) _stripInviteUrl(); }, [_inviteAlreadyUsed, _stripInviteUrl]);
   // 招待時の続柄が標準リストに無い場合は「その他」を選択 + 入力欄に自動反映
   const _stdRelations = ['本人','配偶者','長男','長女','次男','次女','兄','弟','姉','妹','ケアマネージャー'];
   const _invRel = (_inviteInfo.relation || '').trim();
@@ -11551,7 +11581,24 @@ function FamilyView() {
             </svg>
             <div style={{fontSize:18,fontWeight:'bold',marginTop:10,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
           </div>
-          {mode === 'signup' ? (
+          {mode === 'signup' && _inviteAlreadyUsed && !signupForm.done ? (
+            /* ★ 招待URLが既に使われている(登録済み) → 再登録させずログインへ誘導 */
+            <div style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+              <div style={{textAlign:'center'}}>
+                <div style={{fontSize:40,marginBottom:10}}>✅</div>
+                <div style={{fontSize:17,fontWeight:'bold',color:'#15803d',marginBottom:8}}>登録は完了しています</div>
+                <div style={{fontSize:12,color:'#475569',lineHeight:1.8,marginBottom:18}}>
+                  この招待リンクはすでに登録に使われています。<br/>
+                  登録済みの<b>ID・パスワード</b>でログインしてください。<br/>
+                  <span style={{fontSize:11,color:'#94a3b8'}}>（ID・パスワードがご不明な場合は事業所までお問い合わせください）</span>
+                </div>
+                <button onClick={()=>{ _stripInviteUrl(); setSignupForm(f=>({...f, error:''})); setMode('login'); }}
+                  style={{width:'100%',padding:'13px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:'pointer'}}>
+                  ログイン画面へ進む
+                </button>
+              </div>
+            </div>
+          ) : mode === 'signup' ? (
             <div style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
               <div style={{textAlign:'center',marginBottom:18}}>
                 <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b'}}>{signupForm.ecRelation==='ケアマネージャー'?'新規ご関係者の登録':'新規ご家族の登録'}</div>
