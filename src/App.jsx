@@ -394,7 +394,7 @@ ${body}</body></html>`;
                   if (it.type === 'individual' && typeof raw === 'object' && raw) {
                     const allInd = appData.systemSettings?.individualExerciseItems || [];
                     const sel = allInd.find(ii => ii.id === raw.itemId);
-                    if (sel && raw.value) display = `${sel.name}<br/>${raw.value}${sel.defaultUnit||''}`;
+                    if (sel && raw.value) display = `${sel.name}<br/>${applyExUnits(raw.value, sel)}`;
                     else if (sel) display = sel.name;
                   } else if (typeof raw !== 'object') {
                     display = v(raw);
@@ -922,6 +922,35 @@ const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(bi
 //    例: 「①ﾊﾞｲｸ」 = 「①バイク」 として比較できるよう
 //    運動メニューや項目名の同一性判定に使用
 const normalizeName = (s) => (s || '').normalize('NFKC');
+
+// ★ 運動メニューの単位付与 (1〜2単位対応)。 item = {defaultUnit, unitSep, defaultUnit2}
+//   例: 単一 "3"→"3分" ／ 2単位×: "5×10"→"5kg×10回" ／ 2個目空 "5×"→"5kg" [1単位のみ]
+//   ・記号(○×ー等)はそのまま。 既に単位付きなら二重付与しない(冪等)。 分析・表示・入力の全箇所で共通利用。
+const applyExUnits = (raw, item) => {
+  const u1 = (item && item.defaultUnit) || '';
+  const sep = (item && item.unitSep) || '';
+  const u2 = (item && item.defaultUnit2) || '';
+  const s = (raw == null ? '' : String(raw)).trim();
+  if (!s) return '';
+  if (!/[0-9０-９]/.test(s)) return s; // 記号のみはそのまま
+  if (sep && u2) {
+    const parts = s.split(/[×xＸ*/／]/);
+    const p1 = (parts[0] || '').trim();
+    const p2 = (parts.length > 1 ? parts.slice(1).join('') : '').trim();
+    const f1 = (!/[0-9０-９]/.test(p1) || (u1 && p1.endsWith(u1))) ? p1 : (u1 ? `${p1}${u1}` : p1);
+    if (!p2) return f1; // 2個目が空 → 1個目の単位だけ
+    const f2 = (!/[0-9０-９]/.test(p2) || (u2 && p2.endsWith(u2))) ? p2 : (u2 ? `${p2}${u2}` : p2);
+    return `${f1}${sep}${f2}`;
+  }
+  return (u1 && !s.endsWith(u1)) ? `${s}${u1}` : s;
+};
+// 単位ラベル表示用 (「kg×回」など。設定画面の見出し等に使用)
+const exUnitLabel = (item) => {
+  const u1 = (item && item.defaultUnit) || '';
+  const sep = (item && item.unitSep) || '';
+  const u2 = (item && item.defaultUnit2) || '';
+  return (sep && u2) ? `${u1}${sep}${u2}` : u1;
+};
 
 // === 現在の記録者 (アクティブスタッフ) の名前を sessionStorage から取得 ===
 //    全画面共通で「今このスタッフが操作している」の情報源
@@ -9319,7 +9348,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
 // === 共通コンポーネント ===
 
-function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons, zoom = 1 }) {
+function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons, zoom = 1, unitSep = '', unit2 = '' }) {
   const keypadRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
 
@@ -9483,7 +9512,7 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
   if (mode === 'record') { rightCol1 = 'BS'; rightCol2 = 'TAB'; rightCol3 = '/'; }
   else if (mode === 'time') { rightCol1 = 'BS'; rightCol2 = 'TAB'; rightCol3 = ':'; }
   else if (mode === 'date') { rightCol1 = 'BS'; rightCol2 = 'TAB'; rightCol3 = '/'; }
-  else if (mode === 'exercise') { rightCol1 = 'BS'; rightCol2 = 'TAB'; rightCol3 = '×'; }
+  else if (mode === 'exercise') { rightCol1 = 'BS'; rightCol2 = 'TAB'; rightCol3 = (unitSep === '/' ? '/' : '×'); }
   else { rightCol1 = 'BS'; rightCol2 = '/'; rightCol3 = '00'; }
 
   const handleKeyClick = (key) => {
@@ -16962,12 +16991,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _srcArr = (filterMode === 'single') ? localPatients : localTicketRecords;
       const _rec = _srcArr.find(x => x.id === keypad.recordId);
       const _cur = (_rec && _rec.exercises && typeof _rec.exercises[keypad.field] === 'object') ? _rec.exercises[keypad.field] : { itemId:'', value:'' };
-      updateExercise(keypad.recordId, keypad.field, { ...(_cur||{}), value: formatted });
+      // ★ 個別運動の単位(1〜2単位)を選択中の種目から取得して付与
+      const _indItems = (appData.systemSettings?.individualExerciseItems || appSettings.individualExerciseItems || []);
+      const _indItm = _indItems.find(x => x.id === (_cur && _cur.itemId));
+      updateExercise(keypad.recordId, keypad.field, { ...(_cur||{}), value: applyExUnits(formatted, _indItm) });
     } else if (_exItm) {
-      const _unit = _exItm.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(_exItm.name))?.defaultUnit || '';
-      let toSave = formatted;
-      if (toSave && _unit && /[0-9０-９]/.test(String(toSave)) && !String(toSave).endsWith(_unit)) toSave = `${toSave}${_unit}`;
-      updateExercise(keypad.recordId, keypad.field, toSave);
+      // ★ 運動メニュー(1〜2単位)の単位を付与
+      updateExercise(keypad.recordId, keypad.field, applyExUnits(formatted, _exItm));
     } else {
       updateRecord(keypad.recordId, keypad.field, formatted);
     }
@@ -17410,13 +17440,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   })}
                 </div>
                 {!isAbsent && <div className="grid grid-cols-3 gap-1.5">
-                  {exItems.map(item=>{ const v=p.exercises?.[item.id]; const vs=String((typeof v==='object'?'':v)??''); const unit=item.defaultUnit||''; const disp=(vs&&/[0-9０-９]/.test(vs)&&unit&&!vs.endsWith(unit))?`${vs}${unit}`:vs; const ph=plannedEx[item.id]||'';
+                  {exItems.map(item=>{ const v=p.exercises?.[item.id]; const vs=String((typeof v==='object'?'':v)??''); const unit=item.defaultUnit||''; const disp=applyExUnits(vs, item); const ph=plannedEx[item.id]||'';
                     if(!_keypadOn){
                       return (
                         <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 py-1 px-1 flex flex-col items-center min-w-0">
                           <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
                           <input type="text" inputMode="text" disabled={dis} placeholder={ph||'—'} key={`mke-${p.id}-${item.id}-${vs}`} defaultValue={vs}
-                            onBlur={(e)=>{ let val=e.target.value.trim(); if(val&&unit&&/[0-9０-９]/.test(val)&&!val.endsWith(unit)) val=`${val}${unit}`; updateExercise(p.id,item.id,val); }}
+                            onBlur={(e)=>{ updateExercise(p.id,item.id, applyExUnits(e.target.value, item)); }}
                             className="w-full text-center text-sm font-bold text-blue-700 outline-none border border-slate-200 rounded mt-0.5 bg-white disabled:opacity-40" style={{height:30}} />
                         </div>
                       );
@@ -17682,7 +17712,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           <input type="text" readOnly={_keypadOn} value={cur.value || ''} disabled={isAbsent || isReadOnly || isPause || !selItem}
                             onClick={()=>{ if(!_keypadOn) return; if(isAbsent||isReadOnly||isPause||!selItem) return; if(!cur.itemId && effItemId) updateExercise(p.id, item.id, {...cur, itemId: effItemId}); openKeypad(p.id, item.id, cur.value||'', isAbsent); setActiveCell(`${p.id}-${item.id}`); }}
                             onChange={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: e.target.value})}
-                            placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${selItem.defaultUnit}`:''}`:'未選択'}
+                            onBlur={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: applyExUnits(e.target.value, selItem)})}
+                            placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${exUnitLabel(selItem)}`:''}`:'未選択'}
                             style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
                             className={`w-full text-center border rounded bg-white outline-none disabled:opacity-40 placeholder-slate-400 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-emerald-300 focus:border-emerald-500'}`}/>
                         </td>
@@ -17700,8 +17731,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     //   内部値は数値のみのまま、 表示時のみ単位付加 (連動先で値が空にならない安全な実装)
                     const _unit = item.defaultUnit || appSettings.exerciseItems.find(it => normalizeName(it.name) === normalizeName(item.name))?.defaultUnit || '';
                     const _vstr = String(val ?? '');
-                    // ★ 数字を含む値のときだけ単位を付ける (×・ー・○ 等の記号には単位を付けない)
-                    const displayVal = (_vstr !== '' && _unit && /[0-9０-９]/.test(_vstr) && !_vstr.endsWith(_unit)) ? `${_vstr}${_unit}` : _vstr;
+                    // ★ 単位付与(1〜2単位対応・冪等)。 記号(×・ー・○)には付けない
+                    const displayVal = applyExUnits(_vstr, item);
                     // ★ ○ は実施＝目立たせる(太く大きく)。 × と ー は控えめ(細く・小さめ・薄いグレー)。
                     const _isCircle = displayVal==='○'||displayVal==='◯';
                     const _isCross = displayVal==='×'||displayVal==='✕';
@@ -17719,16 +17750,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           {val}
                         </button>
                       ) : (
-                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad && _keypadOn} value={displayVal}
+                        <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad && _keypadOn} value={(item.useKeypad && _keypadOn) ? displayVal : _vstr}
                           onClick={() => { if(item.useKeypad && _keypadOn) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
                           onChange={(e) => {
                             if (item.useKeypad && _keypadOn) return;
-                            // ★ 内部値も単位込みで保存 (空でなく defaultUnit があるとき末尾に補完)
-                            //   既に末尾が unit ならそのまま (重複防止)
-                            let v = e.target.value.trim();
-                            if (v && _unit && /[0-9０-９]/.test(v) && !v.endsWith(_unit)) v = `${v}${_unit}`;
-                            updateExercise(p.id, item.id, v);
+                            // ★ 入力中は生値のまま保存。 単位(1〜2単位)は onBlur で付与する
+                            updateExercise(p.id, item.id, e.target.value);
                           }}
+                          onBlur={(e) => { if (item.useKeypad && _keypadOn) return; updateExercise(p.id, item.id, applyExUnits(e.target.value, item)); }}
                           style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
                           className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
@@ -17858,7 +17887,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </div>
         );
       })(), document.body)}
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}
+        unitSep={(()=>{ const _ei=(appData.systemSettings?.exerciseItems||appSettings.exerciseItems).find(i=>i.id===keypad.field); if(_ei && _ei.type!=='individual') return _ei.unitSep||''; const _rec=(filterMode==='single'?localPatients:localTicketRecords).find(x=>x.id===keypad.recordId); const _cur=_rec&&_rec.exercises&&_rec.exercises[keypad.field]; const _iid=(_cur&&typeof _cur==='object')?_cur.itemId:null; if(_iid){ const _ii=(appData.systemSettings?.individualExerciseItems||appSettings.individualExerciseItems||[]).find(x=>x.id===_iid); return (_ii&&_ii.unitSep)||''; } return ''; })()}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
       {statusModal.isOpen && ReactDOM.createPortal(
@@ -22324,7 +22354,7 @@ function buildAllPeriodTicketHtml(appData, patient) {
           if (it.type === 'individual' && typeof raw === 'object' && raw) {
             const allInd = appData.systemSettings?.individualExerciseItems || [];
             const sel = allInd.find(ii => ii.id === raw.itemId);
-            if (sel && raw.value) display = `${sel.name}<br/>${raw.value}${sel.defaultUnit||''}`; else if (sel) display = sel.name;
+            if (sel && raw.value) display = `${sel.name}<br/>${applyExUnits(raw.value, sel)}`; else if (sel) display = sel.name;
           } else if (typeof raw !== 'object') { display = v(raw); }
           return `<td style="border:1px solid #94a3b8;text-align:center;font-size:10px;font-weight:bold;padding:1px;background:${rowBg};line-height:1.15;">${isA||mt?'':display}</td>`;
         }).join('');
@@ -22597,7 +22627,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                 const sel = allInd.find(ii => ii.id === selId);
                 if (!sel) return null;
                 const dv = (rawIndEx.find(x=>x.itemId===selId)?.defaultValue) || '';
-                return { name: sel.name, val: dv ? `${dv}${sel.defaultUnit||''}` : '' };
+                return { name: sel.name, val: dv ? applyExUnits(dv, sel) : '' };
               };
               return (
             <table className="w-full border-collapse border border-slate-600 mb-1 shrink-0" style={{tableLayout:'fixed',width:'100%',marginTop:6}}>
@@ -22771,7 +22801,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                 isIndividual = true;
                                 const allInd = appData.systemSettings?.individualExerciseItems || [];
                                 const sel = allInd.find(ii => ii.id === raw.itemId);
-                                if (sel && raw.value) display = `${sel.name}\n${raw.value}${sel.defaultUnit||''}`;
+                                if (sel && raw.value) display = `${sel.name}\n${applyExUnits(raw.value, sel)}`;
                                 else if (sel) display = sel.name;
                               } else if (typeof raw !== 'object') {
                                 display = v(raw);
@@ -26323,13 +26353,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           </div></div>
         </>) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">左から利用者を選択してください</div>)}
       </div>
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => {
-        // ★ 運動メニューの入力を閉じる時、数値だけなら単位を自動付与 (例: 10 → 10分)
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode}
+        unitSep={(()=>{ const _it=(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(e => e.id === keypad.exerciseId); return (_it&&_it.unitSep)||''; })()}
+        onClose={() => {
+        // ★ 運動メニューの入力を閉じる時、単位(1〜2単位)を自動付与 (例: 10 → 10分 / 5×10 → 5kg×10回)
         if (keypad.field === 'plannedExercise' && localPatient) {
           const _it = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(e => e.id === keypad.exerciseId);
-          const _unit = _it?.defaultUnit || '';
           const _raw = String(keypad.value ?? '').trim();
-          const _fin = (/^[0-9０-９.]+$/.test(_raw) && _unit) ? _raw + _unit : _raw;
+          const _fin = applyExUnits(_raw, _it);
           if (_fin !== _raw) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: _fin });
         }
         setKeypad({ ...keypad, isOpen: false });
@@ -28497,9 +28528,19 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                     {item.type === 'individual' ? (
                       <span className="w-20 text-[10px] text-emerald-600 text-center italic">下の項目で単位設定</span>
                     ) : (
-                      <input value={item.defaultUnit||''} onChange={e=>{
-                        const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setExerciseItems(arr);
-                      }} placeholder="単位" list="unit-suggestions" className="w-20 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400"/>
+                      <div className="flex items-center gap-1" title="単位を2つ使う場合は区切り(×または/)と2つ目の単位を設定。例: kg × 回 → 5kg×10回">
+                        <input value={item.defaultUnit||''} onChange={e=>{
+                          const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setExerciseItems(arr);
+                        }} placeholder="単位" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400"/>
+                        <select value={item.unitSep||''} onChange={e=>{
+                          const arr=[...exerciseItems]; arr[i]={...arr[i],unitSep:e.target.value}; setExerciseItems(arr);
+                        }} className="px-1 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400 cursor-pointer" title="2つ目の単位の区切り">
+                          <option value="">―</option><option value="×">×</option><option value="/">/</option>
+                        </select>
+                        <input value={item.defaultUnit2||''} disabled={!item.unitSep} onChange={e=>{
+                          const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit2:e.target.value}; setExerciseItems(arr);
+                        }} placeholder="単位2" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400 disabled:opacity-40"/>
+                      </div>
                     )}
                     {/* ★ グラフタイプ: 運動トレンドでの描画方式を選択 (auto=自動推測) */}
                     <select value={item.graphType || 'auto'} onChange={e=>{
@@ -28602,9 +28643,19 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin }) {
                     <input value={item.name} onChange={e=>{
                       const arr=[...individualExerciseItems]; arr[i]={...arr[i],name:e.target.value}; setIndividualExerciseItems(arr);
                     }} className="flex-1 px-2 py-1 bg-white border border-emerald-200 rounded text-sm font-bold outline-none focus:border-emerald-500"/>
-                    <input value={item.defaultUnit||''} onChange={e=>{
-                      const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setIndividualExerciseItems(arr);
-                    }} placeholder="単位" list="unit-suggestions" className="w-20 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500"/>
+                    <div className="flex items-center gap-1" title="単位を2つ使う場合は区切り(×または/)と2つ目の単位を設定。例: kg × 回 → 5kg×10回">
+                      <input value={item.defaultUnit||''} onChange={e=>{
+                        const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setIndividualExerciseItems(arr);
+                      }} placeholder="単位" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500"/>
+                      <select value={item.unitSep||''} onChange={e=>{
+                        const arr=[...individualExerciseItems]; arr[i]={...arr[i],unitSep:e.target.value}; setIndividualExerciseItems(arr);
+                      }} className="px-1 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500 cursor-pointer" title="2つ目の単位の区切り">
+                        <option value="">―</option><option value="×">×</option><option value="/">/</option>
+                      </select>
+                      <input value={item.defaultUnit2||''} disabled={!item.unitSep} onChange={e=>{
+                        const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit2:e.target.value}; setIndividualExerciseItems(arr);
+                      }} placeholder="単位2" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500 disabled:opacity-40"/>
+                    </div>
                     <button type="button" onClick={()=>{
                       if(!window.confirm(`「${item.name}」を削除します。よろしいですか？\n(過去の記録には影響しません)`)) return;
                       setIndividualExerciseItems(individualExerciseItems.filter((_,j)=>j!==i));
