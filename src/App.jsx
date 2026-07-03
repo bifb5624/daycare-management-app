@@ -10075,6 +10075,16 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
   );
 }
 
+// ★ アプリ開発者(つむぎ運営)からのお知らせ (アップデート内容・メンテナンス等)。 ここを更新して配信する。
+//   type: 'update'(アップデート) | 'maintenance'(メンテナンス) | 'info'(お知らせ)
+const DEV_ANNOUNCEMENTS = [
+  { id:'dev_2026_0703', date:'2026-07-03', type:'update', title:'ホーム画面・スケジュール機能を追加しました', body:'ログイン後の「ホーム」（本日のスケジュール・お知らせ・各機能へのショートカット）と、月カレンダーで予定を管理できる「スケジュール」を追加しました。個人ファイルには「支援経過表」も追加しています。' },
+];
+const DEV_ANN_META = {
+  update:      { label:'アップデート', emoji:'🆕', color:'#2563eb', bg:'#eff6ff' },
+  maintenance: { label:'メンテナンス', emoji:'🛠', color:'#c2410c', bg:'#fff7ed' },
+  info:        { label:'お知らせ',     emoji:'ℹ️', color:'#0369a1', bg:'#f0f9ff' },
+};
 // === ホーム / ダッシュボード ===
 function DashboardView({ appData, navigateTo, activeRecorder }) {
   const now = new Date();
@@ -10108,6 +10118,24 @@ function DashboardView({ appData, navigateTo, activeRecorder }) {
           </div>
           <div style={{fontSize:34}}>🍀</div>
         </div>
+        {/* つむぎ運営(開発者)からのお知らせ */}
+        {DEV_ANNOUNCEMENTS.length > 0 && (
+          <Card style={{borderColor:'#c7d2fe'}}>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span></div>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {DEV_ANNOUNCEMENTS.slice(0,5).map(a=>{ const m=DEV_ANN_META[a.type]||DEV_ANN_META.info; return (
+                <div key={a.id} style={{border:`1px solid ${m.color}44`,background:m.bg,borderRadius:10,padding:'8px 12px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
+                    <span style={{fontSize:10,fontWeight:'bold',color:'white',background:m.color,borderRadius:5,padding:'2px 7px'}}>{m.emoji} {m.label}</span>
+                    <span style={{fontSize:10,color:'#94a3b8'}}>{a.date}</span>
+                  </div>
+                  <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{a.title}</div>
+                  {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6}}>{a.body}</div>}
+                </div>
+              );})}
+            </div>
+          </Card>
+        )}
         {/* 本日のスケジュール + お知らせ */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:16}}>
           <Card>
