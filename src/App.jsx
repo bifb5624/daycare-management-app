@@ -9951,7 +9951,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
               <div className="text-sm font-bold text-slate-700">📱 利用者を選択してプレビュー</div>
               <div className="text-xs text-slate-400 font-bold">利用中 {allPats.length}名</div>
             </div>
-            <input type="text" autoFocus placeholder="🔍 氏名・フリガナ・ID で検索" value={patSearch}
+            <input type="text" placeholder="🔍 氏名・フリガナ・ID で検索" value={patSearch}
               onChange={e=>setPatSearch(e.target.value)}
               className="w-full mb-3 px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base font-bold outline-none focus:border-emerald-400" />
             <div className="flex flex-wrap gap-1 mb-3 pb-3 border-b border-slate-100">
