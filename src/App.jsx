@@ -14540,6 +14540,8 @@ export default function App() {
   });
   // ★ ローカル編集タイムスタンプ (Supabase pull の race condition 防止)
   const lastLocalEditRef = React.useRef(0);
+  // ★ 意図的に利用者を全削除した時刻。 直後は「0件安全ガード(クラウド復元)」を無効化し、削除を確定させる。
+  const intentionalEmptyRef = React.useRef(0);
   // ★ つむぎ管理局(super_admin)が店舗に入ったら、その店舗の「管理者」として全ての管理者専用機能を解放する。
   React.useEffect(() => {
     if (staffSession?.role === 'super_admin' && staffSession?.storeId) {
@@ -14655,8 +14657,10 @@ export default function App() {
         if (storeTransitionRef.current || dataLoadedForStoreRef.current !== staffSession.storeId) return;
         // ★ 利用者データ消失防止: 0 件 patient で上書きする際は Supabase 側に既存があるか確認
         //   既存に patients があるのに、こちらが 0 件なら push せず Supabase の値を尊重
+        // ★ 意図的な全削除(一括削除)直後は、0件安全ガードを無効化して削除を確定させる
+        const _intentionalEmpty = (Date.now() - (intentionalEmptyRef.current || 0)) < 20000;
         try {
-          if ((appData.patients || []).length === 0) {
+          if ((appData.patients || []).length === 0 && !_intentionalEmpty) {
             const remote = await supabaseLoadStateForStore(staffSession.storeId);
             const remotePatients = remote?.data?.patients;
             if (Array.isArray(remotePatients) && remotePatients.length > 0) {
@@ -14671,7 +14675,7 @@ export default function App() {
         } catch (e) {
           // ★ 0件pushの安全確認に失敗 (通信エラー等)。 リモートを確認できない以上、
           //   空データで上書きしてしまう危険があるので push しない (データ消失防止)。
-          if ((appData.patients || []).length === 0) {
+          if ((appData.patients || []).length === 0 && !_intentionalEmpty) {
             console.warn('[supabase] safety check failed & local patients=[]; skip push to avoid data loss', e);
             return;
           }
@@ -14753,7 +14757,9 @@ export default function App() {
           // ★ ローカル編集中はリモートで上書きしない (5秒以内に編集していたら pull スキップ)
           //   (ユーザーの編集が Supabase に push される前に pull で消されるバグ対応)
           const since = Date.now() - (lastLocalEditRef.current || 0);
-          if (since < 5000) {
+          // ★ 意図的な全削除直後(20秒間)は pull を止める。 push が完了する前に古いクラウドで復活させないため。
+          const intentionalWindow = (Date.now() - (intentionalEmptyRef.current || 0)) < 20000;
+          if (since < 5000 || intentionalWindow) {
             // 編集中 → pull せず再試行を次の interval に任せる
             return;
           }
@@ -15189,10 +15195,13 @@ export default function App() {
       //   保存直後に別画面へ移動 → pull で古いクラウドデータに上書きされて
       //   入力が消える、というレースを防ぐ (保存と同時にクラウドを最新化)。
       lastLocalEditRef.current = Date.now();
+      if (options.allowEmpty) intentionalEmptyRef.current = Date.now();
       if (isSupabaseEnabled && staffSession?.storeId
           && !storeTransitionRef.current
           && dataLoadedForStoreRef.current === staffSession.storeId
-          && (newData.patients || []).length > 0) {
+          && ((newData.patients || []).length > 0 || options.allowEmpty)) {
+        // ★ options.allowEmpty: 明示的な一括削除など、利用者が0件になっても保存を許可
+        //   (通常は 0件push を安全のため抑止しているが、意図的な削除は反映させる)
         try { supabaseMergeAndSyncStateForStore(staffSession.storeId, newData); } catch (e) { console.warn('[supabase] immediate save failed', e); }
       }
       setToastMsg(options.message || '保存されました');
@@ -29455,7 +29464,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 if(!window.confirm(`次の ${ids.length}名 の利用者を削除します。関連する提供記録などは残りますが、名簿からは完全に消えます。元に戻せません。\n\n${names.slice(0,15).join('、')}${names.length>15?' ほか':''}\n\n本当に削除しますか？`)) return;
                 if(!window.confirm('最終確認：この操作は取り消せません。削除を実行しますか？')) return;
                 const remain = (appData.patients||[]).filter(p=>!ids.includes(p.id));
-                onSave({ ...appData, patients: remain }, { manual:true, message:`✓ ${ids.length}名の利用者を削除しました` });
+                onSave({ ...appData, patients: remain }, { manual:true, message:`✓ ${ids.length}名の利用者を削除しました`, allowEmpty:true });
                 setBulkDelPatients(new Set());
               };
               const doDeleteOffices = () => {
@@ -29466,7 +29475,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 if(!window.confirm(warn+'\n\n本当に削除しますか？')) return;
                 const nextOffices = offices.filter(o=>!nm.includes((o.name||'').trim()));
                 const nextManagers = (appData.systemSettings?.careManagers||[]).filter(c=>!nm.includes((c.office||'').trim()));
-                onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), cmOffices: nextOffices, careManagers: nextManagers } }, { manual:true, message:`✓ ${nm.length}件のケアマネ事業所を削除しました` });
+                onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), cmOffices: nextOffices, careManagers: nextManagers } }, { manual:true, message:`✓ ${nm.length}件のケアマネ事業所を削除しました`, allowEmpty:true });
                 setBulkDelOffices(new Set());
               };
               return (
