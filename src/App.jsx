@@ -874,6 +874,11 @@ function PrintPreviewModal({ children, title, onClose, onPrint }) {
   );
 }
 
+// ★ マウント時に一度だけ fn を実行する小コンポーネント (プレビューを開いたら即印刷 等に使用)
+function AutoRun({ fn }) {
+  React.useEffect(() => { const t = setTimeout(() => { try { fn && fn(); } catch {} }, 250); return () => clearTimeout(t); }, []);
+  return null;
+}
 // === グローバルスタイル（iPadフォント最適化）===
 const GLOBAL_STYLE = `
   * { -webkit-tap-highlight-color: transparent; }
@@ -15662,6 +15667,8 @@ export default function App() {
 
           return (
             <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:9900,display:'flex',flexDirection:'column'}}>
+              {/* ★ プレビューを開いたら二度手間にならないよう、そのまま印刷ダイアログを自動で開く (iOSは新規タブがブロックされるため手動ボタンのまま) */}
+              {printPreviewContent.html && !isIOS && <AutoRun fn={()=>openPrintWindow(false)} />}
               {/* ヘッダー — ★ プレビュー内容(注入HTML)より必ず手前＆操作可能にする */}
               <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)',position:'relative',zIndex:10,pointerEvents:'auto'}}>
                 <div style={{flex:1}}>
