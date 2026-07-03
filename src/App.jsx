@@ -26732,7 +26732,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         const normGender = (s) => { const t=String(s||'').trim(); if(!t) return ''; if(/^(男性|男|m|male)$/i.test(t)) return '男性'; if(/^(女性|女|f|female)$/i.test(t)) return '女性'; return t; };
         const normBurden = (s) => { const t=_toHalf(String(s||'').trim()); if(!t) return ''; if(/^70%/.test(t)||/3割/.test(t)) return '70%'; if(/^80%/.test(t)||/2割/.test(t)) return '80%'; if(/^90%/.test(t)||/1割/.test(t)) return '90%'; const m=t.match(/(70|80|90)\s*%/); if(m) return m[1]+'%'; if(/^3$/.test(t)) return '70%'; if(/^2$/.test(t)) return '80%'; if(/^1$/.test(t)) return '90%'; return t; };
         const normCare = (s) => { const t=_toHalf(String(s||'').trim()).replace(/\s/g,''); if(!t) return ''; if(/事業対象|総合事業|事対|チェックリスト/.test(t)) return '事業対象者'; let m=t.match(/要支援([12])/)||t.match(/^支援([12])/); if(m) return '要支援'+m[1]; m=t.match(/要介護([1-5])/)||t.match(/^介護([1-5])/); if(m) return '要介護'+m[1]; if(t==='要支援') return '要支援1'; return t; };
-        const doImport = () => {
+        const doImport = (perRowChoices) => {
           try {
             const rows = parseCsv(csvModal.importText.replace(/^﻿/,''));
             if (rows.length < 2) throw new Error('ヘッダー行とデータ行が必要です');
@@ -26780,6 +26780,25 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             const normName = (s) => String(s||'').replace(/[\s　]/g,'').trim();
             const existingByName = new Map();
             existing.forEach(p=>{ const k=normName(p.name); if(k) existingByName.set(k,p.id); });
+            // ★ 氏名重複の事前検出: 未解決なら「1人ずつ選ぶ」画面を表示 (ID一致行は除く=通常更新)
+            if (!perRowChoices) {
+              const dupList = [];
+              const _seen = new Set();
+              for (let r=1;r<rows.length;r++){
+                const row = rows[r]; if(!row.some(c=>(c||'').trim())) continue;
+                const nm = val(row,col.name);
+                const _idE = parseInt(val(row,col.id));
+                if (!isNaN(_idE) && existingIds.has(_idE)) continue; // ID指定は常に更新
+                if (!nm) continue;
+                const dId = existingByName.get(normName(nm));
+                if (dId != null && !_seen.has(r)) { _seen.add(r); const ep = existing.find(p=>p.id===dId); dupList.push({ ri:r, name:nm, existingId:dId, existingLabel:`ID:${String(dId).padStart(4,'0')}${ep?.careLevel?`・${ep.careLevel}`:''}${ep?.status?`・${ep.status}`:''}` }); }
+              }
+              if (dupList.length) {
+                const _def = (csvModal.dupMode==='keepBoth') ? 'keepBoth' : 'replace';
+                setCsvModal(prev=>({ ...prev, resolvingDup:true, dupList, dupChoices:Object.fromEntries(dupList.map(d=>[d.ri, _def])) }));
+                return;
+              }
+            }
             const applyEx = (p, emName, emRel, emPhone, doctor) => {
               let np = {...p};
               if (emName || emRel || emPhone) {
@@ -26836,8 +26855,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               const idNum = parseInt(val(row,col.id));
               let target = null;
               if (!isNaN(idNum) && existingIds.has(idNum)) target = existing.find(p=>p.id===idNum);
-              else if (name && dupMode === 'replace') { const dId = existingByName.get(normName(name)); if(dId!=null) target = existing.find(p=>p.id===dId); }
-              // dupMode==='keepBoth' のときは氏名一致でも target を立てず → 新規追加 (両方残す)
+              else if (name) {
+                const dId = existingByName.get(normName(name));
+                if (dId != null) {
+                  // ★ 氏名一致: 1人ずつの選択(perRowChoices) を優先。 無ければ従来の一括 dupMode
+                  const choice = perRowChoices ? (perRowChoices[r] || 'replace') : dupMode;
+                  if (choice === 'skip') { skipped++; continue; }
+                  if (choice !== 'keepBoth') target = existing.find(p=>p.id===dId); // replace(更新)
+                  // keepBoth → target=null → 新規追加(両方残す)
+                }
+              }
               if (target) {
                 const idx = existing.findIndex(p=>p.id===target.id);
                 existing[idx] = applyEx({ ...existing[idx], ...rec }, emName, emRel, emPhone, doctor);
@@ -26869,10 +26896,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             }
             onSave({...appData, patients: existing, systemSettings: _nextSettings});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
-            const modeTxt = dupMode==='replace' ? '氏名一致は置き換え(更新)' : '氏名一致でも両方残す(新規追加)';
-            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${skipped?` / スキップ ${skipped} 件（氏名が空の行）`:''}\n重複時の扱い: ${modeTxt}\n（空欄の項目は既存データを上書きしません／氏名が空の行は取り込みません）`);
+            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${skipped?` / スキップ ${skipped} 件`:''}\n（空欄の項目は既存データを上書きしません／氏名が空の行・スキップ指定は取り込みません／ケアマネ事業所・担当者はマスタにも自動登録しました）`);
           } catch (e) {
-            setCsvModal({...csvModal, error: e.message || String(e)});
+            setCsvModal(prev=>({...prev, error: e.message || String(e)}));
           }
         };
         return (
@@ -26901,7 +26927,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <b>対応列:</b> {HEADERS.join(' / ')}<br/>
                   <b>ヒント:</b> エクスポートしたCSVをExcelで編集→再インポートで一括変更できます。<b>利用者ID</b> 空欄なら新規追加、既存IDなら更新。
                 </div>
-                {csvModal.mode === 'import' && (
+                {csvModal.mode === 'import' && !csvModal.resolvingDup && (
                   <div className="space-y-2">
                     <label className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-xl cursor-pointer hover:bg-blue-100 font-bold text-sm text-blue-700">
                       📁 CSV ファイルを選択 (Excel で保存した .csv をアップロード)
@@ -26945,11 +26971,55 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         <input type="radio" name="csvDupMode" checked={csvModal.dupMode==='keepBoth'} onChange={()=>setCsvModal({...csvModal,dupMode:'keepBoth'})} className="mt-0.5"/>
                         <span className="text-slate-700"><b>両方残す（新規追加）</b> … 同じ氏名でも別の利用者として追加</span>
                       </label>
+                      <div className="text-[11px] text-slate-400 mt-1">※ 氏名が重複する人がいた場合は、次の画面で<b>1人ずつ</b>「更新／新規追加／スキップ」を選べます（上はその初期値）。</div>
                     </div>
                     {csvModal.error && <div className="text-xs font-bold text-red-600">エラー: {csvModal.error}</div>}
-                    <button disabled={!csvModal.importText.trim()} onClick={doImport} className="w-full py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40">取り込みを実行</button>
+                    <button disabled={!csvModal.importText.trim()} onClick={()=>doImport()} className="w-full py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40">取り込みを実行</button>
                   </div>
                 )}
+                {/* ★ 氏名重複の 1人ずつ解決 画面 */}
+                {csvModal.mode === 'import' && csvModal.resolvingDup && (() => {
+                  const dupList = csvModal.dupList || [];
+                  const choices = csvModal.dupChoices || {};
+                  const setAll = (v) => setCsvModal(prev=>({ ...prev, dupChoices: Object.fromEntries((prev.dupList||[]).map(d=>[d.ri, v])) }));
+                  const setOne = (ri, v) => setCsvModal(prev=>({ ...prev, dupChoices: { ...(prev.dupChoices||{}), [ri]: v } }));
+                  const OPTS = [['replace','更新','#2563eb'],['keepBoth','新規追加','#059669'],['skip','スキップ','#64748b']];
+                  return (
+                    <div className="space-y-3">
+                      <div className="text-[12px] bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-amber-900">
+                        氏名が既存の利用者と一致する行が <b>{dupList.length}件</b> あります。<b>1人ずつ</b>取り込み方を選んでください。<br/>
+                        <span className="text-[11px] text-amber-700">更新＝既存に上書き（空欄は元のまま）／新規追加＝別人として追加／スキップ＝取り込まない</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] font-bold text-slate-500">一括:</span>
+                        <button type="button" onClick={()=>setAll('replace')} className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded">すべて更新</button>
+                        <button type="button" onClick={()=>setAll('keepBoth')} className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded">すべて新規追加</button>
+                        <button type="button" onClick={()=>setAll('skip')} className="text-xs font-bold text-slate-600 bg-slate-100 border border-slate-200 px-2 py-1 rounded">すべてスキップ</button>
+                      </div>
+                      <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                        {dupList.map(d => (
+                          <div key={d.ri} className="px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="min-w-0">
+                              <div className="text-sm font-bold text-slate-700">{d.name}</div>
+                              <div className="text-[11px] text-slate-400">既存: {d.existingLabel}</div>
+                            </div>
+                            <div className="flex gap-1 shrink-0">
+                              {OPTS.map(([v,lbl,c]) => {
+                                const on = (choices[d.ri]||'replace')===v;
+                                return <button key={v} type="button" onClick={()=>setOne(d.ri,v)} style={{borderColor:on?c:'#e2e8f0',background:on?c:'white',color:on?'white':'#475569'}} className="text-[11px] font-bold border px-2 py-1 rounded">{lbl}</button>;
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {csvModal.error && <div className="text-xs font-bold text-red-600">エラー: {csvModal.error}</div>}
+                      <div className="flex gap-2">
+                        <button type="button" onClick={()=>setCsvModal(prev=>({...prev, resolvingDup:false, dupList:undefined, dupChoices:undefined, error:''}))} className="flex-1 py-2.5 rounded-xl font-bold text-slate-600 border border-slate-300">← 戻る</button>
+                        <button type="button" onClick={()=>doImport(csvModal.dupChoices||{})} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700">この内容で取り込む</button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
