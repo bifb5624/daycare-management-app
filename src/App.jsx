@@ -31487,6 +31487,14 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const _mNow = new Date();
   const _isCurrentMonth = tY === _mNow.getFullYear() && tM === (_mNow.getMonth()+1);
   const _monthLocked = _isCurrentMonth && _mNow.getDate() < 15;
+  // ★ AI利用回数の上限: 1事業所あたり「利用中の利用者数 ＋ 月3回」まで(実際のカレンダー月で集計)。
+  const _aiMonthKey = `${_mNow.getFullYear()}-${String(_mNow.getMonth()+1).padStart(2,'0')}`;
+  const _aiActiveCount = (appData.patients||[]).filter(p => p.status === '利用中').length;
+  const _aiLimit = _aiActiveCount + 3;
+  const _aiUsed = (appData.systemSettings?.aiUsage?.[_aiMonthKey]) || 0;
+  const _aiRemaining = Math.max(0, _aiLimit - _aiUsed);
+  // systemSettings に AI使用回数を n 加算した新しい systemSettings を返す
+  const _bumpAiUsage = (ss, n) => ({ ...(ss||{}), aiUsage: { ...((ss||{}).aiUsage||{}), [_aiMonthKey]: ((ss||{}).aiUsage?.[_aiMonthKey]||0) + n } });
 
   // 全利用中患者を通所有無で分類
   const allActive = (appData.patients||[]).filter(p => p.status === '利用中');
@@ -31695,13 +31703,15 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     if (noKey && attCount > 0) {
       if (!window.confirm(`APIキーが未設定のため、通所がある ${attCount}名 はスキップし、通所が無い方のみ「実施できなかった」で作成します。\n（通所がある方もAIで作成するには 各種設定→モニタリング でAPIキーを設定してください）\n続行しますか？`)) return;
     } else {
-      if (!window.confirm(`${targets.length}名のモニタリング表を作成し、個人ファイルに保存します。\n（通所がある方はAI下書き／一度も来ていない方は「実施できなかった」。既に作成済みの月は上書き）よろしいですか？`)) return;
+      const _aiNote = attCount > _aiRemaining ? `\n※ 今月のAI下書きは残り${_aiRemaining}回です。通所がある${attCount}名のうち、先着${_aiRemaining}名のみAIで下書きし、超過分は既定値で作成します（手直しで仕上げてください）。` : `\n（今月のAI下書き残り${_aiRemaining}回）`;
+      if (!window.confirm(`${targets.length}名のモニタリング表を作成し、個人ファイルに保存します。\n（通所がある方はAI下書き／一度も来ていない方は「実施できなかった」。既に作成済みの月は上書き）${_aiNote}\nよろしいですか？`)) return;
     }
     cancelRef.current = false;
     setSheetBatchProg({ done:0, total:targets.length });
     let existing = [...(appData.monitoringRecords||[])];
     const newResults = {};
     let done = 0, ok = 0;
+    let aiBudget = _aiRemaining, aiUsedThisRun = 0; // ★ 今月のAI残り回数まで
     const rec = getActiveRecorderName() || '';
     const today = new Date().toISOString().slice(0,10);
     for (const p of targets) {
@@ -31718,9 +31728,20 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             s3:   { sel: '経過観察を要する',            text: buildAutoChange(p) },
             s4:   { sel: 'このまま継続',                text: '' },
           };
+        } else if (noKey) {
+          done++; setSheetBatchProg({ done, total:targets.length }); continue; // 通所ありはAPIキー必須 → スキップ
+        } else if (aiBudget > 0) {
+          out = await aiDraftSheet(p); aiBudget--; aiUsedThisRun++;
         } else {
-          if (noKey) { done++; setSheetBatchProg({ done, total:targets.length }); continue; } // 通所ありはAPIキー必須 → スキップ
-          out = await aiDraftSheet(p);
+          // ★ 今月のAI利用上限に達した → AIを使わず既定値で作成(手直しで仕上げてください)
+          const sel = buildAutoSel(p);
+          out = {
+            s1:   { sel: sel.s1 || '実施できた',   text: buildAutoStatus(p) },
+            goal: { sel: sel.goal || '概ね達成',   text: '' },
+            s2:   { sel: '概ね満足',                text: '' },
+            s3:   { sel: sel.s3 || '変化なし',      text: buildAutoChange(p) },
+            s4:   { sel: 'このまま継続',            text: '' },
+          };
         }
         // ★ 既存(手入力含む)を残し、AIは空欄のみ補完。 確定はしない。
         const prevRec = existing.find(r => r.patientId===p.id && r.period===monthLabelStr);
@@ -31735,7 +31756,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       } catch(e) { /* この利用者はスキップ */ }
       done++; setSheetBatchProg({ done, total:targets.length });
     }
-    onSave({ ...appData, monitoringRecords: existing }, { manual:true, message:`✓ ${ok}名のモニタリング表を作成・保存しました` });
+    const _overflowNote = (aiUsedThisRun < _aiRemaining) ? '' : (aiBudget<=0 && !noKey ? '（今月のAI上限に達した分は既定値で作成→手直ししてください）' : '');
+    onSave({ ...appData, monitoringRecords: existing, systemSettings: aiUsedThisRun ? _bumpAiUsage(appData.systemSettings, aiUsedThisRun) : appData.systemSettings }, { manual:true, message:`✓ ${ok}名のモニタリング表を作成・保存しました${_overflowNote}` });
     setResults(prev => ({ ...prev, ...newResults }));
     setSheetBatchProg(null);
     cancelRef.current = false;
@@ -31752,14 +31774,14 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       s2:{sel:'',text:''}, s3:{sel:'変化なし',text: buildAutoChange(patient)}, s4:{sel:'このまま継続',text:''} };
   };
   // ★ シートを保存。 confirmedFlag=省略時は既存の確定状態を維持(=自動で確定済みにしない)。
-  const upsertSheet = (patient, sheet, opts, confirmedFlag) => {
+  const upsertSheet = (patient, sheet, opts, confirmedFlag, extra) => {
     let existing = [...(appData.monitoringRecords||[])];
     const prev = existing.find(r => r.patientId===patient.id && r.period===monthLabelStr);
     existing = existing.filter(r => !(r.patientId===patient.id && r.period===monthLabelStr));
     const sm = _monSummary(sheet);
     const conf = (confirmedFlag != null) ? confirmedFlag : !!(prev && prev.confirmed);
     existing.push({ id: (prev&&prev.id) || `${patient.id}_${tY}-${String(tM).padStart(2,'0')}`, patientId:patient.id, period:monthLabelStr, createdDate:(prev&&prev.createdDate)||new Date().toLocaleDateString('ja-JP'), createdAt:(prev&&prev.createdAt)||Date.now(), summary:sm, sheet, confirmed: conf });
-    onSave({...appData, monitoringRecords: existing}, opts);
+    onSave({...appData, monitoringRecords: existing, ...(extra||{})}, opts);
     setResults(prev2=>({...prev2,[patient.id]:{text:sm, loading:false, error:null}}));
     if (dirtyRef) dirtyRef.current = false;
   };
@@ -31781,13 +31803,14 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const aiDraftRow = async (patient) => {
     if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
     if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('各種設定→モニタリングでAPIキーを設定してください'); return; }
+    if (_aiRemaining <= 0) { alert(`今月のAI下書きの上限（利用者${_aiActiveCount}名＋3回＝${_aiLimit}回）に達しました。\n翌月まで手入力または「一括作成（既定）」でご対応ください。`); return; }
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
       const out = await aiDraftSheet(patient);
       const base = getOrInitSheetFor(patient);
       const merged = { ...base };
       MON_ITEMS.forEach(it => { const b=_monCell(base[it.key]); const o=out[it.key]||{}; merged[it.key] = { sel: b.sel || o.sel || '', text: b.text || o.text || '' }; });
-      upsertSheet(patient, merged, {manual:true, message:'✓ AIで下書きしました'}, false);
+      upsertSheet(patient, merged, {manual:true, message:`✓ AIで下書きしました（今月の残り${_aiRemaining-1}回）`}, false, { systemSettings: _bumpAiUsage(appData.systemSettings, 1) });
     } catch(e) {
       setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:false, error:String(e.message||e)}}));
     }
@@ -32189,6 +32212,10 @@ ${optionsDesc}
           ⏳ 当月（{tM}月）分のモニタリングは<strong>毎月15日以降</strong>に作成・AI下書き・記入ができます（AIコスト管理のため）。過去月はいつでも編集できます。
         </div>
       )}
+      <div className="no-print" style={{flexShrink:0,background:_aiRemaining>0?'#eff6ff':'#fef2f2',borderBottom:`1px solid ${_aiRemaining>0?'#bfdbfe':'#fecaca'}`,color:_aiRemaining>0?'#1e40af':'#b91c1c',padding:'6px 16px',fontSize:12,display:'flex',alignItems:'center',gap:8}}>
+        🤖 今月のAI下書き：<strong>残り{_aiRemaining}回</strong>（上限{_aiLimit}回＝利用者{_aiActiveCount}名＋3回／{_aiUsed}回使用済み）
+        {_aiRemaining<=0 && <span style={{fontWeight:'bold'}}>— 上限に達しました。手入力または「一括作成（既定）」でご対応ください。</span>}
+      </div>
       {/* テーブル（スクロール可） */}
       <div style={{flex:1,overflow:'auto',padding:'0'}}>
         <div id="print-content-monitoring">
