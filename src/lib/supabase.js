@@ -405,6 +405,43 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     (Array.isArray(localArr) ? localArr : []).forEach(r => { if (r && r.id != null) { const ex = map.get(String(r.id)); map.set(String(r.id), ex ? mergeRecordFields(ex, r) : r); } });
     return [...map.values()];
   };
+  // ★ 利用者マスタのフィールド補完マージ (端末間のデータ消失対策)。
+  //   ローカル(編集端末)を基準にしつつ、ローカルで「空欄」の項目だけクラウドの値で補完する。
+  //   → 別端末で運動メニュー(規定数値)・送迎時間を入力しても、古いスナップショットの端末が
+  //     保存した際に上書き消去されるのを防ぐ。 ローカルに無い利用者は復活させない(=削除は保持)。
+  const mergePatientBackfill = (lp, cp) => {
+    if (!cp) return lp; if (!lp) return cp;
+    const out = { ...lp };
+    const keys = new Set([...Object.keys(lp), ...Object.keys(cp)]);
+    keys.forEach(k => {
+      if (k === '_savedAt') return;
+      const lv = lp[k], cv = cp[k];
+      const lObj = lv && typeof lv === 'object' && !Array.isArray(lv);
+      const cObj = cv && typeof cv === 'object' && !Array.isArray(cv);
+      // プレーンオブジェクト(plannedExercises 等): キー単位で「ローカル空欄のみクラウドで補完」
+      if (lObj || cObj) {
+        const lo = lObj ? lv : {}, co = cObj ? cv : {};
+        const mo = { ...lo };
+        Object.keys(co).forEach(kk => { if (_isEmptyVal(mo[kk]) && !_isEmptyVal(co[kk])) mo[kk] = co[kk]; });
+        out[k] = mo; return;
+      }
+      // 配列: スカラー配列(pickupTimes/scheduleAmPm 等)は index 単位で空欄補完。 オブジェクト配列(履歴系)はローカル優先。
+      if (Array.isArray(lv) || Array.isArray(cv)) {
+        const la = Array.isArray(lv) ? lv : [], ca = Array.isArray(cv) ? cv : [];
+        const bothScalar = la.every(x => x == null || typeof x !== 'object') && ca.every(x => x == null || typeof x !== 'object');
+        if (bothScalar) {
+          const n = Math.max(la.length, ca.length);
+          const res = [];
+          for (let i = 0; i < n; i++) { const a = la[i]; res[i] = !_isEmptyVal(a) ? a : (i < ca.length ? ca[i] : a); }
+          out[k] = res; return;
+        }
+        out[k] = (lv !== undefined) ? lv : cv; return;
+      }
+      // スカラー: ローカルが空欄ならクラウドで補完 (それ以外はローカル維持)
+      if (_isEmptyVal(lv) && !_isEmptyVal(cv)) out[k] = cv;
+    });
+    return out;
+  };
   try {
     let cloud = null;
     try { const row = await supabaseLoadStateForStore(storeId); cloud = row && row.data ? row.data : null; }
@@ -435,6 +472,12 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const arr = FIELD_MERGE_KEYS.has(k) ? mergeByIdFieldLevel(localData[k], cloud[k]) : mergeById(localData[k], cloud[k]);
       merged[k] = arr.filter(r => !(r && r.id != null && tomb[String(r.id)]));
     });
+    // ★ 利用者マスタ: 端末間で運動メニュー(規定数値)・送迎時間などが消えないよう、
+    //   ローカル基準で「空欄の項目だけ」クラウドの値で補完する (削除は保持: ローカルに無い利用者は復活させない)。
+    if (Array.isArray(localData.patients)) {
+      const cloudPatMap = new Map((Array.isArray(cloud.patients) ? cloud.patients : []).map(p => [String(p.id), p]));
+      merged.patients = localData.patients.map(lp => { if (!lp || lp.id == null) return lp; const cp = cloudPatMap.get(String(lp.id)); return cp ? mergePatientBackfill(lp, cp) : lp; });
+    }
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
     //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
     if (Array.isArray(merged.ticketRecords)) {
