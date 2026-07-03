@@ -10075,6 +10075,7 @@ function FamilyAdminView({ appData, onSave }) {
   const [tab, setTab] = useState('post');
   // 統合フォーム: お知らせ + 写真を一画面で
   const [postForm, setPostForm] = useState({ scope:'all', patientIds:[], audience:['family','caremanager','related'], title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass:'', files:[], filePreview:[] });
+  const [editingAnn, setEditingAnn] = useState(null); // {id, kind, patientId} お知らせ編集中
   const [patientFilter, setPatientFilter] = useState({ days:[], ampm:'' });
   const [photoFilter, setPhotoFilter] = useState('');
   const [historyFilter, setHistoryFilter] = useState({ year:'', month:'', kind:'all' });
@@ -10216,6 +10217,19 @@ function FamilyAdminView({ appData, onSave }) {
     let newData = { ...appData };
     const nowIso = new Date().toISOString();
     const ts = Date.now();
+    // ★ 編集モード: 既存お知らせを上書き (id維持・本文/タイトル/日付/送付先を更新、写真は既存に新規を追加)
+    if (editingAnn) {
+      const newPhotos = uploadedPhotos.map((it,i)=>({ id:`${editingAnn.id}_ph_e${ts}_${i}`, ...(it.storagePath?{storagePath:it.storagePath}:{url:it.url}), name:it.name, caption:postForm.title.trim(), class:postForm.eventClass }));
+      const patch = { title: postForm.title.trim(), body: postForm.body, date: postForm.date, audience: postForm.audience, editedAt: nowIso };
+      const applyUpd = (arr) => arr.map(a => a.id===editingAnn.id ? { ...a, ...patch, photos:[...(a.photos||[]), ...newPhotos] } : a);
+      if (editingAnn.kind === 'news_all') newData = { ...newData, familyAnnouncements: applyUpd(allAnnouncements) };
+      else newData = { ...newData, familyPersonalAnnouncements: applyUpd(personalAnnouncements) };
+      onSave(newData);
+      setEditingAnn(null);
+      setPostForm({ scope:'all', patientIds:[], audience: postForm.audience, title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass: postForm.eventClass, files:[], filePreview:[] });
+      alert('お知らせを更新しました');
+      return;
+    }
     // タイトル/本文がある → お知らせを作成（写真があれば一緒に添付）
     if (hasText) {
       const buildPhotos = (annId) => uploadedPhotos.map((it, i) => ({
@@ -10492,8 +10506,14 @@ function FamilyAdminView({ appData, onSave }) {
                 </div>
               )}
             </div>
-            <button onClick={submitPost} className="w-full py-2.5 rounded-xl font-bold text-white bg-emerald-500 hover:bg-emerald-600 shadow active:scale-95">
-              {(()=>{
+            {editingAnn && (
+              <div className="flex items-center justify-between gap-2 mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold text-amber-800">
+                <span>✏️ お知らせを編集中（更新すると投稿済みの内容が書き換わります）</span>
+                <button onClick={()=>{ setEditingAnn(null); setPostForm(f=>({...f, title:'', body:'', files:[], filePreview:[]})); }} className="shrink-0 px-2 py-1 bg-white border border-amber-300 rounded-lg text-amber-700 hover:bg-amber-100">編集をやめる</button>
+              </div>
+            )}
+            <button onClick={submitPost} className={`w-full py-2.5 rounded-xl font-bold text-white shadow active:scale-95 ${editingAnn?'bg-amber-500 hover:bg-amber-600':'bg-emerald-500 hover:bg-emerald-600'}`}>
+              {editingAnn ? 'この内容で更新する' : (()=>{
                 const what = [postForm.title.trim() && 'お知らせ', postForm.files.length > 0 && `写真${postForm.files.length}枚`].filter(Boolean).join('+') || '内容';
                 const who = postForm.scope === 'specific' && postForm.patientIds.length > 0 ? `${postForm.patientIds.length}名に` : '全体に';
                 return `${who}${what}を投稿する`;
@@ -10638,6 +10658,14 @@ function FamilyAdminView({ appData, onSave }) {
                       </>
                     )}
                     <div className="flex gap-2 mt-4 pt-4 border-t border-slate-100">
+                      {historyDetail.kind !== 'photo' && (
+                        <button onClick={()=>{
+                          const it = historyDetail.item;
+                          setPostForm(f => ({ ...f, scope: historyDetail.kind==='news_personal'?'specific':'all', patientIds: it.patientId?[it.patientId]:[], audience: it.audience||['family','caremanager','related'], title: it.title||'', body: it.body||'', date: it.date || new Date().toISOString().slice(0,10), eventClass:'', files:[], filePreview:[] }));
+                          setEditingAnn({ id: it.id, kind: historyDetail.kind, patientId: it.patientId });
+                          setTab('post'); setHistoryDetail(null);
+                        }} className="flex-1 py-2 text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg">✏️ 編集</button>
+                      )}
                       <button onClick={()=>{
                         const text = historyDetail.kind==='photo' ? (historyDetail.item.caption||'') : `${historyDetail.item.title}\n\n${historyDetail.item.body||''}`;
                         navigator.clipboard?.writeText(text); alert('クリップボードにコピーしました');
@@ -32769,11 +32797,11 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',background:'none',border:'none',padding:0,fontWeight:'bold',fontSize:13}}>
                   <span style={{
                     display:'inline-flex',alignItems:'center',justifyContent:'center',
-                    width:16,height:16,border:`2px solid ${checks[k]?'#1e293b':'#94a3b8'}`,
+                    width:16,height:16,border:'2px solid #1e293b',
                     borderRadius:3,background:checks[k]?'#1e293b':'white',color:'white',
                     fontSize:11,fontWeight:'bold',flexShrink:0
                   }}>{checks[k]?'✓':''}</span>
-                  <span style={{color:checks[k]?'#1e293b':'#94a3b8'}}>{label}</span>
+                  <span style={{color:'#1e293b'}}>{label}</span>
                 </button>
               ))}
             </div>
@@ -33324,8 +33352,8 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             {[['kyuukyuu','至急！'],['kakunin','ご確認ください'],['orikaesu','折り返しご連絡ください']].map(([k,label])=>(
               <button key={k} type="button" onClick={()=>{ setChecks(c=>({...c,[k]:!c[k]})); markDirty(); }}
                 style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer',background:'none',border:'none',padding:0,fontWeight:'bold',fontSize:13}}>
-                <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,border:`2px solid ${checks[k]?'#1e293b':'#94a3b8'}`,borderRadius:3,background:checks[k]?'#1e293b':'white',color:'white',fontSize:11,fontWeight:'bold',flexShrink:0}}>{checks[k]?'✓':''}</span>
-                <span style={{color:checks[k]?'#1e293b':'#94a3b8'}}>{label}</span>
+                <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:16,height:16,border:'2px solid #1e293b',borderRadius:3,background:checks[k]?'#1e293b':'white',color:'white',fontSize:11,fontWeight:'bold',flexShrink:0}}>{checks[k]?'✓':''}</span>
+                <span style={{color:'#1e293b'}}>{label}</span>
               </button>
             ))}
           </div>
