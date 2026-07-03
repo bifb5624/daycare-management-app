@@ -31835,15 +31835,42 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     onSave({ ...appData, monitoringRecords: existing }, { manual:true, message:`✓ ${targets.length}名のモニタリング表を作成・保存しました` });
     setResults(prev => ({ ...prev, ...newResults }));
   };
-  // ★ 一括FAX: 作成済み(または既定)のモニタリング表を全員ぶん1つの印刷HTML(複数ページ)にまとめてプレビュー→印刷/PDF/FAX
-  const batchFax = () => {
+  // ★ モニタリング送付履歴の記録を作る (個人ファイル「連絡」タブ・宛先=担当ケアマネ)
+  const _monFaxEntry = (p, idx) => ({
+    id: `mon_${p.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}${idx!=null?'_'+idx:''}`,
+    type: 'monitoring', patientId: p.id, patientName: p.name||'',
+    subject: `${monthLabelStr} 通所介護モニタリング表`,
+    recipientOffice: p.cmOffice||'', recipientName: p.cmName||'', recipientFax: p.cmFax||'',
+    memo: (getSheetRecord(p.id)?.summary)||'', timestamp: new Date().toISOString(),
+  });
+  // ★ 担当ケアマネへFAX(一括): 作成済みのモニタリング表を、利用者ごとの担当ケアマネ(cmOffice/cmName)宛てで出力＋送付履歴に記録
+  const faxToCareManagers = () => {
     const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
-    const targets = checked.length ? checked : [...attendedPats, ...absentPats];
-    const withSheet = targets.filter(p => getSheetRecord(p.id));
-    if (!withSheet.length) { alert('作成済みのモニタリング表がありません。先に「一括作成」または各表を作成してください。'); return; }
-    const pages = withSheet.map(p => buildSheetHtml(p, getSheetRecord(p.id).sheet, true)).join('');
+    const targets = (checked.length ? checked : [...attendedPats, ...absentPats]).filter(p => getSheetRecord(p.id));
+    if (!targets.length) { alert('作成済みのモニタリング表がありません。先に「🤖 AIで下書き」または「📁 個人ファイルに保存」で作成してください。'); return; }
+    const noCm = targets.filter(p => !((p.cmOffice||'').trim()));
+    if (noCm.length) {
+      if (!window.confirm(`担当ケアマネ事業所が未設定の方が ${noCm.length}名 います（${noCm.slice(0,3).map(p=>p.name).join('、')}${noCm.length>3?' ほか':''}）。\n宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）`)) return;
+    }
+    if (!window.confirm(`${targets.length}名のモニタリング表を、それぞれの担当ケアマネ宛て（宛先自動）で出力します。\n送付履歴にも記録します。よろしいですか？`)) return;
+    const pages = targets.map(p => buildSheetHtml(p, getSheetRecord(p.id).sheet, true, true)).join('');
     const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${pages}</div>`;
-    const title = `通所介護モニタリング表_${monthLabelStr}_${withSheet.length}名`;
+    const title = `モニタリング表_ケアマネ送付_${monthLabelStr}_${targets.length}名`;
+    const entries = targets.map((p,i) => _monFaxEntry(p, i));
+    onSave({...appData, faxHistory:[...entries, ...(appData.faxHistory||[])]}, {manual:true, message:`✓ ${targets.length}名分を担当ケアマネ宛てで出力し、送付履歴に記録しました`});
+    if (onShowPrintPreview) {
+      onShowPrintPreview(title,'A4 landscape',null);
+      setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
+    }
+  };
+  // ★ 担当ケアマネへFAX(1名): この利用者のモニタリング表を担当ケアマネ宛てで出力＋送付履歴に記録
+  const faxRowToCareManager = (patient) => {
+    const rec = getSheetRecord(patient.id);
+    const sheet = (rec&&rec.sheet) ? rec.sheet : getOrInitSheetFor(patient);
+    if (!((patient.cmOffice||'').trim())) { if(!window.confirm('この利用者は担当ケアマネ事業所が未設定です。宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）')) return; }
+    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${buildSheetHtml(patient, sheet, true, false)}</div>`;
+    const title = `モニタリング表_${patient.name}_${monthLabelStr}`;
+    onSave({...appData, faxHistory:[_monFaxEntry(patient), ...(appData.faxHistory||[])]}, {manual:true, message:`✓ ${patient.name}様のモニタリング表を担当ケアマネ宛てで出力しました`});
     if (onShowPrintPreview) {
       onShowPrintPreview(title,'A4 landscape',null);
       setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
@@ -32204,6 +32231,10 @@ ${optionsDesc}
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
           📁 個人ファイルに保存
         </button>
+        <button type="button" onClick={faxToCareManagers} title="作成済みのモニタリング表を、利用者ごとの担当ケアマネ宛て(宛先自動)で出力し、送付履歴に記録します"
+          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fdba74',background:'#fff7ed',color:'#c2410c',cursor:'pointer'}}>
+          📠 担当ケアマネへFAX
+        </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
 
@@ -32297,6 +32328,10 @@ ${optionsDesc}
                       <button type="button" onClick={()=>{ const s=(sheetRec&&sheetRec.sheet)||getOrInitSheetFor(patient); const txt=MON_ITEMS.map(it=>{const c=_monCell(s[it.key]);return `${it.no}${it.title}：${c.sel}${c.text?` ${c.text}`:''}`;}).join('\n'); copyText(patient.id, txt); }}
                         style={{background:copiedId===patient.id?'#d1fae5':'#f0fdf4',border:`1px solid ${copiedId===patient.id?'#6ee7b7':'#bbf7d0'}`,color:copiedId===patient.id?'#059669':'#10b981',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:3,whiteSpace:'nowrap'}}>
                         {copiedId===patient.id ? '✓ コピー済' : <><Copy size={10}/> 全文コピー</>}
+                      </button>
+                      <button type="button" onClick={()=>faxRowToCareManager(patient)} title={`担当ケアマネ${patient.cmOffice?`（${patient.cmOffice}）`:'（未設定）'}宛てでこの表を出力し、送付履歴に記録します`}
+                        style={{background:'#fff7ed',border:'1px solid #fdba74',color:'#c2410c',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                        📠 ケアマネへFAX
                       </button>
                     </div>
                   </td>
@@ -34478,6 +34513,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const _q = renrakuSearch.trim().toLowerCase();
             const _match = (h) => { if(!_q) return true; const hay = [h.subject,h.recipientOffice,h.recipientName,h.memo,h.body,h.content,h.note,h.dateIso,_ts(h.timestamp)].map(x=>String(x||'').toLowerCase()).join(' '); return hay.includes(_q); };
             const absHist = faxOf('absence').filter(_match); const genHist = faxOf('general').filter(_match);
+            const monHist = faxOf('monitoring').filter(_match);
             const faxList = (title, list, view) => (
               <div className="bg-white rounded-xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -34525,9 +34561,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                   <input type="text" value={renrakuSearch} onChange={e=>setRenrakuSearch(e.target.value)} placeholder="🔍 件名・宛先・内容・日付で検索…" className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
                   {renrakuSearch && <button onClick={()=>setRenrakuSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm">✕</button>}
                 </div>
-                {_q && <div className="text-[11px] text-slate-500">「{renrakuSearch}」で絞り込み中（休み{absHist.length}件・各種{genHist.length}件）</div>}
+                {_q && <div className="text-[11px] text-slate-500">「{renrakuSearch}」で絞り込み中（休み{absHist.length}件・各種{genHist.length}件・モニタリング{monHist.length}件）</div>}
                 {faxList('休み連絡', absHist, 'absence_fax')}
                 {faxList('各種連絡', genHist, 'general_fax')}
+                {faxList('モニタリング（ケアマネ送付）', monHist, 'monitoring')}
               </div>
             );
           })()}
