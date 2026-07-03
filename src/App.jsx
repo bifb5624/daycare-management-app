@@ -12167,7 +12167,7 @@ function FamilyView() {
             </div>
             {(()=>{ try{ return sessionStorage.getItem('tsumugiIdleLogout')==='1'; }catch{ return false; } })() && (
               <div style={{background:'#fffbeb',border:'1px solid #fde68a',color:'#92400e',fontSize:12,fontWeight:'bold',borderRadius:10,padding:'8px 12px',marginBottom:12,textAlign:'center'}}>
-                30分間操作がなかったため、自動保存してログアウトしました。
+                20分間操作がなかったため、自動保存してログアウトしました。
               </div>
             )}
             {loginForm.error && <div style={{color:'#ef4444',fontSize:12,fontWeight:'bold',marginBottom:12,textAlign:'center'}}>{loginForm.error}</div>}
@@ -15203,7 +15203,10 @@ export default function App() {
   // ★ 無操作が続いたら自動ログアウト (離席時の情報保護)。 ログアウト前に現在の入力画面を自動保存してから閉じる。
   useEffect(() => {
     if (!staffSession) return; // スタッフ/本部ログイン中のみ
-    const IDLE_MS = 30 * 60 * 1000; // 30分 無操作で自動ログアウト
+    // ★ 20分 無操作で自動ログアウト。 setTimeout はスリープ中に止まり判定漏れするため、
+    //   「最終操作時刻(壁時計)」を保持し、 30秒ごと + 復帰時(visibilitychange/focus) に経過をチェックする。
+    //   → 画面が暗くなってスリープしても、20分経過後に復帰した時点で必ず強制ログアウトされる。
+    const IDLE_MS = 20 * 60 * 1000; // 20分
     const refMap = {
       record: [recordDirtyRef, recordSaveFnRef], master: [masterDirtyRef, masterSaveFnRef],
       settings: [settingsDirtyRef, settingsSaveFnRef], print: [printDirtyRef, printSaveFnRef],
@@ -15214,23 +15217,36 @@ export default function App() {
       seikatsu_kinou: [seikatsuKinouDirtyRef, seikatsuKinouSaveFnRef],
       kyomi_kanshin: [kyomiKanshinDirtyRef, kyomiKanshinSaveFnRef],
     };
-    const flushCurrent = () => {
-      const pair = refMap[currentView];
-      if (pair && pair[0]?.current && typeof pair[1]?.current === 'function') {
-        try { pair[1].current(); } catch (e) { console.warn('[idle-logout] save failed', e); }
-      }
+    // ★ ログアウト直前に、開いている全ての入力画面の未保存を保存する
+    const flushAll = () => {
+      Object.values(refMap).forEach(pair => {
+        try { if (pair && pair[1] && typeof pair[1].current === 'function') pair[1].current(); } catch (e) { console.warn('[idle-logout] save failed', e); }
+      });
     };
-    let timer = null;
+    let loggingOut = false;
+    let lastActive = Date.now();
+    const markActive = () => { lastActive = Date.now(); };
     const doIdleLogout = () => {
-      flushCurrent(); // 未保存の入力画面を保存
+      if (loggingOut) return; loggingOut = true;
+      flushAll(); // ★ 未保存を全部保存してからログアウト
       try { sessionStorage.setItem('tsumugiIdleLogout', '1'); } catch {}
-      setTimeout(() => handleLogout(), 500); // 保存反映を待ってからログアウト
+      setTimeout(() => handleLogout(), 700); // 保存(クラウド反映)を待ってからログアウト
     };
-    const reset = () => { if (timer) clearTimeout(timer); timer = setTimeout(doIdleLogout, IDLE_MS); };
+    const check = () => { if (!loggingOut && (Date.now() - lastActive) >= IDLE_MS) doIdleLogout(); };
     const events = ['mousemove','mousedown','keydown','touchstart','scroll','wheel'];
-    events.forEach(ev => window.addEventListener(ev, reset, { passive: true }));
-    reset();
-    return () => { if (timer) clearTimeout(timer); events.forEach(ev => window.removeEventListener(ev, reset)); };
+    events.forEach(ev => window.addEventListener(ev, markActive, { passive: true }));
+    const iv = setInterval(check, 30 * 1000); // 30秒ごとに経過時間をチェック
+    const onWake = () => { if (document.visibilityState === 'visible') check(); }; // スリープ/タブ復帰時に即チェック
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+    return () => {
+      clearInterval(iv);
+      events.forEach(ev => window.removeEventListener(ev, markActive));
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
+    };
   }, [staffSession, currentView]);
 
   const handleSaveToCloud = (newData, options = {}) => {
