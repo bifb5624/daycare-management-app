@@ -25982,11 +25982,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label>
                     <select disabled={isOff} value={localPatient.cmOffice||''} onChange={e=>{const office=e.target.value;const offices=appData.systemSettings?.cmOffices||[];const officeData=offices.find(o=>o.name===office);const u={...localPatient,cmOffice:office,cmName:'',cmPhone:'',cmFax:officeData?.fax||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?u:p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                       <option value="">未選択</option>{(appData.systemSettings?.cmOffices||[]).map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
+                      {localPatient.cmOffice && !(appData.systemSettings?.cmOffices||[]).some(o=>o.name===localPatient.cmOffice) && <option value={localPatient.cmOffice}>{localPatient.cmOffice}（未登録）</option>}
                     </select>
                   </div>
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">担当者名</label>
                     <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?u:p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                       <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
+                      {localPatient.cmName && !(appData.systemSettings?.careManagers||[]).some(c=>c.office===localPatient.cmOffice&&c.name===localPatient.cmName) && <option value={localPatient.cmName}>{localPatient.cmName}（未登録）</option>}
                     </select>
                   </div>
                 </div>
@@ -26725,6 +26727,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           return m ? `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}` : String(s||'').trim();
         };
         const splitName = (full) => { const a=String(full||'').trim().split(/[\s　]+/).filter(Boolean); return { last:a[0]||'', first:a.slice(1).join(' ')||'' }; };
+        // ★ 取り込み値の正規化 (カイポケ等の表記ゆれをアプリの選択肢に合わせる)
+        const _toHalf = (s) => String(s||'').replace(/[０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[Ａ-Ｚａ-ｚ]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+        const normGender = (s) => { const t=String(s||'').trim(); if(!t) return ''; if(/^(男性|男|m|male)$/i.test(t)) return '男性'; if(/^(女性|女|f|female)$/i.test(t)) return '女性'; return t; };
+        const normBurden = (s) => { const t=_toHalf(String(s||'').trim()); if(!t) return ''; if(/^70%/.test(t)||/3割/.test(t)) return '70%'; if(/^80%/.test(t)||/2割/.test(t)) return '80%'; if(/^90%/.test(t)||/1割/.test(t)) return '90%'; const m=t.match(/(70|80|90)\s*%/); if(m) return m[1]+'%'; if(/^3$/.test(t)) return '70%'; if(/^2$/.test(t)) return '80%'; if(/^1$/.test(t)) return '90%'; return t; };
+        const normCare = (s) => { const t=_toHalf(String(s||'').trim()).replace(/\s/g,''); if(!t) return ''; if(/事業対象|総合事業|事対|チェックリスト/.test(t)) return '事業対象者'; let m=t.match(/要支援([12])/)||t.match(/^支援([12])/); if(m) return '要支援'+m[1]; m=t.match(/要介護([1-5])/)||t.match(/^介護([1-5])/); if(m) return '要介護'+m[1]; if(t==='要支援') return '要支援1'; return t; };
         const doImport = () => {
           try {
             const rows = parseCsv(csvModal.importText.replace(/^﻿/,''));
@@ -26755,13 +26762,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               ryui:        findCol(header,['留意']),
               doctor:      findCol(header,['かかりつけ','主治医','担当医']),
               email:       findCol(header,['メール','email','eメール'],['緊急','連絡先']),
-              careLevelFrom: findCol(header,['認定有効期間開始','有効期間開始','認定開始','認定有効開始'],['終了']),
-              careLevelTo:   findCol(header,['認定有効期間終了','有効期間終了','認定終了','認定有効終了'],['開始']),
-              costBurden:  findCol(header,['負担割合','負担割']),
-              cmOffice:    findCol(header,['ケアマネ事業所','居宅介護支援','ケアマネージャー事業所','cm事業所'],['担当','電話','fax','ファックス']),
-              cmName:      findCol(header,['担当ケアマネ','担当ケアマネージャー','ケアマネ氏名','ケアマネ名'],['事業所','電話','fax','ファックス']),
-              cmPhone:     findCol(header,['ケアマネ電話','cm電話'],['fax','ファックス','事業所']),
-              cmFax:       findCol(header,['ケアマネfax','ケアマネファックス','cmfax']),
+              careLevelFrom: findCol(header,['認定有効期間開始','有効期間開始','認定開始','認定有効開始','適用期間開始','認定期間開始'],['終了']),
+              careLevelTo:   findCol(header,['認定有効期間終了','有効期間終了','認定終了','認定有効終了','適用期間終了','認定期間終了'],['開始']),
+              costBurden:  findCol(header,['負担割合','負担割','給付率']),
+              cmOffice:    findCol(header,['ケアマネ事業所','居宅介護支援','ケアマネージャー事業所','cm事業所','居宅事業所','事業所名'],['担当','電話','tel','fax','ファックス']),
+              cmName:      findCol(header,['担当ケアマネ','担当ケアマネージャー','ケアマネ氏名','ケアマネ名','介護支援専門員'],['事業所','電話','tel','fax','ファックス']),
+              cmPhone:     findCol(header,['担当ケアマネ電話','ケアマネ電話','cm電話','介護支援専門員電話'],['fax','ファックス','事業所']),
+              cmFax:       findCol(header,['ケアマネfax','ケアマネファックス','cmfax','ケアマネ事業所fax','事業所fax','居宅fax']),
+              cmOfficePhone: findCol(header,['ケアマネ事業所電話','事業所電話','居宅電話','ケアマネ事業所tel'],['担当','fax','ファックス']),
             };
             const val = (row,i) => (i>=0 ? String(row[i]||'').trim() : '');
             const existing = [...(appData.patients||[])];
@@ -26797,7 +26805,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               const set = (k,v) => { if (v !== '') rec[k]=v; };
               if (name) { const s=splitName(name); rec.name=name; rec.lastName=s.last; rec.firstName=s.first; }
               if (kana) { const s=splitName(kana); rec.kana=kana; rec.kanaLast=s.last; rec.kanaFirst=s.first; }
-              set('gender', val(row,col.gender));
+              set('gender', normGender(val(row,col.gender)));
               set('birthDate', col.birthDate>=0 && val(row,col.birthDate) ? normDate(val(row,col.birthDate)) : '');
               set('zipCode', val(row,col.zipCode));
               set('prefecture', val(row,col.prefecture));
@@ -26808,7 +26816,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               set('phone', val(row,col.phone));
               set('phoneMobile', val(row,col.mobile));
               set('insuranceNo', insNo);
-              set('careLevel', val(row,col.careLevel));
+              set('careLevel', normCare(val(row,col.careLevel)));
               set('startDate', col.startDate>=0 && val(row,col.startDate) ? normDate(val(row,col.startDate)) : '');
               set('endDate', col.endDate>=0 && val(row,col.endDate) ? normDate(val(row,col.endDate)) : '');
               set('status', val(row,col.status));
@@ -26817,11 +26825,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               set('email', val(row,col.email));
               set('careLevelFrom', col.careLevelFrom>=0 && val(row,col.careLevelFrom) ? normDate(val(row,col.careLevelFrom)) : '');
               set('careLevelTo', col.careLevelTo>=0 && val(row,col.careLevelTo) ? normDate(val(row,col.careLevelTo)) : '');
-              set('costBurden', val(row,col.costBurden));
+              set('costBurden', normBurden(val(row,col.costBurden)));
               set('cmOffice', val(row,col.cmOffice));
               set('cmName', val(row,col.cmName));
               set('cmPhone', val(row,col.cmPhone));
               set('cmFax', val(row,col.cmFax));
+              const _cmOfficePhone = val(row,col.cmOfficePhone);
+              if (_cmOfficePhone) rec.cmOfficePhone = _cmOfficePhone;
               const emName=val(row,col.emName), emRel=val(row,col.emRelation), emPhone=val(row,col.emPhone), doctor=val(row,col.doctor);
               const idNum = parseInt(val(row,col.id));
               let target = null;
@@ -26842,7 +26852,22 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 added++;
               }
             }
-            onSave({...appData, patients: existing});
+            // ★ 取り込んだケアマネ事業所・担当者を各種設定のマスタにも自動登録 (プルダウンに表示されるように)
+            let _nextSettings = appData.systemSettings || {};
+            {
+              const offices = [ ...(_nextSettings.cmOffices||[]) ];
+              const officeNames = new Set(offices.map(o=>(o.name||'').trim()));
+              const mgrs = [ ...(_nextSettings.careManagers||[]) ];
+              const mgrKeys = new Set(mgrs.map(c=>`${(c.office||'').trim()}|${(c.name||'').trim()}`));
+              existing.forEach(p => {
+                const on = (p.cmOffice||'').trim();
+                if (on && !officeNames.has(on)) { officeNames.add(on); offices.push({ name:on, phone:p.cmOfficePhone||'', fax:p.cmFax||'' }); }
+                const nm = (p.cmName||'').trim();
+                if (on && nm && !mgrKeys.has(`${on}|${nm}`)) { mgrKeys.add(`${on}|${nm}`); mgrs.push({ office:on, name:nm, phone:p.cmPhone||'', phoneDirect:p.cmPhone||'', fax:p.cmFax||'' }); }
+              });
+              _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs };
+            }
+            onSave({...appData, patients: existing, systemSettings: _nextSettings});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
             const modeTxt = dupMode==='replace' ? '氏名一致は置き換え(更新)' : '氏名一致でも両方残す(新規追加)';
             alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${skipped?` / スキップ ${skipped} 件（氏名が空の行）`:''}\n重複時の扱い: ${modeTxt}\n（空欄の項目は既存データを上書きしません／氏名が空の行は取り込みません）`);
