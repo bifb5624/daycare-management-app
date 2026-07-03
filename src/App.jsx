@@ -14541,7 +14541,9 @@ export default function App() {
       } catch {}
     })();
     return () => { stopped = true; };
-  }, [staffSession?.role]);
+    // ★ 店舗切替を開いた時・入店中の店舗が変わった時にも最新の店舗一覧(法人名含む)を取り直す
+    //   (店舗を追加/法人名を編集した直後でも、古い一覧のまま切替候補が絞られないように)
+  }, [staffSession?.role, staffSession?.storeId, adminStoreDropdownOpen]);
 
   // ★ システムお知らせ (本部 → 全店舗のメンテナンス通知等)
   const [systemNotices, setSystemNotices] = React.useState([]);
@@ -15885,9 +15887,12 @@ export default function App() {
                     ) : (
                       <>
                         {(() => {
-                          // ★ 同一法人(org_name)の店舗のみ切替対象にする
+                          // ★ 同一法人(org_name)の店舗のみ切替対象にする。 ただし現在店舗の法人名が未設定なら
+                          //   グループ判定できないため全店舗を切替可能にする(新規追加直後などで法人名が空でも切り替えられるように)。
                           const curOrg = (adminStoresList.find(x => x.id === staffSession.storeId)?.org_name || '').trim();
-                          const switchable = adminStoresList.filter(s => ((s.org_name||'').trim() === curOrg) || s.id === staffSession.storeId);
+                          const switchable = curOrg
+                            ? adminStoresList.filter(s => ((s.org_name||'').trim() === curOrg) || s.id === staffSession.storeId)
+                            : adminStoresList;
                           return switchable;
                         })().map(s => {
                           const isCurrent = s.id === staffSession.storeId;
