@@ -30821,6 +30821,42 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   };
   const dupRecord = (r) => { setEditing({ ...r, id:`kk_${pid}_${Date.now()}`, createdAt:Date.now(), prevDate: r.createdDate||'', createdDate: toReiwa(new Date().toISOString().slice(0,10)), shortAchieve:'', longAchieve:'', henka:'', kadai:'', setsumeiDate:'', setsumeisha:'' }); };
 
+  // ★ 計画書連携: この利用者の最新の 生活機能チェック / 興味・関心 レコードを取得
+  const _latestBy = (arr) => (arr||[]).filter(r=>r.patientId===pid).sort((a,b)=>(b.recordDate||'').localeCompare(a.recordDate||'')||((b.createdAt||0)-(a.createdAt||0)))[0] || null;
+  const latestSeikatsu = _latestBy(appData.seikatsuKinouRecords);
+  const latestKyomi = _latestBy(appData.kyomiKanshinRecords);
+  const _appendField = (key, text) => { if(!text) return; setEditing(e => { const cur=(e[key]||'').trim(); return {...e, [key]: cur ? `${cur}\n${text}` : text}; }); markDirty(); };
+  // 生活機能チェック(ADL/IADL/起居/心身機能) → 「機能訓練実施上の留意事項」へ取り込む
+  const importFromSeikatsu = () => {
+    if(!latestSeikatsu){ if(navigateTo && window.confirm('この利用者の生活機能チェックがまだありません。作成画面を開きますか？')) navigateTo('seikatsu_kinou'); return; }
+    const s = latestSeikatsu;
+    const care = (obj, items) => (items||[]).filter(k=>{const v=obj?.[k]; return v && v!=='自立';}).map(k=>`${k}:${obj[k]}`);
+    const shin = (SEIKATSU_SHINSHIN).filter(k=>{const v=s.shinshin?.[k]; return v && v!=='なし';}).map(k=>`${k}:${s.shinshin[k]}`);
+    const adl = [...care(s.adl,SEIKATSU_ADL), ...care(s.kikyo,SEIKATSU_KIKYO), ...care(s.iadl,SEIKATSU_IADL)];
+    const parts=[];
+    if(shin.length) parts.push(`【心身機能】${shin.join('／')}`);
+    if(adl.length) parts.push(`【生活動作で介助・見守りが必要】${adl.join('／')}`);
+    if(!parts.length){ alert('生活機能チェックに介助が必要な項目がありませんでした（すべて自立／なし）。'); return; }
+    const summary = parts.join(' ');
+    if(!window.confirm(`生活機能チェック（${s.recordDate||'日付なし'}）から、次を「機能訓練実施上の留意事項」に取り込みます。\n\n${summary}\n\nよろしいですか？（既存の内容の下に追記します）`)) return;
+    _appendField('ryuiPoint', summary);
+  };
+  // 興味・関心チェック → 「本人の希望」「社会参加の状況」へ取り込む
+  const importFromKyomi = () => {
+    if(!latestKyomi){ if(navigateTo && window.confirm('この利用者の興味・関心チェックがまだありません。作成画面を開きますか？')) navigateTo('kyomi_kanshin'); return; }
+    const k = latestKyomi;
+    const flagItems = (flag) => { const out=[]; (KYOMI_DEFAULT).forEach(name=>{ if(k.items?.[name]?.[flag]) out.push(name); }); (k.custom||[]).forEach(c=>{ if(c && c[flag] && c.name) out.push(c.name); }); return out; };
+    const shitemitai = flagItems('shitemitai');
+    const shiteiru = flagItems('shiteiru');
+    const bikou = (k.bikou||'').trim();
+    if(!shitemitai.length && !shiteiru.length && !bikou){ alert('興味・関心チェックに取り込める項目がありませんでした。'); return; }
+    const msg = [ shitemitai.length?`「してみたい」→ 本人の希望：${shitemitai.join('、')}`:'', shiteiru.length?`「している」→ 社会参加の状況：${shiteiru.join('、')}`:'', bikou?'備考 → 本人の希望に追記':'' ].filter(Boolean).join('\n');
+    if(!window.confirm(`興味・関心チェック（${k.recordDate||'日付なし'}）から取り込みます。\n\n${msg}\n\nよろしいですか？（既存の内容の下に追記します）`)) return;
+    const kibou = [ shitemitai.length?`してみたい：${shitemitai.join('、')}`:'', bikou ].filter(Boolean).join('\n');
+    if(kibou) _appendField('honninKibou', kibou);
+    if(shiteiru.length) _appendField('shakaiSanka', `関心・実施中：${shiteiru.join('、')}`);
+  };
+
   // 印刷対象 (編集中 or 最新)
   const printRec = editing || records[0] || null;
 
@@ -30844,6 +30880,25 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
       <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
         {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : editing ? (
           <div className="max-w-4xl mx-auto space-y-4">
+            {/* 🔗 計画書連携: 他様式から取り込む */}
+            <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4">
+              <div className="text-sm font-bold text-indigo-700 mb-1 flex items-center gap-2">🔗 他の様式から取り込む（計画書連携）</div>
+              <div className="text-[11px] text-indigo-900 opacity-70 mb-3">生活機能チェック・興味関心チェック・運動メニューの最新内容を、この計画書の該当欄へ取り込みます（既存の内容の下に追記します）。</div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={importFromSeikatsu} title="最新の生活機能チェックから、介助が必要なADL/IADL・心身機能を『機能訓練実施上の留意事項』へ取り込みます"
+                  className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100">
+                  🩺 生活機能チェックから取り込む <span className="font-normal opacity-70">{latestSeikatsu?`（${latestSeikatsu.recordDate||'日付なし'}）`:'（未作成）'}</span>
+                </button>
+                <button onClick={importFromKyomi} title="最新の興味・関心チェックから『してみたい/している』項目を『本人の希望/社会参加の状況』へ取り込みます"
+                  className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100">
+                  🎯 興味・関心から取り込む <span className="font-normal opacity-70">{latestKyomi?`（${latestKyomi.recordDate||'日付なし'}）`:'（未作成）'}</span>
+                </button>
+                <button onClick={()=>upd({programs:programsFromPlanned()})} title="運動メニュー（月別提供記録の予定運動）から個別機能訓練項目を取り込みます"
+                  className="px-3 py-2 bg-white border border-amber-300 text-amber-700 rounded-lg text-xs font-bold hover:bg-amber-100">
+                  🏃 運動メニューから訓練項目を取り込む
+                </button>
+              </div>
+            </div>
             {/* 基本情報 */}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様／{patient?.gender||''}／{_age(patient?.birthDate)}歳／{patient?.careLevel||''}）</div>
