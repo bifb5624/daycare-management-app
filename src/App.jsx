@@ -30510,6 +30510,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               const sr = (log.patientRows||[])[i]||{};
               const name = pt?.name || sr.name || '';
               if(!name) return null;
+              // ★ 欠席・休止・休業の利用者は送迎車の割り当て対象外 (この選択に表示しない)
+              if(pt && (pt.status==='欠席'||pt.status==='休業'||pt.status==='休止')) return null;
               const val = carAssignSelections[String(i)] ?? (() => {
                 if((log[carAssignModal.prefix+'_walk']||{})[String(i)]) return 'walk';
                 const found = ds.cars.find(c=>(log[carAssignModal.prefix]||{})[i+'_'+c.id]);

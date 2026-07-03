@@ -377,7 +377,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   const _isEmptyVal = (v) => v == null || v === '';
   const mergeRecordFields = (a, b) => {
     if (!a) return b; if (!b) return a;
-    const aNewer = (Number(a._savedAt) || 0) >= (Number(b._savedAt) || 0);
+    const at = Number(a._savedAt) || 0, bt = Number(b._savedAt) || 0;
+    const aNewer = at >= bt;
     const out = {};
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     keys.forEach(k => {
@@ -386,17 +387,25 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const aObj = av && typeof av === 'object' && !Array.isArray(av);
       const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
       if (aObj || bObj) {
+        // ★ exercises 等のオブジェクト(=触った項目だけを保持)は、キー単位でマージ。
+        //   新しい方が「明示的に空にした」項目(=キーはあるが空)は、より新しい場合クリアを反映する
+        //   (○を消して保存→戻る問題の解消)。 触っていない項目はキー自体が無いので相手の値が残る。
         const ao = aObj ? av : {}, bo = bObj ? bv : {};
         const older = aNewer ? bo : ao, newer = aNewer ? ao : bo;
+        const newerStrict = aNewer ? (at > bt) : (bt > at);
         const mo = { ...older };
-        Object.keys(newer).forEach(kk => { if (!_isEmptyVal(newer[kk])) mo[kk] = newer[kk]; else if (!(kk in mo)) mo[kk] = newer[kk]; });
+        Object.keys(newer).forEach(kk => {
+          if (!_isEmptyVal(newer[kk])) mo[kk] = newer[kk];        // 新しい方に値あり → 採用
+          else if (newerStrict) mo[kk] = newer[kk];              // 新しい方が明示的に空にした → クリアを反映
+          else if (!(kk in mo)) mo[kk] = newer[kk];              // それ以外は相手の値を維持
+        });
         out[k] = mo; return;
       }
       if (_isEmptyVal(av)) { out[k] = bv; return; }
       if (_isEmptyVal(bv)) { out[k] = av; return; }
       out[k] = aNewer ? av : bv; // 両方非空の競合 → 新しい方
     });
-    out._savedAt = Math.max(Number(a._savedAt) || 0, Number(b._savedAt) || 0);
+    out._savedAt = Math.max(at, bt);
     return out;
   };
   const mergeByIdFieldLevel = (localArr, cloudArr) => {
