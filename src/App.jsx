@@ -29739,6 +29739,21 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const setAmpm = (v) => setSharedAmpm && setSharedAmpm(v);
   const capacity = appData?.systemSettings?.facilityInfo?.capacity || 10;
   const [isPrintPreview, setIsPrintPreview] = useState(false);
+  // ★ 画面表示のシート拡大: コンテナ幅いっぱいまで日誌シート(200mm≒756px)を拡大して上下左右のグレー余白を減らす
+  const diaryScrollRef = React.useRef(null);
+  const [diaryViewScale, setDiaryViewScale] = useState(1);
+  React.useEffect(() => {
+    const measure = () => {
+      const w = diaryScrollRef.current?.clientWidth || window.innerWidth;
+      const SHEET_W = 756; // 200mm @96dpi
+      const s = Math.min(1.5, Math.max(1, (w - 12) / SHEET_W));
+      setDiaryViewScale(Number(s.toFixed(3)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const t = setInterval(measure, 800); // サイドバー開閉等での幅変化にも追従
+    return () => { window.removeEventListener('resize', measure); clearInterval(t); };
+  }, []);
   const [timeKeypad, setTimeKeypad] = useState(null);
   const [timeInput, setTimeInput] = useState('');
   const [carAssignModal, setCarAssignModal] = useState(null); // {prefix:'pick'|'drop'}
@@ -30662,7 +30677,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   }
 
   return (
-    <div className="h-full overflow-auto w-full bg-slate-100">
+    <div ref={diaryScrollRef} className="h-full overflow-auto w-full bg-slate-100">
       <style>{`
         @media print {
           body, html, #root { height: auto !important; overflow: visible !important; background: white !important; }
@@ -30919,7 +30934,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         </div>
       )}
       <div id="diary-print-content" style={isReadOnly ? {pointerEvents:'none', userSelect:'none', opacity:0.95} : undefined}>
-        <div className="flex flex-col items-center py-8 px-4 gap-8">
+        <div className="flex flex-col items-center py-3 px-2" style={{gap: `${Math.round(24*diaryViewScale)}px`}}>
           {(() => {
             // 編集ビューでもページング: 利用者数が多ければ見切れず2ページ目に分割表示
             const carCount = ds.cars.length;
@@ -30945,8 +30960,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               pageList.push({rowStart:0, rowEnd:0, showStaff:false, showPatients:false, showExtras:true});
             }
             return pageList.map((p, i) => (
-              <div key={i} className="shadow-xl rounded-lg overflow-hidden border border-slate-300">
-                <DiarySheet pageInfo={{pageIndex:i, totalPages:pageList.length, ...p}} />
+              <div key={i} style={{ transform:`scale(${diaryViewScale})`, transformOrigin:'top center', marginBottom: diaryViewScale>1 ? `${Math.round((diaryViewScale-1)*1085)}px` : 0 }}>
+                <div className="shadow-xl rounded-lg overflow-hidden border border-slate-300">
+                  <DiarySheet pageInfo={{pageIndex:i, totalPages:pageList.length, ...p}} />
+                </div>
               </div>
             ));
           })()}
