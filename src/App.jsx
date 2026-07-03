@@ -10070,6 +10070,162 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
   );
 }
 
+// === スケジュール管理 ===
+function ScheduleView({ appData, onSave }) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const [curMonth, setCurMonth] = useState(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
+  const [selDay, setSelDay] = useState(todayStr);
+  const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color}
+  const events = appData.scheduleEvents || [];
+  const save = (list, msg) => onSave({ ...appData, scheduleEvents: list }, msg ? { manual:true, message: msg } : undefined);
+  const upsert = () => {
+    if (!modal) return;
+    if (!modal.title || !modal.title.trim()) { alert('予定のタイトルを入力してください'); return; }
+    if (!modal.date) { alert('日付を選んでください'); return; }
+    const ev = { ...modal, title: modal.title.trim() };
+    const list = modal.id ? events.map(e=>e.id===modal.id?ev:e) : [...events, { ...ev, id:`ev_${Date.now()}_${Math.random().toString(36).slice(2,6)}` }];
+    save(list, modal.id ? '✓ 予定を更新しました' : '✓ 予定を追加しました');
+    setModal(null);
+  };
+  const del = (id) => { if(!window.confirm('この予定を削除しますか？')) return; save(events.filter(e=>e.id!==id), '✓ 削除しました'); setModal(null); };
+  const evOf = (dstr) => events.filter(e=>e.date===dstr).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
+  const timeLabel = (e) => e.start ? `${e.start}${e.end?`〜${e.end}`:''}` : '終日';
+  const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#0ea5e9','#64748b'];
+  const [cy, cm] = curMonth.split('-').map(Number);
+  const firstDow = new Date(cy, cm-1, 1).getDay();
+  const daysIn = new Date(cy, cm, 0).getDate();
+  const cells = [...Array(firstDow).fill(null), ...Array.from({length:daysIn},(_,i)=>i+1)];
+  while (cells.length % 7 !== 0) cells.push(null);
+  const dstrOf = (d) => `${cy}-${String(cm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  const shiftMonth = (delta) => { const d = new Date(cy, cm-1+delta, 1); setCurMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); };
+  const todayEvents = evOf(todayStr);
+  const selEvents = evOf(selDay);
+  const dow = ['日','月','火','水','木','金','土'];
+  const openNew = (dstr) => setModal({ date: dstr || selDay, start:'', end:'', title:'', note:'', color: COLORS[0] });
+  const fmtJp = (dstr) => { const [y,m,dd]=dstr.split('-').map(Number); const w=new Date(y,m-1,dd).getDay(); return `${m}月${dd}日(${dow[w]})`; };
+  return (
+    <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
+      <div className="no-print" style={{position:'sticky',top:0,zIndex:20,background:'linear-gradient(135deg,#6366f1,#8b5cf6)',color:'white',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <CalendarRange size={20}/>
+          <span style={{fontSize:17,fontWeight:'bold'}}>スケジュール</span>
+        </div>
+        <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Plus size={16}/>予定を追加</button>
+      </div>
+      <div style={{flex:1,overflow:'auto',padding:16}}>
+        <div style={{maxWidth:1000,margin:'0 auto',display:'flex',flexDirection:'column',gap:16}}>
+          {/* 今日の予定 */}
+          <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><Clock size={16}/>今日の予定（{today.getMonth()+1}月{today.getDate()}日）</div>
+            {todayEvents.length===0 ? (
+              <div style={{fontSize:13,color:'#94a3b8'}}>今日の予定はありません。</div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {todayEvents.map(e=>(
+                  <button key={e.id} onClick={()=>setModal({...e})} style={{textAlign:'left',display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px',cursor:'pointer'}}>
+                    <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
+                    <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}</span>
+                    {e.note && <span style={{fontSize:11,color:'#64748b',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.note}</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* カレンダー + 選択日 */}
+          <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:16}}>
+            <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                <button onClick={()=>shiftMonth(-1)} style={{background:'#f1f5f9',border:'none',borderRadius:8,padding:'6px 12px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>‹ 前月</button>
+                <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>{cy}年{cm}月</div>
+                <button onClick={()=>shiftMonth(1)} style={{background:'#f1f5f9',border:'none',borderRadius:8,padding:'6px 12px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>翌月 ›</button>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
+                {dow.map((w,i)=>(<div key={w} style={{textAlign:'center',fontSize:11,fontWeight:'bold',padding:'2px 0',color:i===0?'#ef4444':i===6?'#3b82f6':'#64748b'}}>{w}</div>))}
+                {cells.map((d,i)=>{
+                  if (d===null) return <div key={`e${i}`}/>;
+                  const dstr = dstrOf(d);
+                  const evs = evOf(dstr);
+                  const isToday = dstr===todayStr;
+                  const isSel = dstr===selDay;
+                  return (
+                    <button key={dstr} onClick={()=>setSelDay(dstr)} style={{minHeight:74,textAlign:'left',background:isSel?'#eef2ff':'white',border:`1px solid ${isSel?'#818cf8':'#e2e8f0'}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
+                      <span style={{fontSize:12,fontWeight:'bold',alignSelf:'flex-start',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155')}}>{d}</span>
+                      {evs.slice(0,3).map(e=>(
+                        <span key={e.id} style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>{e.start?`${e.start} `:''}{e.title}</span>
+                      ))}
+                      {evs.length>3 && <span style={{fontSize:9,color:'#64748b',fontWeight:'bold'}}>他{evs.length-3}件</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* 選択日の予定 */}
+            <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{fmtJp(selDay)} の予定</div>
+                <button onClick={()=>openNew(selDay)} style={{background:'#6366f1',color:'white',border:'none',borderRadius:8,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}><Plus size={13}/>追加</button>
+              </div>
+              {selEvents.length===0 ? (
+                <div style={{fontSize:13,color:'#94a3b8',padding:'12px 0'}}>この日の予定はありません。「追加」から登録できます。</div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {selEvents.map(e=>(
+                    <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px'}}>
+                      <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}</div>
+                        {e.note && <div style={{fontSize:12,color:'#64748b',whiteSpace:'pre-wrap'}}>{e.note}</div>}
+                      </div>
+                      <button onClick={()=>setModal({...e})} style={{background:'#e2e8f0',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>編集</button>
+                      <button onClick={()=>del(e.id)} style={{background:'#fee2e2',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#b91c1c',cursor:'pointer'}}>削除</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* 予定 追加/編集モーダル */}
+      {modal && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setModal(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:440,maxWidth:'100%',maxHeight:'90vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:14}}>{modal.id?'予定を編集':'予定を追加'}</div>
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>日付</label>
+            <input type="date" value={modal.date} onChange={e=>setModal(m=>({...m,date:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
+            <div style={{display:'flex',gap:10,marginBottom:12}}>
+              <div style={{flex:1}}>
+                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>開始</label>
+                <input type="time" value={modal.start||''} onChange={e=>setModal(m=>({...m,start:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
+              </div>
+              <div style={{flex:1}}>
+                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>終了</label>
+                <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
+              </div>
+            </div>
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>タイトル</label>
+            <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="例: 担当者会議 / 避難訓練 / 面談" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>メモ（任意）</label>
+            <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色</label>
+            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
+              {COLORS.map(c=>(
+                <button key={c} onClick={()=>setModal(m=>({...m,color:c}))} style={{width:26,height:26,borderRadius:'50%',background:c,border:modal.color===c?'3px solid #1e293b':'2px solid white',boxShadow:'0 0 0 1px #cbd5e1',cursor:'pointer'}}/>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              {modal.id && <button onClick={()=>del(modal.id)} style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>削除</button>}
+              <div style={{flex:1}}/>
+              <button onClick={()=>setModal(null)} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
+              <button onClick={upsert} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'10px 18px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 // === 家族関係者閲覧 管理画面 (事業所側) ===
 function FamilyAdminView({ appData, onSave }) {
   const [tab, setTab] = useState('post');
@@ -15715,6 +15871,7 @@ export default function App() {
               <SidebarItem icon={<FileText size={18} />} label="休み連絡" active={currentView === 'absence_fax'} onClick={() => navigateTo('absence_fax')} />
               <SidebarItem icon={<FileText size={18} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
+              <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               {hasAddon(appData,'kinou_keikaku') && (
                 <SidebarItem icon={<FileText size={18} />} label="個別機能訓練計画書" active={currentView === 'kinou_keikaku'} onClick={() => navigateTo('kinou_keikaku')} />
               )}
@@ -15748,6 +15905,7 @@ export default function App() {
                  currentView === 'absence_fax' ? '休み連絡' :
                  currentView === 'general_fax' ? '各種連絡' :
                  currentView === 'monitoring' ? 'モニタリング' :
+                 currentView === 'schedule' ? 'スケジュール' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
                  currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
                  currentView === 'kyomi_kanshin' ? '興味・関心チェックシート' :
@@ -15807,6 +15965,7 @@ export default function App() {
              currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'fitness' ? <FitnessView appData={appData} onSave={handleSaveToCloud} selectedDate={selectedDate} sharedAmpm={sharedAmpm} navigateTo={navigateTo} targetPatientId={targetPatientId} onPatientChange={setTargetPatientId} dirtyRef={fitnessDirtyRef} saveFnRef={fitnessSaveFnRef} /> :
              currentView === 'monitoring' ? <MonitoringView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={monitoringDirtyRef} saveFnRef={monitoringSaveFnRef} /> :
+             currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
              currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
@@ -15872,6 +16031,8 @@ export default function App() {
                     ...appData,
                     storeMembers: newMembers,
                     diarySettings: { ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}), staff: newDiaryStaff },
+                    // ★ 管理者なら事業所情報の管理者名に自動転記
+                    ...(staffAddForm.role==='管理者' ? { systemSettings: { ...(appData.systemSettings||{}), facilityInfo: { ...(appData.systemSettings?.facilityInfo||{}), manager: fullName } } } : {}),
                   }, { manual: true, message: '✓ スタッフ情報を更新しました' });
                   if (activeRecorder && activeRecorder.id===eid) {
                     const ua = {...activeRecorder, name:fullName, lastName:last, firstName:first, roleLabel:staffAddForm.role};
@@ -15911,6 +16072,8 @@ export default function App() {
                     ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
                     staff: newDiaryStaff,
                   },
+                  // ★ 管理者なら事業所情報の管理者名に自動転記
+                  ...(staffAddForm.role==='管理者' ? { systemSettings: { ...(appData.systemSettings||{}), facilityInfo: { ...(appData.systemSettings?.facilityInfo||{}), manager: fullName } } } : {}),
                 }, { manual: true, message: '✓ スタッフを登録しました' });
                 setStaffAddModal(false);
               }}
