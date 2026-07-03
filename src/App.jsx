@@ -10233,12 +10233,27 @@ function ScheduleView({ appData, onSave }) {
     if (!modal) return;
     if (!modal.title || !modal.title.trim()) { alert('予定のタイトルを入力してください'); return; }
     if (!modal.date) { alert('日付を選んでください'); return; }
-    const ev = { ...modal, title: modal.title.trim() };
-    const list = modal.id ? events.map(e=>e.id===modal.id?ev:e) : [...events, { ...ev, id:`ev_${Date.now()}_${Math.random().toString(36).slice(2,6)}` }];
-    save(list, modal.id ? '✓ 予定を更新しました' : '✓ 予定を追加しました');
+    const evId = modal.id || `ev_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+    const ev = { ...modal, id: evId, title: modal.title.trim() };
+    const list = modal.id ? events.map(e=>e.id===modal.id?ev:e) : [...events, ev];
+    // ★ お知らせ配信: 利用者を選び「お知らせとして配信」ON → その利用者(ご家族)＋担当ケアマネの閲覧画面のお知らせに掲載
+    const annId = `schednews_${evId}`;
+    let personalAnns = (appData.familyPersonalAnnouncements || []).filter(a => a.id !== annId);
+    if (ev.patientId && ev.notify) {
+      const [yy,mm,dd] = String(ev.date).split('-').map(Number);
+      const w = ['日','月','火','水','木','金','土'][new Date(yy,mm-1,dd).getDay()];
+      const tstr = ev.start ? `${ev.start}${ev.end?`〜${ev.end}`:''}` : '';
+      personalAnns = [{ id:annId, patientId:ev.patientId, title:`【予定】${ev.title}`, body:`${mm}月${dd}日(${w})${tstr?` ${tstr}`:''}${ev.note?`\n${ev.note}`:''}`, date:ev.date, postedAt:new Date().toISOString(), audience:['family','caremanager','related'], photos:[], _fromSchedule:evId }, ...personalAnns];
+    }
+    onSave({ ...appData, scheduleEvents: list, familyPersonalAnnouncements: personalAnns }, { manual:true, message: (ev.patientId&&ev.notify) ? '✓ 予定を保存し、お知らせを配信しました' : (modal.id ? '✓ 予定を更新しました' : '✓ 予定を追加しました') });
     setModal(null);
   };
-  const del = (id) => { if(!window.confirm('この予定を削除しますか？')) return; save(events.filter(e=>e.id!==id), '✓ 削除しました'); setModal(null); };
+  const del = (id) => {
+    if(!window.confirm('この予定を削除しますか？')) return;
+    const annId = `schednews_${id}`;
+    onSave({ ...appData, scheduleEvents: events.filter(e=>e.id!==id), familyPersonalAnnouncements: (appData.familyPersonalAnnouncements||[]).filter(a=>a.id!==annId) }, { manual:true, message:'✓ 削除しました' });
+    setModal(null);
+  };
   const evOf = (dstr) => events.filter(e=>e.date===dstr).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
   const timeLabel = (e) => e.start ? `${e.start}${e.end?`〜${e.end}`:''}` : '終日';
   const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#0ea5e9','#64748b'];
@@ -10368,6 +10383,12 @@ function ScheduleView({ appData, onSave }) {
                 担当ケアマネ：<b>{p.cmOffice||'（事業所未登録）'}</b>{p.cmName?` / ${p.cmName} 様`:''}{p.cmFax?`　FAX ${p.cmFax}`:''}
               </div>
             ); })()}
+            {modal.patientId && (
+              <label style={{display:'flex',alignItems:'flex-start',gap:8,background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:8,padding:'8px 10px',marginBottom:12,cursor:'pointer'}}>
+                <input type="checkbox" checked={!!modal.notify} onChange={e=>setModal(m=>({...m,notify:e.target.checked}))} style={{width:16,height:16,marginTop:1}}/>
+                <span style={{fontSize:12,fontWeight:'bold',color:'#4338ca',lineHeight:1.5}}>この予定を<b>お知らせとして配信</b>する<br/><span style={{fontSize:10,fontWeight:'normal',color:'#64748b'}}>選んだ利用者のご家族・関係者・担当ケアマネの閲覧画面に、日時入りで掲載されます</span></span>
+              </label>
+            )}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>メモ（任意）</label>
             <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色</label>
