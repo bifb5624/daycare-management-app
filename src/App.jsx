@@ -24759,6 +24759,8 @@ function LabelInput({ label, disabled, value, onChange, type = "text", placehold
 function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
   const [localPatient, setLocalPatient] = useState(null);
+  // ★ 直近に読み込んだ「リモート利用者」の内容シグネチャ (他端末の更新を検知して即反映するため)
+  const lastLoadedPatientSigRef = React.useRef(null);
   const [deleteConfirmModal, setDeleteConfirmModal] = useState(false);
   // ★ 2段階削除確認 (誤操作で完全削除されないように)
   const [deleteConfirmStep2, setDeleteConfirmStep2] = useState(false);
@@ -24960,42 +24962,56 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
   // ★ 編集中のリセット防止: 同じ患者編集中の appData.patients 更新では localPatient を上書きしない
   //   patient ID が変わった (別利用者を選択) ときだけ localPatient を読み直す
+  // ★ リモート利用者 → 編集用ローカルコピーを構築 (家族名の自動反映・旧データ分割を含む)
+  const _buildLocalPatient = (p) => {
+    if (!p) return null;
+    let lp = JSON.parse(JSON.stringify(p));
+    const _sp = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
+    // ★ 主要連絡先(familyName)が未設定なら、登録済み家族アカウント / 緊急連絡先から自動反映。
+    if (!lp.familyName) {
+      const acc = (appData.familyAccounts||[]).filter(a => a.patientId === lp.id && (a.kind||'family')==='family')[0];
+      const ec = (lp.emergencyContacts||[])[0];
+      const src = acc || ec;
+      if (src) {
+        const nm = (src.lastName||src.firstName) ? {last:src.lastName||'',first:src.firstName||''} : _sp(src.displayName||src.name||'');
+        lp.familyName = src.displayName || src.name || `${nm.last} ${nm.first}`.trim();
+        lp.familyLastName = nm.last; lp.familyFirstName = nm.first;
+        lp.familyKana = src.kana || '';
+        lp.familyRelation = src.relation || '';
+        lp.familyPhone = src.phone || '';
+        lp.familyPhoneMobile = src.phoneMobile || '';
+        lp.familyEmail = src.email || '';
+      }
+    }
+    // 旧データ互換: 氏名/ふりがなが未分割なら姓/名へ自動分割
+    if (lp.familyName && !lp.familyLastName && !lp.familyFirstName) { const s=_sp(lp.familyName); lp.familyLastName=s.last; lp.familyFirstName=s.first; }
+    if (lp.familyKana && !lp.familyKanaLast && !lp.familyKanaFirst) { const s=_sp(lp.familyKana); lp.familyKanaLast=s.last; lp.familyKanaFirst=s.first; }
+    return lp;
+  };
   useEffect(() => {
     if (editingPatientId && appData.patients) {
       const p = (appData.patients||[]).find(pt => pt.id === editingPatientId);
       // 既に同じ ID の localPatient がある場合は上書きしない (編集中のデータを保護)
       if (!localPatient || localPatient.id !== editingPatientId) {
-        let lp = p ? JSON.parse(JSON.stringify(p)) : null;
-        if (lp) {
-          const _sp = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
-          // ★ 主要連絡先(familyName)が未設定なら、登録済み家族アカウント / 緊急連絡先から自動反映。
-          //   家族が登録した情報を「緊急連絡先(主要)」欄に自動で載せる (紫ボックスの代わり)。
-          if (!lp.familyName) {
-            const acc = (appData.familyAccounts||[]).filter(a => a.patientId === lp.id && (a.kind||'family')==='family')[0];
-            const ec = (lp.emergencyContacts||[])[0];
-            const src = acc || ec;
-            if (src) {
-              const nm = (src.lastName||src.firstName) ? {last:src.lastName||'',first:src.firstName||''} : _sp(src.displayName||src.name||'');
-              lp.familyName = src.displayName || src.name || `${nm.last} ${nm.first}`.trim();
-              lp.familyLastName = nm.last; lp.familyFirstName = nm.first;
-              lp.familyKana = src.kana || '';
-              lp.familyRelation = src.relation || '';
-              lp.familyPhone = src.phone || '';
-              lp.familyPhoneMobile = src.phoneMobile || '';
-              lp.familyEmail = src.email || '';
-            }
-          }
-          // 旧データ互換: 氏名/ふりがなが未分割なら姓/名へ自動分割
-          if (lp.familyName && !lp.familyLastName && !lp.familyFirstName) { const s=_sp(lp.familyName); lp.familyLastName=s.last; lp.familyFirstName=s.first; }
-          if (lp.familyKana && !lp.familyKanaLast && !lp.familyKanaFirst) { const s=_sp(lp.familyKana); lp.familyKanaLast=s.last; lp.familyKanaFirst=s.first; }
-        }
-        setLocalPatient(lp);
+        lastLoadedPatientSigRef.current = JSON.stringify(p || null);
+        setLocalPatient(_buildLocalPatient(p));
       }
     } else {
       setLocalPatient(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingPatientId]);
+  // ★ 表示中の利用者が他端末で更新されたら即反映 (編集中は上書きしない)
+  const _remotePatientSig = JSON.stringify((appData.patients||[]).find(pt => pt.id === editingPatientId) || null);
+  useEffect(() => {
+    if (!editingPatientId || !localPatient || localPatient.id !== editingPatientId) return;
+    if (_remotePatientSig === lastLoadedPatientSigRef.current) return; // リモートに変化なし
+    lastLoadedPatientSigRef.current = _remotePatientSig;
+    if (dirtyRef?.current) return; // 編集中は上書きしない
+    const p = (appData.patients||[]).find(pt => pt.id === editingPatientId);
+    if (p) setLocalPatient(_buildLocalPatient(p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_remotePatientSig]);
 
   const updateLPFields = (obj) => {
     if (!localPatient) return;
