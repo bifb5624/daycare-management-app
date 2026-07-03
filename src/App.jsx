@@ -26692,10 +26692,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               if (doctor) { const pf=np.personalFile||{}; np.personalFile={...pf, faceSheet:{...(pf.faceSheet||{}), chronicDiseases: doctor}}; }
               return np;
             };
-            let added=0, updated=0;
+            let added=0, updated=0, skipped=0;
             for (let r=1;r<rows.length;r++){
               const row = rows[r]; if(!row.some(c=>(c||'').trim())) continue;
               const name = val(row,col.name), kana = val(row,col.kana);
+              // ★ 氏名が空の行はスキップ (既存IDの更新行を除く)。 名前の無い空の利用者が量産されるのを防ぐ
+              const _idEarly = parseInt(val(row,col.id));
+              const _isExistingIdRow = !isNaN(_idEarly) && existingIds.has(_idEarly);
+              if (!name && !_isExistingIdRow) { skipped++; continue; }
               const insNo = val(row,col.insuranceNo);
               const addr = [val(row,col.prefecture),val(row,col.city),val(row,col.addressLine),val(row,col.building)].filter(Boolean).join('');
               // ★ 空欄は rec に入れない (既存を上書きしない / 新規はデフォルト)
@@ -26751,7 +26755,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             onSave({...appData, patients: existing});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
             const modeTxt = dupMode==='replace' ? '氏名一致は置き換え(更新)' : '氏名一致でも両方残す(新規追加)';
-            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件\n重複時の扱い: ${modeTxt}\n（空欄の項目は既存データを上書きしません）`);
+            alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${skipped?` / スキップ ${skipped} 件（氏名が空の行）`:''}\n重複時の扱い: ${modeTxt}\n（空欄の項目は既存データを上書きしません／氏名が空の行は取り込みません）`);
           } catch (e) {
             setCsvModal({...csvModal, error: e.message || String(e)});
           }
@@ -29472,7 +29476,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                       <div className="text-sm font-bold text-slate-700">利用者（{patients.length}名）</div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button type="button" onClick={()=>setBulkDelPatients(new Set(patients.filter(p=>!(p.name||'').trim()).map(p=>p.id)))} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded" title="氏名が空の利用者だけを選択(CSVの空行対策)">氏名が空を選択</button>
                         <button type="button" onClick={()=>setBulkDelPatients(new Set(patients.map(p=>p.id)))} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全選択</button>
                         <button type="button" onClick={()=>setBulkDelPatients(new Set())} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全解除</button>
                         <button type="button" onClick={doDeletePatients} disabled={!bulkDelPatients.size} className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 px-3 py-1 rounded">選択した{bulkDelPatients.size||''}件を削除</button>
@@ -29482,7 +29487,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       {patients.length===0 ? <div className="text-xs text-slate-400 p-3">利用者がいません</div> : patients.map(p=>(
                         <label key={p.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer">
                           <input type="checkbox" checked={bulkDelPatients.has(p.id)} onChange={()=>togglePat(p.id)} className="w-4 h-4" style={{accentColor:'#dc2626'}}/>
-                          <span className="text-sm font-bold text-slate-700 flex-1">{p.name}</span>
+                          <span className={`text-sm font-bold flex-1 ${(p.name||'').trim()?'text-slate-700':'text-amber-600 italic'}`}>{(p.name||'').trim() || `（氏名なし・ID:${p.id}）`}</span>
                           <span className="text-[11px] text-slate-400">{p.status||''}{p.careLevel?`・${p.careLevel}`:''}</span>
                         </label>
                       ))}
