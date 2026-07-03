@@ -33601,12 +33601,21 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   // 既存データから自動生成される行(srcKey付き)
   const spAutoEvents = () => {
     const out = [];
-    const push = (srcKey, date, from, content) => { if(!srcKey||!content) return; out.push({ id:srcKey, srcKey, date:String(date||'').slice(0,10), staff:'', from:from||'', content, _auto:true }); };
+    const seen = new Set();
+    // ★ srcKey で重複排除 (同じ月のモニタリング等が複数あっても1件に集約)
+    const push = (srcKey, date, from, content) => { if(!srcKey||!content||seen.has(srcKey)) return; seen.add(srcKey); out.push({ id:srcKey, srcKey, date:String(date||'').slice(0,10), staff:'', from:from||'', content, _auto:true }); };
     const fh = appData.faxHistory||[];
-    fh.filter(h=>h.type==='absence' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_abs_${h.id}`, (h.dateIso||h.timestamp), 'ご家族/ご本人', `休み連絡${h.subject?`（${h.subject}）`:''}`));
-    fh.filter(h=>h.type==='general' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_gen_${h.id}`, h.timestamp, '当事業所', `各種連絡${h.subject?`：${h.subject}`:''}`));
+    // 休み連絡: 欠席日と理由(ticketRecord.tokki)も記載
+    fh.filter(h=>h.type==='absence' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>{
+      let dl='', reason='';
+      if (h.dateIso) { const d=new Date(h.dateIso); dl=`${d.getMonth()+1}/${d.getDate()}`; const lbl=`${d.getMonth()+1}月${d.getDate()}日`; const rec=(appData.ticketRecords||[]).find(r=>r.patientId===patient.id && r.date===lbl && r.status==='欠席'); reason=(rec&&rec.tokki)||''; }
+      push(`fax_abs_${h.id}`, (h.dateIso||h.timestamp), 'ご家族/ご本人', `休み連絡${dl?`（${dl}）`:''}${reason?`　理由: ${reason}`:''}`);
+    });
+    // 各種連絡: 件名+本文も記載
+    fh.filter(h=>h.type==='general' && (h.patientId===patient.id || h.patientName===patient.name)).forEach(h=>push(`fax_gen_${h.id}`, h.timestamp, '当事業所', `各種連絡${h.subject?`：${h.subject}`:''}${h.memo?`　${String(h.memo).replace(/\s+/g,' ').trim()}`:''}`));
     (appData.fitnessRecords||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`fit_${r.date}`, r.date, '当事業所', '体力測定を実施'));
-    (appData.monitoringRecords||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`mon_${r.period}`, (r.createdAt?new Date(r.createdAt).toISOString().slice(0,10):''), '当事業所', `モニタリング（${r.period}）を実施`));
+    // モニタリング: 同じ月(period)が複数あっても最新1件に集約
+    [...(appData.monitoringRecords||[])].filter(r=>r.patientId===patient.id).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).forEach(r=>push(`mon_${r.period}`, (r.createdAt?new Date(r.createdAt).toISOString().slice(0,10):''), '当事業所', `モニタリング（${r.period}）を実施`));
     (personalFile.meetings||[]).forEach(m=>push(`mtg_${m.id}`, (m.date||''), '当事業所', `サービス担当者会議${m.location?`（${m.location}）`:''}`));
     (patient.cmHistory||[]).forEach((h,i)=>push(`cm_${h.from||i}`, h.from, 'ケアマネ', `担当ケアマネ変更：${h.office||''} ${h.name||''}`.trim()));
     (patient.careLevelHistory||[]).forEach((h,i)=>push(`cl_${h.from||i}`, h.from, 'ケアマネ', `介護度変更：${h.value||''}`));
@@ -33624,7 +33633,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     const rows = [];
     spAutoEvents().forEach(a => { if(hidden.has(a.srcKey)) return; const o=overrideByKey[a.srcKey]; rows.push(o ? {...a, ...o, _auto:true} : a); });
     stored.forEach(e => { if(!e.srcKey) rows.push({...e, _auto:false}); });
-    return rows.sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+    // ★ 常に時系列(日付昇順)。 日付未設定は末尾へ
+    return rows.sort((a,b)=>{ const da=String(a.date||''), db=String(b.date||''); if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1; return da.localeCompare(db); });
   };
   // 行の編集: 自動行は srcKey で上書き保存、手動行は id で更新
   const spEditRow = (row, patch) => {
