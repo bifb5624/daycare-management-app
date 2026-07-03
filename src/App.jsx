@@ -33964,9 +33964,11 @@ const DEFAULT_PF_CATEGORIES = [
     note: '日々の介護記録・経過記録 / サービス提供実績' },
   { id: 'cat_7', name: '7. 初回ご利用報告', emoji: '📢', isDefault: true,
     note: '初回通所時のケアマネ向け報告 (バイタル・ご利用の様子)' },
-  { id: 'cat_8', name: '8. 連絡・体力測定の記録', emoji: '🗒️', isDefault: true,
-    note: '休み連絡 / 各種連絡 の送付履歴 / 体力測定の記録' },
-  { id: 'cat_9', name: '9. 支援経過表', emoji: '📈', isDefault: true,
+  { id: 'cat_8', name: '8. 体力測定の記録', emoji: '📏', isDefault: true,
+    note: '体力測定の記録（測定日ごとの一覧・横スクロールで全項目）' },
+  { id: 'cat_renraku', name: '9. 連絡（休み・各種連絡）', emoji: '🗒️', isDefault: true,
+    note: '休み連絡 / 各種連絡 の送付履歴（件名・宛先で検索）' },
+  { id: 'cat_9', name: '10. 支援経過表', emoji: '📈', isDefault: true,
     note: '日付・担当者・連絡元・内容の経過記録 (年ごと・A4縦で出力)' },
 ];
 
@@ -34186,7 +34188,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const isCMTab = activeCat === 'cat_3';
   const isServiceTab = activeCat === 'cat_6'; // ★ サービス提供記録は cat_6 へ移動
   const isInitialReportTab = activeCat === 'cat_7'; // ★ 初回ご利用報告
-  const isRecordsTab = activeCat === 'cat_8'; // ★ 連絡・体力測定の記録
+  const isRecordsTab = activeCat === 'cat_8'; // ★ 体力測定の記録
+  const isRenrakuTab = activeCat === 'cat_renraku'; // ★ 連絡（休み・各種連絡）
   const isSpTab = activeCat === 'cat_9'; // ★ 支援経過表
   const activeCategory = allCategories.find(c => c.id === activeCat) || allCategories[0];
   // ★ 初回ご利用報告: 初回通所記録を検出し、バイタルを自動取得
@@ -34261,6 +34264,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   });
   const [showTrash, setShowTrash] = useState(false);
   const [expandedFaxId, setExpandedFaxId] = useState(null); // 連絡履歴: クリックで内容を展開
+  const [renrakuSearch, setRenrakuSearch] = useState(''); // ★ 連絡タブ: 件名・宛先・内容で絞り込み
   const trashItems = personalFile.trash || [];
 
   // 月次スナップショットを今すぐ作成
@@ -34466,13 +34470,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               </div>
             </div>
           )}
-          {/* 連絡・体力測定の記録 (読み取り) */}
-          {isRecordsTab && (() => {
-            const fitItems = appData.systemSettings?.fitnessItems || [];
-            const fitRecs = (appData.fitnessRecords||[]).filter(r => r.patientId === patient.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+          {/* 連絡（休み・各種連絡）(読み取り) */}
+          {isRenrakuTab && (() => {
             const faxOf = (type) => (appData.faxHistory||[]).filter(h => h.type === type && (h.patientName||'') === (patient.name||'')).sort((a,b)=>(b.timestamp||'').localeCompare(a.timestamp||''));
-            const absHist = faxOf('absence'); const genHist = faxOf('general');
             const _ts = (t) => { try { return new Date(t).toLocaleDateString('ja-JP'); } catch { return t||''; } };
+            // ★ 書類検索: 件名・宛先・内容・日付で絞り込み
+            const _q = renrakuSearch.trim().toLowerCase();
+            const _match = (h) => { if(!_q) return true; const hay = [h.subject,h.recipientOffice,h.recipientName,h.memo,h.body,h.content,h.note,h.dateIso,_ts(h.timestamp)].map(x=>String(x||'').toLowerCase()).join(' '); return hay.includes(_q); };
+            const absHist = faxOf('absence').filter(_match); const genHist = faxOf('general').filter(_match);
             const faxList = (title, list, view) => (
               <div className="bg-white rounded-xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -34514,34 +34519,52 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             );
             return (
               <div className="space-y-4">
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">この利用者の<b>休み連絡・各種連絡の送付履歴</b>と<b>体力測定の記録</b>をまとめて確認できます。連絡は「作成・出力へ」から書類を作成・印刷できます。</div>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">この利用者に送った<b>休み連絡・各種連絡の送付履歴</b>を確認できます。「作成・出力へ」から書類を作成・印刷できます。件名・宛先・内容で検索できます。</div>
+                {/* 書類検索 */}
+                <div className="relative">
+                  <input type="text" value={renrakuSearch} onChange={e=>setRenrakuSearch(e.target.value)} placeholder="🔍 件名・宛先・内容・日付で検索…" className="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
+                  {renrakuSearch && <button onClick={()=>setRenrakuSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm">✕</button>}
+                </div>
+                {_q && <div className="text-[11px] text-slate-500">「{renrakuSearch}」で絞り込み中（休み{absHist.length}件・各種{genHist.length}件）</div>}
                 {faxList('休み連絡', absHist, 'absence_fax')}
                 {faxList('各種連絡', genHist, 'general_fax')}
-                {/* 体力測定 (表) */}
+              </div>
+            );
+          })()}
+          {/* 体力測定の記録 (読み取り・横スクロール) */}
+          {isRecordsTab && (() => {
+            const fitItems = appData.systemSettings?.fitnessItems || [];
+            const fitRecs = (appData.fitnessRecords||[]).filter(r => r.patientId === patient.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+            return (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">この利用者の<b>体力測定の記録</b>を測定日ごとに一覧できます。項目が多い場合は<b>表を左右にスクロール</b>してください（日付・担当は左に固定されます）。</div>
                 <div className="bg-white rounded-xl border border-slate-200 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-bold text-sm text-slate-700">体力測定（{fitRecs.length}件）</div>
                     {navigateTo && <button onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo('fitness'); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">測定・入力へ →</button>}
                   </div>
                   {fitRecs.length===0 ? <div className="text-xs text-slate-400 py-2">記録なし</div> : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs border-collapse">
-                        <thead><tr className="bg-slate-50 border-b border-slate-200">
-                          <th className="px-3 py-2 text-left font-bold text-slate-500 whitespace-nowrap">日付</th>
-                          <th className="px-3 py-2 text-left font-bold text-slate-500 whitespace-nowrap">担当</th>
-                          {fitItems.map(it=><th key={it.id} className="px-3 py-2 text-center font-bold text-slate-500 whitespace-nowrap">{it.name}<br/><span className="font-normal text-slate-400">（{it.unit}）</span></th>)}
-                        </tr></thead>
-                        <tbody>
-                          {fitRecs.map((r,ri)=>(
-                            <tr key={r.id} className={ri%2?'bg-slate-50':'bg-white'}>
-                              <td className="px-3 py-1.5 font-bold text-slate-600 whitespace-nowrap">{r.date}</td>
-                              <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.recorder||'—'}</td>
-                              {fitItems.map(it=>{ const v=r.values?.[it.id]; return <td key={it.id} className="px-3 py-1.5 text-center">{(v!==''&&v!=null)?<span className="font-bold text-slate-700">{v}</span>:<span className="text-slate-300">—</span>}</td>; })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <>
+                      {fitItems.length>3 && <div className="text-[10px] text-slate-400 mb-1 text-right">← 横にスクロールできます →</div>}
+                      <div className="overflow-x-auto rounded-lg border border-slate-100" style={{WebkitOverflowScrolling:'touch'}}>
+                        <table className="text-xs border-collapse" style={{minWidth:'100%'}}>
+                          <thead><tr className="bg-slate-50 border-b border-slate-200">
+                            <th className="px-3 py-2 text-left font-bold text-slate-500 whitespace-nowrap sticky left-0 bg-slate-50 z-10" style={{boxShadow:'2px 0 0 #e2e8f0'}}>日付</th>
+                            <th className="px-3 py-2 text-left font-bold text-slate-500 whitespace-nowrap">担当</th>
+                            {fitItems.map(it=><th key={it.id} className="px-3 py-2 text-center font-bold text-slate-500 whitespace-nowrap">{it.name}<br/><span className="font-normal text-slate-400">（{it.unit}）</span></th>)}
+                          </tr></thead>
+                          <tbody>
+                            {fitRecs.map((r,ri)=>(
+                              <tr key={r.id} className={ri%2?'bg-slate-50':'bg-white'}>
+                                <td className={`px-3 py-1.5 font-bold text-slate-600 whitespace-nowrap sticky left-0 z-10 ${ri%2?'bg-slate-50':'bg-white'}`} style={{boxShadow:'2px 0 0 #e2e8f0'}}>{r.date}</td>
+                                <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{r.recorder||'—'}</td>
+                                {fitItems.map(it=>{ const v=r.values?.[it.id]; return <td key={it.id} className="px-3 py-1.5 text-center">{(v!==''&&v!=null)?<span className="font-bold text-slate-700">{v}</span>:<span className="text-slate-300">—</span>}</td>; })}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
                   )}
                 </div>
               </div>
