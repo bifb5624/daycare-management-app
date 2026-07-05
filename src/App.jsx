@@ -14872,7 +14872,7 @@ export default function App() {
       }
     };
     checkAndPull(); // 即時1回
-    const timer = setInterval(checkAndPull, 8000); // ★ 8秒ごと (Realtime未有効時の保険)
+    const timer = setInterval(checkAndPull, 4000); // ★ 4秒ごと (Realtime未有効時の保険。反映を速く)
     // ★ Realtime購読: 同じ店舗の app_state が変わった瞬間に即 pull (1〜2秒で反映)。
     //   他店舗の変更では通知は来ない(店舗IDでフィルタ)。 Supabase側でRealtime有効化すると動作。
     const stopRealtime = supabaseSubscribeStoreRealtime(newStoreId, () => {
