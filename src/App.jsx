@@ -13685,12 +13685,12 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
   );
 }
 
-function RecorderPickerGate({ storeName, storeId, members, canManage, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth }) {
+function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdmin, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth }) {
   const [pendingAdmin, setPendingAdmin] = React.useState(null); // 管理者選択 → 認証待ち
-  // 管理者メンバーを選んだ時はパスワード認証を挟む
+  // 管理者メンバーを選んだ時はパスワード認証を挟む。 ★ つむぎ管理局(super_admin)は本部認証済みなので店舗のPINを省略して入れる
   const selectMember = (m) => {
     const isAdminMember = m.isAdmin || m.roleLabel === '管理者';
-    if (isAdminMember) { setPendingAdmin(m); return; }
+    if (isAdminMember && !isSuperAdmin) { setPendingAdmin(m); return; }
     onSelect(m);
   };
   const [showAdd, setShowAdd] = useState(false);
@@ -13725,9 +13725,15 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, onSelect, 
             <div style={{textAlign:'center',padding:32}}>
               <div style={{fontSize:14,color:'#475569',marginBottom:8,fontWeight:'bold'}}>まだメンバーが登録されていません</div>
               <div style={{fontSize:11,color:'#94a3b8',marginBottom:18}}>下のボタンから店舗のスタッフ名を登録してください</div>
-              {canManage && (
-                <button onClick={()=>setShowAdd(true)} style={{padding:'10px 20px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>+ 最初のメンバーを追加</button>
-              )}
+              <div style={{display:'flex',flexDirection:'column',gap:10,alignItems:'center'}}>
+                {canManage && (
+                  <button onClick={()=>setShowAdd(true)} style={{padding:'10px 20px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>+ 最初のメンバーを追加</button>
+                )}
+                {/* ★ つむぎ管理局: メンバー未登録・管理者PIN未設定でも、そのまま店舗に入って確認できる */}
+                {isSuperAdmin && (
+                  <button onClick={()=>onSelect({ id:'hq_viewer', name:'管理局', roleLabel:'管理者', isAdmin:true })} style={{padding:'10px 20px',background:'#4338ca',color:'white',border:'none',borderRadius:12,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>🏢 つむぎ管理局として入る（確認用）</button>
+                )}
+              </div>
             </div>
           ) : (
             <>
@@ -15529,6 +15535,7 @@ export default function App() {
       storeId={staffSession.storeId}
       members={mergedStaffMembers}
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
+      isSuperAdmin={staffSession.role === 'super_admin'}
       adminAuth={appData.systemSettings?.adminAuth || null}
       onSetAdminAuth={(auth)=>{ const nd={ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }; setAppData(nd); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseSetStoreAdminAuth(staffSession.storeId, auth); }catch(e){} } }}
       onSelect={(m) => {
