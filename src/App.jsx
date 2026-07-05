@@ -14750,9 +14750,12 @@ export default function App() {
     // 5. ★ pull 由来の変更ではない (= ローカル編集) → pull した内容を押し戻して他端末の入力を消さない
     if (!isRemote && isSupabaseEnabled && staffSession?.storeId
         && !storeTransitionRef.current
-        && dataLoadedForStoreRef.current === staffSession.storeId) {
+        && dataLoadedForStoreRef.current === staffSession.storeId
+        && !(appData._sbStoreId && appData._sbStoreId !== staffSession.storeId)) {
       const t = setTimeout(async () => {
         if (storeTransitionRef.current || dataLoadedForStoreRef.current !== staffSession.storeId) return;
+        // ★ 店舗不一致(別店舗データが混入)の疑いがあれば push 中止(店舗間混在の防波堤)
+        if (appData._sbStoreId && appData._sbStoreId !== staffSession.storeId) { console.warn('[safety] skip push: appData store mismatch', appData._sbStoreId, '!=', staffSession.storeId); return; }
         // ★ 利用者データ消失防止: 0 件 patient で上書きする際は Supabase 側に既存があるか確認
         //   既存に patients があるのに、こちらが 0 件なら push せず Supabase の値を尊重
         // ★ 意図的な全削除(一括削除)直後は、0件安全ガードを無効化して削除を確定させる
@@ -14804,9 +14807,11 @@ export default function App() {
       try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
       // React state も完全クリア
       setAppData({
+        _sbStoreId: null, // ★ 未ロード目印(この状態では push しない)
         patients: [], ticketRecords: [], familyAnnouncements: [],
         familyPersonalAnnouncements: [], familyPhotos: [],
         monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
+        scheduleEvents: [], monthlyShifts: {},
         contactBooks: [], familyAccounts: [], familyInvites: [],
         systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
         storeMembers: [],
@@ -14827,7 +14832,7 @@ export default function App() {
             storeRecord = list.find(s => s.id === newStoreId);
           } catch {}
           const BLANK = createBlankAppData(storeRecord, staffSession);
-          setAppData(prev => ({ ...BLANK, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] }));
+          setAppData(prev => ({ ...BLANK, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] }));
           try { localStorage.setItem('daycareAppData_v3', JSON.stringify(BLANK)); } catch {}
           supabaseSyncStateForStore(newStoreId, BLANK);
           // ★ load 完了 → push 解禁
@@ -14865,7 +14870,7 @@ export default function App() {
         // 通常: 既存データをロード。 pull 由来なので push しない (他端末の入力を上書きしない)。
         applyingRemoteRef.current = true;
         setAppData(prev => {
-          const merged = { ...row.data, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
+          const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
           return merged;
         });
         // ★ load 完了 → push 解禁
@@ -15210,8 +15215,8 @@ export default function App() {
   const [bugReport, setBugReport] = useState(null); // {desc, sending, sent, err} | null  不具合レポート
   // 管理者パスワードを保存 (RecorderPicker/スタッフ切替 共通)
   const saveAdminAuth = (auth) => {
-    const nd = { ...appData, systemSettings: { ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } };
-    setAppData(nd);
+    // ★ 関数型更新で「最新の appData」に adminAuth を足す(古い店舗のスナップショットで上書きしない)
+    setAppData(prev => ({ ...prev, systemSettings: { ...(prev.systemSettings||{}), adminAuth: { ...(prev.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }));
     // ★ adminAuth だけを対象店舗に安全に書き込む(appData全体を送らない=店舗間混在を防ぐ)
     if (isSupabaseEnabled && staffSession?.storeId) { try { supabaseSetStoreAdminAuth(staffSession.storeId, auth); } catch(e){} }
   };
@@ -15314,9 +15319,13 @@ export default function App() {
       // ★ クラウド保存は「現在の店舗のデータを正しく読込済み」のときのみ許可する。
       //   (店舗切替の途中で古い店舗のデータを別店舗のキーへ書く=店舗間データ混在を防ぐ安全装置)
       const _hasRealData = (newData.patients || []).length > 0;
+      // ★ 店舗不一致ガード: データに刻まれた店舗ID(_sbStoreId)が現在の店舗と明らかに違うなら push しない
+      //   (別店舗のデータを誤って書き込む=店舗間混在の最終防波堤。 未設定時は従来ガードに委ねる)
+      const _storeMatch = !(newData._sbStoreId && newData._sbStoreId !== staffSession.storeId);
       const _canPush = isSupabaseEnabled && staffSession?.storeId
         && !storeTransitionRef.current
         && dataLoadedForStoreRef.current === staffSession.storeId
+        && _storeMatch
         && (_hasRealData || options.allowEmpty);
       if (_canPush) {
         // ★ 保存結果を監視: 失敗したら「クラウド保存に失敗」を明示 (静かに消えるのを防ぐ)
@@ -15537,7 +15546,7 @@ export default function App() {
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
       isSuperAdmin={staffSession.role === 'super_admin'}
       adminAuth={appData.systemSettings?.adminAuth || null}
-      onSetAdminAuth={(auth)=>{ const nd={ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }; setAppData(nd); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseSetStoreAdminAuth(staffSession.storeId, auth); }catch(e){} } }}
+      onSetAdminAuth={(auth)=>{ setAppData(prev => ({ ...prev, systemSettings:{ ...(prev.systemSettings||{}), adminAuth: { ...(prev.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } })); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseSetStoreAdminAuth(staffSession.storeId, auth); }catch(e){} } }}
       onSelect={(m) => {
         sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
         setActiveRecorder(m);

@@ -246,9 +246,9 @@ export async function supabaseListFamilyByPatient(patientId) {
 const APP_STATE_KEY = 'default';
 const sanitizeForSync = (data) => {
   if (!data) return {};
-  const { familyAccounts, familyInvites, ...rest } = data;
-  // familyAccounts/Invites は別テーブルで管理しているので app_state からは除外
-  // (重複保存を避けてサイズを抑える)
+  // familyAccounts/Invites は別テーブル管理のため除外。 _sbStoreId は「そのデータがどの店舗のものか」を
+  // メモリ上で示す目印なのでクラウドには保存しない(店舗間で持ち回って誤判定するのを防ぐ)。
+  const { familyAccounts, familyInvites, _sbStoreId, ...rest } = data;
   return rest;
 };
 
