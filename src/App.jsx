@@ -15301,17 +15301,32 @@ export default function App() {
       //   入力が消える、というレースを防ぐ (保存と同時にクラウドを最新化)。
       lastLocalEditRef.current = Date.now();
       if (options.allowEmpty) intentionalEmptyRef.current = Date.now();
-      if (isSupabaseEnabled && staffSession?.storeId
-          && !storeTransitionRef.current
-          && dataLoadedForStoreRef.current === staffSession.storeId
-          && ((newData.patients || []).length > 0 || options.allowEmpty)) {
-        // ★ options.allowEmpty: 明示的な一括削除など、利用者が0件になっても保存を許可
-        //   (通常は 0件push を安全のため抑止しているが、意図的な削除は反映させる)
-        try { supabaseMergeAndSyncStateForStore(staffSession.storeId, newData); } catch (e) { console.warn('[supabase] immediate save failed', e); }
+      // ★ 手動保存は原則クラウドへ即時反映。 店舗読込フラグが一時的に外れていても、
+      //   実データ(利用者あり)かつ店舗切替中でなければ push する(保存の取りこぼし防止)。
+      const _hasRealData = (newData.patients || []).length > 0;
+      const _canPush = isSupabaseEnabled && staffSession?.storeId
+        && !storeTransitionRef.current
+        && (dataLoadedForStoreRef.current === staffSession.storeId || _hasRealData)
+        && (_hasRealData || options.allowEmpty);
+      if (_canPush) {
+        // ★ 保存結果を監視: 失敗したら「クラウド保存に失敗」を明示 (静かに消えるのを防ぐ)
+        Promise.resolve()
+          .then(() => supabaseMergeAndSyncStateForStore(staffSession.storeId, newData))
+          .then(ok => { if (ok === false) { setToastMsg('⚠ クラウド保存に失敗しました。通信状況を確認して、もう一度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); } })
+          .catch(e => { console.warn('[supabase] immediate save failed', e); setToastMsg('⚠ クラウド保存に失敗しました。通信を確認して再度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); });
+        setToastMsg(options.message || '保存されました');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      } else if (isSupabaseEnabled && staffSession?.storeId && !options.allowEmpty && !_hasRealData) {
+        // 利用者0件(未ロード等)で push 抑止 → 端末ローカルのみ。 誤解を避ける表示
+        setToastMsg('端末に保存しました（クラウド同期は数秒後に自動実行）');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+      } else {
+        setToastMsg(options.message || '保存されました');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
       }
-      setToastMsg(options.message || '保存されました');
-      setShowToast(true);
-      setTimeout(() => setShowToast(false), 3000);
     }
   };
 
