@@ -30682,8 +30682,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const CarAssignModal = () => {
     if(!carAssignModal) return null;
     const label = carAssignModal.prefix==='pick' ? '迎え' : '送り';
-    return (
-      <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.55)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+    const _node = (
+      <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.55)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
         <div style={{backgroundColor:'white',borderRadius:16,padding:20,width:360,maxHeight:'80vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
           <div className="flex justify-between items-center mb-3">
             <div className="font-bold text-lg text-slate-800">{label}の送迎車割り当て</div>
@@ -30723,14 +30723,17 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         </div>
       </div>
     );
+    return (typeof document !== 'undefined' && document.body) ? ReactDOM.createPortal(_node, document.body) : _node;
   };
 
   const TimeKeypadModal = () => {
     if(!timeKeypad) return null;
     const car = ds.cars.find(c=>c.id===timeKeypad.carId);
     const fieldLabel = timeKeypad.field==='arrive'?'到着':'出発';
-    return (
-      <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}} onClick={closeTimeKeypad}>
+    // ★ 拡大した日誌シート(transform)の影響で position:fixed がシート基準になり画面上部に出てしまうため、
+    //   body直下へ Portal して必ず「今見えている画面の中央」に表示する。
+    const _node = (
+      <div style={{position:'fixed',inset:0,backgroundColor:'rgba(0,0,0,0.5)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16,boxSizing:'border-box'}} onClick={closeTimeKeypad}>
         <div style={{backgroundColor:'white',borderRadius:16,padding:20,width:240,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
           <div style={{textAlign:'center',fontWeight:'bold',fontSize:13,marginBottom:8,color:'#333'}}>
             {car?.name}　{fieldLabel}時間
@@ -30755,6 +30758,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         </div>
       </div>
     );
+    return (typeof document !== 'undefined' && document.body) ? ReactDOM.createPortal(_node, document.body) : _node;
   };
 
   if (isPrintPreview) {
