@@ -763,6 +763,20 @@ export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet
   } catch (e) { console.warn('[supabase] mergeFaceSheetFromCM failed', e); return false; }
 }
 
+// ★ 店舗の管理者パスワード(adminAuth)だけを安全に更新する。
+//   対象店舗のクラウドデータを読み直し、systemSettings.adminAuth のみ変更して書き戻す。
+//   → 店舗切替直後などに「別店舗の appData 全体」を誤って書き込む(=店舗間データ混在)のを防ぐ。
+export async function supabaseSetStoreAdminAuth(storeId, authPatch) {
+  if (!supabase || !storeId) return false;
+  try {
+    const row = await supabaseLoadStateForStore(storeId);
+    const data = (row && row.data) ? row.data : {};
+    const nextSettings = { ...(data.systemSettings || {}), adminAuth: { ...(data.systemSettings?.adminAuth || {}), ...(authPatch || {}), setAt: Date.now() } };
+    await supabase.from('app_state').upsert({ key: storeId, data: { ...data, systemSettings: nextSettings } });
+    return true;
+  } catch (e) { console.warn('[supabase] setStoreAdminAuth failed', e); return false; }
+}
+
 // =========================================================
 // スタッフ認証 (本部管理者 / 店舗管理者 / 店舗スタッフ)
 // =========================================================

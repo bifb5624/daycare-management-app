@@ -35,6 +35,7 @@ import {
   supabaseListInvitesAndAccountsForPatient,
   supabaseMergePatientFromFamily,
   supabaseMergeFaceSheetFromCM,
+  supabaseSetStoreAdminAuth,
   supabaseDeletePatientFamily,
   supabaseListSystemNotices,
   supabaseListAllSystemNotices,
@@ -14680,6 +14681,8 @@ export default function App() {
     try { return JSON.parse(localStorage.getItem('tsumugiDismissedNotices')||'[]'); } catch { return []; }
   });
   React.useEffect(() => {
+    // ★ 店舗が変わったら前店舗のお知らせを一旦クリア(切替直後に別店舗の内容が残らないように)
+    setSystemNotices([]);
     if (!isSupabaseEnabled || !staffSession?.storeId) return;
     let stopped = false;
     const load = async () => {
@@ -15203,7 +15206,8 @@ export default function App() {
   const saveAdminAuth = (auth) => {
     const nd = { ...appData, systemSettings: { ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } };
     setAppData(nd);
-    if (isSupabaseEnabled && staffSession?.storeId) { try { supabaseMergeAndSyncStateForStore(staffSession.storeId, nd); } catch(e){} }
+    // ★ adminAuth だけを対象店舗に安全に書き込む(appData全体を送らない=店舗間混在を防ぐ)
+    if (isSupabaseEnabled && staffSession?.storeId) { try { supabaseSetStoreAdminAuth(staffSession.storeId, auth); } catch(e){} }
   };
   // スタッフ確定 (管理者=正規 or 期間内の譲渡先 なら認証済みフラグON、それ以外は解除)
   const commitRecorder = (m) => {
@@ -15301,12 +15305,12 @@ export default function App() {
       //   入力が消える、というレースを防ぐ (保存と同時にクラウドを最新化)。
       lastLocalEditRef.current = Date.now();
       if (options.allowEmpty) intentionalEmptyRef.current = Date.now();
-      // ★ 手動保存は原則クラウドへ即時反映。 店舗読込フラグが一時的に外れていても、
-      //   実データ(利用者あり)かつ店舗切替中でなければ push する(保存の取りこぼし防止)。
+      // ★ クラウド保存は「現在の店舗のデータを正しく読込済み」のときのみ許可する。
+      //   (店舗切替の途中で古い店舗のデータを別店舗のキーへ書く=店舗間データ混在を防ぐ安全装置)
       const _hasRealData = (newData.patients || []).length > 0;
       const _canPush = isSupabaseEnabled && staffSession?.storeId
         && !storeTransitionRef.current
-        && (dataLoadedForStoreRef.current === staffSession.storeId || _hasRealData)
+        && dataLoadedForStoreRef.current === staffSession.storeId
         && (_hasRealData || options.allowEmpty);
       if (_canPush) {
         // ★ 保存結果を監視: 失敗したら「クラウド保存に失敗」を明示 (静かに消えるのを防ぐ)
@@ -15526,7 +15530,7 @@ export default function App() {
       members={mergedStaffMembers}
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
       adminAuth={appData.systemSettings?.adminAuth || null}
-      onSetAdminAuth={(auth)=>{ const nd={ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }; setAppData(nd); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseMergeAndSyncStateForStore(staffSession.storeId, nd); }catch(e){} } }}
+      onSetAdminAuth={(auth)=>{ const nd={ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth: { ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }; setAppData(nd); if(isSupabaseEnabled && staffSession?.storeId){ try{ supabaseSetStoreAdminAuth(staffSession.storeId, auth); }catch(e){} } }}
       onSelect={(m) => {
         sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
         setActiveRecorder(m);
