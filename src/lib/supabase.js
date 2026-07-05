@@ -738,6 +738,31 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
   }
 }
 
+// ★ ケアマネ(関係者)画面から フェイスシート を更新 → 事業所側の personalFile.faceSheet に反映。
+//   変更ごとに版(faceSheetHistory)を追加する。 personalFile の他の部分(ファイル等)は温存。
+export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet, meta = {}) {
+  if (!supabase || !storeId || !patientId) return false;
+  try {
+    const row = await supabaseLoadStateForStore(storeId);
+    if (!row || !row.data) return false;
+    const currentData = row.data;
+    const now = new Date().toISOString();
+    const patients = (currentData.patients || []).map(p => {
+      if (String(p.id) !== String(patientId)) return p;
+      const pf = p.personalFile || {};
+      const newFs = { ...(pf.faceSheet || {}), ...(faceSheet || {}), updatedAt: now, updatedBy: meta.updatedBy || 'ケアマネ' };
+      const prevHist = Array.isArray(pf.faceSheetHistory) ? pf.faceSheetHistory : [];
+      const version = ((prevHist[prevHist.length - 1] || {}).version || 0) + 1;
+      const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
+      const snapshot = { ...textOnly, _attachCounts: { genogram: (genogramFiles || []).length, floorPlan: (floorPlanFiles || []).length, pickupRoute: (pickupRouteFiles || []).length } };
+      const hist = [...prevHist, { version, updatedAt: now, updatedBy: newFs.updatedBy, source: meta.source || 'caremanager', snapshot }].slice(-20);
+      return { ...p, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+    });
+    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
+    return true;
+  } catch (e) { console.warn('[supabase] mergeFaceSheetFromCM failed', e); return false; }
+}
+
 // =========================================================
 // スタッフ認証 (本部管理者 / 店舗管理者 / 店舗スタッフ)
 // =========================================================

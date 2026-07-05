@@ -34,6 +34,7 @@ import {
   supabaseDeleteInviteByCode,
   supabaseListInvitesAndAccountsForPatient,
   supabaseMergePatientFromFamily,
+  supabaseMergeFaceSheetFromCM,
   supabaseDeletePatientFamily,
   supabaseListSystemNotices,
   supabaseListAllSystemNotices,
@@ -12270,6 +12271,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [inviteMode, setInviteMode] = useState('list');
   // ★ 利用者・登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
+  const [cmFaceSheetOpen, setCmFaceSheetOpen] = useState(false); // ★ ケアマネ: フェイスシート編集
+  const [cmFaceSheetSaving, setCmFaceSheetSaving] = useState(false);
   const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
@@ -12507,6 +12510,10 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 <button onClick={onSwitchPatient} style={hdrBtnStyle}>利用者切替</button>
               )}
               <button onClick={()=>setMyInfoOpen(true)} style={hdrBtnStyle}>利用者・登録者情報</button>
+              {/* ★ ケアマネ(関係者)のみ: フェイスシートの登録・編集 (事業所の個人ファイルへ反映) */}
+              {isCmAccount && !_isPreview && (
+                <button onClick={()=>setCmFaceSheetOpen(true)} style={{...hdrBtnStyle, background:'#eef2ff', borderColor:'#c7d2fe', color:'#4338ca'}}>📝 フェイスシート</button>
+              )}
               {/* ★ 代表者以外も一覧を閲覧できる (招待/取消などの操作はモーダル内で代表者のみ) */}
               <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
                 {isCmAccount ? '関係者一覧' : '家族一覧'}
@@ -12725,6 +12732,39 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       {/* 写真・PDF プレビュー (フルスクリーン) */}
       {mediaPreview && <MediaPreviewModal media={mediaPreview} onClose={()=>setMediaPreview(null)} />}
       {/* 利用者・登録者情報モーダル (タブ式) */}
+      {/* ★ ケアマネ(関係者): フェイスシートの登録・編集 → 事業所の個人ファイルへ反映(版付き) */}
+      {cmFaceSheetOpen && (
+        <FaceSheetForm
+          patient={patient}
+          appData={data}
+          initial={patient?.personalFile?.faceSheet || {}}
+          onSave={async (fsData) => {
+            if (cmFaceSheetSaving) return;
+            setCmFaceSheetSaving(true);
+            const now = new Date().toISOString();
+            const _by = loggedAcc?.displayName || loggedAcc?.username || patient?.cmName || 'ケアマネ';
+            const newFs = { ...fsData, updatedAt: now, updatedBy: _by };
+            const pf = patient?.personalFile || {};
+            const prevHist = Array.isArray(pf.faceSheetHistory) ? pf.faceSheetHistory : [];
+            const version = ((prevHist[prevHist.length-1]||{}).version || 0) + 1;
+            const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
+            const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
+            const hist = [...prevHist, { version, updatedAt: now, updatedBy:_by, source:'caremanager', snapshot }].slice(-20);
+            const newPatient = { ...patient, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+            const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
+            try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+            setData(updated);
+            if (isSupabaseEnabled) {
+              const _storeId = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
+              if (_storeId) { try { await supabaseMergeFaceSheetFromCM(_storeId, patient.id, fsData, { updatedBy:_by, source:'caremanager' }); } catch(e){ console.warn('[facesheet] cloud sync failed', e); } }
+            }
+            setCmFaceSheetSaving(false);
+            setCmFaceSheetOpen(false);
+            alert('フェイスシートを保存しました。事業所側の個人ファイルに反映されます。');
+          }}
+          onClose={()=>setCmFaceSheetOpen(false)}
+        />
+      )}
       {myInfoOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
           <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
@@ -34974,8 +35014,13 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 利用者の基本情報・家族・連絡先・介護保険・医療・ケアマネ情報をまとめた書式です。<br/>
                 {Object.keys(faceSheet).length === 0
                   ? '「新規作成」から入力してください。'
-                  : `作成済 (最終更新: ${faceSheet.updatedAt ? new Date(faceSheet.updatedAt).toLocaleDateString('ja-JP') : '不明'})`
+                  : `作成済 (最終更新: ${faceSheet.updatedAt ? new Date(faceSheet.updatedAt).toLocaleDateString('ja-JP') : '不明'}${faceSheet.updatedBy?` / ${faceSheet.updatedBy}`:''})`
                 }
+                {(personalFile.faceSheetHistory||[]).length > 0 && (
+                  <span className="ml-1">・版 {(personalFile.faceSheetHistory[personalFile.faceSheetHistory.length-1]||{}).version || (personalFile.faceSheetHistory||[]).length}
+                    {(personalFile.faceSheetHistory||[]).some(h=>h.source==='caremanager') && <span className="text-indigo-600 font-bold">（ケアマネ更新あり）</span>}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -35441,8 +35486,17 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             // ★ 削除された添付は personalFile.trash へ (7日間復元可)
             const now = new Date().toISOString();
             const trashAdds = (removedAtts||[]).map(a => ({ ...a, _deletedAt: now, _kind: 'fs', _field: a._field }));
+            const _by = (getActiveRecorderName && getActiveRecorderName()) || '事業所';
+            const newFs = { ...fsData, updatedAt: now, updatedBy: _by };
+            // ★ 変更ごとに版を追加 (テキストのみのスナップショット・最新20件)
+            const prevHist = personalFile.faceSheetHistory || [];
+            const version = ((prevHist[prevHist.length-1]||{}).version || 0) + 1;
+            const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
+            const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
+            const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
             updatePatient({
-              faceSheet: { ...fsData, updatedAt: now },
+              faceSheet: newFs,
+              faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
             });
             setShowFaceSheetForm(false);
