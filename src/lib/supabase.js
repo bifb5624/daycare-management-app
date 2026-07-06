@@ -818,17 +818,31 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
       };
       unionDocs('docInsurance', patch.docInsurance, '介護保険証');
       unionDocs('docBurden', patch.docBurden, '負担割合証');
-      // 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映
+      // 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映。 値変更は変更履歴にも記録。
       const m = patch.master || {};
-      const setMaster = (key, val, label) => {
-        if (val == null || val === '') return;
-        if (String(val) === String(np[key] || '')) return;
-        np[key] = String(val); changed.push(label);
+      const nowDay = now.split('T')[0];
+      const appendHist = (histKey, oldVal, newVal, from, to) => {
+        const hist = Array.isArray(np[histKey]) ? [...np[histKey]] : [];
+        const nv = newVal == null ? '' : String(newVal);
+        if (!nv || String(oldVal || '') === nv) return hist;
+        const f = from || nowDay;
+        if (oldVal) {
+          if (hist.length > 0 && !hist[hist.length - 1].to) hist[hist.length - 1] = { ...hist[hist.length - 1], to: f };
+          else if (hist.length === 0) hist.push({ value: oldVal, from: null, to: f, note: '' });
+        }
+        hist.push({ value: nv, from: f, to: to || null, note: '' });
+        return hist;
       };
-      setMaster('careLevel', m.careLevel, '介護度');
-      setMaster('careLevelFrom', m.careLevelFrom, '認定有効期間');
-      setMaster('careLevelTo', m.careLevelTo, '認定有効期間');
-      setMaster('costBurden', m.costBurden, '負担割合');
+      if (m.careLevel != null && m.careLevel !== '' && String(m.careLevel) !== String(np.careLevel || '')) {
+        np.careLevelHistory = appendHist('careLevelHistory', np.careLevel, m.careLevel, (m.careLevelFrom || np.careLevelFrom), (m.careLevelTo || np.careLevelTo));
+        np.careLevel = String(m.careLevel); changed.push('介護度');
+      }
+      if (m.careLevelFrom != null && m.careLevelFrom !== '' && String(m.careLevelFrom) !== String(np.careLevelFrom || '')) { np.careLevelFrom = String(m.careLevelFrom); changed.push('認定有効期間'); }
+      if (m.careLevelTo != null && m.careLevelTo !== '' && String(m.careLevelTo) !== String(np.careLevelTo || '')) { np.careLevelTo = String(m.careLevelTo); changed.push('認定有効期間'); }
+      if (m.costBurden != null && m.costBurden !== '' && String(m.costBurden) !== String(np.costBurden || '')) {
+        np.costBurdenHistory = appendHist('costBurdenHistory', np.costBurden, m.costBurden, null, null);
+        np.costBurden = String(m.costBurden); changed.push('負担割合');
+      }
       const hasAsmtText = patch.assessmentText != null && String(patch.assessmentText) !== ((np.personalFile || {}).assessment || {}).text;
       const hasAsmtFiles = Array.isArray(patch.assessmentFiles) && patch.assessmentFiles.length;
       if (hasAsmtText || hasAsmtFiles) {

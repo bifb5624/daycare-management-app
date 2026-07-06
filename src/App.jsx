@@ -1392,6 +1392,45 @@ function stripPatientData(appData, idSet) {
   return out;
 }
 
+// ★ 介護度/負担割合などの変更履歴に1件追加する。 直前の未終了エントリを終了させ、新しい値を追加。
+//   entries: { value, from, to, note }
+function appendValueHistory(existingHist, oldValue, newValue, from, to) {
+  const hist = Array.isArray(existingHist) ? [...existingHist] : [];
+  const today = new Date().toISOString().split('T')[0];
+  const nv = newValue == null ? '' : String(newValue);
+  if (!nv || String(oldValue || '') === nv) return hist; // 変更なし/空は履歴を作らない
+  const f = from || today;
+  if (oldValue) {
+    if (hist.length > 0 && !hist[hist.length - 1].to) hist[hist.length - 1] = { ...hist[hist.length - 1], to: f };
+    else if (hist.length === 0) hist.push({ value: oldValue, from: null, to: f, note: '' });
+  }
+  hist.push({ value: nv, from: f, to: to || null, note: '' });
+  return hist;
+}
+
+// ★ 介護度/負担割合などの変更履歴を読み取り表示 (事業所・ケアマネ両画面で共通・インラインstyle)。
+function ValueHistoryList({ title, hist }) {
+  const list = Array.isArray(hist) ? hist : [];
+  if (!list.length) return null;
+  const fmt = (s) => { if (!s) return '?'; const d = new Date(s); return isNaN(d) ? s : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+  const today = new Date().toISOString().split('T')[0];
+  const sorted = [...list].sort((a, b) => String(b.from || '').localeCompare(String(a.from || '')));
+  return (
+    <div style={{ marginTop: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 'bold', color: '#94a3b8', marginBottom: 2 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {sorted.slice(0, 8).map((h, i) => (
+          <div key={i} style={{ fontSize: 11, color: '#64748b' }}>
+            <span style={{ color: '#94a3b8' }}>{fmt(h.from)}{h.to ? ` 〜 ${fmt(h.to)}` : ' 〜'}</span>　<b style={{ color: '#334155' }}>{h.value}</b>
+            {h.from && h.from > today ? <span style={{ marginLeft: 4, fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '0 5px', borderRadius: 4, fontWeight: 'bold' }}>予定</span> : null}
+            {h.note ? `（${h.note}）` : ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const normalizeRecordMonth = (dateStr, currentYear) => {
   if (!dateStr) return null;
   const isoM = dateStr.match(/^(\d{4})-(\d{2})/);
@@ -12371,6 +12410,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
                 <input type="date" value={mCareTo} onChange={(e) => setMCareTo(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} />
               </div>
             </div>
+            <ValueHistoryList title="介護度の変更履歴" hist={patient?.careLevelHistory} />
           </div>
         </div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
@@ -12380,6 +12420,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
             <select value={mCostBurden} onChange={(e) => setMCostBurden(e.target.value)} style={{ width: '100%', maxWidth: 220, fontSize: 14, fontWeight: 'bold', padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }}>
               <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
             </select>
+            <ValueHistoryList title="負担割合の変更履歴" hist={patient?.costBurdenHistory} />
           </div>
         </div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
@@ -35125,8 +35166,17 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   // ★ ケアマネからの未読更新(事業所が確認すべきもの)
   const cmDocUpdates = (patient.docUpdates || []).filter(u => u.by === 'caremanager' && !u.readOffice);
   const markCmUpdatesRead = () => savePatientTop({ docUpdates: (patient.docUpdates||[]).map(u => u.by==='caremanager' ? { ...u, readOffice:true } : u) }, { manual:true, message:'✓ 確認済みにしました' });
-  // ★ 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映
-  const saveMaster = (patch) => savePatientTop({ ...patch }, { manual:true, message:'✓ 利用者マスタに反映しました' });
+  // ★ 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映。 値変更は変更履歴にも記録。
+  const saveMaster = (patch) => {
+    const np = { ...patch };
+    if ('careLevel' in patch && String(patch.careLevel||'') !== String(patient.careLevel||'')) {
+      np.careLevelHistory = appendValueHistory(patient.careLevelHistory, patient.careLevel, patch.careLevel, patch.careLevelFrom ?? patient.careLevelFrom, patch.careLevelTo ?? patient.careLevelTo);
+    }
+    if ('costBurden' in patch && String(patch.costBurden||'') !== String(patient.costBurden||'')) {
+      np.costBurdenHistory = appendValueHistory(patient.costBurdenHistory, patient.costBurden, patch.costBurden, null, null);
+    }
+    savePatientTop(np, { manual:true, message:'✓ 利用者マスタに反映しました' });
+  };
 
   // ★ 支援経過表 (カテゴリ9)。 既存データを自動でマージ表示し、手動編集・追加もできる。
   //   保存構造: personalFile.supportProgress = [手動行 or 自動行の上書き(srcKey付)], supportProgressHidden = [削除した自動行のsrcKey]
@@ -35611,6 +35661,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                             <input type="date" value={patient.careLevelTo||''} onChange={e=>saveMaster({careLevelTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
                           </div>
                         </div>
+                        <ValueHistoryList title="介護度の変更履歴" hist={patient.careLevelHistory} />
                       </div>
                     )}
                     {key === 'docBurden' && (
@@ -35619,6 +35670,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         <select value={patient.costBurden||''} onChange={e=>saveMaster({costBurden:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
                           <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
                         </select>
+                        <ValueHistoryList title="負担割合の変更履歴" hist={patient.costBurdenHistory} />
                       </div>
                     )}
                   </div>
