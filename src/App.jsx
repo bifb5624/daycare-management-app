@@ -35045,29 +35045,33 @@ function MediaPreviewModal({ media, onClose }) {
   );
 }
 
+// ★ 番号は付けず、group 単位でタブに区切りを入れて見やすくする。
+//   group: 'honnin'(本人・契約) / 'plan'(アセスメント・計画) / 'record'(記録)
 const DEFAULT_PF_CATEGORIES = [
-  { id: 'cat_1', name: '1. 基本情報・本人確認', emoji: '👤', isDefault: true,
+  { id: 'cat_1', name: '基本情報', emoji: '👤', isDefault: true, group: 'honnin',
     note: 'フェイスシート / 介護保険被保険者証 / 負担割合証 など' },
-  { id: 'cat_2', name: '2. 契約・同意関係', emoji: '📋', isDefault: true,
+  { id: 'cat_2', name: '契約・同意関係', emoji: '📋', isDefault: true, group: 'honnin',
     note: '契約書 / 重要事項説明書 / 個人情報使用同意書' },
-  // ★ ケアプランと担当者会議録は一緒に参照することが多いので 1 つに (担当者会議は専用機能)
-  { id: 'cat_3', name: '3. ケアプラン・担当者会議', emoji: '🗂️', isDefault: true,
+  // ★ アセスメント: アセスメントシート / 生活機能チェック / 興味・関心 をまとめる
+  { id: 'cat_4', name: 'アセスメント', emoji: '📝', isDefault: true, group: 'plan',
+    note: 'アセスメントシート / 生活機能チェックシート / 興味・関心チェックシート' },
+  // ★ モニタリングは単体カテゴリに分離
+  { id: 'cat_mon', name: 'モニタリング', emoji: '📉', isDefault: true, group: 'plan',
+    note: '通所介護モニタリング表（作成・保管・閲覧）' },
+  { id: 'cat_3', name: 'ケアプラン・担当者会議', emoji: '🗂️', isDefault: true, group: 'plan',
     note: '居宅サービス計画書 (ケアプラン) / サービス担当者会議の記録' },
-  // ★ アセスメントとモニタリングは定期的に増えるので独立カテゴリに
-  { id: 'cat_4', name: '4. アセスメント・モニタリング', emoji: '📝', isDefault: true,
-    note: 'アセスメントシート / モニタリング記録' },
-  { id: 'cat_5', name: '5. 通所介護計画書', emoji: '📝', isDefault: true,
-    note: '通所介護計画書 (個別機能訓練計画書 など)' },
+  { id: 'cat_5', name: '計画書', emoji: '📄', isDefault: true, group: 'plan',
+    note: '通所介護計画書 / 個別機能訓練計画書' },
   // ★ サービス提供記録 (月次スナップショット機能) は cat_6 に移動 (isServiceTab も cat_6 を参照)
-  { id: 'cat_6', name: '6. サービス提供記録', emoji: '📊', isDefault: true,
+  { id: 'cat_6', name: 'サービス提供記録', emoji: '📊', isDefault: true, group: 'record',
     note: '日々の介護記録・経過記録 / サービス提供実績' },
-  { id: 'cat_7', name: '7. 初回ご利用報告', emoji: '📢', isDefault: true,
+  { id: 'cat_7', name: '初回ご利用報告', emoji: '📢', isDefault: true, group: 'record',
     note: '初回通所時のケアマネ向け報告 (バイタル・ご利用の様子)' },
-  { id: 'cat_8', name: '8. 体力測定の記録', emoji: '📏', isDefault: true,
+  { id: 'cat_8', name: '体力測定の記録', emoji: '📏', isDefault: true, group: 'record',
     note: '体力測定の記録（測定日ごとの一覧・横スクロールで全項目）' },
-  { id: 'cat_renraku', name: '9. 連絡（休み・各種連絡）', emoji: '🗒️', isDefault: true,
+  { id: 'cat_renraku', name: '連絡', emoji: '🗒️', isDefault: true, group: 'record',
     note: '休み連絡 / 各種連絡 の送付履歴（件名・宛先で検索）' },
-  { id: 'cat_9', name: '10. 支援経過表', emoji: '📈', isDefault: true,
+  { id: 'cat_9', name: '支援経過表', emoji: '📈', isDefault: true, group: 'record',
     note: '日付・担当者・連絡元・内容の経過記録 (年ごと・A4縦で出力)' },
 ];
 
@@ -35370,6 +35374,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const monthlyServiceRecords = personalFile.monthlyServiceRecords || [];
   const faceSheet = personalFile.faceSheet || {};
   const isBasicTab = activeCat === 'cat_1';
+  const isAssessmentTab = activeCat === 'cat_4'; // ★ アセスメント (アセスメントシート/生活機能/興味関心)
+  const isMonitoringTab = activeCat === 'cat_mon'; // ★ モニタリング (単体)
+  const isKeikakuTab = activeCat === 'cat_5'; // ★ 計画書 (通所介護/個別機能訓練)
   const isCMTab = activeCat === 'cat_3';
   const isServiceTab = activeCat === 'cat_6'; // ★ サービス提供記録は cat_6 へ移動
   const isInitialReportTab = activeCat === 'cat_7'; // ★ 初回ご利用報告
@@ -35533,25 +35540,22 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             )}
           </div>
         )}
-        {/* 個別機能訓練 書類 (アドオン有効時) — 計画書/生活機能/興味関心 をここから開ける */}
-        {hasAddon(appData,'kinou_keikaku') && navigateTo && (
-          <div className="shrink-0 px-4 py-2 bg-cyan-50 border-b border-cyan-100 flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-bold text-cyan-800">🧩 個別機能訓練 書類:</span>
-            {[['kinou_keikaku','計画書(3-3)','kinouKeikakuRecords'],['seikatsu_kinou','生活機能チェック(3-2)','seikatsuKinouRecords'],['kyomi_kanshin','興味・関心(3-1)','kyomiKanshinRecords']].map(([view,label,key])=>{
-              const cnt=(appData[key]||[]).filter(r=>r.patientId===patient.id).length;
-              return <button key={view} onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo(view); }} className="px-3 py-1 bg-white border border-cyan-200 rounded-lg text-[11px] font-bold text-cyan-700 hover:bg-cyan-100">{label}（{cnt}件）→</button>;
-            })}
-          </div>
-        )}
-        {/* タブ */}
-        <div className="flex overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50 px-3 gap-1">
-          {allCategories.map(c => (
-            <button key={c.id} onClick={()=>setActiveCat(c.id)}
-              className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all ${activeCat === c.id ? 'border-emerald-600 text-emerald-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-              {c.name}
-              {!c.isDefault && <button onClick={(e)=>{ e.stopPropagation(); handleDeleteCustomCategory(c.id); }} className="ml-1 text-slate-400 hover:text-red-500">×</button>}
-            </button>
-          ))}
+        {/* タブ (グループごとに区切り線を入れて見やすく) */}
+        <div className="flex overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50 px-3 gap-1 items-stretch">
+          {allCategories.map((c, i) => {
+            const prev = allCategories[i-1];
+            const showDivider = i > 0 && (c.group || '') !== (prev?.group || '');
+            return (
+              <React.Fragment key={c.id}>
+                {showDivider && <div className="self-center h-6 w-px bg-slate-300 mx-1.5 shrink-0" />}
+                <button onClick={()=>setActiveCat(c.id)}
+                  className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-all ${activeCat === c.id ? 'border-emerald-600 text-emerald-700 bg-white' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                  {c.emoji} {c.name}
+                  {!c.isDefault && <button onClick={(e)=>{ e.stopPropagation(); handleDeleteCustomCategory(c.id); }} className="ml-1 text-slate-400 hover:text-red-500">×</button>}
+                </button>
+              </React.Fragment>
+            );
+          })}
           <button onClick={handleAddCustomCategory} className="px-3 py-3 text-xs font-bold text-emerald-600 hover:bg-emerald-50 whitespace-nowrap">+ カテゴリ追加</button>
         </div>
         {/* コンテンツ */}
@@ -35573,6 +35577,36 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                     ・{(u.items||[]).join('・')} <span className="text-cyan-600">（{u.byName||'ケアマネ'} / {u.at ? new Date(u.at).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}）</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+          {/* 基本情報タブ: フェイスシート (先頭) */}
+          {isBasicTab && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-bold text-amber-900">フェイスシート</div>
+                <div className="flex gap-2">
+                  <button onClick={()=>setShowFaceSheetForm(true)}
+                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold">
+                    {Object.keys(faceSheet).length === 0 ? '+ 新規作成' : '編集'}
+                  </button>
+                  {Object.keys(faceSheet).length > 0 && (
+                    <button onClick={()=>setPdfPreviewFaceSheet(true)}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">PDF</button>
+                  )}
+                </div>
+              </div>
+              <div className="text-[11px] text-amber-700 leading-relaxed">
+                利用者の基本情報・家族・連絡先・介護保険・医療・ケアマネ情報をまとめた書式です。<br/>
+                {Object.keys(faceSheet).length === 0
+                  ? '「新規作成」から入力してください。'
+                  : `作成済 (最終更新: ${faceSheet.updatedAt ? new Date(faceSheet.updatedAt).toLocaleDateString('ja-JP') : '不明'}${faceSheet.updatedBy?` / ${faceSheet.updatedBy}`:''})`
+                }
+                {(personalFile.faceSheetHistory||[]).length > 0 && (
+                  <span className="ml-1">・版 {(personalFile.faceSheetHistory[personalFile.faceSheetHistory.length-1]||{}).version || (personalFile.faceSheetHistory||[]).length}
+                    {(personalFile.faceSheetHistory||[]).some(h=>h.source==='caremanager') && <span className="text-indigo-600 font-bold">（ケアマネ更新あり）</span>}
+                  </span>
+                )}
               </div>
             </div>
           )}
@@ -35678,8 +35712,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               })}
             </div>
           )}
-          {/* 基本情報タブのみ: アセスメントシート (ケアマネと共有) */}
-          {isBasicTab && (
+          {/* アセスメントタブ: アセスメントシート(ケアマネと共有) + 生活機能チェック/興味関心へのリンク */}
+          {isAssessmentTab && (
             <OfficeAssessmentCard
               patientId={patient.id}
               assessment={personalFile.assessment}
@@ -35690,34 +35724,33 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               }}
             />
           )}
-          {/* 基本情報タブのみ: フェイスシート */}
-          {isBasicTab && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-bold text-amber-900">フェイスシート</div>
-                <div className="flex gap-2">
-                  <button onClick={()=>setShowFaceSheetForm(true)}
-                    className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold">
-                    {Object.keys(faceSheet).length === 0 ? '+ 新規作成' : '編集'}
-                  </button>
-                  {Object.keys(faceSheet).length > 0 && (
-                    <button onClick={()=>setPdfPreviewFaceSheet(true)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">PDF</button>
-                  )}
-                </div>
+          {isAssessmentTab && hasAddon(appData,'kinou_keikaku') && navigateTo && (
+            <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4 mb-4">
+              <div className="text-sm font-bold text-cyan-900 mb-2">🧩 アセスメント関連シート</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {[['seikatsu_kinou','生活機能チェックシート (3-2)','seikatsuKinouRecords'],['kyomi_kanshin','興味・関心チェックシート (3-1)','kyomiKanshinRecords']].map(([view,label,key])=>{
+                  const cnt=(appData[key]||[]).filter(r=>r.patientId===patient.id).length;
+                  return <button key={view} onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo(view); }} className="px-3 py-1.5 bg-white border border-cyan-200 rounded-lg text-[12px] font-bold text-cyan-700 hover:bg-cyan-100">{label}（{cnt}件）→</button>;
+                })}
               </div>
-              <div className="text-[11px] text-amber-700 leading-relaxed">
-                利用者の基本情報・家族・連絡先・介護保険・医療・ケアマネ情報をまとめた書式です。<br/>
-                {Object.keys(faceSheet).length === 0
-                  ? '「新規作成」から入力してください。'
-                  : `作成済 (最終更新: ${faceSheet.updatedAt ? new Date(faceSheet.updatedAt).toLocaleDateString('ja-JP') : '不明'}${faceSheet.updatedBy?` / ${faceSheet.updatedBy}`:''})`
-                }
-                {(personalFile.faceSheetHistory||[]).length > 0 && (
-                  <span className="ml-1">・版 {(personalFile.faceSheetHistory[personalFile.faceSheetHistory.length-1]||{}).version || (personalFile.faceSheetHistory||[]).length}
-                    {(personalFile.faceSheetHistory||[]).some(h=>h.source==='caremanager') && <span className="text-indigo-600 font-bold">（ケアマネ更新あり）</span>}
-                  </span>
-                )}
+            </div>
+          )}
+          {/* 計画書タブ: 通所介護計画書 / 個別機能訓練計画書 へのリンク */}
+          {isKeikakuTab && navigateTo && (
+            <div className="bg-cyan-50 border border-cyan-200 rounded-xl p-4 mb-4">
+              <div className="text-sm font-bold text-cyan-900 mb-2">📄 計画書</div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {[
+                  ...(hasAddon(appData,'tsusho_keikaku') ? [['tsusho_keikaku','通所介護計画書','tsushoKeikakuRecords']] : []),
+                  ...(hasAddon(appData,'kinou_keikaku') ? [['kinou_keikaku','個別機能訓練計画書 (3-3)','kinouKeikakuRecords']] : []),
+                ].map(([view,label,key])=>{
+                  const cnt=(appData[key]||[]).filter(r=>r.patientId===patient.id).length;
+                  return <button key={view} onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo(view); }} className="px-3 py-1.5 bg-white border border-cyan-200 rounded-lg text-[12px] font-bold text-cyan-700 hover:bg-cyan-100">{label}（{cnt}件）→</button>;
+                })}
               </div>
+              {!hasAddon(appData,'tsusho_keikaku') && !hasAddon(appData,'kinou_keikaku') && (
+                <div className="text-[11px] text-slate-500">計画書アドオンが無効です。各種設定→アドオンで有効にしてください。</div>
+              )}
             </div>
           )}
           {/* 連絡（休み・各種連絡）(読み取り) */}
@@ -35941,8 +35974,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               )}
             </div>
           )}
-          {/* ケアマネジメントタブのみ: モニタリング表（保管・閲覧） */}
-          {isCMTab && (() => {
+          {/* モニタリングタブ: モニタリング表（保管・閲覧） */}
+          {isMonitoringTab && (() => {
             // ★ 同じ月が複数あれば最新(createdAt)のみに集約して表示
             const _byPeriod = {};
             (appData.monitoringRecords||[]).filter(r=>r.patientId===patient.id).forEach(r=>{ const k=r.period||''; if(!_byPeriod[k] || (r.createdAt||0) > (_byPeriod[k].createdAt||0)) _byPeriod[k]=r; });
