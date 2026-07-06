@@ -425,6 +425,22 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     keys.forEach(k => {
       if (k === '_savedAt') return;
       const lv = lp[k], cv = cp[k];
+      // ★ 書類(介護保険証/負担割合証)と更新ログ: 両端末の追加を失わないよう id 単位で和集合マージ。
+      //   docUpdates は既読フラグ(readOffice/readCm)を両者で OR (どちらかが既読なら既読)。
+      if (k === 'docInsurance' || k === 'docBurden' || k === 'docUpdates') {
+        const la = Array.isArray(lv) ? lv : [], ca = Array.isArray(cv) ? cv : [];
+        if (!la.length && !ca.length) return;
+        const byId = new Map();
+        ca.forEach(d => { if (d && d.id != null) byId.set(String(d.id), d); });
+        la.forEach(d => {
+          if (!d || d.id == null) return;
+          const key = String(d.id), prev = byId.get(key);
+          if (prev && k === 'docUpdates') byId.set(key, { ...prev, ...d, readOffice: !!(prev.readOffice || d.readOffice), readCm: !!(prev.readCm || d.readCm) });
+          else byId.set(key, d);
+        });
+        out[k] = [...byId.values()];
+        return;
+      }
       const lObj = lv && typeof lv === 'object' && !Array.isArray(lv);
       const cObj = cv && typeof cv === 'object' && !Array.isArray(cv);
       // プレーンオブジェクト(plannedExercises 等): キー単位で「ローカル空欄のみクラウドで補完」
@@ -432,6 +448,16 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         const lo = lObj ? lv : {}, co = cObj ? cv : {};
         const mo = { ...lo };
         Object.keys(co).forEach(kk => { if (_isEmptyVal(mo[kk]) && !_isEmptyVal(co[kk])) mo[kk] = co[kk]; });
+        // ★ personalFile.assessment: 事業所/ケアマネ双方の編集を保持
+        //   text は updatedAt が新しい方、files は id 単位で和集合。
+        if (k === 'personalFile' && (lo.assessment || co.assessment)) {
+          const la = lo.assessment || {}, ca = co.assessment || {};
+          const byId = new Map();
+          (ca.files || []).forEach(d => { if (d && d.id != null) byId.set(String(d.id), d); });
+          (la.files || []).forEach(d => { if (d && d.id != null) byId.set(String(d.id), d); });
+          const newer = (String(ca.updatedAt || '') > String(la.updatedAt || '')) ? ca : la;
+          mo.assessment = { ...la, ...ca, ...newer, files: [...byId.values()] };
+        }
         out[k] = mo; return;
       }
       // 配列: スカラー配列(pickupTimes/scheduleAmPm 等)は index 単位で空欄補完。 オブジェクト配列(履歴系)はローカル優先。
@@ -756,7 +782,10 @@ export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet
       const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
       const snapshot = { ...textOnly, _attachCounts: { genogram: (genogramFiles || []).length, floorPlan: (floorPlanFiles || []).length, pickupRoute: (pickupRouteFiles || []).length } };
       const hist = [...prevHist, { version, updatedAt: now, updatedBy: newFs.updatedBy, source: meta.source || 'caremanager', snapshot }].slice(-20);
-      return { ...p, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+      // 共有の更新ログにも記録 (事業所側バナーに「フェイスシート」更新を表示)
+      const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+      const docUpdates = [...log, { id: `du_${now}_${Math.round(Math.random() * 1e6)}`, at: now, by: 'caremanager', byName: newFs.updatedBy, items: ['フェイスシート'], readOffice: false, readCm: true }].slice(-50);
+      return { ...p, docUpdates, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
     });
     await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
     return true;
@@ -815,6 +844,26 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
     await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
     return true;
   } catch (e) { console.warn('[supabase] mergePatientDocsFromCM failed', e); return false; }
+}
+
+// ★ docUpdates の既読フラグだけを更新 (side='cm' → readCm:true / side='office' → readOffice:true)。
+//   ケアマネ画面は全体stateをpushしないため、ここで対象店舗のデータを読み直して該当項目のみ更新。
+export async function supabaseMarkDocUpdatesRead(storeId, patientId, side = 'cm') {
+  if (!supabase || !storeId || !patientId) return false;
+  try {
+    const row = await supabaseLoadStateForStore(storeId);
+    if (!row || !row.data) return false;
+    const currentData = row.data;
+    const flag = side === 'office' ? 'readOffice' : 'readCm';
+    const patients = (currentData.patients || []).map(p => {
+      if (String(p.id) !== String(patientId)) return p;
+      const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+      if (!log.some(u => !u[flag])) return p;
+      return { ...p, docUpdates: log.map(u => u[flag] ? u : { ...u, [flag]: true }) };
+    });
+    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
+    return true;
+  } catch (e) { console.warn('[supabase] markDocUpdatesRead failed', e); return false; }
 }
 
 // ★ 店舗の管理者パスワード(adminAuth)だけを安全に更新する。

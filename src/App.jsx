@@ -36,6 +36,7 @@ import {
   supabaseMergePatientFromFamily,
   supabaseMergeFaceSheetFromCM,
   supabaseMergePatientDocsFromCM,
+  supabaseMarkDocUpdatesRead,
   supabaseSetStoreAdminAuth,
   supabaseDeletePatientFamily,
   supabaseListSystemNotices,
@@ -12648,6 +12649,29 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         </div>
       </div>
       <div className="family-content-area" style={{maxWidth: tab==='analysis' ? '100%' : 720, margin: tab==='analysis' ? '0' : '16px auto 0', padding: tab==='analysis' ? '0' : '0 12px 40px'}}>
+        {/* ★ ケアマネ: 事業所からの書類更新 新着通知 */}
+        {isCmAccount && !_isPreview && (() => {
+          const officeUpds = (patient?.docUpdates || []).filter(u => u.by === 'office' && !u.readCm);
+          if (!officeUpds.length) return null;
+          const markRead = async () => {
+            const updated = { ...data, patients:(data.patients||[]).map(p => p.id===patient.id ? { ...p, docUpdates:(p.docUpdates||[]).map(u => u.by==='office'?{...u,readCm:true}:u) } : p) };
+            try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+            setData(updated);
+            const _sid = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
+            if (isSupabaseEnabled && _sid) { try { await supabaseMarkDocUpdatesRead(_sid, patient.id, 'cm'); } catch(e){} }
+          };
+          return (
+            <div style={{maxWidth:720,margin:'0 auto 12px',background:'#ecfeff',border:'2px solid #67e8f9',borderRadius:12,padding:'12px 14px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <div style={{fontSize:13,fontWeight:'bold',color:'#0e7490'}}>🔔 事業所から書類の更新があります</div>
+                <button onClick={markRead} style={{fontSize:12,fontWeight:'bold',color:'white',background:'#0891b2',border:'none',borderRadius:8,padding:'5px 10px',cursor:'pointer'}}>確認</button>
+              </div>
+              {officeUpds.slice().reverse().map(u => (
+                <div key={u.id} style={{fontSize:12,color:'#155e75'}}>・{(u.items||[]).join('・')} <span style={{color:'#0891b2'}}>（{u.byName||'事業所'} / {u.at ? new Date(u.at).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}）</span></div>
+              ))}
+            </div>
+          );
+        })()}
         {tab === 'analysis' && (
           /* カード枠を取り除き、PersonalDashboardView を直接ぶら下げて sticky を機能させる */
           <PersonalDashboardView
@@ -34947,6 +34971,65 @@ const DEFAULT_PF_CATEGORIES = [
     note: '日付・担当者・連絡元・内容の経過記録 (年ごと・A4縦で出力)' },
 ];
 
+// ★ 事業所側: アセスメントシート(手入力+写真/PDF)。 ケアマネ画面と共有され、更新はケアマネへ通知される。
+function OfficeAssessmentCard({ patientId, assessment, onSaveAssessment }) {
+  const [text, setText] = useState(assessment?.text || '');
+  const [files, setFiles] = useState(() => Array.isArray(assessment?.files) ? assessment.files : []);
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const savedText = assessment?.text || '';
+  const addFiles = async (fl) => {
+    const list = rejectVideos(fl); if (!list.length) return; setBusy(true);
+    const added = [];
+    for (const f of list) {
+      try {
+        const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+        const { blob, dataUrl, contentType } = await processUploadFile(f);
+        let stored = null; if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `pf/${patientId}` });
+        const rec = { id: `as_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name: f.name, type: isPdf ? 'pdf' : 'image', mimeType: contentType, fileDate: new Date().toISOString().slice(0, 10), uploadedAt: new Date().toISOString() };
+        if (stored?.path) rec.storagePath = stored.path; else if (dataUrl) rec.data = dataUrl;
+        added.push(rec);
+      } catch (e) { console.warn('[assessment] upload failed', e); }
+    }
+    const nf = [...files, ...added]; setFiles(nf); setBusy(false);
+    onSaveAssessment({ text, files: nf });
+  };
+  const removeFile = (id) => { const nf = files.filter(x => x.id !== id); setFiles(nf); onSaveAssessment({ text, files: nf }); };
+  return (
+    <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-bold text-sky-900">📝 アセスメントシート</div>
+        <div className="flex items-center gap-2">
+          {text !== savedText && <span className="text-[11px] text-orange-600 font-bold">未保存</span>}
+          <button onClick={() => onSaveAssessment({ text, files })} disabled={text === savedText} className={`px-3 py-1.5 rounded-lg text-xs font-bold text-white ${text === savedText ? 'bg-slate-300' : 'bg-sky-600 hover:bg-sky-700'}`}>保存</button>
+          <label className={`px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1 ${busy ? 'opacity-60' : ''}`}>
+            <CloudUpload size={12} />{busy ? '保存中…' : '添付'}
+            <input type="file" accept="image/*,application/pdf" multiple className="hidden" disabled={busy} onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
+          </label>
+        </div>
+      </div>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={5} placeholder="アセスメント内容（手入力）。写真・PDFの添付も可能です。ケアマネと共有されます。" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg outline-none resize-y text-sm leading-relaxed" />
+      {files.length > 0 && (
+        <div className="grid grid-cols-3 md:grid-cols-4 gap-2 mt-2">
+          {files.map(img => (
+            <div key={img.id} className="relative">
+              {img.type === 'pdf' || img.type === 'application/pdf' ? (
+                <div onClick={() => setPreview({ file: img, name: img.name, type: 'pdf' })} className="aspect-square bg-red-50 border border-red-200 rounded-lg flex flex-col items-center justify-center cursor-pointer p-1"><span className="text-2xl">📋</span><span className="text-[8px] font-bold text-red-600 text-center truncate w-full px-1">{img.name}</span></div>
+              ) : (
+                <StoredImage file={img} alt={img.name} className="w-full aspect-square object-cover rounded-lg border border-slate-200 cursor-pointer" onClick={() => setPreview({ file: img, name: img.name, type: 'image' })} />
+              )}
+              <button onClick={() => removeFile(img.id)} style={{ position: 'absolute', top: -4, right: -4, background: '#ef4444', color: 'white', border: 'none', borderRadius: '50%', width: 18, height: 18, fontSize: 10, fontWeight: 'bold', cursor: 'pointer' }}>✕</button>
+              <div className="text-[9px] text-slate-400 text-center mt-1 truncate">{img.fileDate || ''}{img.updatedBy ? `・${img.updatedBy}` : ''}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {(assessment?.updatedAt) && <div className="text-[10px] text-slate-400 mt-2">最終更新: {new Date(assessment.updatedAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}{assessment.updatedBy?` / ${assessment.updatedBy}`:''}</div>}
+      {preview && <MediaPreviewModal media={preview} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}
+
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange }) {
   // ★ 常に最新の appData から利用者を取得する。
   //   patientProp はモーダルを開いた時点のスナップショットで、保存(updatePatient → onSave → setAppData)後も
@@ -34967,6 +35050,22 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     const newPatient = { ...patient, personalFile: { ...personalFile, ...patch } };
     onSave({ ...appData, patients: (appData.patients || []).map(p => p.id === patient.id ? newPatient : p) }, opts);
   };
+  // ★ 患者トップレベル(docInsurance/docBurden/docUpdates 等)を保存。 personalFilePatch を渡せば個人ファイルも同時更新。
+  const _recName = (()=>{ try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || '事業所'; } catch { return '事業所'; } })();
+  const savePatientTop = (patch, opts, personalFilePatch) => {
+    const np = { ...patient, ...patch };
+    if (personalFilePatch) np.personalFile = { ...personalFile, ...personalFilePatch };
+    onSave({ ...appData, patients: (appData.patients || []).map(p => p.id === patient.id ? np : p) }, opts);
+  };
+  // ★ 事業所側の書類更新をログに残す(ケアマネ画面に新着通知)。 readCm:false = ケアマネ未読。
+  const withOfficeDocUpdate = (items) => {
+    const now = new Date().toISOString();
+    const log = Array.isArray(patient.docUpdates) ? patient.docUpdates : [];
+    return [...log, { id: `du_${now}_${Math.round(Math.random()*1e6)}`, at: now, by: 'office', byName: _recName, items: [...new Set(items)], readOffice: true, readCm: false }].slice(-50);
+  };
+  // ★ ケアマネからの未読更新(事業所が確認すべきもの)
+  const cmDocUpdates = (patient.docUpdates || []).filter(u => u.by === 'caremanager' && !u.readOffice);
+  const markCmUpdatesRead = () => savePatientTop({ docUpdates: (patient.docUpdates||[]).map(u => u.by==='caremanager' ? { ...u, readOffice:true } : u) }, { manual:true, message:'✓ 確認済みにしました' });
 
   // ★ 支援経過表 (カテゴリ9)。 既存データを自動でマージ表示し、手動編集・追加もできる。
   //   保存構造: personalFile.supportProgress = [手動行 or 自動行の上書き(srcKey付)], supportProgressHidden = [削除した自動行のsrcKey]
@@ -35350,6 +35449,22 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             <div className="text-sm font-bold text-slate-700">{activeCategory.name}</div>
             {activeCategory.note && <div className="text-[11px] text-slate-500 mt-1">{activeCategory.note}</div>}
           </div>
+          {/* 基本情報タブ: ケアマネからの書類更新 新着通知 */}
+          {isBasicTab && cmDocUpdates.length > 0 && (
+            <div className="mb-4 bg-cyan-50 border-2 border-cyan-300 rounded-xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-bold text-cyan-900">🔔 ケアマネから書類の更新があります</div>
+                <button onClick={markCmUpdatesRead} className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg text-xs font-bold">確認済みにする</button>
+              </div>
+              <div className="space-y-1">
+                {cmDocUpdates.slice().reverse().map(u => (
+                  <div key={u.id} className="text-[12px] text-cyan-800">
+                    ・{(u.items||[]).join('・')} <span className="text-cyan-600">（{u.byName||'ケアマネ'} / {u.at ? new Date(u.at).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}）</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {/* 基本情報タブのみ: 旧書類フィールドの表示 (docInsurance/docBurden/medicationImages/docOther) */}
           {isBasicTab && (
             <div className="mb-4 space-y-3">
@@ -35382,7 +35497,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                             cur.push(item);
                           }
                           // patient レベルに保存 (個人ファイル ではなく旧構造)。 ★ 即時クラウド保存
-                          onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: cur } : p) }, { manual: true, message: '✓ 写真を保存しました' });
+                          //   保険証・負担割合証はケアマネ画面へ新着通知(docUpdates)を残す
+                          const _notifyCm = (key === 'docInsurance' || key === 'docBurden');
+                          const _patch = _notifyCm ? { [key]: cur, docUpdates: withOfficeDocUpdate([label]) } : { [key]: cur };
+                          onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, ..._patch } : p) }, { manual: true, message: '✓ 写真を保存しました' });
                           e.target.value = '';
                         }}/>
                       </label>
@@ -35419,6 +35537,18 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 );
               })}
             </div>
+          )}
+          {/* 基本情報タブのみ: アセスメントシート (ケアマネと共有) */}
+          {isBasicTab && (
+            <OfficeAssessmentCard
+              patientId={patient.id}
+              assessment={personalFile.assessment}
+              onSaveAssessment={({text, files}) => {
+                const now = new Date().toISOString();
+                const asmt = { ...(personalFile.assessment||{}), text, files, updatedAt: now, updatedBy: _recName };
+                savePatientTop({ docUpdates: withOfficeDocUpdate(['アセスメントシート']) }, { manual:true, message:'✓ アセスメントを保存しました' }, { assessment: asmt });
+              }}
+            />
           )}
           {/* 基本情報タブのみ: フェイスシート */}
           {isBasicTab && (
@@ -35920,7 +36050,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
-            updatePatient({
+            // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)
+            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']) }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
