@@ -21787,6 +21787,15 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     let ap = p && di >= 0 ? (p.scheduleAmPm?.[di] || '') : '';
     // 振替記録は furikaeAmpm を優先 (普段の曜日スケジュールに無い場合も正しく振り分け)
     if (r.status === '振替' && r.furikaeAmpm) ap = r.furikaeAmpm;
+    // ★ 基本利用曜日(scheduleAmPm)にその曜日が無い記録は、実際に入力された時間帯データ(AM/PMのバイタル)から
+    //   時間帯を判定する。 基本利用曜日に依存しすぎると、曜日変更や臨時利用の記録が別曜日のAMに誤集計されるため。
+    if (!ap) {
+      const _has = (suffix) => [r['temp'+suffix], r['bpUpSt'+suffix], r['bpUpEn'+suffix], r['plSt'+suffix], r['plEn'+suffix]].some(v => v != null && String(v).trim() !== '');
+      const hasAM = _has('_AM'); const hasPM = _has('_PM');
+      if (hasAM && hasPM) ap = '1日';
+      else if (hasAM) ap = 'AM';
+      else if (hasPM) ap = 'PM';
+    }
     return { ...r, amPm: ap };
   }), [recs, patMap]);
 
