@@ -21928,8 +21928,9 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         const ap = r.amPm;
         const inAM = ap === 'AM' || ap === '1日';
         const inPM = ap === 'PM' || ap === '1日';
-        const fallbackToAM = !inAM && !inPM; // amPm が ''/それ以外 の場合は AM 扱い
-        if (inAM || fallbackToAM) {
+        // ★ amPm が空 (その曜日にスケジュールが無い=別曜日の記録が誤混入) の場合は AM に入れない。
+        //   以前は AM 扱い(fallback)にしていたため、別曜日の利用者が誤って表示されていた。
+        if (inAM) {
           if (!amPats[r.patientId]) amPats[r.patientId] = { planned:0, att:0 };
           if (isPlannedRec(r)) amPats[r.patientId].planned++;
           if (r.status==='出席'||r.status==='振替') amPats[r.patientId].att++;
@@ -22849,6 +22850,9 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const [patSearch, setPatSearch] = useState('');
   const [showFaxHist, setShowFaxHist] = useState(false);
   const [bikouEdit, setBikouEdit] = useState(null); // {text} 当月の備考を手動編集中
+  // ★ 個人ファイルから開いたか (戻るで個人ファイルに戻すため)
+  const cameFromPFRef = React.useRef(false);
+  const openedPatientRef = React.useRef(null);
   // ★ 個人ファイルから「年月を選んで開く」ディープリンク (sessionStorage 経由でその月を表示)
   React.useEffect(() => {
     try {
@@ -22857,10 +22861,18 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
         sessionStorage.removeItem('tsumugiOpenTicket');
         const o = JSON.parse(raw);
         if (o && o.month) setCurMonth(o.month);
-        if (o && o.patientId != null) setSelId(o.patientId);
+        if (o && o.patientId != null) { setSelId(o.patientId); openedPatientRef.current = o.patientId; }
+        if (o && o.fromPF) cameFromPFRef.current = true;
       }
     } catch {}
   }, []);
+  // ★ 「戻る」: 個人ファイルから来たなら、その利用者の個人ファイル(サービス提供記録タブ)に戻る。それ以外は利用者マスタへ。
+  const goBackFromTicket = () => {
+    if (cameFromPFRef.current) {
+      try { sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({ patientId: openedPatientRef.current != null ? openedPatientRef.current : selId, tab: 'cat_6' })); } catch {}
+    }
+    navigateTo && navigateTo('master');
+  };
   const ticketHistory = (appData.faxHistory||[]).filter(h => h.type === 'ticket');
   const deleteFaxHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
   const sp = (appData.patients||[]).find(p => p.id === selId) || (appData.patients||[])[0];
@@ -22911,7 +22923,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
       {/* ヘッダー：スクロールコンテナの外 */}
       <div className="thp bg-white px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-4 shrink-0 sticky top-0 z-30" style={{minWidth:0}}>
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          {navigateTo && <button onClick={()=>navigateTo('master')} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-xl font-bold text-sm flex items-center gap-1 shrink-0" title="利用者マスタへ戻る"><ArrowLeft size={16}/>戻る</button>}
+          {navigateTo && <button onClick={goBackFromTicket} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-2 rounded-xl font-bold text-sm flex items-center gap-1 shrink-0" title="戻る"><ArrowLeft size={16}/>戻る</button>}
           <div style={{position:'relative'}}>
             <button onClick={()=>{setPatDropOpen(v=>!v);setPatSearch('');}} className="bg-slate-50 border border-slate-300 hover:border-blue-400 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 min-w-[160px] max-w-[220px]">
               <span className="truncate flex-1 text-left">{sp?.name || '利用者を選択'}</span>
@@ -25146,7 +25158,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [csvModal, setCsvModal] = useState({isOpen:false, mode:null, importText:'', error:''});
   const [familyShareModal, setFamilyShareModal] = useState(null); // {patient}
   const deletingAccIdsRef = useRef(new Set()); // ★ 削除中/削除済みのアカウントID (Supabase再取得で復活させない)
-  const [personalFileModal, setPersonalFileModal] = useState(null); // {patient}
+  const [personalFileModal, setPersonalFileModal] = useState(null); // {patient, initialTab}
+  // ★ サービス提供記録から「戻る」で戻ってきたとき、元の個人ファイル(サービス提供記録タブ)を再度開く
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('tsumugiReopenPF');
+      if (raw) {
+        sessionStorage.removeItem('tsumugiReopenPF');
+        const o = JSON.parse(raw);
+        const pat = (appData.patients||[]).find(p => String(p.id) === String(o.patientId));
+        if (pat) { setEditingPatientId(pat.id); onPatientChange && onPatientChange(pat.id); setPersonalFileModal({ patient: pat, initialTab: o.tab || 'cat_6' }); }
+      }
+    } catch {}
+  }, []);
 
   // ★ アカウント管理モーダルを開いた時 + 10秒ごと、Supabase から最新の家族招待/アカウントを取得
   //   (登録した家族の状態が「未使用」のまま固まらないように)
@@ -27372,6 +27396,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         <PersonalFileModal
           patient={personalFileModal.patient}
           appData={appData}
+          initialTab={personalFileModal.initialTab}
           onSave={(updated)=>{ onSave(updated); }}
           onClose={()=>setPersonalFileModal(null)}
           navigateTo={navigateTo}
@@ -30747,6 +30772,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               return checked.map(c => ({label: c.name || '', name: c.type || ''}));
             };
             const CarCell = ({prefix}) => {
+              // ★ 欠席/休業の場合は送迎なし → 選択されていても空白表示にする
+              if (isAbsent) {
+                return <div style={{fontSize:8,textAlign:'center',color:'#bbb',fontWeight:'normal',lineHeight:_compact?'16px':'20px'}}>—</div>;
+              }
               const sel = getSelectedCar(prefix);
               if (!sel || sel.length === 0) {
                 return <div style={{fontSize:8,textAlign:'center',color:'#bbb',fontWeight:'normal',lineHeight:_compact?'16px':'20px'}}>—</div>;
@@ -30879,10 +30908,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       )}
 
       {/* フッター（pageInfo の showExtras が true の場合のみ） */}
-      {_showExtras && (
+      {_showExtras && (() => {
+      // ★ 記入漏れの強調: 記録者が1人もチェックされていない / 管理者確認が未チェック の場合は色付き(黄)で目立たせる
+      const recorderDone = Object.keys(_log.recorder||{}).some(k => (_log.recorder||{})[k]);
+      const managerDone = !!_log.managerConfirmed;
+      const warnBox = { border:'2px solid #f59e0b', backgroundColor:'#fffbeb' };
+      return (
       <div style={{display:'flex',gap:4,marginTop:'auto',paddingTop:4}}>
-        <div style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
-          <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>記録者</div>
+        <div style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden', ...(recorderDone ? {} : warnBox)}}>
+          <div style={{backgroundColor: recorderDone ? '#445' : '#f59e0b',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>記録者{recorderDone ? '' : '（未記入）'}</div>
           <div style={{padding:'3px 8px',display:'flex',flexWrap:'wrap',gap:'1px 0',minHeight:40,alignContent:'center'}}>
             {/* ★ 同姓同名のスタッフは重複排除 (役職違いの同名スタッフがいるとき片方だけ表示) */}
             {(() => {
@@ -30901,15 +30935,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             ))}
           </div>
         </div>
-        <div style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
-          <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>管理者確認</div>
+        <div style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden', ...(managerDone ? {} : warnBox)}}>
+          <div style={{backgroundColor: managerDone ? '#445' : '#f59e0b',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>管理者確認{managerDone ? '' : '（未確認）'}</div>
           <div style={{padding:'5px 8px',display:'flex',alignItems:'center',gap:4,minHeight:38}}>
             <CB checked={!!(_log.managerConfirmed)} onChange={()=>_updateLog({managerConfirmed:!_log.managerConfirmed})} sz={12}/>
             <span style={{fontSize:11,fontWeight:'bold',lineHeight:1.4}}>{managerName}は上記記録を確認しました。</span>
           </div>
         </div>
       </div>
-      )}
+      ); })()}
     </div>
   );
   };
@@ -34355,7 +34389,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                     value={fax.memo ?? defaultMemo}
                     onChange={e=>updateFax(key,{memo:e.target.value})}
                     placeholder="連絡事項を自由に入力してください"
-                    style={{width:'100%',flex:1,border:'none',borderRadius:0,padding:'4px 0',fontSize:16,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.8,boxSizing:'border-box'}}
+                    style={{width:'100%',flex:1,border:'1.5px dashed #94a3b8',borderRadius:8,padding:'10px 12px',fontSize:16,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.8,boxSizing:'border-box',background:'#fafafa'}}
                   />
                 )}
               </div>
@@ -35134,7 +35168,7 @@ function OfficeAssessmentCard({ patientId, assessment, onSaveAssessment }) {
   );
 }
 
-function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange }) {
+function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange, initialTab }) {
   // ★ 常に最新の appData から利用者を取得する。
   //   patientProp はモーダルを開いた時点のスナップショットで、保存(updatePatient → onSave → setAppData)後も
   //   更新されない。そのため担当者会議などを保存しても画面に反映されず、再度開いても出ず
@@ -35145,7 +35179,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const customCategories = personalFile.categories || [];
   const [expandedMon, setExpandedMon] = useState(null); // モニタリング表の展開
   const allCategories = [...DEFAULT_PF_CATEGORIES, ...customCategories];
-  const [activeCat, setActiveCat] = useState(allCategories[0].id);
+  const [activeCat, setActiveCat] = useState((initialTab && allCategories.some(c=>c.id===initialTab)) ? initialTab : allCategories[0].id);
   const [showMeetingForm, setShowMeetingForm] = useState(false);
   const [editingMeeting, setEditingMeeting] = useState(null);
   const [pdfPreviewMeeting, setPdfPreviewMeeting] = useState(null);
@@ -35906,7 +35940,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const _set = new Set();
             (appData.ticketRecords||[]).forEach(r => { if(r.patientId!==patient.id) return; const m=(r.date||'').match(/(\d+)月/); if(!m) return; let y=r.year; if(!y){ y=(typeof r.id==='number'&&r.id>1e12)?new Date(r.id).getFullYear():new Date().getFullYear(); } _set.add(`${y}-${String(+m[1]).padStart(2,'0')}`); });
             const _months = [...(_set)].sort((a,b)=>b.localeCompare(a));
-            const _open = (ym) => { try{ sessionStorage.setItem('tsumugiOpenTicket', JSON.stringify({patientId: patient.id, month: ym})); }catch{} onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo('ticket'); };
+            const _open = (ym) => { try{ sessionStorage.setItem('tsumugiOpenTicket', JSON.stringify({patientId: patient.id, month: ym, fromPF: true})); }catch{} onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo&&navigateTo('ticket'); };
             // ★ その月の最終通所が済んだ(=過ぎた)月は「確定（保管済み）」。 都度描画なので保管操作は不要
             const _todayD = new Date(); _todayD.setHours(0,0,0,0);
             const _isArchived = (ym) => { const [y,m]=ym.split('-').map(Number); if (_todayD > new Date(y, m, 0)) return true; try { const sch = generateMonthlySchedule([patient], y, m, appData.monthlyShifts, appData.ticketRecords||[], appData.holidays, appData.systemSettings?.facilityInfo?.closedDays||[0]); if(!sch.length) return false; return new Date(y, m-1, Math.max(...sch.map(r=>r.dayNum))) < _todayD; } catch { return false; } };
