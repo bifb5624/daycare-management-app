@@ -925,18 +925,21 @@ const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(bi
 //    運動メニューや項目名の同一性判定に使用
 const normalizeName = (s) => (s || '').normalize('NFKC');
 
-// ★ 運動メニューの単位付与 (1〜2単位対応)。 item = {defaultUnit, unitSep, defaultUnit2}
-//   例: 単一 "3"→"3分" ／ 2単位×: "5×10"→"5kg×10回" ／ 2個目空 "5×"→"5kg" [1単位のみ]
+// ★ 入力文字列から区切り(×または/)を自動判定。 無ければ既定は × 。
+const _detectExSep = (s) => { const m = String(s||'').match(/[×xＸ*\/／]/); if (!m) return '×'; return (m[0] === '/' || m[0] === '／') ? '/' : '×'; };
+// ★ 運動メニューの単位付与 (1〜2単位対応)。 item = {defaultUnit(1単位), defaultUnit2(2単位)}
+//   2単位モードは defaultUnit2 があるかで判定。 区切り(×//)は入力から自動判定(既定×)。
+//   例: 1単位 "3"→"3分" ／ 2単位 "5×10"→"5kg×10回" / "5/10"→"5kg/10回" ／ 2個目空 "5×"→"5kg"
 //   ・記号(○×ー等)はそのまま。 既に単位付きなら二重付与しない(冪等)。 分析・表示・入力の全箇所で共通利用。
 const applyExUnits = (raw, item) => {
   const u1 = (item && item.defaultUnit) || '';
-  const sep = (item && item.unitSep) || '';
   const u2 = (item && item.defaultUnit2) || '';
   const s = (raw == null ? '' : String(raw)).trim();
   if (!s) return '';
   if (!/[0-9０-９]/.test(s)) return s; // 記号のみはそのまま
-  if (sep && u2) {
-    const parts = s.split(/[×xＸ*/／]/);
+  if (u2) {
+    const sep = _detectExSep(s); // 入力された区切りを自動判定(既定×)
+    const parts = s.split(/[×xＸ*\/／]/);
     const p1 = (parts[0] || '').trim();
     const p2 = (parts.length > 1 ? parts.slice(1).join('') : '').trim();
     const f1 = (!/[0-9０-９]/.test(p1) || (u1 && p1.endsWith(u1))) ? p1 : (u1 ? `${p1}${u1}` : p1);
@@ -946,12 +949,11 @@ const applyExUnits = (raw, item) => {
   }
   return (u1 && !s.endsWith(u1)) ? `${s}${u1}` : s;
 };
-// 単位ラベル表示用 (「kg×回」など。設定画面の見出し等に使用)
+// 単位ラベル表示用 (「kg×回」など。設定画面の見出し等に使用)。 2単位は × 表記で示す
 const exUnitLabel = (item) => {
   const u1 = (item && item.defaultUnit) || '';
-  const sep = (item && item.unitSep) || '';
   const u2 = (item && item.defaultUnit2) || '';
-  return (sep && u2) ? `${u1}${sep}${u2}` : u1;
+  return u2 ? `${u1}×${u2}` : u1;
 };
 
 // === 現在の記録者 (アクティブスタッフ) の名前を sessionStorage から取得 ===
@@ -28798,18 +28800,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     {item.type === 'individual' ? (
                       <span className="w-20 text-[10px] text-emerald-600 text-center italic">下の項目で単位設定</span>
                     ) : (
-                      <div className="flex items-center gap-1" title="単位を2つ使う場合は区切り(×または/)と2つ目の単位を設定。例: kg × 回 → 5kg×10回">
-                        <input value={item.defaultUnit||''} onChange={e=>{
-                          const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setExerciseItems(arr);
-                        }} placeholder="単位" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400"/>
-                        <select value={item.unitSep||''} onChange={e=>{
-                          const arr=[...exerciseItems]; arr[i]={...arr[i],unitSep:e.target.value}; setExerciseItems(arr);
-                        }} className="px-1 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400 cursor-pointer" title="2つ目の単位の区切り">
-                          <option value="">―</option><option value="×">×</option><option value="/">/</option>
-                        </select>
-                        <input value={item.defaultUnit2||''} disabled={!item.unitSep} onChange={e=>{
-                          const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit2:e.target.value}; setExerciseItems(arr);
-                        }} placeholder="単位2" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400 disabled:opacity-40"/>
+                      <div className="flex items-end gap-1" title="1単位＝1つ目の単位。 2単位＝2つ目の単位(空欄なら1単位のみ)。 区切り(×または/)は入力時に自動判定します。例: kg と 回 → 5×10 が 5kg×10回 に">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[8px] text-slate-400 leading-none mb-0.5">1単位</span>
+                          <input value={item.defaultUnit||''} onChange={e=>{
+                            const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setExerciseItems(arr);
+                          }} placeholder="例:kg" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400"/>
+                        </div>
+                        <span className="text-slate-300 text-[11px] pb-1.5">×/</span>
+                        <div className="flex flex-col items-center">
+                          <span className="text-[8px] text-slate-400 leading-none mb-0.5">2単位</span>
+                          <input value={item.defaultUnit2||''} onChange={e=>{
+                            const arr=[...exerciseItems]; arr[i]={...arr[i],defaultUnit2:e.target.value}; setExerciseItems(arr);
+                          }} placeholder="任意" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-slate-200 rounded text-xs font-bold outline-none focus:border-blue-400"/>
+                        </div>
                       </div>
                     )}
                     {/* ★ グラフタイプ: 運動トレンドでの描画方式を選択 (auto=自動推測) */}
@@ -28913,18 +28917,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     <input value={item.name} onChange={e=>{
                       const arr=[...individualExerciseItems]; arr[i]={...arr[i],name:e.target.value}; setIndividualExerciseItems(arr);
                     }} className="flex-1 px-2 py-1 bg-white border border-emerald-200 rounded text-sm font-bold outline-none focus:border-emerald-500"/>
-                    <div className="flex items-center gap-1" title="単位を2つ使う場合は区切り(×または/)と2つ目の単位を設定。例: kg × 回 → 5kg×10回">
-                      <input value={item.defaultUnit||''} onChange={e=>{
-                        const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setIndividualExerciseItems(arr);
-                      }} placeholder="単位" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500"/>
-                      <select value={item.unitSep||''} onChange={e=>{
-                        const arr=[...individualExerciseItems]; arr[i]={...arr[i],unitSep:e.target.value}; setIndividualExerciseItems(arr);
-                      }} className="px-1 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500 cursor-pointer" title="2つ目の単位の区切り">
-                        <option value="">―</option><option value="×">×</option><option value="/">/</option>
-                      </select>
-                      <input value={item.defaultUnit2||''} disabled={!item.unitSep} onChange={e=>{
-                        const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit2:e.target.value}; setIndividualExerciseItems(arr);
-                      }} placeholder="単位2" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500 disabled:opacity-40"/>
+                    <div className="flex items-end gap-1" title="1単位＝1つ目の単位。 2単位＝2つ目の単位(空欄なら1単位のみ)。 区切り(×または/)は入力時に自動判定します。例: kg と 回 → 5×10 が 5kg×10回 に">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] text-emerald-500 leading-none mb-0.5">1単位</span>
+                        <input value={item.defaultUnit||''} onChange={e=>{
+                          const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit:e.target.value}; setIndividualExerciseItems(arr);
+                        }} placeholder="例:kg" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500"/>
+                      </div>
+                      <span className="text-emerald-300 text-[11px] pb-1.5">×/</span>
+                      <div className="flex flex-col items-center">
+                        <span className="text-[8px] text-emerald-500 leading-none mb-0.5">2単位</span>
+                        <input value={item.defaultUnit2||''} onChange={e=>{
+                          const arr=[...individualExerciseItems]; arr[i]={...arr[i],defaultUnit2:e.target.value}; setIndividualExerciseItems(arr);
+                        }} placeholder="任意" list="unit-suggestions" className="w-14 px-2 py-1 bg-white border border-emerald-200 rounded text-xs font-bold outline-none focus:border-emerald-500"/>
+                      </div>
                     </div>
                     <button type="button" onClick={()=>{
                       if(!window.confirm(`「${item.name}」を削除します。よろしいですか？\n(過去の記録には影響しません)`)) return;
