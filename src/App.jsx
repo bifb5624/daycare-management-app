@@ -28273,6 +28273,9 @@ function AdminSettingsSection({ appData, onSave }) {
 function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const [activeTab, setActiveTab] = useState('facility');
+  // ★ systemSettings の参照 & 部分更新ヘルパー (テンキー表示ON/OFF 等の即時保存に使用)
+  const ss = appData.systemSettings || {};
+  const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch } }, { manual:true, message: msg || '✓ 保存しました' });
   // ★ 一括削除(管理者用): 選択中の利用者ID / ケアマネ事業所名
   const [bulkDelPatients, setBulkDelPatients] = useState(() => new Set());
   const [bulkDelOffices, setBulkDelOffices] = useState(() => new Set());
