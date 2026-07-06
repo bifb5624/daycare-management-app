@@ -26820,7 +26820,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         // ★ 取り込み値の正規化 (カイポケ等の表記ゆれをアプリの選択肢に合わせる)
         const _toHalf = (s) => String(s||'').replace(/[０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[Ａ-Ｚａ-ｚ]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
         const normGender = (s) => { const t=String(s||'').trim(); if(!t) return ''; if(/^(男性|男|m|male)$/i.test(t)) return '男性'; if(/^(女性|女|f|female)$/i.test(t)) return '女性'; return t; };
-        const normBurden = (s) => { const t=_toHalf(String(s||'').trim()); if(!t) return ''; if(/^70%/.test(t)||/3割/.test(t)) return '70%'; if(/^80%/.test(t)||/2割/.test(t)) return '80%'; if(/^90%/.test(t)||/1割/.test(t)) return '90%'; const m=t.match(/(70|80|90)\s*%/); if(m) return m[1]+'%'; if(/^3$/.test(t)) return '70%'; if(/^2$/.test(t)) return '80%'; if(/^1$/.test(t)) return '90%'; return t; };
+        const normBurden = (s) => { const t=_toHalf(String(s||'').trim()); if(!t) return ''; if(/^70%/.test(t)||/3割/.test(t)) return '70%'; if(/^80%/.test(t)||/2割/.test(t)) return '80%'; if(/^90%/.test(t)||/1割/.test(t)) return '90%'; const m=t.match(/(70|80|90)\s*%/); if(m) return m[1]+'%'; if(/^90$/.test(t)) return '90%'; if(/^80$/.test(t)) return '80%'; if(/^70$/.test(t)) return '70%'; if(/^3$/.test(t)) return '70%'; if(/^2$/.test(t)) return '80%'; if(/^1$/.test(t)) return '90%'; return t; };
         const normCare = (s) => { const t=_toHalf(String(s||'').trim()).replace(/\s/g,''); if(!t) return ''; if(/事業対象|総合事業|事対|チェックリスト/.test(t)) return '事業対象者'; let m=t.match(/要支援([12])/)||t.match(/^支援([12])/); if(m) return '要支援'+m[1]; m=t.match(/要介護([1-5])/)||t.match(/^介護([1-5])/); if(m) return '要介護'+m[1]; if(t==='要支援') return '要支援1'; return t; };
         const doImport = (perRowChoices) => {
           try {
@@ -26843,7 +26843,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               emName:      findCol(header,['緊急連絡先氏名','緊急連絡先名','連絡先氏名','連絡先名'],['カナ','かな','続柄','電話','郵便','住所','都道府県','市区町村','番地','屋号','建物']),
               emRelation:  findCol(header,['続柄']),
               emPhone:     findCol(header,['緊急連絡先電話','連絡先電話'],['氏名','カナ']),
-              insuranceNo: findCol(header,['被保険者番号','被保番','保険者番号']),
+              insuranceNo: (findCol(header,['被保険者番号','被保番','被保険者証番号'])!==-1 ? findCol(header,['被保険者番号','被保番','被保険者証番号']) : findCol(header,['保険者番号'],['被'])),
               careLevel:   findCol(header,['介護度','要介護','要支援'],['期間']),
               startDate:   findCol(header,['利用開始','開始日'],['適用','介護度','緊急']),
               endDate:     findCol(header,['利用終了','終了日'],['適用']),
@@ -26855,7 +26855,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               careLevelFrom: findCol(header,['認定有効期間開始','有効期間開始','認定開始','認定有効開始','適用期間開始','認定期間開始'],['終了']),
               careLevelTo:   findCol(header,['認定有効期間終了','有効期間終了','認定終了','認定有効終了','適用期間終了','認定期間終了'],['開始']),
               costBurden:  findCol(header,['負担割合','負担割','給付率']),
-              cmOffice:    findCol(header,['ケアマネ事業所','居宅介護支援','ケアマネージャー事業所','cm事業所','居宅事業所','事業所名'],['担当','電話','tel','fax','ファックス']),
+              cmOffice:    findCol(header,['ケアマネ事業所','居宅介護支援','居宅支援','担当居宅','ケアマネージャー事業所','cm事業所','居宅事業所','事業所名','地域包括','包括支援'],['電話','tel','fax','ファックス','担当ケアマネ','ケアマネ名','ケアマネ氏名']),
               cmName:      findCol(header,['担当ケアマネ','担当ケアマネージャー','ケアマネ氏名','ケアマネ名','介護支援専門員'],['事業所','電話','tel','fax','ファックス']),
               cmPhone:     findCol(header,['担当ケアマネ電話','ケアマネ電話','cm電話','介護支援専門員電話'],['fax','ファックス','事業所']),
               cmFax:       findCol(header,['ケアマネfax','ケアマネファックス','cmfax','ケアマネ事業所fax','事業所fax','居宅fax']),
