@@ -12234,6 +12234,8 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
   const asmt0 = (patient?.personalFile || {}).assessment || {};
   const [ins, setIns] = useState(() => Array.isArray(patient?.docInsurance) ? patient.docInsurance : []);
   const [bur, setBur] = useState(() => Array.isArray(patient?.docBurden) ? patient.docBurden : []);
+  const [insText, setInsText] = useState(patient?.docInsuranceText || '');
+  const [burText, setBurText] = useState(patient?.docBurdenText || '');
   const [asmtText, setAsmtText] = useState(asmt0.text || '');
   const [asmtFiles, setAsmtFiles] = useState(() => Array.isArray(asmt0.files) ? asmt0.files : []);
   const [busy, setBusy] = useState('');
@@ -12272,10 +12274,10 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
     const newAsmtFiles = asmtFiles.filter(d => !origAsmt.current.has(String(d.id)));
     const pf = patient.personalFile || {};
     const asmt = { ...(pf.assessment || {}), text: asmtText, files: asmtFiles, updatedAt: now, updatedBy: byName };
-    const np = { ...patient, docInsurance: ins, docBurden: bur, personalFile: { ...pf, assessment: asmt } };
+    const np = { ...patient, docInsurance: ins, docBurden: bur, docInsuranceText: insText, docBurdenText: burText, personalFile: { ...pf, assessment: asmt } };
     onSaved(np);
     if (isSupabaseEnabled && storeId) {
-      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
+      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, insuranceText: insText, burdenText: burText, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
       catch (e) { console.warn('[cmDocs] cloud sync failed', e); }
     }
     setSaving(false);
@@ -12283,8 +12285,8 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
     alert('保存しました。事業所側の個人ファイル（介護保険証・負担割合証・アセスメント）に反映されます。');
   };
 
-  const DocSection = ({ label, list, setter, tag, accept }) => (
-    <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+  const DocSection = ({ label, list, setter, tag, accept, _noborder }) => (
+    <div style={_noborder ? {} : { border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a' }}>{label} <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 'normal' }}>({list.length})</span></div>
         <label style={{ fontSize: 12, fontWeight: 'bold', color: '#0e7490', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8, padding: '5px 10px', cursor: busy ? 'wait' : 'pointer' }}>
@@ -12322,8 +12324,14 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
       <div style={{ background: 'white', borderRadius: 18, maxWidth: 560, width: '100%', padding: '20px 18px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
         <div style={{ fontSize: 17, fontWeight: 'bold', color: '#0f172a', marginBottom: 4 }}>📎 保険証・負担割合証・アセスメント</div>
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>{patient?.name} 様。ここで登録・更新した書類は事業所側の個人ファイルに反映され、双方で最新のものを共有できます（既存の書類に追記され、上書きはしません）。</div>
-        <DocSection label="🪪 介護保険証" list={ins} setter={setIns} tag="ins" accept="image/*,application/pdf" />
-        <DocSection label="💳 負担割合証" list={bur} setter={setBur} tag="bur" accept="image/*,application/pdf" />
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          <DocSection label="🪪 介護保険証" list={ins} setter={setIns} tag="ins" accept="image/*,application/pdf" _noborder />
+          <textarea value={insText} onChange={(e) => setInsText(e.target.value)} placeholder="手入力メモ（被保険者番号・有効期限など。任意）…" rows={2} style={{ width: '100%', fontSize: 13, padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, marginTop: 6 }} />
+        </div>
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          <DocSection label="💳 負担割合証" list={bur} setter={setBur} tag="bur" accept="image/*,application/pdf" _noborder />
+          <textarea value={burText} onChange={(e) => setBurText(e.target.value)} placeholder="手入力メモ（負担割合・有効期限など。任意）…" rows={2} style={{ width: '100%', fontSize: 13, padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, marginTop: 6 }} />
+        </div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 8 }}>📝 アセスメントシート</div>
           <textarea value={asmtText} onChange={(e) => setAsmtText(e.target.value)} placeholder="アセスメント内容を手入力できます（写真・PDFの添付も可能）。" rows={6} style={{ width: '100%', fontSize: 13, padding: 10, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6 }} />
@@ -34971,6 +34979,22 @@ const DEFAULT_PF_CATEGORIES = [
     note: '日付・担当者・連絡元・内容の経過記録 (年ごと・A4縦で出力)' },
 ];
 
+// ★ 書類の手入力メモ欄 (介護保険証/負担割合証)。 ローカル編集→保存ボタンで確定。
+function DocNoteField({ value, placeholder, onCommit }) {
+  const [v, setV] = useState(value || '');
+  const dirty = v !== (value || '');
+  return (
+    <div className="mt-2">
+      <textarea value={v} onChange={e => setV(e.target.value)} rows={2} placeholder={placeholder}
+        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg outline-none resize-y text-sm leading-relaxed" />
+      <div className="flex justify-end items-center gap-2 mt-1">
+        {dirty && <span className="text-[11px] text-orange-600 font-bold">未保存</span>}
+        <button onClick={() => onCommit(v)} disabled={!dirty} className={`px-3 py-1 rounded-lg text-xs font-bold text-white ${dirty ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-300'}`}>保存</button>
+      </div>
+    </div>
+  );
+}
+
 // ★ 事業所側: アセスメントシート(手入力+写真/PDF)。 ケアマネ画面と共有され、更新はケアマネへ通知される。
 function OfficeAssessmentCard({ patientId, assessment, onSaveAssessment }) {
   const [text, setText] = useState(assessment?.text || '');
@@ -35532,6 +35556,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                           </div>
                         ))}
                       </div>
+                    )}
+                    {(key === 'docInsurance' || key === 'docBurden') && (
+                      <DocNoteField value={patient[key+'Text']} placeholder="手入力メモ（被保険者番号・有効期限・負担割合など。任意）…"
+                        onCommit={(v)=>{ onSave({ ...appData, patients:(appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key+'Text']: v, docUpdates: withOfficeDocUpdate([label]) } : p) }, { manual:true, message:'✓ 保存しました' }); }} />
                     )}
                   </div>
                 );
