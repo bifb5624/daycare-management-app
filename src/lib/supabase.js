@@ -818,13 +818,17 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
       };
       unionDocs('docInsurance', patch.docInsurance, '介護保険証');
       unionDocs('docBurden', patch.docBurden, '負担割合証');
-      const setText = (key, val, label) => {
-        if (val == null) return;
+      // 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映
+      const m = patch.master || {};
+      const setMaster = (key, val, label) => {
+        if (val == null || val === '') return;
         if (String(val) === String(np[key] || '')) return;
         np[key] = String(val); changed.push(label);
       };
-      setText('docInsuranceText', patch.insuranceText, '介護保険証');
-      setText('docBurdenText', patch.burdenText, '負担割合証');
+      setMaster('careLevel', m.careLevel, '介護度');
+      setMaster('careLevelFrom', m.careLevelFrom, '認定有効期間');
+      setMaster('careLevelTo', m.careLevelTo, '認定有効期間');
+      setMaster('costBurden', m.costBurden, '負担割合');
       const hasAsmtText = patch.assessmentText != null && String(patch.assessmentText) !== ((np.personalFile || {}).assessment || {}).text;
       const hasAsmtFiles = Array.isArray(patch.assessmentFiles) && patch.assessmentFiles.length;
       if (hasAsmtText || hasAsmtFiles) {

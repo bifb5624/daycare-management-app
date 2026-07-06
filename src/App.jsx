@@ -12234,8 +12234,10 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
   const asmt0 = (patient?.personalFile || {}).assessment || {};
   const [ins, setIns] = useState(() => Array.isArray(patient?.docInsurance) ? patient.docInsurance : []);
   const [bur, setBur] = useState(() => Array.isArray(patient?.docBurden) ? patient.docBurden : []);
-  const [insText, setInsText] = useState(patient?.docInsuranceText || '');
-  const [burText, setBurText] = useState(patient?.docBurdenText || '');
+  const [mCareLevel, setMCareLevel] = useState(patient?.careLevel || '');
+  const [mCareFrom, setMCareFrom] = useState(patient?.careLevelFrom || '');
+  const [mCareTo, setMCareTo] = useState(patient?.careLevelTo || '');
+  const [mCostBurden, setMCostBurden] = useState(patient?.costBurden || '');
   const [asmtText, setAsmtText] = useState(asmt0.text || '');
   const [asmtFiles, setAsmtFiles] = useState(() => Array.isArray(asmt0.files) ? asmt0.files : []);
   const [busy, setBusy] = useState('');
@@ -12274,10 +12276,10 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
     const newAsmtFiles = asmtFiles.filter(d => !origAsmt.current.has(String(d.id)));
     const pf = patient.personalFile || {};
     const asmt = { ...(pf.assessment || {}), text: asmtText, files: asmtFiles, updatedAt: now, updatedBy: byName };
-    const np = { ...patient, docInsurance: ins, docBurden: bur, docInsuranceText: insText, docBurdenText: burText, personalFile: { ...pf, assessment: asmt } };
+    const np = { ...patient, docInsurance: ins, docBurden: bur, careLevel: mCareLevel, careLevelFrom: mCareFrom, careLevelTo: mCareTo, costBurden: mCostBurden, personalFile: { ...pf, assessment: asmt } };
     onSaved(np);
     if (isSupabaseEnabled && storeId) {
-      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, insuranceText: insText, burdenText: burText, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
+      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, master: { careLevel: mCareLevel, careLevelFrom: mCareFrom, careLevelTo: mCareTo, costBurden: mCostBurden }, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
       catch (e) { console.warn('[cmDocs] cloud sync failed', e); }
     }
     setSaving(false);
@@ -12326,11 +12328,32 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>{patient?.name} 様。ここで登録・更新した書類は事業所側の個人ファイルに反映され、双方で最新のものを共有できます（既存の書類に追記され、上書きはしません）。</div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
           <DocSection label="🪪 介護保険証" list={ins} setter={setIns} tag="ins" accept="image/*,application/pdf" _noborder />
-          <textarea value={insText} onChange={(e) => setInsText(e.target.value)} placeholder="手入力メモ（被保険者番号・有効期限など。任意）…" rows={2} style={{ width: '100%', fontSize: 13, padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, marginTop: 6 }} />
+          <div style={{ marginTop: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 6 }}>保険証の内容（入力すると事業所の利用者マスタに自動反映）</div>
+            <div style={{ marginBottom: 8 }}>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>介護度</label>
+              <select value={mCareLevel} onChange={(e) => setMCareLevel(e.target.value)} style={{ width: '100%', maxWidth: 220, fontSize: 14, fontWeight: 'bold', padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }}>
+                <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>認定有効期間</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <input type="date" value={mCareFrom} onChange={(e) => setMCareFrom(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} />
+                <span style={{ color: '#94a3b8' }}>〜</span>
+                <input type="date" value={mCareTo} onChange={(e) => setMCareTo(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} />
+              </div>
+            </div>
+          </div>
         </div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
           <DocSection label="💳 負担割合証" list={bur} setter={setBur} tag="bur" accept="image/*,application/pdf" _noborder />
-          <textarea value={burText} onChange={(e) => setBurText(e.target.value)} placeholder="手入力メモ（負担割合・有効期限など。任意）…" rows={2} style={{ width: '100%', fontSize: 13, padding: 8, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, marginTop: 6 }} />
+          <div style={{ marginTop: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>負担割合（入力すると事業所の利用者マスタに自動反映）</label>
+            <select value={mCostBurden} onChange={(e) => setMCostBurden(e.target.value)} style={{ width: '100%', maxWidth: 220, fontSize: 14, fontWeight: 'bold', padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }}>
+              <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
+            </select>
+          </div>
         </div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 8 }}>📝 アセスメントシート</div>
@@ -34979,22 +35002,6 @@ const DEFAULT_PF_CATEGORIES = [
     note: '日付・担当者・連絡元・内容の経過記録 (年ごと・A4縦で出力)' },
 ];
 
-// ★ 書類の手入力メモ欄 (介護保険証/負担割合証)。 ローカル編集→保存ボタンで確定。
-function DocNoteField({ value, placeholder, onCommit }) {
-  const [v, setV] = useState(value || '');
-  const dirty = v !== (value || '');
-  return (
-    <div className="mt-2">
-      <textarea value={v} onChange={e => setV(e.target.value)} rows={2} placeholder={placeholder}
-        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg outline-none resize-y text-sm leading-relaxed" />
-      <div className="flex justify-end items-center gap-2 mt-1">
-        {dirty && <span className="text-[11px] text-orange-600 font-bold">未保存</span>}
-        <button onClick={() => onCommit(v)} disabled={!dirty} className={`px-3 py-1 rounded-lg text-xs font-bold text-white ${dirty ? 'bg-blue-600 hover:bg-blue-700' : 'bg-slate-300'}`}>保存</button>
-      </div>
-    </div>
-  );
-}
-
 // ★ 事業所側: アセスメントシート(手入力+写真/PDF)。 ケアマネ画面と共有され、更新はケアマネへ通知される。
 function OfficeAssessmentCard({ patientId, assessment, onSaveAssessment }) {
   const [text, setText] = useState(assessment?.text || '');
@@ -35090,6 +35097,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   // ★ ケアマネからの未読更新(事業所が確認すべきもの)
   const cmDocUpdates = (patient.docUpdates || []).filter(u => u.by === 'caremanager' && !u.readOffice);
   const markCmUpdatesRead = () => savePatientTop({ docUpdates: (patient.docUpdates||[]).map(u => u.by==='caremanager' ? { ...u, readOffice:true } : u) }, { manual:true, message:'✓ 確認済みにしました' });
+  // ★ 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映
+  const saveMaster = (patch) => savePatientTop({ ...patch }, { manual:true, message:'✓ 利用者マスタに反映しました' });
 
   // ★ 支援経過表 (カテゴリ9)。 既存データを自動でマージ表示し、手動編集・追加もできる。
   //   保存構造: personalFile.supportProgress = [手動行 or 自動行の上書き(srcKey付)], supportProgressHidden = [削除した自動行のsrcKey]
@@ -35557,9 +35566,32 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         ))}
                       </div>
                     )}
-                    {(key === 'docInsurance' || key === 'docBurden') && (
-                      <DocNoteField value={patient[key+'Text']} placeholder="手入力メモ（被保険者番号・有効期限・負担割合など。任意）…"
-                        onCommit={(v)=>{ onSave({ ...appData, patients:(appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key+'Text']: v, docUpdates: withOfficeDocUpdate([label]) } : p) }, { manual:true, message:'✓ 保存しました' }); }} />
+                    {key === 'docInsurance' && (
+                      <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200 space-y-2">
+                        <div className="text-[11px] font-bold text-slate-500">保険証の内容（入力すると利用者マスタに自動反映）</div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 mb-0.5">介護度</label>
+                          <select value={patient.careLevel||''} onChange={e=>saveMaster({careLevel:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+                            <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v=><option key={v} value={v}>{v}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-500 mb-0.5">認定有効期間</label>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <input type="date" value={patient.careLevelFrom||''} onChange={e=>saveMaster({careLevelFrom:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <span className="text-slate-400">〜</span>
+                            <input type="date" value={patient.careLevelTo||''} onChange={e=>saveMaster({careLevelTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {key === 'docBurden' && (
+                      <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
+                        <label className="block text-[11px] font-bold text-slate-500 mb-0.5">負担割合（入力すると利用者マスタに自動反映）</label>
+                        <select value={patient.costBurden||''} onChange={e=>saveMaster({costBurden:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+                          <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
+                        </select>
+                      </div>
                     )}
                   </div>
                 );
