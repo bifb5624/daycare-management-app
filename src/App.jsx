@@ -1365,6 +1365,33 @@ const rejectVideos = (files) => {
   return arr.filter(f => !isVideoFile(f));
 };
 
+// ★ 利用者IDに紐づく全データ (patientId を持つ配列)。 削除時にまとめて除去する。
+const PATIENT_LINKED_ARRAYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','familyPersonalAnnouncements','familyPhotos','scheduleEvents','familyAccounts','familyInvites'];
+// ★ クラウド同期で id 和集合マージされる配列 (supabase.js の ARRAY_KEYS と一致)。 削除時は墓石(deletedIds)を残さないと復活する。
+const PATIENT_LINKED_TOMB_KEYS = new Set(['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','familyPersonalAnnouncements','familyPhotos','scheduleEvents']);
+// 指定した利用者ID群に紐づく記録・気分・写真・お知らせ等を全て除去し、墓石を付与したパッチを返す。
+// → 削除後にCSV等で同じIDが再利用されても、前の利用者の記録が誤って表示されない。
+function stripPatientData(appData, idSet) {
+  const out = {};
+  const tomb = { ...(appData.deletedIds || {}) };
+  const now = Date.now();
+  const inSet = (pid) => idSet.has(pid) || idSet.has(Number(pid)) || idSet.has(String(pid));
+  PATIENT_LINKED_ARRAYS.forEach(k => {
+    const arr = appData[k];
+    if (!Array.isArray(arr)) return;
+    const removed = arr.filter(r => r && inSet(r.patientId));
+    if (!removed.length) return;
+    out[k] = arr.filter(r => !(r && inSet(r.patientId)));
+    if (PATIENT_LINKED_TOMB_KEYS.has(k)) {
+      const m = { ...(tomb[k] || {}) };
+      removed.forEach(r => { if (r && r.id != null) m[String(r.id)] = now; });
+      tomb[k] = m;
+    }
+  });
+  out.deletedIds = tomb;
+  return out;
+}
+
 const normalizeRecordMonth = (dateStr, currentYear) => {
   if (!dateStr) return null;
   const isoM = dateStr.match(/^(\d{4})-(\d{2})/);
@@ -25445,17 +25472,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       try { await supabaseDeleteFolder(`pf/${pid}`); await supabaseDeleteFolder(`fs/${pid}`); }
       catch (e) { console.warn('[storage] delete patient folder failed', e); }
     }
+    // ★ この利用者IDに紐づく全データ (提供記録・気分・体力測定・お知らせ・写真等) を除去 + 墓石付与。
+    //   → 削除後にCSV等で同じIDが再利用されても、前の利用者のデータが誤って紐づかない。
+    const _cleaned = stripPatientData(appData, new Set([pid]));
     onSave({
       ...appData,
       patients: (appData.patients||[]).filter(p => p.id !== pid),
-      ticketRecords: (appData.ticketRecords || []).filter(r => r.patientId !== pid),
-      // ★ ローカルの家族情報も削除 (Supabase と整合)
-      familyAccounts: (appData.familyAccounts || []).filter(a => a.patientId !== pid),
-      familyInvites: (appData.familyInvites || []).filter(i => i.patientId !== pid),
-      // ★ 関連する個人ファイル・モニタリング等も削除
-      monitoringRecords: (appData.monitoringRecords || []).filter(r => r.patientId !== pid),
-      fitnessRecords: (appData.fitnessRecords || []).filter(r => r.patientId !== pid),
-      initialReports: (appData.initialReports || []).filter(r => r.patientId !== pid),
+      ..._cleaned,
     });
     setEditingPatientId(null);
     setLocalPatient(null);
@@ -27051,7 +27074,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             const val = (row,i) => (i>=0 ? String(row[i]||'').trim() : '');
             const existing = [...(appData.patients||[])];
             const existingIds = new Set(existing.map(p=>p.id));
-            let maxId = Math.max(0, ...existing.map(p=>p.id));
+            // ★ 採番は「これまでの最大ID」を上限にした連番 (patientIdSeq)。 削除しても番号は戻さず増やし続けるため、
+            //   全員削除→再取込しても前の利用者と同じIDが再利用されず、古い記録が誤って紐づかない。
+            let maxId = Math.max(0, ...existing.map(p=>p.id), Number(appData.patientIdSeq)||0);
             // ★ 氏名(空白無視)で重複判定。 dupMode='replace'(置き換え) / 'keepBoth'(両方残す)
             const dupMode = csvModal.dupMode || 'replace';
             const normName = (s) => String(s||'').replace(/[\s　]/g,'').trim();
@@ -27171,7 +27196,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               });
               _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs };
             }
-            onSave({...appData, patients: existing, systemSettings: _nextSettings});
+            onSave({...appData, patients: existing, systemSettings: _nextSettings, patientIdSeq: Math.max(maxId, Number(appData.patientIdSeq)||0)});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
             alert(`取り込み完了: 新規 ${added} 件 / 更新 ${updated} 件${skipped?` / スキップ ${skipped} 件`:''}\n（空欄の項目は既存データを上書きしません／氏名が空の行・スキップ指定は取り込みません／ケアマネ事業所・担当者はマスタにも自動登録しました）`);
           } catch (e) {
@@ -27696,7 +27721,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         const canSubmit = !!(newPatientLast.trim() && newPatientFirst.trim() && newPatientKanaLast.trim() && newPatientKanaFirst.trim());
         const submit = () => {
           if (!canSubmit) return;
-          const newId = Math.max(0, ...(appData.patients||[]).map(p=>p.id)) + 1;
+          // ★ 削除しても番号を戻さない連番 (patientIdSeq)。 前の利用者と同じIDの再利用を防ぐ。
+          const newId = Math.max(0, ...(appData.patients||[]).map(p=>p.id), Number(appData.patientIdSeq)||0) + 1;
           const newPat = {
             id: newId, name: fullName, kana: fullKana,
             lastName: newPatientLast.trim(), firstName: newPatientFirst.trim(),
@@ -27718,7 +27744,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             _extra.seikatsuKinouRecords = [...(appData.seikatsuKinouRecords||[]), { id:`sk_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:'', bikou:'', _auto:true }];
             _extra.kyomiKanshinRecords = [...(appData.kyomiKanshinRecords||[]), { id:`ki_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', items:{}, custom:[], bikou:'', _auto:true }];
           }
-          onSave({...appData, patients:[...(appData.patients||[]), newPat], ..._extra});
+          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra});
           setEditingPatientId(newId);
           setPatientStatusFilter('利用中');
           setNewPatientModal(false);
@@ -29921,10 +29947,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
               const doDeletePatients = () => {
                 const ids = [...bulkDelPatients]; if(!ids.length){ alert('削除する利用者を選択してください'); return; }
                 const names = (appData.patients||[]).filter(p=>ids.includes(p.id)).map(p=>p.name);
-                if(!window.confirm(`次の ${ids.length}名 の利用者を削除します。関連する提供記録などは残りますが、名簿からは完全に消えます。元に戻せません。\n\n${names.slice(0,15).join('、')}${names.length>15?' ほか':''}\n\n本当に削除しますか？`)) return;
+                if(!window.confirm(`次の ${ids.length}名 の利用者を削除します。提供記録・気分・体力測定・お知らせなど、この利用者に紐づくデータもすべて削除されます。元に戻せません。\n\n${names.slice(0,15).join('、')}${names.length>15?' ほか':''}\n\n本当に削除しますか？`)) return;
                 if(!window.confirm('最終確認：この操作は取り消せません。削除を実行しますか？')) return;
+                const idSet = new Set(ids);
                 const remain = (appData.patients||[]).filter(p=>!ids.includes(p.id));
-                onSave({ ...appData, patients: remain }, { manual:true, message:`✓ ${ids.length}名の利用者を削除しました`, allowEmpty:true });
+                const cleaned = stripPatientData(appData, idSet);
+                onSave({ ...appData, patients: remain, ...cleaned }, { manual:true, message:`✓ ${ids.length}名の利用者と関連データを削除しました`, allowEmpty:true });
                 setBulkDelPatients(new Set());
               };
               const doDeleteOffices = () => {
