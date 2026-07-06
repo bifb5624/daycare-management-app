@@ -35,6 +35,7 @@ import {
   supabaseListInvitesAndAccountsForPatient,
   supabaseMergePatientFromFamily,
   supabaseMergeFaceSheetFromCM,
+  supabaseMergePatientDocsFromCM,
   supabaseSetStoreAdminAuth,
   supabaseDeletePatientFamily,
   supabaseListSystemNotices,
@@ -12225,6 +12226,120 @@ function FamilyView() {
 }
 
 // === 家族画面 - 利用者ごとのコンテンツ ===
+// ★ ケアマネ(関係者)画面: 介護保険証 / 負担割合証 / アセスメントシート の閲覧・添付。
+//   添付は Supabase Storage へアップロードし、supabaseMergePatientDocsFromCM で事業所側 patient に追記マージ。
+//   → 事業所の個人ファイル(介護保険証/負担割合証/アセスメント)に反映され、双方で最新を共有できる。
+function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
+  const asmt0 = (patient?.personalFile || {}).assessment || {};
+  const [ins, setIns] = useState(() => Array.isArray(patient?.docInsurance) ? patient.docInsurance : []);
+  const [bur, setBur] = useState(() => Array.isArray(patient?.docBurden) ? patient.docBurden : []);
+  const [asmtText, setAsmtText] = useState(asmt0.text || '');
+  const [asmtFiles, setAsmtFiles] = useState(() => Array.isArray(asmt0.files) ? asmt0.files : []);
+  const [busy, setBusy] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState(null); // {file,name,type}
+  const origIns = React.useRef(new Set((patient?.docInsurance || []).map(d => String(d && d.id))));
+  const origBur = React.useRef(new Set((patient?.docBurden || []).map(d => String(d && d.id))));
+  const origAsmt = React.useRef(new Set((asmt0.files || []).map(d => String(d && d.id))));
+
+  const uploadFiles = async (fileList, setter, tag) => {
+    const files = rejectVideos(fileList);
+    if (!files.length) return;
+    setBusy(tag);
+    const added = [];
+    for (const f of files) {
+      try {
+        const isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+        const { blob, dataUrl, contentType } = await processUploadFile(f);
+        let stored = null;
+        if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `pf/${patient.id}` });
+        const rec = { id: `cm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, name: f.name, title: f.name.replace(/\.[^.]+$/, ''), fileDate: new Date().toISOString().slice(0, 10), type: isPdf ? 'pdf' : 'image', mimeType: contentType, uploadedAt: new Date().toISOString(), uploadedBy: byName, source: 'caremanager' };
+        if (stored?.path) rec.storagePath = stored.path; else if (dataUrl) rec.data = dataUrl;
+        added.push(rec);
+      } catch (e) { console.warn('[cmDocs] upload failed', e); }
+    }
+    setter(prev => [...prev, ...added]);
+    setBusy('');
+  };
+
+  const save = async () => {
+    if (saving || busy) return;
+    setSaving(true);
+    const now = new Date().toISOString();
+    const newIns = ins.filter(d => !origIns.current.has(String(d.id)));
+    const newBur = bur.filter(d => !origBur.current.has(String(d.id)));
+    const newAsmtFiles = asmtFiles.filter(d => !origAsmt.current.has(String(d.id)));
+    const pf = patient.personalFile || {};
+    const asmt = { ...(pf.assessment || {}), text: asmtText, files: asmtFiles, updatedAt: now, updatedBy: byName };
+    const np = { ...patient, docInsurance: ins, docBurden: bur, personalFile: { ...pf, assessment: asmt } };
+    onSaved(np);
+    if (isSupabaseEnabled && storeId) {
+      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
+      catch (e) { console.warn('[cmDocs] cloud sync failed', e); }
+    }
+    setSaving(false);
+    onClose();
+    alert('保存しました。事業所側の個人ファイル（介護保険証・負担割合証・アセスメント）に反映されます。');
+  };
+
+  const DocSection = ({ label, list, setter, tag, accept }) => (
+    <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a' }}>{label} <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 'normal' }}>({list.length})</span></div>
+        <label style={{ fontSize: 12, fontWeight: 'bold', color: '#0e7490', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8, padding: '5px 10px', cursor: busy ? 'wait' : 'pointer' }}>
+          {busy === tag ? 'アップロード中…' : '＋ 写真・PDFを追加'}
+          <input type="file" accept={accept} multiple style={{ display: 'none' }} disabled={!!busy} onChange={(e) => { uploadFiles(e.target.files, setter, tag); e.target.value = ''; }} />
+        </label>
+      </div>
+      {list.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#94a3b8', padding: '8px 0' }}>まだ登録がありません。</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          {list.map(d => {
+            const isNew = !origIns.current.has(String(d.id)) && !origBur.current.has(String(d.id)) && !origAsmt.current.has(String(d.id));
+            return (
+              <div key={d.id} style={{ position: 'relative', width: 88 }}>
+                {d.type === 'pdf' ? (
+                  <div onClick={() => setPreview({ file: d, name: d.name, type: 'pdf' })} style={{ width: 88, height: 88, borderRadius: 8, border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#b91c1c', background: '#fef2f2', cursor: 'pointer', textAlign: 'center', padding: 4 }}>📄 PDF</div>
+                ) : (
+                  <StoredImage file={d} alt={d.name} style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', cursor: 'pointer' }} onClick={() => setPreview({ file: d, name: d.name, type: 'image' })} />
+                )}
+                <div style={{ fontSize: 9, color: '#64748b', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.fileDate || ''}{d.uploadedBy ? `・${d.uploadedBy}` : ''}</div>
+                {isNew && (
+                  <button onClick={() => setter(prev => prev.filter(x => x.id !== d.id))} style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', background: '#ef4444', color: 'white', border: '2px solid white', fontSize: 12, lineHeight: '16px', cursor: 'pointer', padding: 0 }}>×</button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'white', borderRadius: 18, maxWidth: 560, width: '100%', padding: '20px 18px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 17, fontWeight: 'bold', color: '#0f172a', marginBottom: 4 }}>📎 保険証・負担割合証・アセスメント</div>
+        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>{patient?.name} 様。ここで登録・更新した書類は事業所側の個人ファイルに反映され、双方で最新のものを共有できます（既存の書類に追記され、上書きはしません）。</div>
+        <DocSection label="🪪 介護保険証" list={ins} setter={setIns} tag="ins" accept="image/*,application/pdf" />
+        <DocSection label="💳 負担割合証" list={bur} setter={setBur} tag="bur" accept="image/*,application/pdf" />
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 8 }}>📝 アセスメントシート</div>
+          <textarea value={asmtText} onChange={(e) => setAsmtText(e.target.value)} placeholder="アセスメント内容を手入力できます（写真・PDFの添付も可能）。" rows={6} style={{ width: '100%', fontSize: 13, padding: 10, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6 }} />
+          <div style={{ marginTop: 10 }}>
+            <DocSection label="添付ファイル" list={asmtFiles} setter={setAsmtFiles} tag="asmt" accept="image/*,application/pdf" />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
+          <button onClick={onClose} disabled={saving} style={{ flex: 1, padding: '11px', fontSize: 14, fontWeight: 'bold', color: '#475569', background: '#f1f5f9', border: 'none', borderRadius: 10, cursor: 'pointer' }}>閉じる</button>
+          <button onClick={save} disabled={saving || !!busy} style={{ flex: 2, padding: '11px', fontSize: 14, fontWeight: 'bold', color: 'white', background: (saving || busy) ? '#94a3b8' : '#0891b2', border: 'none', borderRadius: 10, cursor: (saving || busy) ? 'wait' : 'pointer' }}>{saving ? '保存中…' : '保存して事業所に反映'}</button>
+        </div>
+      </div>
+      {preview && <MediaPreviewModal media={preview} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}
+
 function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient }) {
   const [tab, setTab] = useState('news');
   // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
@@ -12278,6 +12393,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [cmFaceSheetOpen, setCmFaceSheetOpen] = useState(false); // ★ ケアマネ: フェイスシート編集
   const [cmFaceSheetSaving, setCmFaceSheetSaving] = useState(false);
+  const [cmDocsOpen, setCmDocsOpen] = useState(false); // ★ ケアマネ: 保険証・負担割合証・アセスメント
   const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
@@ -12518,6 +12634,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               {/* ★ ケアマネ(関係者)のみ: フェイスシートの登録・編集 (事業所の個人ファイルへ反映) */}
               {isCmAccount && !_isPreview && (
                 <button onClick={()=>setCmFaceSheetOpen(true)} style={{...hdrBtnStyle, background:'#eef2ff', borderColor:'#c7d2fe', color:'#4338ca'}}>📝 フェイスシート</button>
+              )}
+              {isCmAccount && !_isPreview && (
+                <button onClick={()=>setCmDocsOpen(true)} style={{...hdrBtnStyle, background:'#ecfeff', borderColor:'#a5f3fc', color:'#0e7490'}}>📎 保険証・アセスメント</button>
               )}
               {/* ★ 代表者以外も一覧を閲覧できる (招待/取消などの操作はモーダル内で代表者のみ) */}
               <button onClick={()=>{setInviteMode('list'); setInviteFamilyOpen(true);}} style={hdrBtnStyle}>
@@ -12768,6 +12887,19 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             alert('フェイスシートを保存しました。事業所側の個人ファイルに反映されます。');
           }}
           onClose={()=>setCmFaceSheetOpen(false)}
+        />
+      )}
+      {cmDocsOpen && (
+        <CmDocsModal
+          patient={patient}
+          storeId={loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null}
+          byName={loggedAcc?.displayName || loggedAcc?.username || patient?.cmName || 'ケアマネ'}
+          onSaved={(np)=>{
+            const updated = { ...data, patients:(data.patients||[]).map(p => p.id===patient.id ? np : p) };
+            try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+            setData(updated);
+          }}
+          onClose={()=>setCmDocsOpen(false)}
         />
       )}
       {myInfoOpen && (

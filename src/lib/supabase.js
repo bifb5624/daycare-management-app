@@ -763,6 +763,60 @@ export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet
   } catch (e) { console.warn('[supabase] mergeFaceSheetFromCM failed', e); return false; }
 }
 
+// ★ ケアマネ(関係者)画面から 書類(介護保険証/負担割合証/アセスメント) を更新
+//    → 事業所側 patient.docInsurance / docBurden / personalFile.assessment に「追記マージ」(既存は温存)。
+//    → 変更内容を patient.docUpdates ログに記録(readOffice:false = 事業所側に新着通知)。
+//    patch: { docInsurance?:[], docBurden?:[], assessmentText?:string, assessmentFiles?:[] }
+//    meta: { byName }
+export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch = {}, meta = {}) {
+  if (!supabase || !storeId || !patientId) return false;
+  try {
+    const row = await supabaseLoadStateForStore(storeId);
+    if (!row || !row.data) return false;
+    const currentData = row.data;
+    const now = new Date().toISOString();
+    const byName = meta.byName || 'ケアマネ';
+    let changed = [];
+    const patients = (currentData.patients || []).map(p => {
+      if (String(p.id) !== String(patientId)) return p;
+      const np = { ...p };
+      const unionDocs = (key, incoming, label) => {
+        if (!Array.isArray(incoming) || !incoming.length) return;
+        const ex = Array.isArray(np[key]) ? np[key] : [];
+        const ids = new Set(ex.map(d => String(d && d.id)));
+        const add = incoming.filter(d => d && !ids.has(String(d.id)));
+        if (add.length) { np[key] = [...ex, ...add]; changed.push(label); }
+      };
+      unionDocs('docInsurance', patch.docInsurance, '介護保険証');
+      unionDocs('docBurden', patch.docBurden, '負担割合証');
+      const hasAsmtText = patch.assessmentText != null && String(patch.assessmentText) !== ((np.personalFile || {}).assessment || {}).text;
+      const hasAsmtFiles = Array.isArray(patch.assessmentFiles) && patch.assessmentFiles.length;
+      if (hasAsmtText || hasAsmtFiles) {
+        const pf = np.personalFile || {};
+        const asmt = { ...(pf.assessment || {}) };
+        if (patch.assessmentText != null) asmt.text = String(patch.assessmentText);
+        if (hasAsmtFiles) {
+          const ex = Array.isArray(asmt.files) ? asmt.files : [];
+          const ids = new Set(ex.map(d => String(d && d.id)));
+          asmt.files = [...ex, ...patch.assessmentFiles.filter(d => d && !ids.has(String(d.id)))];
+        }
+        asmt.updatedAt = now; asmt.updatedBy = byName;
+        np.personalFile = { ...pf, assessment: asmt };
+        changed.push('アセスメントシート');
+      }
+      if (changed.length) {
+        const items = [...new Set(changed)];
+        const log = Array.isArray(np.docUpdates) ? np.docUpdates : [];
+        np.docUpdates = [...log, { id: `du_${now}_${Math.round(Math.random() * 1e6)}`, at: now, by: 'caremanager', byName, items, readOffice: false, readCm: true }].slice(-50);
+      }
+      return np;
+    });
+    if (!changed.length) return true;
+    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
+    return true;
+  } catch (e) { console.warn('[supabase] mergePatientDocsFromCM failed', e); return false; }
+}
+
 // ★ 店舗の管理者パスワード(adminAuth)だけを安全に更新する。
 //   対象店舗のクラウドデータを読み直し、systemSettings.adminAuth のみ変更して書き戻す。
 //   → 店舗切替直後などに「別店舗の appData 全体」を誤って書き込む(=店舗間データ混在)のを防ぐ。
