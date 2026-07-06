@@ -21776,14 +21776,24 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     const mM = r.date ? r.date.match(/(\d+)月/) : null;
     if (!mM) return false;
     if (targetMonths === null) return true;
-    // 年月マッチング: recordsには年情報がないため月のみでフィルタ（複数月スパンの場合は月番号で比較）
     const mo = parseInt(mM[1]);
+    // ★ 年が記録にあれば「年月」で厳密一致 (別の年の同じ月の記録が混ざり、曜日がズレるのを防ぐ)。
+    //   年が無い旧記録は従来どおり月のみで一致。
+    if (r.year) return targetMonths.includes(`${r.year}-${String(mo).padStart(2,'0')}`);
     return targetMonths.some(ym => parseInt(ym.split('-')[1]) === mo);
   }), [appData.ticketRecords, targetMonths]);
 
   const recsAP = React.useMemo(() => recs.map(r => {
     const p = patMap[r.patientId];
-    const di = DOW_MAP[r.dayOfWeek] ?? -1;
+    // ★ 集計に使う曜日は「記録の日付(＋年)から計算」する。 保存済み dayOfWeek が古い/誤っていても、
+    //   入力画面(日付→曜日で表示)と一致させ、別曜日への誤集計を防ぐ。
+    let di = DOW_MAP[r.dayOfWeek] ?? -1;
+    const dm = String(r.date||'').match(/(\d+)月(\d+)日/);
+    if (dm && r.year) {
+      const d = new Date(Number(r.year), Number(dm[1])-1, Number(dm[2]));
+      if (!isNaN(d.getTime())) di = d.getDay();
+    }
+    const _dow = di >= 0 ? DOW_LABELS[di] : (r.dayOfWeek || '');
     let ap = p && di >= 0 ? (p.scheduleAmPm?.[di] || '') : '';
     // 振替記録は furikaeAmpm を優先 (普段の曜日スケジュールに無い場合も正しく振り分け)
     if (r.status === '振替' && r.furikaeAmpm) ap = r.furikaeAmpm;
@@ -21796,7 +21806,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       else if (hasAM) ap = 'AM';
       else if (hasPM) ap = 'PM';
     }
-    return { ...r, amPm: ap };
+    return { ...r, amPm: ap, _dow };
   }), [recs, patMap]);
 
   // 通所曜日ラベル取得
@@ -21912,7 +21922,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     ];
     const days = allDays.filter(d => !closed.includes(d.idx)).map(d => d.dow);
     return days.map(dow => {
-      const dayRecs = recsAP.filter(r => r.dayOfWeek === dow);
+      const dayRecs = recsAP.filter(r => r._dow === dow);
       // 1日 (終日) の利用者は AM と PM の両方に含める。
       // 合計 = AM + PM (各セッション件数の総和) で整合する
       const calcRate = (ap) => {
