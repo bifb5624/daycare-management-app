@@ -32805,22 +32805,35 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         const cs="border:1px solid #000;padding:4px 6px;vertical-align:top;white-space:pre-wrap;font-size:11px;word-break:break-word;line-height:1.5;";
         const lab=cs+"background:#f2f2f2;font-weight:bold;white-space:nowrap;";
         const progRows=(printRec.programs||[]).filter(p=>p&&(String(p.item||'')+String(p.content||'')).trim()).map(p=>`<tr><td style="${cs}white-space:nowrap;">${esc(p.item)}</td><td style="${cs}">${esc(p.content)}</td><td style="${cs}text-align:center;">${esc(p.freqWeek)}</td><td style="${cs}text-align:center;">${esc(p.time)}</td></tr>`).join('') || `<tr><td style="${cs}" colspan="4">&nbsp;</td></tr>`;
-        const html=`<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:190mm;padding:8mm 6mm;box-sizing:border-box;background:white;">
-          <div style="text-align:center;font-size:18px;font-weight:bold;margin-bottom:10px;">通所介護計画書</div>
+        const _fmtDate=(iso)=>{ if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return String(iso); return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`; };
+        const _certPeriod = (patient?.careLevelFrom||patient?.careLevelTo) ? `${_fmtDate(patient?.careLevelFrom)||'　　'} 〜 ${_fmtDate(patient?.careLevelTo)||'　　'}` : '';
+        const _birthStr = patient?.birthDate ? _fmtDate(patient.birthDate) : '';
+        const _facLine = [esc(facility.name), (facility.address?esc(facility.address)+esc(facility.addressBuilding||''):''), (facility.phone?`TEL ${esc(facility.phone)}`:''), (facility.manager?`管理者 ${esc(facility.manager)}`:'')].filter(Boolean).join('　');
+        const html=`<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:190mm;padding:8mm 7mm;box-sizing:border-box;background:white;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #000;padding-bottom:5px;margin-bottom:8px;">
+            <div style="font-size:20px;font-weight:bold;letter-spacing:5px;">通所介護計画書</div>
+            <div style="font-size:10px;color:#333;">${esc(facility.name)||''}</div>
+          </div>
           <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
-            <tr><td style="${lab}">利用者名</td><td style="${cs}width:38%;">${esc(patient?.name)} 様（${esc(patient?.careLevel)||''}）</td><td style="${lab}">事業所</td><td style="${cs}">${esc(facility.name)||''}</td></tr>
-            <tr><td style="${lab}">作成日</td><td style="${cs}">${esc(printRec.createdDate)}</td><td style="${lab}">計画作成者</td><td style="${cs}">${esc(printRec.author)}（${esc(printRec.authorJob)||''}）</td></tr>
+            <tr><td style="${lab}width:80px;">利用者氏名</td><td style="${cs}">${esc(patient?.name)} 様${_age(patient?.birthDate)!==''?`（${_age(patient?.birthDate)}歳）`:''}</td><td style="${lab}width:80px;">生年月日</td><td style="${cs}width:26%;">${esc(_birthStr)||'&nbsp;'}</td></tr>
+            <tr><td style="${lab}">要介護度</td><td style="${cs}">${esc(patient?.careLevel)||'&nbsp;'}</td><td style="${lab}">認定有効期間</td><td style="${cs}">${esc(_certPeriod)||'&nbsp;'}</td></tr>
+            <tr><td style="${lab}">作成日</td><td style="${cs}">${esc(printRec.createdDate)||'&nbsp;'}</td><td style="${lab}">計画作成者</td><td style="${cs}">${esc(printRec.author)||''}${printRec.authorJob?`（${esc(printRec.authorJob)}）`:''}</td></tr>
+            <tr><td style="${lab}">前回作成日</td><td style="${cs}">${esc(printRec.prevDate)||'&nbsp;'}</td><td style="${lab}">初回作成日</td><td style="${cs}">${esc(printRec.firstDate)||'&nbsp;'}</td></tr>
           </table>
           <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
             <tr><td style="${lab}width:130px;">ご本人の意向</td><td style="${cs}">${esc(printRec.honninKibou)||'&nbsp;'}</td></tr>
             <tr><td style="${lab}">ご家族の意向</td><td style="${cs}">${esc(printRec.kazokuKibou)||'&nbsp;'}</td></tr>
             <tr><td style="${lab}">総合的な援助の方針</td><td style="${cs}">${esc(printRec.hoshin)||'&nbsp;'}</td></tr>
-            <tr><td style="${lab}">長期目標（${esc(printRec.longPeriod)||''}）</td><td style="${cs}">${esc(printRec.longGoal)||'&nbsp;'}</td></tr>
-            <tr><td style="${lab}">短期目標（${esc(printRec.shortPeriod)||''}）</td><td style="${cs}">${esc(printRec.shortGoal)||'&nbsp;'}</td></tr>
           </table>
-          <div style="font-size:12px;font-weight:bold;margin:6px 0 3px;">【サービス提供内容】</div>
+          <div style="font-size:12px;font-weight:bold;margin:8px 0 3px;">【目標】</div>
           <table style="width:100%;border-collapse:collapse;">
-            <tr><td style="${lab}text-align:center;width:90px;">項目</td><td style="${lab}text-align:center;">内容</td><td style="${lab}text-align:center;width:70px;">頻度</td><td style="${lab}text-align:center;width:60px;">時間</td></tr>
+            <tr><td style="${lab}text-align:center;width:70px;">区分</td><td style="${lab}text-align:center;">目標</td><td style="${lab}text-align:center;width:120px;">期間</td><td style="${lab}text-align:center;width:80px;">達成度</td></tr>
+            <tr><td style="${lab}">長期目標</td><td style="${cs}">${esc(printRec.longGoal)||'&nbsp;'}</td><td style="${cs}text-align:center;">${esc(printRec.longPeriod)||'&nbsp;'}</td><td style="${cs}text-align:center;">${esc(printRec.longAchieve)||'&nbsp;'}</td></tr>
+            <tr><td style="${lab}">短期目標</td><td style="${cs}">${esc(printRec.shortGoal)||'&nbsp;'}</td><td style="${cs}text-align:center;">${esc(printRec.shortPeriod)||'&nbsp;'}</td><td style="${cs}text-align:center;">${esc(printRec.shortAchieve)||'&nbsp;'}</td></tr>
+          </table>
+          <div style="font-size:12px;font-weight:bold;margin:8px 0 3px;">【サービス提供内容】</div>
+          <table style="width:100%;border-collapse:collapse;">
+            <tr><td style="${lab}text-align:center;width:100px;">項目</td><td style="${lab}text-align:center;">内容</td><td style="${lab}text-align:center;width:80px;">頻度（週）</td><td style="${lab}text-align:center;width:70px;">時間</td></tr>
             ${progRows}
           </table>
           <table style="width:100%;border-collapse:collapse;margin-top:6px;">
@@ -32828,10 +32841,14 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
             <tr><td style="${lab}">送迎</td><td style="${cs}">${esc(printRec.sougei)||'&nbsp;'}</td></tr>
             <tr><td style="${lab}">特記事項</td><td style="${cs}">${esc(printRec.tokki)||'&nbsp;'}</td></tr>
           </table>
-          <table style="width:100%;border-collapse:collapse;margin-top:10px;">
-            <tr><td style="${lab}width:90px;">説明日</td><td style="${cs}width:34%;">${esc(printRec.setsumeiDate)||'&nbsp;'}</td><td style="${lab}">説明者</td><td style="${cs}">${esc(printRec.setsumeisha)||'&nbsp;'}</td></tr>
-            <tr><td style="${lab}">同意（署名）</td><td style="${cs}" colspan="3">${esc(printRec.doui)||'&nbsp;'}　　　　　　　㊞</td></tr>
-          </table>
+          <div style="border:1px solid #000;padding:7px 9px;margin-top:10px;font-size:11px;line-height:1.8;">
+            上記の通所介護計画について、説明を受け内容に同意しました。
+            <div style="display:flex;justify-content:space-between;margin-top:6px;">
+              <div>説明日：${esc(printRec.setsumeiDate)||'　　　年　　月　　日'}　　説明者：${esc(printRec.setsumeisha)||'　　　　　　'}</div>
+              <div>ご利用者・ご家族 署名：${esc(printRec.doui)||'　　　　　　　　'}　㊞</div>
+            </div>
+          </div>
+          <div style="margin-top:8px;font-size:10px;text-align:right;color:#333;">${_facLine}</div>
         </div>`;
         return <div id="tk-print-area" style={{display:'none'}} dangerouslySetInnerHTML={{__html:html}}/>;
       })()}
