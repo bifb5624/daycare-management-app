@@ -14345,6 +14345,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         address: storeForm.address.trim(),
         phone: formatJpPhone(storeForm.phone),
         fax: formatJpPhone(storeForm.fax),
+        email: storeForm.login_email.trim(),
       });
       // 2. 店舗ログイン情報を staff として作成
       try {
@@ -29005,6 +29006,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 {/* ★ 電話/FAX: ハイフン自動付与 (数字のみ入力 → formatJpPhone で表示) */}
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.phone || "")} onChange={e => setFacilityInfo({...facilityInfo, phone: toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345678" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><input type="tel" inputMode="numeric" value={formatJpPhone(facilityInfo.fax || "")} onChange={e => setFacilityInfo({...facilityInfo, fax: toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)})} placeholder="0312345679" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">メールアドレス</label><input type="email" value={facilityInfo.email || ""} onChange={e => setFacilityInfo({...facilityInfo, email: e.target.value})} placeholder="store@example.com" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/><div className="text-[11px] text-slate-400 mt-1">つむぎ管理局の店舗登録時に入力されたメールアドレスが初期反映されます。</div></div>
                 <div className="border-t border-slate-200 pt-4"><h4 className="text-sm font-bold text-slate-700 mb-3">サービス提供時間</h4>
                   <div className="grid grid-cols-3 gap-4">
                     <div><label className="block text-sm font-bold text-slate-600 mb-1.5">1単位目</label>
