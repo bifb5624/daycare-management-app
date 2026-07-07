@@ -28635,6 +28635,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch } }, { manual:true, message: msg || '✓ 保存しました' });
   // ★ 一括削除(管理者用): 選択中の利用者ID / ケアマネ事業所名
   const [bulkDelPatients, setBulkDelPatients] = useState(() => new Set());
+  const [bulkDelStatus, setBulkDelStatus] = useState('all'); // 一括削除の状態絞り込み: all/利用中/休止/退所
   const [bulkDelOffices, setBulkDelOffices] = useState(() => new Set());
   // ★ アドオン (本部のみ ON/OFF)。 即時保存。
   const toggleAddon = (key) => {
@@ -30099,26 +30100,38 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 <SectionCard title="🗑 一括削除（管理者用）">
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-700 font-bold">⚠ ここでの削除は<b>元に戻せません</b>。チェックを付けて「選択した◯件を削除」を押すと、まとめて削除できます（1件ずつの削除も可）。この機能は<b>管理者のみ</b>に表示されます。</div>
                   {/* 利用者 */}
+                  {(() => {
+                  const _pStatus = (p) => (p.status==='退所' ? '退所' : p.status==='休止' ? '休止' : '利用中');
+                  const filteredPatients = bulkDelStatus==='all' ? patients : patients.filter(p=>_pStatus(p)===bulkDelStatus);
+                  return (
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-                      <div className="text-sm font-bold text-slate-700">利用者（{patients.length}名）</div>
+                      <div className="text-sm font-bold text-slate-700">利用者（{filteredPatients.length}名{bulkDelStatus!=='all'?` / 全${patients.length}名`:''}）</div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <button type="button" onClick={()=>setBulkDelPatients(new Set(patients.filter(p=>!(p.name||'').trim()).map(p=>p.id)))} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded" title="氏名が空の利用者だけを選択(CSVの空行対策)">氏名が空を選択</button>
-                        <button type="button" onClick={()=>setBulkDelPatients(new Set(patients.map(p=>p.id)))} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全選択</button>
+                        <button type="button" onClick={()=>setBulkDelPatients(new Set(filteredPatients.filter(p=>!(p.name||'').trim()).map(p=>p.id)))} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded" title="氏名が空の利用者だけを選択(CSVの空行対策)">氏名が空を選択</button>
+                        <button type="button" onClick={()=>setBulkDelPatients(new Set(filteredPatients.map(p=>p.id)))} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">{bulkDelStatus==='all'?'全選択':'表示中を全選択'}</button>
                         <button type="button" onClick={()=>setBulkDelPatients(new Set())} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全解除</button>
                         <button type="button" onClick={doDeletePatients} disabled={!bulkDelPatients.size} className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 px-3 py-1 rounded">選択した{bulkDelPatients.size||''}件を削除</button>
                       </div>
                     </div>
+                    {/* ★ 状態で絞り込み */}
+                    <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">状態:</span>
+                      {[['all','全て'],['利用中','利用中'],['休止','一時停止'],['退所','利用停止']].map(([v,l])=>(
+                        <button key={v} type="button" onClick={()=>setBulkDelStatus(v)} className={`text-xs font-bold px-3 py-1 rounded-full border ${bulkDelStatus===v?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{l}（{v==='all'?patients.length:patients.filter(p=>_pStatus(p)===v).length}）</button>
+                      ))}
+                    </div>
                     <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
-                      {patients.length===0 ? <div className="text-xs text-slate-400 p-3">利用者がいません</div> : patients.map(p=>(
+                      {filteredPatients.length===0 ? <div className="text-xs text-slate-400 p-3">該当する利用者がいません</div> : filteredPatients.map(p=>(
                         <label key={p.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer">
                           <input type="checkbox" checked={bulkDelPatients.has(p.id)} onChange={()=>togglePat(p.id)} className="w-4 h-4" style={{accentColor:'#dc2626'}}/>
                           <span className={`text-sm font-bold flex-1 ${(p.name||'').trim()?'text-slate-700':'text-amber-600 italic'}`}>{(p.name||'').trim() || `（氏名なし・ID:${p.id}）`}</span>
-                          <span className="text-[11px] text-slate-400">{p.status||''}{p.careLevel?`・${p.careLevel}`:''}</span>
+                          <span className="text-[11px] text-slate-400">{_pStatus(p)}{p.careLevel?`・${p.careLevel}`:''}</span>
                         </label>
                       ))}
                     </div>
                   </div>
+                  ); })()}
                   {/* ケアマネ事業所 */}
                   <div>
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
