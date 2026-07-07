@@ -1501,8 +1501,11 @@ function createBlankAppData(storeRecord, staffSession) {
   const facility = {
     name: storeRecord?.name || staffSession?.storeName || '',
     short_name: storeRecord?.short_name || '',
+    // ★ 各種設定は zipCode / addressBuilding を参照するため、その名前で転記する (以前は zip のみで反映されなかった)
     zip: storeRecord?.zip_code || '',
+    zipCode: storeRecord?.zip_code || '',
     address: storeRecord?.address || '',
+    addressBuilding: storeRecord?.address_building || '',
     phone: storeRecord?.phone || '',
     fax: storeRecord?.fax || '',
     email: storeRecord?.email || '',
@@ -14343,6 +14346,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         org_name: storeForm.org_name.trim(),
         zip_code: formatJpZip(storeForm.zip),
         address: storeForm.address.trim(),
+        address_building: storeForm.addressBuilding.trim(),
         phone: formatJpPhone(storeForm.phone),
         fax: formatJpPhone(storeForm.fax),
         email: storeForm.login_email.trim(),

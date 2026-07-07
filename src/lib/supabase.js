@@ -954,13 +954,16 @@ export async function supabaseListStores() {
   } catch { return []; }
 }
 
-export async function supabaseCreateStore({ id, name, short_name, org_name, zip_code, address, phone, fax, email }) {
+export async function supabaseCreateStore({ id, name, short_name, org_name, zip_code, address, phone, fax, email, address_building }) {
   if (!supabase) throw new Error('Supabase 未接続');
-  const { data, error } = await supabase
-    .from('stores')
-    .insert({ id, name, short_name, org_name, zip_code, address, phone, fax, email })
-    .select()
-    .single();
+  const base = { id, name, short_name, org_name, zip_code, address, phone, fax, email };
+  const withBuilding = (address_building !== undefined && address_building !== null && address_building !== '')
+    ? { ...base, address_building } : base;
+  let { data, error } = await supabase.from('stores').insert(withBuilding).select().single();
+  // ★ address_building 列がまだ無いDBでも店舗作成が失敗しないようフォールバック (14_add_store_address_building.sql 未適用時)
+  if (error && withBuilding !== base && /address_building|column|schema/i.test(error.message || '')) {
+    ({ data, error } = await supabase.from('stores').insert(base).select().single());
+  }
   if (error) throw error;
   return data;
 }
