@@ -20379,12 +20379,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {pts1.map(p=>{
                     const warn=refLines&&refLines.some(r=>p.v>=r.v&&r.warn);
                     const isMax=p===maxP1, isMin=p===minP1;
-                    const show=()=>setVitalTooltip({x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:pts2.find(q=>q.i===p.i)});
                     return (
                       <g key={p.i}>
-                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={14} fill="transparent" style={{cursor:'pointer'}}
-                          onClick={()=>setVitalTooltip(prev=>(prev&&prev.field===field&&prev.i===p.i)?null:{x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:pts2.find(q=>q.i===p.i)})}
-                          onMouseEnter={show} onMouseLeave={()=>setVitalTooltip(null)}/>
                         <circle cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?7:5}
                           fill={isMax?'#ef4444':isMin?'#3b82f6':warn?'#f97316':color1}
                           stroke="white" strokeWidth={isMax||isMin?2:1.5} pointerEvents="none"/>
@@ -20396,9 +20392,6 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     const isMax=p===maxP2, isMin=p===minP2;
                     return (
                       <g key={'d'+p.i}>
-                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={14} fill="transparent" style={{cursor:'pointer'}}
-                          onClick={()=>setVitalTooltip(prev=>(prev&&prev.field===field&&prev.i===p.i)?null:{x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:p})}
-                          onMouseEnter={()=>setVitalTooltip({x:xPV(p.i),y:yP(p.v),d:p.d,field,i:p.i,pts2:p})} onMouseLeave={()=>setVitalTooltip(null)}/>
                         <circle cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?7:5}
                           fill={isMax?'#ef4444':isMin?'#3b82f6':color2}
                           stroke="white" strokeWidth={isMax||isMin?2:1.5} pointerEvents="none"/>
@@ -20415,48 +20408,34 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       i=Math.max(0,Math.min(dailyData.length-1,i));
                       const p1=pts1.find(q=>q.i===i)||ptsE1.find(q=>q.i===i);
                       if(!p1){ setVitalTooltip(null); return; }
-                      setVitalTooltip({x:xPV(i),y:yP(p1.v),d:dailyData[i],field,i,pts2:pts2.find(q=>q.i===i)});
+                      // ★ カーソル位置(px/py)に追従させる (気分トレンドと同じHTMLツールチップ)
+                      setVitalTooltip({px:e.clientX,py:e.clientY,d:dailyData[i],field,i});
                     }}
                     onMouseLeave={()=>setVitalTooltip(null)}
-                    onClick={(e)=>{
-                      const rb=e.currentTarget.getBoundingClientRect();
-                      const ox=e.clientX-rb.left;
-                      let i=Math.round((ox-PAD_X-_STEP/2)/_STEP);
-                      i=Math.max(0,Math.min(dailyData.length-1,i));
-                      const p1=pts1.find(q=>q.i===i)||ptsE1.find(q=>q.i===i);
-                      if(!p1) return;
-                      setVitalTooltip(prev=>(prev&&prev.field===field&&prev.i===i)?null:{x:xPV(i),y:yP(p1.v),d:dailyData[i],field,i,pts2:pts2.find(q=>q.i===i)});
-                    }}
                   />
-                  {/* ツールチップ — ★ ドットに被らないよう上(無理なら下)へギャップを空けて配置 + 幅を広げ単位の見切れ防止 */}
-                  {vitalTooltip&&vitalTooltip.field===field&&(()=>{
-                    const d=vitalTooltip.d;
-                    const lines=[d.date];
-                    if(field==='bpUp') {
-                      if(d.bpUp!=null) lines.push(`通所時: ${d.bpUp}/${d.bpDn??'-'} mmHg`);
-                      if(d.bpUpEn!=null) lines.push(`終了時: ${d.bpUpEn}/${d.bpDnEn??'-'} mmHg`);
-                    }
-                    else if(field==='temp') lines.push(`体温: ${d.temp}℃`);
-                    else if(field==='pulse') {
-                      if(d.pulse!=null) lines.push(`通所時: ${d.pulse} 回/分`);
-                      if(d.pulseEn!=null) lines.push(`終了時: ${d.pulseEn} 回/分`);
-                    }
-                    const bw=200, bh=lines.length*19+12;
-                    let tx=vitalTooltip.x - bw/2;                       // ドットの真上に中央寄せ
-                    tx=Math.max(2, Math.min(tx, W+LW - bw - 2));        // 描画域内にクランプ
-                    let ty=vitalTooltip.y - bh - 16;                    // ドットの16px上(被らない)
-                    if(ty<2) ty=vitalTooltip.y + 18;                    // 上に入らなければ下へ
-                    return (
-                      <g pointerEvents="none">
-                        <rect x={tx} y={ty} width={bw} height={bh} rx={6} fill="#1e293b" opacity={0.95}/>
-                        {lines.map((l,li)=><text key={li} x={tx+11} y={ty+19+li*19} fontSize={13} fill="white" fontWeight="bold">{l}</text>)}
-                      </g>
-                    );
-                  })()}
                   {/* X軸日付ラベル */}
                   {dailyData.map((d,i)=>showLabel(i)?<text key={i} x={xPV(i)} y={H+12} textAnchor="middle" fontSize={11} fill="#000" fontWeight="bold">{d.label}</text>:null)}
                 </svg>
                 </div>
+                {/* ★ ツールチップ: カーソル追従のHTMLオーバーレイ(気分トレンドと同じ滑らかさ)。 pointerEvents:none */}
+                {vitalTooltip&&vitalTooltip.field===field&&(()=>{
+                  const d=vitalTooltip.d;
+                  const lines=[d.date];
+                  if(field==='bpUp') {
+                    if(d.bpUp!=null) lines.push(`通所時: ${d.bpUp}/${d.bpDn??'-'} mmHg`);
+                    if(d.bpUpEn!=null) lines.push(`終了時: ${d.bpUpEn}/${d.bpDnEn??'-'} mmHg`);
+                  }
+                  else if(field==='temp') lines.push(`体温: ${d.temp}℃`);
+                  else if(field==='pulse') {
+                    if(d.pulse!=null) lines.push(`通所時: ${d.pulse} 回/分`);
+                    if(d.pulseEn!=null) lines.push(`終了時: ${d.pulseEn} 回/分`);
+                  }
+                  return (
+                    <div style={{position:'fixed',left:vitalTooltip.px+12,top:vitalTooltip.py-8,background:'rgba(15,23,42,0.92)',color:'white',borderRadius:10,padding:'8px 12px',fontSize:13,zIndex:9999,pointerEvents:'none',minWidth:140,boxShadow:'0 4px 16px rgba(0,0,0,0.3)'}}>
+                      {lines.map((l,li)=><div key={li} style={{fontWeight:li===0?'bold':'normal',marginBottom:li<lines.length-1?2:0,borderBottom:li===0?'1px solid rgba(255,255,255,0.2)':'none',paddingBottom:li===0?4:0}}>{l}</div>)}
+                    </div>
+                  );
+                })()}
               </div>
             );
           };
@@ -20842,25 +20821,37 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       {exData.map((d,i)=>{
                         if (graphType === 'weight_reps') {
                           if (d.secondary == null) return null;
-                          return <circle key={`s${i}`} cx={xP2(i)} cy={yPSec(d.secondary)} r={3.5} fill="#f97316" stroke="white" strokeWidth={1.5}
-                            onMouseEnter={()=>setExTooltip({i,x:xP2(i),y:yPSec(d.secondary),d})} onMouseLeave={()=>setExTooltip(null)}/>;
+                          return <circle key={`s${i}`} cx={xP2(i)} cy={yPSec(d.secondary)} r={3.5} fill="#f97316" stroke="white" strokeWidth={1.5} pointerEvents="none"/>;
                         }
                         const dv=d.val||d.avg||0; const isMax=dv===maxV,isMin=dv===minV;
-                        return <circle key={i} cx={xP2(i)} cy={yP2(dv)} r={isMax||isMin?5:3.5} fill={isMax?'#ef4444':isMin?'#3b82f6':'#6366f1'} stroke="white" strokeWidth={1.5}
-                          onMouseEnter={()=>setExTooltip({i,x:xP2(i),y:yP2(dv),d})} onMouseLeave={()=>setExTooltip(null)}/>;
+                        return <circle key={i} cx={xP2(i)} cy={yP2(dv)} r={isMax||isMin?5:3.5} fill={isMax?'#ef4444':isMin?'#3b82f6':'#6366f1'} stroke="white" strokeWidth={1.5} pointerEvents="none"/>;
                       })}
-                      {exTooltip&&(()=>{
-                        const tx=Math.min(exTooltip.x+8,W2-80),ty=Math.max(exTooltip.y-52,4);
-                        const d=exTooltip.d;
-                        const lines2 = graphType === 'weight_reps'
-                          ? [d.date||d.month+'月', `${d.primary ?? '-'}${unitLabel} × ${d.secondary ?? '-'}回`]
-                          : [d.date||d.month+'月',`${d.val||d.avg?.toFixed(1)||'-'}${unitLabel}`];
-                        return (<g>
-                          <rect x={tx} y={ty} width={150} height={lines2.length*16+10} rx={5} fill="#1e293b" opacity={0.92}/>
-                          {lines2.map((l,li)=><text key={li} x={tx+8} y={ty+16+li*16} fontSize={10} fill="white" fontWeight="bold">{l}</text>)}
-                        </g>);
-                      })()}
+                      {/* ★ ホバー用オーバーレイ: プロット全体1枚。 カーソルに追従してツールチップを滑らかに更新 */}
+                      <rect x={0} y={0} width={W2} height={H2} fill="transparent" style={{cursor:'pointer'}}
+                        onMouseMove={(e)=>{
+                          const rb=e.currentTarget.getBoundingClientRect();
+                          const ox=e.clientX-rb.left;
+                          let i=Math.round((ox-PAD_L2-_STEP2/2)/_STEP2);
+                          i=Math.max(0,Math.min(exData.length-1,i));
+                          const d=exData[i];
+                          if(!d){ setExTooltip(null); return; }
+                          setExTooltip({px:e.clientX,py:e.clientY,d,i});
+                        }}
+                        onMouseLeave={()=>setExTooltip(null)}
+                      />
                     </svg>
+                    {/* ★ ツールチップ: カーソル追従のHTMLオーバーレイ(気分トレンドと同じ滑らかさ)。 pointerEvents:none */}
+                    {exTooltip&&exTooltip.d&&(()=>{
+                      const d=exTooltip.d;
+                      const lines2 = graphType === 'weight_reps'
+                        ? [d.date||d.month+'月', `${d.primary ?? '-'}${unitLabel} × ${d.secondary ?? '-'}回`]
+                        : [d.date||d.month+'月',`${d.val||d.avg?.toFixed(1)||'-'}${unitLabel}`];
+                      return (
+                        <div style={{position:'fixed',left:exTooltip.px+12,top:exTooltip.py-8,background:'rgba(15,23,42,0.92)',color:'white',borderRadius:10,padding:'8px 12px',fontSize:13,zIndex:9999,pointerEvents:'none',minWidth:120,boxShadow:'0 4px 16px rgba(0,0,0,0.3)'}}>
+                          {lines2.map((l,li)=><div key={li} style={{fontWeight:li===0?'bold':'normal',marginBottom:li<lines2.length-1?2:0,borderBottom:li===0?'1px solid rgba(255,255,255,0.2)':'none',paddingBottom:li===0?4:0}}>{l}</div>)}
+                        </div>
+                      );
+                    })()}
                     <div style={{position:'relative',height:14,marginTop:2,width:W2+LW2}}>
                       {exData.map((d,i)=>{
                         if(!showLbl(i)) return null;
