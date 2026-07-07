@@ -10383,19 +10383,22 @@ function ScheduleView({ appData, onSave }) {
     onSave({ ...appData, scheduleEvents: events.filter(e=>e.id!==id), familyPersonalAnnouncements: (appData.familyPersonalAnnouncements||[]).filter(a=>a.id!==annId), deletedIds: _td }, { manual:true, message:'✓ 削除しました' });
     setModal(null);
   };
-  // ★ 繰り返し予定の展開: e.date と一致、または 繰り返し(毎週/毎月)がその日に当たる
+  // ★ 繰り返し予定の展開: e.date と一致、または 繰り返し(毎週/毎月/毎年・N間隔)がその日に当たる
   const occursOn = (e, dstr) => {
     if (e.date === dstr) return true;
     if (!e.repeat || e.repeat === 'none') return false;
     if (dstr < e.date) return false;
     if (e.repeatUntil && dstr > e.repeatUntil) return false;
+    const every = Math.max(1, Number(e.repeatEvery)||1);
     const [y1,m1,d1] = e.date.split('-').map(Number);
     const [y2,m2,d2] = dstr.split('-').map(Number);
     const base = new Date(y1,m1-1,d1), cur = new Date(y2,m2-1,d2);
-    if (e.repeat === 'weekly') { const diff = Math.round((cur-base)/86400000); return diff>0 && diff%7===0; }
-    if (e.repeat === 'monthly') { return d1===d2 && cur>base; }
+    if (e.repeat === 'weekly') { const diff = Math.round((cur-base)/86400000); return diff>0 && diff%(7*every)===0; }
+    if (e.repeat === 'monthly') { if(d1!==d2) return false; const mo=(y2-y1)*12+(m2-m1); return mo>0 && mo%every===0; }
+    if (e.repeat === 'yearly') { if(m1!==m2||d1!==d2) return false; const yr=y2-y1; return yr>0 && yr%every===0; }
     return false;
   };
+  const addMonthsToDate = (dstr, months) => { if(!dstr) return ''; const [y,m,d]=dstr.split('-').map(Number); const dt=new Date(y,m-1+months,d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; };
   const evOf = (dstr) => events.filter(e=>occursOn(e,dstr)).map(e=> e.date===dstr ? e : {...e, date:dstr, _occ:true, _baseId:e.id}).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
   const editEvent = (e) => { const be = e._occ ? (events.find(x=>x.id===e._baseId)||e) : e; setModal({...be}); };
   const delEvent = (e) => { del(e._occ ? e._baseId : e.id); };
@@ -10642,17 +10645,31 @@ function ScheduleView({ appData, onSave }) {
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>メモ（任意）</label>
             <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>繰り返し</label>
-            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
-              <select value={modal.repeat||'none'} onChange={e=>setModal(m=>({...m,repeat:e.target.value}))} style={{padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:'white'}}>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
+              <select value={modal.repeat||'none'} onChange={e=>setModal(m=>({...m,repeat:e.target.value, repeatEvery:m.repeatEvery||1}))} style={{padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:'white'}}>
                 <option value="none">なし</option>
-                <option value="weekly">毎週（同じ曜日）</option>
-                <option value="monthly">毎月（同じ日）</option>
+                <option value="weekly">毎週</option>
+                <option value="monthly">毎月</option>
+                <option value="yearly">毎年</option>
               </select>
               {modal.repeat && modal.repeat!=='none' && (
-                <label style={{fontSize:12,color:'#475569',display:'flex',alignItems:'center',gap:6}}>いつまで<input type="date" value={modal.repeatUntil||''} onChange={e=>setModal(m=>({...m,repeatUntil:e.target.value}))} style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/></label>
+                <div style={{display:'flex',alignItems:'center',gap:4}}>
+                  <input type="number" min={1} max={99} value={modal.repeatEvery||1} onChange={e=>setModal(m=>({...m,repeatEvery:Math.max(1,Math.min(99,Number(e.target.value)||1))}))} style={{width:54,boxSizing:'border-box',padding:'8px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',textAlign:'center'}}/>
+                  <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>{modal.repeat==='weekly'?'週':modal.repeat==='monthly'?'月':'年'}ごと</span>
+                </div>
               )}
             </div>
-            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginTop:-6,marginBottom:12}}>※ 繰り返し予定の編集・削除は、シリーズ全体に反映されます。</div>}
+            {modal.repeat && modal.repeat!=='none' && (
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,flexWrap:'wrap'}}>
+                <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>いつまで</span>
+                <input type="date" value={modal.repeatUntil||''} onChange={e=>setModal(m=>({...m,repeatUntil:e.target.value}))} style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/>
+                {[['3ヶ月',3],['半年',6],['1年',12]].map(([lbl,mo])=>(
+                  <button key={lbl} type="button" onClick={()=>setModal(m=>({...m,repeatUntil:addMonthsToDate(m.date,mo)}))} style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #c7d2fe',background:'#eef2ff',color:'#4338ca',cursor:'pointer'}}>{lbl}</button>
+                ))}
+                <button type="button" onClick={()=>setModal(m=>({...m,repeatUntil:''}))} style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #e2e8f0',background:'white',color:'#64748b',cursor:'pointer'}}>無期限</button>
+              </div>
+            )}
+            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>例:「2」＋「週ごと」で隔週、「6」＋「月ごと」で半年ごと。<b>編集・削除はシリーズ全体</b>に反映されます。</div>}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
               <label style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>色・分類（押すとタイトルに入ります）</label>
               <button type="button" onClick={()=>setLabelEditorOpen(true)} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>✎ ラベル編集</button>
