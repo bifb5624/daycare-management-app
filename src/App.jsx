@@ -14609,7 +14609,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                     const result = await lookupZipAddress(storeForm.zip);
                     if (result?.full) setStoreForm(f=>({...f, address: result.full}));
                     else alert('住所が見つかりませんでした。');
-                  }} style={{padding:'10px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>📍 住所を検索</button>
+                  }} style={{padding:'10px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>住所を検索</button>
                 </div>
               </div>
               <div style={{marginBottom:12}}>
@@ -26363,7 +26363,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         if (result?.full) updateLP('address', result.full);
                         else alert('住所が見つかりませんでした。郵便番号をご確認ください。');
                       }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
-                        📍 住所検索
+                        住所検索
                       </button>
                     </div>
                   </div>
@@ -28979,7 +28979,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       const result = await lookupZipAddress(facilityInfo.zipCode);
                       if (result?.full) setFacilityInfo({...facilityInfo, address: result.full});
                       else alert('住所が見つかりませんでした。郵便番号をご確認ください。');
-                    }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95">📍 住所を検索</button>
+                    }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95">住所を検索</button>
                   </div>
                 </div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={facilityInfo.address || ""} onChange={e => setFacilityInfo({...facilityInfo, address: e.target.value})} placeholder="郵便番号から検索すると自動入力されます" className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
@@ -29594,7 +29594,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       const r = await lookupZipAddress(newOffice.zipCode);
                       if (r?.full) setNewOffice({...newOffice, address: r.full});
                       else alert('住所が見つかりませんでした');
-                    }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95">📍 住所検索</button>
+                    }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95">住所検索</button>
                   </div>
                 </div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={newOffice.address||''} onChange={e => setNewOffice({...newOffice, address: e.target.value})} placeholder="例: 東京都江東区扇橋1-1-1" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
