@@ -10341,8 +10341,10 @@ function ScheduleView({ appData, onSave }) {
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const [curMonth, setCurMonth] = useState(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
   const [selDay, setSelDay] = useState(todayStr);
-  const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color}
+  const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color, repeat, repeatUntil}
   const [editLabels, setEditLabels] = useState(false); // 色ラベルの編集モード
+  const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
+  const [dragEvId, setDragEvId] = useState(null); // ドラッグ移動中の予定ID
   const events = appData.scheduleEvents || [];
   const save = (list, msg) => onSave({ ...appData, scheduleEvents: list }, msg ? { manual:true, message: msg } : undefined);
   // ★ 色ラベル(カテゴリ): 色を押すとタイトルが自動で入る。 各種設定不要でここで編集・保存。
@@ -10380,9 +10382,33 @@ function ScheduleView({ appData, onSave }) {
     onSave({ ...appData, scheduleEvents: events.filter(e=>e.id!==id), familyPersonalAnnouncements: (appData.familyPersonalAnnouncements||[]).filter(a=>a.id!==annId), deletedIds: _td }, { manual:true, message:'✓ 削除しました' });
     setModal(null);
   };
-  const evOf = (dstr) => events.filter(e=>e.date===dstr).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
+  // ★ 繰り返し予定の展開: e.date と一致、または 繰り返し(毎週/毎月)がその日に当たる
+  const occursOn = (e, dstr) => {
+    if (e.date === dstr) return true;
+    if (!e.repeat || e.repeat === 'none') return false;
+    if (dstr < e.date) return false;
+    if (e.repeatUntil && dstr > e.repeatUntil) return false;
+    const [y1,m1,d1] = e.date.split('-').map(Number);
+    const [y2,m2,d2] = dstr.split('-').map(Number);
+    const base = new Date(y1,m1-1,d1), cur = new Date(y2,m2-1,d2);
+    if (e.repeat === 'weekly') { const diff = Math.round((cur-base)/86400000); return diff>0 && diff%7===0; }
+    if (e.repeat === 'monthly') { return d1===d2 && cur>base; }
+    return false;
+  };
+  const evOf = (dstr) => events.filter(e=>occursOn(e,dstr)).map(e=> e.date===dstr ? e : {...e, date:dstr, _occ:true, _baseId:e.id}).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
+  const editEvent = (e) => { const be = e._occ ? (events.find(x=>x.id===e._baseId)||e) : e; setModal({...be}); };
+  const delEvent = (e) => { del(e._occ ? e._baseId : e.id); };
+  const moveEvent = (e, toDstr) => { if(!e||!toDstr) return; const id=e._occ?e._baseId:e.id; const base=events.find(x=>x.id===id); if(!base||base.date===toDstr) return; save(events.map(x=>x.id===id?{...base,date:toDstr,_savedAt:Date.now()}:x), '✓ 予定を移動しました'); };
+  // 通所予定人数(基本利用曜日ベース・休止/定休除く) と 祝日・定休
+  const attendeeCount = (dstr) => { const [y,m,d]=dstr.split('-').map(Number); const dw=new Date(y,m-1,d).getDay(); if((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) return 0; return (appData.patients||[]).filter(p=>{ if(p.status==='退所') return false; const sc=(getScheduleOnDate(p,dstr)?.[dw])||''; if(!sc) return false; if(getPauseReasonOnDate(p,dstr)) return false; return true; }).length; };
+  const isHolidayDate = (dstr) => (appData.holidays||[]).some(h => (h.date||h) === dstr);
+  const holidayName = (dstr) => { const h=(appData.holidays||[]).find(x=>(x.date||x)===dstr); return h && h.name ? h.name : ''; };
+  const isClosedDate = (dstr) => { const [y,m,d]=dstr.split('-').map(Number); return (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(new Date(y,m-1,d).getDay()); };
   const timeLabel = (e) => e.start ? `${e.start}${e.end?`〜${e.end}`:''}` : '終日';
   const COLORS = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#0ea5e9','#64748b'];
+  const navBtn = {background:'#f1f5f9',border:'none',borderRadius:8,padding:'6px 12px',fontWeight:'bold',cursor:'pointer',color:'#475569',fontSize:13};
+  const shiftSelDay = (delta) => { const [y,m,d]=selDay.split('-').map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()+delta); setSelDay(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`); };
+  const weekDaysOf = (dstr) => { const [y,m,d]=dstr.split('-').map(Number); const dt=new Date(y,m-1,d); dt.setDate(dt.getDate()-dt.getDay()); return Array.from({length:7},(_,i)=>{ const c=new Date(dt); c.setDate(c.getDate()+i); return `${c.getFullYear()}-${String(c.getMonth()+1).padStart(2,'0')}-${String(c.getDate()).padStart(2,'0')}`; }); };
   const [cy, cm] = curMonth.split('-').map(Number);
   const firstDow = new Date(cy, cm-1, 1).getDay();
   const daysIn = new Date(cy, cm, 0).getDate();
@@ -10414,7 +10440,7 @@ function ScheduleView({ appData, onSave }) {
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {todayEvents.map(e=>(
-                  <button key={e.id} onClick={()=>setModal({...e})} style={{textAlign:'left',display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px',cursor:'pointer'}}>
+                  <button key={e.id} onClick={()=>editEvent(e)} style={{textAlign:'left',display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px',cursor:'pointer'}}>
                     <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
                     <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}{patName(e)?<span style={{fontSize:12,color:'#6366f1',marginLeft:6}}>／{patName(e)} 様</span>:null}</span>
                     {e.note && <span style={{fontSize:11,color:'#64748b',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.note}</span>}
@@ -10426,11 +10452,27 @@ function ScheduleView({ appData, onSave }) {
           {/* カレンダー + 選択日 */}
           <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:16}}>
             <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
-              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
-                <button onClick={()=>shiftMonth(-1)} style={{background:'#f1f5f9',border:'none',borderRadius:8,padding:'6px 12px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>‹ 前月</button>
-                <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>{cy}年{cm}月</div>
-                <button onClick={()=>shiftMonth(1)} style={{background:'#f1f5f9',border:'none',borderRadius:8,padding:'6px 12px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>翌月 ›</button>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12,gap:8,flexWrap:'wrap'}}>
+                <div style={{display:'flex',gap:3,background:'#f1f5f9',borderRadius:10,padding:3}}>
+                  {[['month','月'],['week','週']].map(([v,l])=>(
+                    <button key={v} onClick={()=>setViewMode(v)} style={{border:'none',borderRadius:8,padding:'5px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',background:viewMode===v?'white':'transparent',color:viewMode===v?'#4338ca':'#64748b',boxShadow:viewMode===v?'0 1px 3px rgba(0,0,0,0.1)':'none'}}>{l}</button>
+                  ))}
+                </div>
+                {viewMode==='month' ? (
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <button onClick={()=>shiftMonth(-1)} style={navBtn}>‹ 前月</button>
+                    <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>{cy}年{cm}月</div>
+                    <button onClick={()=>shiftMonth(1)} style={navBtn}>翌月 ›</button>
+                  </div>
+                ) : (
+                  <div style={{display:'flex',alignItems:'center',gap:10}}>
+                    <button onClick={()=>shiftSelDay(-7)} style={navBtn}>‹ 前週</button>
+                    <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{(()=>{const wd=weekDaysOf(selDay);const a=wd[0].split('-').map(Number),b=wd[6].split('-').map(Number);return `${a[1]}/${a[2]}〜${b[1]}/${b[2]}`;})()}</div>
+                    <button onClick={()=>shiftSelDay(7)} style={navBtn}>翌週 ›</button>
+                  </div>
+                )}
               </div>
+              {viewMode==='month' && (
               <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
                 {dow.map((w,i)=>(<div key={w} style={{textAlign:'center',fontSize:11,fontWeight:'bold',padding:'2px 0',color:i===0?'#ef4444':i===6?'#3b82f6':'#64748b'}}>{w}</div>))}
                 {cells.map((d,i)=>{
@@ -10439,17 +10481,76 @@ function ScheduleView({ appData, onSave }) {
                   const evs = evOf(dstr);
                   const isToday = dstr===todayStr;
                   const isSel = dstr===selDay;
+                  const cnt = attendeeCount(dstr);
+                  const holi = isHolidayDate(dstr);
+                  const closed = isClosedDate(dstr);
+                  const bg = isSel ? '#eef2ff' : (holi ? '#fef2f2' : (closed ? '#f8fafc' : 'white'));
                   return (
-                    <button key={dstr} onClick={()=>setSelDay(dstr)} style={{minHeight:74,textAlign:'left',background:isSel?'#eef2ff':'white',border:`1px solid ${isSel?'#818cf8':'#e2e8f0'}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
-                      <span style={{fontSize:12,fontWeight:'bold',alignSelf:'flex-start',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155')}}>{d}</span>
-                      {evs.slice(0,3).map(e=>(
-                        <span key={e.id} style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>{e.start?`${e.start} `:''}{e.title}{patName(e)?`／${patName(e)}`:''}</span>
-                      ))}
+                    <div key={dstr} onClick={()=>setSelDay(dstr)}
+                      onDragOver={dragEvId?ev=>ev.preventDefault():undefined}
+                      onDrop={dragEvId?()=>{ const be=events.find(x=>x.id===dragEvId); if(be) moveEvent(be,dstr); setDragEvId(null); }:undefined}
+                      style={{minHeight:78,textAlign:'left',background:bg,border:`1px solid ${isSel?'#818cf8':(dragEvId?'#c7d2fe':'#e2e8f0')}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
+                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                        <span style={{fontSize:12,fontWeight:'bold',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(holi?'#ef4444':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155'))}}>{d}</span>
+                        {closed ? <span style={{fontSize:8,fontWeight:'bold',color:'#94a3b8'}}>定休</span> : (cnt>0 && <span style={{fontSize:9,fontWeight:'bold',color:'#0e7490',background:'#ecfeff',borderRadius:8,padding:'0 5px'}} title="通所予定人数">{cnt}名</span>)}
+                      </div>
+                      {holi && holidayName(dstr) && <span style={{fontSize:8,fontWeight:'bold',color:'#ef4444',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{holidayName(dstr)}</span>}
+                      {evs.slice(0,3).map(e=>{ const drg = !e._occ && (!e.repeat||e.repeat==='none'); return (
+                        <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?ev=>{setDragEvId(e.id);}:undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation(); editEvent(e);}}
+                          title={`${e.title}${patName(e)?'／'+patName(e):''}`}
+                          style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.start?`${e.start} `:''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>
+                      );})}
                       {evs.length>3 && <span style={{fontSize:9,color:'#64748b',fontWeight:'bold'}}>他{evs.length-3}件</span>}
-                    </button>
+                    </div>
                   );
                 })}
               </div>
+              )}
+              {viewMode==='week' && (() => {
+                const wd = weekDaysOf(selDay);
+                const HStart=7, HEnd=19, hourH=42; const gridH=(HEnd-HStart)*hourH;
+                const cols = `40px repeat(7,minmax(92px,1fr))`;
+                const toTop = (t) => { const a=String(t).split(':'); const mins=(Number(a[0])||0)*60+(Number(a[1])||0); return Math.max(0,(mins-HStart*60)/60*hourH); };
+                const durH = (e) => { if(!e.start) return hourH*0.5; const s=e.start.split(':'),en=(e.end||'').split(':'); const sm=(Number(s[0])||0)*60+(Number(s[1])||0); const em=en.length>=2?(Number(en[0])||0)*60+(Number(en[1])||0):sm+30; return Math.max(18,(Math.max(20,em-sm))/60*hourH); };
+                const dropCell = (ds) => dragEvId ? { onDragOver:ev=>ev.preventDefault(), onDrop:()=>{ const be=events.find(x=>x.id===dragEvId); if(be) moveEvent(be,ds); setDragEvId(null); } } : {};
+                return (
+                  <div style={{overflowX:'auto'}}>
+                    <div style={{display:'grid',gridTemplateColumns:cols}}>
+                      <div/>
+                      {wd.map((ds,i)=>{ const dd=ds.split('-').map(Number)[2]; const isT=ds===todayStr; const holi=isHolidayDate(ds); const closed=isClosedDate(ds); const cnt=attendeeCount(ds); return (
+                        <div key={ds} onClick={()=>setSelDay(ds)} style={{textAlign:'center',padding:'4px 2px',cursor:'pointer',borderBottom:'2px solid '+(ds===selDay?'#6366f1':'#e2e8f0'),background:isT?'#eef2ff':'transparent'}}>
+                          <div style={{fontSize:11,fontWeight:'bold',color:(i===0||holi)?'#ef4444':i===6?'#3b82f6':'#64748b'}}>{dow[i]}</div>
+                          <div style={{fontSize:15,fontWeight:'bold',color:isT?'#4338ca':'#1e293b'}}>{dd}</div>
+                          {closed?<div style={{fontSize:8,color:'#94a3b8',fontWeight:'bold'}}>定休</div>:(cnt>0&&<div style={{fontSize:8,color:'#0e7490',fontWeight:'bold'}}>{cnt}名</div>)}
+                        </div>); })}
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:cols,borderBottom:'1px solid #e2e8f0'}}>
+                      <div style={{fontSize:8,color:'#94a3b8',textAlign:'right',padding:'3px 4px'}}>終日</div>
+                      {wd.map(ds=>{ const alld=evOf(ds).filter(e=>!e.start); return (
+                        <div key={ds} onClick={()=>openNew(ds)} {...dropCell(ds)} style={{minHeight:20,padding:2,borderLeft:'1px solid #f1f5f9',cursor:'pointer',display:'flex',flexDirection:'column',gap:2}}>
+                          {alld.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();editEvent(e);}} title={e.title} style={{fontSize:9,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:3,padding:'1px 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>; })}
+                        </div>); })}
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:cols}}>
+                      <div style={{position:'relative',height:gridH}}>
+                        {Array.from({length:HEnd-HStart},(_,h)=>(<div key={h} style={{position:'absolute',top:h*hourH-6,right:3,fontSize:9,color:'#94a3b8',fontWeight:'bold'}}>{HStart+h}:00</div>))}
+                      </div>
+                      {wd.map(ds=>{ const timed=evOf(ds).filter(e=>e.start); const closed=isClosedDate(ds); return (
+                        <div key={ds} {...dropCell(ds)} onClick={(ev)=>{ const rect=ev.currentTarget.getBoundingClientRect(); const y=ev.clientY-rect.top; let mins=HStart*60+Math.round((y/hourH*60)/15)*15; mins=Math.max(HStart*60,Math.min(HEnd*60-15,mins)); const hh=String(Math.floor(mins/60)).padStart(2,'0'),mm=String(mins%60).padStart(2,'0'); setModal({date:ds,start:`${hh}:${mm}`,end:addMin(`${hh}:${mm}`,60),title:'',note:'',color:COLORS[0]}); }}
+                          style={{position:'relative',height:gridH,borderLeft:'1px solid #f1f5f9',cursor:'pointer',background:closed?'#f8fafc':(isHolidayDate(ds)?'#fef2f2':'white')}}>
+                          {Array.from({length:HEnd-HStart},(_,h)=>(<div key={h} style={{position:'absolute',top:h*hourH,left:0,right:0,borderTop:'1px solid #f1f5f9'}}/>))}
+                          {timed.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return (
+                            <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();editEvent(e);}} title={`${timeLabel(e)} ${e.title}`}
+                              style={{position:'absolute',top:toTop(e.start),left:2,right:2,height:durH(e),background:e.color||'#6366f1',color:'white',borderRadius:4,padding:'1px 4px',fontSize:9,fontWeight:'bold',overflow:'hidden',cursor:drg?'grab':'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.25)'}}>
+                              <div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.start} {e.title}</div>
+                              {patName(e)&&<div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',opacity:0.9}}>／{patName(e)}</div>}
+                            </div>); })}
+                        </div>); })}
+                    </div>
+                    <div style={{fontSize:10,color:'#94a3b8',marginTop:6}}>※ 空いている時間帯をクリックするとその時刻で予定を追加できます。予定はドラッグで別の日へ移動できます（繰り返し予定を除く）。</div>
+                  </div>
+                );
+              })()}
             </div>
             {/* 選択日の予定 */}
             <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
@@ -10469,8 +10570,8 @@ function ScheduleView({ appData, onSave }) {
                         {e.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p ? <div style={{fontSize:11,color:'#4338ca',fontWeight:'bold'}}>👤 {p.name}{p.cmOffice?`（${p.cmOffice}${p.cmName?` ${p.cmName}様`:''}）`:''}</div> : null; })()}
                         {e.note && <div style={{fontSize:12,color:'#64748b',whiteSpace:'pre-wrap'}}>{e.note}</div>}
                       </div>
-                      <button onClick={()=>setModal({...e})} style={{background:'#e2e8f0',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>編集</button>
-                      <button onClick={()=>del(e.id)} style={{background:'#fee2e2',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#b91c1c',cursor:'pointer'}}>削除</button>
+                      <button onClick={()=>editEvent(e)} style={{background:'#e2e8f0',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>編集</button>
+                      <button onClick={()=>delEvent(e)} style={{background:'#fee2e2',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#b91c1c',cursor:'pointer'}}>削除</button>
                     </div>
                   ))}
                 </div>
@@ -10525,6 +10626,18 @@ function ScheduleView({ appData, onSave }) {
             )}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>メモ（任意）</label>
             <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>繰り返し</label>
+            <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}}>
+              <select value={modal.repeat||'none'} onChange={e=>setModal(m=>({...m,repeat:e.target.value}))} style={{padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:'white'}}>
+                <option value="none">なし</option>
+                <option value="weekly">毎週（同じ曜日）</option>
+                <option value="monthly">毎月（同じ日）</option>
+              </select>
+              {modal.repeat && modal.repeat!=='none' && (
+                <label style={{fontSize:12,color:'#475569',display:'flex',alignItems:'center',gap:6}}>いつまで<input type="date" value={modal.repeatUntil||''} onChange={e=>setModal(m=>({...m,repeatUntil:e.target.value}))} style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/></label>
+              )}
+            </div>
+            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginTop:-6,marginBottom:12}}>※ 繰り返し予定の編集・削除は、シリーズ全体に反映されます。</div>}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
               <label style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>色・分類（押すとタイトルに入ります）</label>
               <button type="button" onClick={()=>setEditLabels(v=>!v)} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>{editLabels?'完了':'✎ ラベル編集'}</button>
