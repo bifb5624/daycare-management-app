@@ -10396,8 +10396,18 @@ function ScheduleView({ appData, onSave }) {
     if (e.repeat === 'weekly') { const diff = Math.round((cur-base)/86400000); return diff>0 && diff%(7*every)===0; }
     if (e.repeat === 'monthly') { if(d1!==d2) return false; const mo=(y2-y1)*12+(m2-m1); return mo>0 && mo%every===0; }
     if (e.repeat === 'yearly') { if(m1!==m2||d1!==d2) return false; const yr=y2-y1; return yr>0 && yr%every===0; }
+    if (e.repeat === 'monthly_nth') { // 第◯曜日(例: 第2・第4 火曜日)。 曜日は開始日から。
+      if (cur.getDay() !== base.getDay()) return false;
+      const nth = Math.floor((d2-1)/7)+1;
+      const lastDom = new Date(y2, m2, 0).getDate();
+      const isLast = d2+7 > lastDom;
+      const weeks = e.monthlyNthWeeks || [];
+      return weeks.includes(nth) || (isLast && weeks.includes('last'));
+    }
     return false;
   };
+  const nthOfMonth = (dstr) => { const d=Number(dstr.slice(8,10)); return Math.floor((d-1)/7)+1; };
+  const dowLabel = (dstr) => ['日','月','火','水','木','金','土'][(()=>{const [y,m,d]=dstr.split('-').map(Number);return new Date(y,m-1,d).getDay();})()];
   const addMonthsToDate = (dstr, months) => { if(!dstr) return ''; const [y,m,d]=dstr.split('-').map(Number); const dt=new Date(y,m-1+months,d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; };
   const evOf = (dstr) => events.filter(e=>occursOn(e,dstr)).map(e=> e.date===dstr ? e : {...e, date:dstr, _occ:true, _baseId:e.id}).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
   const editEvent = (e) => { const be = e._occ ? (events.find(x=>x.id===e._baseId)||e) : e; setModal({...be}); };
@@ -10646,19 +10656,31 @@ function ScheduleView({ appData, onSave }) {
             <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>繰り返し</label>
             <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
-              <select value={modal.repeat||'none'} onChange={e=>setModal(m=>({...m,repeat:e.target.value, repeatEvery:m.repeatEvery||1}))} style={{padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:'white'}}>
+              <select value={modal.repeat||'none'} onChange={e=>setModal(m=>{ const rep=e.target.value; const upd={...m, repeat:rep, repeatEvery:m.repeatEvery||1}; if(rep==='monthly_nth' && (!m.monthlyNthWeeks||!m.monthlyNthWeeks.length) && m.date){ upd.monthlyNthWeeks=[nthOfMonth(m.date)]; } return upd; })} style={{padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:'white'}}>
                 <option value="none">なし</option>
                 <option value="weekly">毎週</option>
-                <option value="monthly">毎月</option>
+                <option value="monthly">毎月（同じ日）</option>
+                <option value="monthly_nth">毎月（第◯曜日）</option>
                 <option value="yearly">毎年</option>
               </select>
-              {modal.repeat && modal.repeat!=='none' && (
+              {modal.repeat && modal.repeat!=='none' && modal.repeat!=='monthly_nth' && (
                 <div style={{display:'flex',alignItems:'center',gap:4}}>
                   <input type="number" min={1} max={99} value={modal.repeatEvery||1} onChange={e=>setModal(m=>({...m,repeatEvery:Math.max(1,Math.min(99,Number(e.target.value)||1))}))} style={{width:54,boxSizing:'border-box',padding:'8px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',textAlign:'center'}}/>
                   <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>{modal.repeat==='weekly'?'週':modal.repeat==='monthly'?'月':'年'}ごと</span>
                 </div>
               )}
             </div>
+            {modal.repeat==='monthly_nth' && (
+              <div style={{marginBottom:8}}>
+                <div style={{fontSize:11,color:'#64748b',marginBottom:4}}>毎月の「第◯ <b style={{color:'#4338ca'}}>{modal.date?dowLabel(modal.date):''}曜日</b>」に繰り返します（複数選択可・例: 第2と第4）</div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {[[1,'第1'],[2,'第2'],[3,'第3'],[4,'第4'],[5,'第5'],['last','最終']].map(([v,lbl])=>{
+                    const on=(modal.monthlyNthWeeks||[]).includes(v);
+                    return <button key={String(v)} type="button" onClick={()=>setModal(m=>{ const cur=m.monthlyNthWeeks||[]; return {...m, monthlyNthWeeks: on?cur.filter(x=>x!==v):[...cur,v]}; })} style={{fontSize:12,fontWeight:'bold',padding:'5px 10px',borderRadius:14,border:on?'2px solid #6366f1':'1px solid #cbd5e1',background:on?'#eef2ff':'white',color:on?'#4338ca':'#64748b',cursor:'pointer'}}>{lbl}</button>;
+                  })}
+                </div>
+              </div>
+            )}
             {modal.repeat && modal.repeat!=='none' && (
               <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,flexWrap:'wrap'}}>
                 <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>いつまで</span>
