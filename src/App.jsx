@@ -14361,7 +14361,23 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         // 店舗は作成済み。ログイン情報だけ失敗 → ユーザーにメッセージ
         alert(`店舗は作成されましたが、ログイン情報の発行に失敗しました:\n${staffErr.message || ''}\n後で「+ 店舗管理者を追加」から再発行してください。`);
       }
-      alert(`✅ 店舗「${storeForm.name}」を作成しました。\n\nログイン情報:\nID: ${storeForm.login_id}\nPW: ${storeForm.login_pw}\n\nこの情報を店舗管理者にお伝えください。`);
+      // 3. メールアドレスがあれば「アカウント発行(登録完了)」メールを自動送信 (ログインURL/ID/PW)
+      let mailNote = '';
+      const _email = storeForm.login_email.trim();
+      if (_email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(_email)) {
+        try {
+          const loginUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '');
+          const r = await fetch('/api/send-store-welcome', {
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ to: _email, storeName: storeForm.name.trim(), orgName: storeForm.org_name.trim(), loginId: storeForm.login_id.trim(), loginPw: storeForm.login_pw, loginUrl }),
+          });
+          if (r.ok) mailNote = `\n\n📧 ${_email} 宛に登録完了メール（ログインURL・ID・PW）を送信しました。`;
+          else { const j = await r.json().catch(() => ({})); mailNote = `\n\n⚠ メール送信に失敗しました（${j.error || r.status}）。ID/PWは手動でお伝えください。`; }
+        } catch (e) { mailNote = `\n\n⚠ メール送信に失敗しました。ID/PWは手動でお伝えください。`; }
+      } else {
+        mailNote = `\n\n（メールアドレス未入力のため自動送信していません。ID/PWを手動でお伝えください。）`;
+      }
+      alert(`✅ 店舗「${storeForm.name}」を作成しました。\n\nログイン情報:\nID: ${storeForm.login_id}\nPW: ${storeForm.login_pw}${mailNote}`);
       setStoreForm({ id:'', name:'', short_name:'', org_name:'', zip:'', address:'', phone:'', fax:'', login_id:'', login_pw:'', login_email:'', login_phone:'', error:'', loading:false });
       setShowAddStore(false);
       loadStores();
@@ -14651,6 +14667,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                   <div>
                     <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先メール <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
                     <input type="email" value={storeForm.login_email} onChange={e=>setStoreForm(f=>({...f,login_email:e.target.value}))} placeholder="store@example.com" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                    <div style={{fontSize:10,color:'#0e7490',marginTop:3,lineHeight:1.5}}>📧 入力すると、作成時にこのアドレスへ<b>ログインURL・ID・パスワード</b>の登録完了メールを自動送信します。</div>
                   </div>
                   <div>
                     <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先電話 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
