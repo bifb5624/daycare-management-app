@@ -32996,6 +32996,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [activeSelection, setActiveSelection] = React.useState(null);
   const [monitorSort, setMonitorSort] = React.useState('kana'); // 'kana'|'careLevel'|'cmOffice'|'schedule'
   const [sheetModal, setSheetModal] = React.useState(null); // {patientId} 正式モニタリング表の編集
+  const [autoFax, setAutoFax] = React.useState(null); // 自動FAX送信の進捗/結果 {running,total,done,results:[]}
   const [editTextCell, setEditTextCell] = React.useState(null); // `${pid}:${key}` 一覧で本文を直接編集中のセル
 
   // 対象月が変わったらその月の保存済みデータで更新
@@ -33409,6 +33410,42 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       setTimeout(()=>window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 landscape',html}})),50);
     }
   };
+  // ★ 自動FAX送信(一括): 各利用者のモニタリング表を、それぞれの担当ケアマネのFAX番号へ外部FAX(InterFAX)で自動送信
+  const autoFaxToCareManagers = async () => {
+    if (autoFax?.running) return;
+    const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
+    const targets = (checked.length ? checked : [...attendedPats, ...absentPats]).filter(p => getSheetRecord(p.id));
+    if (!targets.length) { alert('作成済みのモニタリング表がありません。先に作成してください。'); return; }
+    const withFax = targets.filter(p => (p.cmFax||'').trim());
+    const noFax = targets.filter(p => !(p.cmFax||'').trim());
+    if (!withFax.length) { alert('担当ケアマネのFAX番号が登録されている利用者がいません。\n利用者マスタの「担当ケアマネ FAX」を設定してください。'); return; }
+    let msg = `${withFax.length}名分のモニタリング表を、各担当ケアマネのFAX番号へ【自動送信】します。`;
+    if (noFax.length) msg += `\n※ FAX番号 未登録の ${noFax.length}名（${noFax.slice(0,3).map(p=>p.name).join('、')}${noFax.length>3?' ほか':''}）は送信されません。`;
+    msg += `\n\n送信は外部FAXサービス（従量課金）の対象です。よろしいですか？`;
+    if (!window.confirm(msg)) return;
+    setAutoFax({ running:true, total:withFax.length, done:0, results:[] });
+    const results = [];
+    for (const p of withFax) {
+      const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${buildSheetHtml(p, getSheetRecord(p.id).sheet, true, false)}</div>`;
+      let r0 = { name:p.name, office:p.cmOffice||'', to:p.cmFax, ok:false, err:'' };
+      try {
+        const resp = await fetch('/api/send-fax', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ to:p.cmFax, html, subject:`${monthLabelStr} 通所介護モニタリング表` }) });
+        const j = await resp.json().catch(()=>({}));
+        if (resp.ok && j.success) { r0.ok = true; r0.faxId = j.faxId; }
+        else { r0.err = j.error || `HTTP ${resp.status}`; r0.notConfigured = !!j.notConfigured; }
+      } catch (e) { r0.err = String(e).slice(0,120); }
+      results.push(r0);
+      setAutoFax(prev => ({ ...prev, done: results.length, results:[...results] }));
+      if (r0.notConfigured) break; // 未設定なら以降は無駄なので中断
+    }
+    // 送信成功分だけ送付履歴に記録
+    const okList = withFax.filter((p,i) => results[i]?.ok);
+    if (okList.length) {
+      const entries = okList.map((p,i) => ({ ..._monFaxEntry(p, i), memo:'自動FAX送信（外部連携）' }));
+      onSave({ ...appData, faxHistory:[...entries, ...(appData.faxHistory||[])] }, { manual:true, message:`✓ ${okList.length}名分をFAX自動送信しました` });
+    }
+    setAutoFax(prev => ({ ...prev, running:false, results, noFaxCount: noFax.length }));
+  };
   // ★ 担当ケアマネへFAX(1名): この利用者のモニタリング表を担当ケアマネ宛てで出力＋送付履歴に記録
   const faxRowToCareManager = (patient) => {
     const rec = getSheetRecord(patient.id);
@@ -33777,12 +33814,47 @@ ${optionsDesc}
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
           📁 個人ファイルに保存
         </button>
-        <button type="button" onClick={faxToCareManagers} title="作成済みのモニタリング表を、利用者ごとの担当ケアマネ宛て(宛先自動)で出力し、送付履歴に記録します"
+        <button type="button" onClick={faxToCareManagers} title="作成済みのモニタリング表を、利用者ごとの担当ケアマネ宛て(宛先自動)で出力（印刷/複合機FAX用）し、送付履歴に記録します"
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fdba74',background:'#fff7ed',color:'#c2410c',cursor:'pointer'}}>
-          📠 担当ケアマネへFAX
+          📠 印刷/複合機FAX用に出力
+        </button>
+        <button type="button" onClick={autoFaxToCareManagers} disabled={autoFax?.running} title="各利用者のモニタリング表を、それぞれの担当ケアマネのFAX番号へ外部FAX(InterFAX)で自動送信します（送信は従量課金）"
+          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6366f1',background:autoFax?.running?'#e0e7ff':'#eef2ff',color:'#4338ca',cursor:autoFax?.running?'wait':'pointer'}}>
+          {autoFax?.running ? `📠 自動送信中… ${autoFax.done}/${autoFax.total}` : '📠 各ケアマネへ自動FAX送信'}
         </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
+      {autoFax && (() => {
+        const okN = (autoFax.results||[]).filter(r=>r.ok).length;
+        const ngN = (autoFax.results||[]).filter(r=>!r.ok).length;
+        const notConf = (autoFax.results||[]).some(r=>r.notConfigured);
+        return (
+          <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>{ if(!autoFax.running) setAutoFax(null); }}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:460,maxWidth:'100%',maxHeight:'86vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:8}}>📠 各ケアマネへ自動FAX送信</div>
+              {autoFax.running ? (
+                <div style={{fontSize:13,color:'#4338ca',fontWeight:'bold',marginBottom:10}}>送信中… {autoFax.done}/{autoFax.total}</div>
+              ) : (
+                <div style={{fontSize:13,fontWeight:'bold',marginBottom:10}}>完了：<span style={{color:'#16a34a'}}>成功 {okN}件</span> ／ <span style={{color:'#dc2626'}}>失敗 {ngN}件</span>{autoFax.noFaxCount?` ／ FAX未登録スキップ ${autoFax.noFaxCount}件`:''}</div>
+              )}
+              {notConf && <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:10,padding:'10px 12px',fontSize:12,color:'#92400e',marginBottom:10,lineHeight:1.6}}>外部FAX送信が<b>未設定</b>です。ご利用には InterFAX のアカウント作成と、Vercelの環境変数（INTERFAX_USER / INTERFAX_PASS）の設定が必要です。設定後にお使いいただけます。</div>}
+              <div style={{display:'grid',gap:5}}>
+                {(autoFax.results||[]).map((r,i)=>(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:8,fontSize:12,border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px'}}>
+                    <span style={{fontSize:14}}>{r.ok?'✅':'❌'}</span>
+                    <span style={{fontWeight:'bold',color:'#334155',minWidth:80}}>{r.name} 様</span>
+                    <span style={{color:'#64748b',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.office||'—'}　{r.to}</span>
+                    {!r.ok && <span style={{color:'#dc2626',fontSize:11}}>{r.err}</span>}
+                  </div>
+                ))}
+              </div>
+              <div style={{textAlign:'right',marginTop:14}}>
+                <button disabled={autoFax.running} onClick={()=>setAutoFax(null)} style={{background:autoFax.running?'#cbd5e1':'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:autoFax.running?'wait':'pointer'}}>{autoFax.running?'送信中…':'閉じる'}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {_monthLocked && (
         <div className="no-print" style={{flexShrink:0,background:'#fffbeb',borderBottom:'1px solid #fde68a',color:'#92400e',padding:'8px 16px',fontSize:12,fontWeight:'bold',display:'flex',alignItems:'center',gap:8}}>
