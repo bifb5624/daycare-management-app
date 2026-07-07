@@ -12731,11 +12731,11 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 <button onClick={onSwitchPatient} style={hdrBtnStyle}>利用者切替</button>
               )}
               <button onClick={()=>setMyInfoOpen(true)} style={hdrBtnStyle}>利用者・登録者情報</button>
-              {/* ★ ケアマネ(関係者)のみ: フェイスシートの登録・編集 (事業所の個人ファイルへ反映) */}
-              {isCmAccount && !_isPreview && (
+              {/* ★ ケアマネ(関係者): フェイスシートの登録・編集 (事業所の個人ファイルへ反映)。 プレビューでも位置確認できるよう表示 */}
+              {isCmAccount && (
                 <button onClick={()=>setCmFaceSheetOpen(true)} style={{...hdrBtnStyle, background:'#eef2ff', borderColor:'#c7d2fe', color:'#4338ca'}}>📝 フェイスシート</button>
               )}
-              {isCmAccount && !_isPreview && (
+              {isCmAccount && (
                 <button onClick={()=>setCmDocsOpen(true)} style={{...hdrBtnStyle, background:'#ecfeff', borderColor:'#a5f3fc', color:'#0e7490'}}>📎 保険証・アセスメント</button>
               )}
               {/* ★ 代表者以外も一覧を閲覧できる (招待/取消などの操作はモーダル内で代表者のみ) */}
