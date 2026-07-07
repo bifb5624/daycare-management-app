@@ -20405,6 +20405,29 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </g>
                     );
                   })}
+                  {/* ★ ホバー用オーバーレイ: プロット全体で1枚だけ。 マウス位置から最寄りの日を判定して
+                      ツールチップを滑らかに更新(ドットごとの判定だと重なりで反応が悪く/消えなくなるため)。 */}
+                  <rect x={0} y={0} width={W} height={H} fill="transparent" style={{cursor:'pointer'}}
+                    onMouseMove={(e)=>{
+                      const rb=e.currentTarget.getBoundingClientRect();
+                      const ox=e.clientX-rb.left;
+                      let i=Math.round((ox-PAD_X-_STEP/2)/_STEP);
+                      i=Math.max(0,Math.min(dailyData.length-1,i));
+                      const p1=pts1.find(q=>q.i===i)||ptsE1.find(q=>q.i===i);
+                      if(!p1){ setVitalTooltip(null); return; }
+                      setVitalTooltip({x:xPV(i),y:yP(p1.v),d:dailyData[i],field,i,pts2:pts2.find(q=>q.i===i)});
+                    }}
+                    onMouseLeave={()=>setVitalTooltip(null)}
+                    onClick={(e)=>{
+                      const rb=e.currentTarget.getBoundingClientRect();
+                      const ox=e.clientX-rb.left;
+                      let i=Math.round((ox-PAD_X-_STEP/2)/_STEP);
+                      i=Math.max(0,Math.min(dailyData.length-1,i));
+                      const p1=pts1.find(q=>q.i===i)||ptsE1.find(q=>q.i===i);
+                      if(!p1) return;
+                      setVitalTooltip(prev=>(prev&&prev.field===field&&prev.i===i)?null:{x:xPV(i),y:yP(p1.v),d:dailyData[i],field,i,pts2:pts2.find(q=>q.i===i)});
+                    }}
+                  />
                   {/* ツールチップ — ★ ドットに被らないよう上(無理なら下)へギャップを空けて配置 + 幅を広げ単位の見切れ防止 */}
                   {vitalTooltip&&vitalTooltip.field===field&&(()=>{
                     const d=vitalTooltip.d;
@@ -20424,7 +20447,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     let ty=vitalTooltip.y - bh - 16;                    // ドットの16px上(被らない)
                     if(ty<2) ty=vitalTooltip.y + 18;                    // 上に入らなければ下へ
                     return (
-                      <g>
+                      <g pointerEvents="none">
                         <rect x={tx} y={ty} width={bw} height={bh} rx={6} fill="#1e293b" opacity={0.95}/>
                         {lines.map((l,li)=><text key={li} x={tx+11} y={ty+19+li*19} fontSize={13} fill="white" fontWeight="bold">{l}</text>)}
                       </g>
