@@ -18619,6 +18619,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const toggleSec = (id) => setCollapsedSecs(p=>({...p,[id]:!p[id]}));
   const isCol = (id) => !!collapsedSecs[id];
   const [exTooltip, setExTooltip] = useState(null);
+  const [fitTooltip, setFitTooltip] = useState(null); // 体力測定グラフ ツールチップ {px,py,date,val,unit}
   const [barTip, setBarTip] = useState(null);
   const [selTrekkiMonth, setSelTrekkiMonth] = useState(null);
   const [detailMonth, setDetailMonth] = useState(null); // (旧: 詳細記録の月別サブ選択。現在は期間連動のため未使用)
@@ -20323,7 +20324,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   ))}
                 </div>
                 {/* グラフ本体（横スクロール） */}
-                <div className="vital-scroll" style={{flex:1,minWidth:0,overflowX:'auto'}}>
+                <div className="vital-scroll" style={{flex:1,minWidth:0,overflowX:'auto'}} onMouseLeave={()=>setVitalTooltip(null)}>
                 <svg width={W+LW} height={H+22} style={{display:'block'}}>
                   {/* Y軸目盛グリッド線のみ */}
                   {yTicks.map(v=>(
@@ -20350,11 +20351,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {ptsE1.map(p=>(<circle key={'e1'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={4.5} fill="white" stroke={color1} strokeWidth={2.2} pointerEvents="none"/>))}
                   {ptsE2.map(p=>(<circle key={'e2'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={4.5} fill="white" stroke={color2} strokeWidth={2.2} pointerEvents="none"/>))}
                   {/* max/min ハイライト輪郭（pts1） */}
-                  {maxP1&&<circle cx={xPV(maxP1.i)} cy={yP(maxP1.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45}/>}
-                  {minP1&&<circle cx={xPV(minP1.i)} cy={yP(minP1.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45}/>}
+                  {maxP1&&<circle cx={xPV(maxP1.i)} cy={yP(maxP1.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45} pointerEvents="none"/>}
+                  {minP1&&<circle cx={xPV(minP1.i)} cy={yP(minP1.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45} pointerEvents="none"/>}
                   {/* max/min ハイライト輪郭（pts2） */}
-                  {maxP2&&<circle cx={xPV(maxP2.i)} cy={yP(maxP2.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45}/>}
-                  {minP2&&<circle cx={xPV(minP2.i)} cy={yP(minP2.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45}/>}
+                  {maxP2&&<circle cx={xPV(maxP2.i)} cy={yP(maxP2.v)} r={11} fill="none" stroke="#ef4444" strokeWidth={2.5} opacity={0.45} pointerEvents="none"/>}
+                  {minP2&&<circle cx={xPV(minP2.i)} cy={yP(minP2.v)} r={11} fill="none" stroke="#3b82f6" strokeWidth={2.5} opacity={0.45} pointerEvents="none"/>}
                   {/* max ラベル（pts1） */}
                   {maxP1&&<g>
                     <rect x={xPV(maxP1.i)-20} y={yP(maxP1.v)-22} width={40} height={14} rx={3} fill="#ef4444" opacity={0.85}/>
@@ -20379,40 +20380,34 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {pts1.map(p=>{
                     const warn=refLines&&refLines.some(r=>p.v>=r.v&&r.warn);
                     const isMax=p===maxP1, isMin=p===minP1;
+                    const _enter=(e)=>setVitalTooltip({px:e.clientX,py:e.clientY,d:p.d,field,i:p.i});
                     return (
                       <g key={p.i}>
                         <circle cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?7:5}
                           fill={isMax?'#ef4444':isMin?'#3b82f6':warn?'#f97316':color1}
                           stroke="white" strokeWidth={isMax||isMin?2:1.5} pointerEvents="none"/>
+                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={9} fill="transparent" style={{cursor:'pointer'}}
+                          onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setVitalTooltip(null)}/>
                       </g>
                     );
                   })}
                   {/* 通常ドット（pts2） */}
                   {pts2.map(p=>{
                     const isMax=p===maxP2, isMin=p===minP2;
+                    const _enter=(e)=>setVitalTooltip({px:e.clientX,py:e.clientY,d:p.d,field,i:p.i});
                     return (
                       <g key={'d'+p.i}>
                         <circle cx={xPV(p.i)} cy={yP(p.v)} r={isMax||isMin?7:5}
                           fill={isMax?'#ef4444':isMin?'#3b82f6':color2}
                           stroke="white" strokeWidth={isMax||isMin?2:1.5} pointerEvents="none"/>
+                        <circle cx={xPV(p.i)} cy={yP(p.v)} r={9} fill="transparent" style={{cursor:'pointer'}}
+                          onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setVitalTooltip(null)}/>
                       </g>
                     );
                   })}
-                  {/* ★ ホバー用オーバーレイ: プロット全体で1枚だけ。 マウス位置から最寄りの日を判定して
-                      ツールチップを滑らかに更新(ドットごとの判定だと重なりで反応が悪く/消えなくなるため)。 */}
-                  <rect x={0} y={0} width={W} height={H} fill="transparent" style={{cursor:'pointer'}}
-                    onMouseMove={(e)=>{
-                      const rb=e.currentTarget.getBoundingClientRect();
-                      const ox=e.clientX-rb.left;
-                      let i=Math.round((ox-PAD_X-_STEP/2)/_STEP);
-                      i=Math.max(0,Math.min(dailyData.length-1,i));
-                      const p1=pts1.find(q=>q.i===i)||ptsE1.find(q=>q.i===i);
-                      if(!p1){ setVitalTooltip(null); return; }
-                      // ★ カーソル位置(px/py)に追従させる (気分トレンドと同じHTMLツールチップ)
-                      setVitalTooltip({px:e.clientX,py:e.clientY,d:dailyData[i],field,i});
-                    }}
-                    onMouseLeave={()=>setVitalTooltip(null)}
-                  />
+                  {/* 終了時ドット(ptsE1/ptsE2) にも判定を付与 */}
+                  {ptsE1.map(p=>{const _enter=(e)=>setVitalTooltip({px:e.clientX,py:e.clientY,d:p.d,field,i:p.i});return <circle key={'he1'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={9} fill="transparent" style={{cursor:'pointer'}} onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setVitalTooltip(null)}/>;})}
+                  {ptsE2.map(p=>{const _enter=(e)=>setVitalTooltip({px:e.clientX,py:e.clientY,d:p.d,field,i:p.i});return <circle key={'he2'+p.i} cx={xPV(p.i)} cy={yP(p.v)} r={9} fill="transparent" style={{cursor:'pointer'}} onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setVitalTooltip(null)}/>;})}
                   {/* X軸日付ラベル */}
                   {dailyData.map((d,i)=>showLabel(i)?<text key={i} x={xPV(i)} y={H+12} textAnchor="middle" fontSize={11} fill="#000" fontWeight="bold">{d.label}</text>:null)}
                 </svg>
@@ -20817,28 +20812,22 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                           return `${xP2(origIdx)},${yPSec(d.secondary)}`;
                         }).join(' ')} fill="none" stroke="#f97316" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
                       )}
-                      {/* 点の描画 */}
+                      {/* 点の描画 + 各ドットに判定円(気分トレンドと同じ方式) */}
                       {exData.map((d,i)=>{
+                        const _enter=(e)=>setExTooltip({px:e.clientX,py:e.clientY,d,i});
                         if (graphType === 'weight_reps') {
                           if (d.secondary == null) return null;
-                          return <circle key={`s${i}`} cx={xP2(i)} cy={yPSec(d.secondary)} r={3.5} fill="#f97316" stroke="white" strokeWidth={1.5} pointerEvents="none"/>;
+                          return (<g key={`s${i}`}>
+                            <circle cx={xP2(i)} cy={yPSec(d.secondary)} r={3.5} fill="#f97316" stroke="white" strokeWidth={1.5} pointerEvents="none"/>
+                            <circle cx={xP2(i)} cy={yPSec(d.secondary)} r={8} fill="transparent" style={{cursor:'pointer'}} onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setExTooltip(null)}/>
+                          </g>);
                         }
                         const dv=d.val||d.avg||0; const isMax=dv===maxV,isMin=dv===minV;
-                        return <circle key={i} cx={xP2(i)} cy={yP2(dv)} r={isMax||isMin?5:3.5} fill={isMax?'#ef4444':isMin?'#3b82f6':'#6366f1'} stroke="white" strokeWidth={1.5} pointerEvents="none"/>;
+                        return (<g key={i}>
+                          <circle cx={xP2(i)} cy={yP2(dv)} r={isMax||isMin?5:3.5} fill={isMax?'#ef4444':isMin?'#3b82f6':'#6366f1'} stroke="white" strokeWidth={1.5} pointerEvents="none"/>
+                          <circle cx={xP2(i)} cy={yP2(dv)} r={8} fill="transparent" style={{cursor:'pointer'}} onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setExTooltip(null)}/>
+                        </g>);
                       })}
-                      {/* ★ ホバー用オーバーレイ: プロット全体1枚。 カーソルに追従してツールチップを滑らかに更新 */}
-                      <rect x={0} y={0} width={W2} height={H2} fill="transparent" style={{cursor:'pointer'}}
-                        onMouseMove={(e)=>{
-                          const rb=e.currentTarget.getBoundingClientRect();
-                          const ox=e.clientX-rb.left;
-                          let i=Math.round((ox-PAD_L2-_STEP2/2)/_STEP2);
-                          i=Math.max(0,Math.min(exData.length-1,i));
-                          const d=exData[i];
-                          if(!d){ setExTooltip(null); return; }
-                          setExTooltip({px:e.clientX,py:e.clientY,d,i});
-                        }}
-                        onMouseLeave={()=>setExTooltip(null)}
-                      />
                     </svg>
                     {/* ★ ツールチップ: カーソル追従のHTMLオーバーレイ(気分トレンドと同じ滑らかさ)。 pointerEvents:none */}
                     {exTooltip&&exTooltip.d&&(()=>{
@@ -20931,10 +20920,21 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                           {(()=>{const ticks=[];const rng=yMaxF-yMinF||1;const st=rng<=5?0.5:rng<=20?2:rng<=100?10:50;for(let v=Math.ceil(yMinF/st)*st;v<=yMaxF;v+=st)ticks.push(v);return ticks.map(v=><line key={v} x1={0} y1={yPF(v)} x2={W2f-44} y2={yPF(v)} stroke="#f1f5f9" strokeWidth={1}/>);})()}
                           <polyline points={dailyFit.map((r,i)=>`${xPF(i)},${yPF(Number(r.values[_selFitId]))}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
                           {dailyFit.map((r,i)=>(
-                            <circle key={i} cx={xPF(i)} cy={yPF(Number(r.values[_selFitId]))} r={4} fill="#6366f1" stroke="white" strokeWidth={1.5}/>
+                            <circle key={i} cx={xPF(i)} cy={yPF(Number(r.values[_selFitId]))} r={4} fill="#6366f1" stroke="white" strokeWidth={1.5} pointerEvents="none"/>
                           ))}
+                          {/* 各ドットに判定円(気分トレンドと同じ方式) */}
+                          {dailyFit.map((r,i)=>{
+                            const _enter=(e)=>setFitTooltip({px:e.clientX,py:e.clientY,date:r.date,val:r.values[_selFitId],unit:selFitItem?.unit||''});
+                            return <circle key={'hf'+i} cx={xPF(i)} cy={yPF(Number(r.values[_selFitId]))} r={9} fill="transparent" style={{cursor:'pointer'}} onMouseEnter={_enter} onMouseMove={_enter} onMouseLeave={()=>setFitTooltip(null)}/>;
+                          })}
                           {dailyFit.map((r,i)=>showLF(i)?<text key={i} x={xPF(i)} y={H2f+11} textAnchor="middle" fontSize={8} fill="#000" fontWeight="bold">{r.date.replace(/(\d+)年(\d+)月(\d+)日/,'$2/$3').replace(/(\d+)月(\d+)日/,'$1/$2')}</text>:null)}
                         </svg>
+                        {fitTooltip&&(()=>(
+                          <div style={{position:'fixed',left:fitTooltip.px+12,top:fitTooltip.py-8,background:'rgba(15,23,42,0.92)',color:'white',borderRadius:10,padding:'8px 12px',fontSize:13,zIndex:9999,pointerEvents:'none',minWidth:120,boxShadow:'0 4px 16px rgba(0,0,0,0.3)'}}>
+                            <div style={{fontWeight:'bold',marginBottom:2,borderBottom:'1px solid rgba(255,255,255,0.2)',paddingBottom:4}}>{fitTooltip.date}</div>
+                            <div>{selFitItem?.name}: {fitTooltip.val}{fitTooltip.unit}</div>
+                          </div>
+                        ))()}
                       </div>
                     </div>
                     {/* 記録一覧 */}
