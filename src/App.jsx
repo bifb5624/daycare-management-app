@@ -27165,6 +27165,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         const normGender = (s) => { const t=String(s||'').trim(); if(!t) return ''; if(/^(男性|男|m|male)$/i.test(t)) return '男性'; if(/^(女性|女|f|female)$/i.test(t)) return '女性'; return t; };
         const normBurden = (s) => { const t=_toHalf(String(s||'').trim()); if(!t) return ''; if(/^70%/.test(t)||/3割/.test(t)) return '70%'; if(/^80%/.test(t)||/2割/.test(t)) return '80%'; if(/^90%/.test(t)||/1割/.test(t)) return '90%'; const m=t.match(/(70|80|90)\s*%/); if(m) return m[1]+'%'; if(/^90$/.test(t)) return '90%'; if(/^80$/.test(t)) return '80%'; if(/^70$/.test(t)) return '70%'; if(/^3$/.test(t)) return '70%'; if(/^2$/.test(t)) return '80%'; if(/^1$/.test(t)) return '90%'; return t; };
         const normCare = (s) => { const t=_toHalf(String(s||'').trim()).replace(/\s/g,''); if(!t) return ''; if(/事業対象|総合事業|事対|チェックリスト/.test(t)) return '事業対象者'; let m=t.match(/要支援([12])/)||t.match(/^支援([12])/); if(m) return '要支援'+m[1]; m=t.match(/要介護([1-5])/)||t.match(/^介護([1-5])/); if(m) return '要介護'+m[1]; if(t==='要支援') return '要支援1'; return t; };
+        // ★ 状態: 利用中 / 休止(一時停止) / 退所(利用停止) に正規化。 一時停止(=休止)を 停止(=退所)より先に判定する。
+        const normStatus = (s) => { const t=String(s||'').replace(/[\s　]/g,'').trim(); if(!t) return ''; if(/一時停止|一時休止|休止|中断|休会/.test(t)) return '休止'; if(/退所|利用終了|利用停止|サービス終了|終了|停止|中止|解約/.test(t)) return '退所'; if(/利用中|利用開始|継続|提供中|稼働|通所中|在籍/.test(t)) return '利用中'; return t; };
         const doImport = (perRowChoices) => {
           try {
             const rows = parseCsv(csvModal.importText.replace(/^﻿/,''));
@@ -27190,7 +27192,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               careLevel:   findCol(header,['介護度','要介護','要支援'],['期間']),
               startDate:   findCol(header,['利用開始','開始日'],['適用','介護度','緊急']),
               endDate:     findCol(header,['利用終了','終了日'],['適用']),
-              status:      findCol(header,['状態','利用状態','利用区分']),
+              status:      findCol(header,['状態','利用状態','利用区分','利用状況','利用者状態','ステータス','サービス状況','サービス提供状況','在籍状況','状況'],['開始','終了','日']),
               kiou:        findCol(header,['既往']),
               ryui:        findCol(header,['留意']),
               doctor:      findCol(header,['かかりつけ','主治医','担当医']),
@@ -27273,7 +27275,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               set('careLevel', normCare(val(row,col.careLevel)));
               set('startDate', col.startDate>=0 && val(row,col.startDate) ? normDate(val(row,col.startDate)) : '');
               set('endDate', col.endDate>=0 && val(row,col.endDate) ? normDate(val(row,col.endDate)) : '');
-              set('status', val(row,col.status));
+              set('status', normStatus(val(row,col.status)));
               set('kiou', val(row,col.kiou));
               set('ryui', val(row,col.ryui));
               set('email', val(row,col.email));
