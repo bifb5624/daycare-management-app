@@ -10343,6 +10343,8 @@ function ScheduleView({ appData, onSave }) {
   const [selDay, setSelDay] = useState(todayStr);
   const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color, repeat, repeatUntil}
   const [labelEditorOpen, setLabelEditorOpen] = useState(false); // ラベル編集モーダル(ヘッダから・色/名前/追加)
+  const [repeatMgrOpen, setRepeatMgrOpen] = useState(false); // 繰り返し設定 管理モーダル
+  const [mgrDates, setMgrDates] = useState({}); // {eventId: 'YYYY-MM-DD'} 指定日以降削除用
   const [iconPopup, setIconPopup] = useState(null); // {date, birthdays:[], expiries:[]}
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
   const [dragEvId, setDragEvId] = useState(null); // ドラッグ移動中の予定ID
@@ -10393,6 +10395,7 @@ function ScheduleView({ appData, onSave }) {
     const [y1,m1,d1] = e.date.split('-').map(Number);
     const [y2,m2,d2] = dstr.split('-').map(Number);
     const base = new Date(y1,m1-1,d1), cur = new Date(y2,m2-1,d2);
+    if (e.repeat === 'daily') { const diff = Math.round((cur-base)/86400000); return diff>0 && diff%every===0; }
     if (e.repeat === 'weekly') { const diff = Math.round((cur-base)/86400000); return diff>0 && diff%(7*every)===0; }
     if (e.repeat === 'monthly') { if(d1!==d2) return false; const mo=(y2-y1)*12+(m2-m1); return mo>0 && mo%every===0; }
     if (e.repeat === 'yearly') { if(m1!==m2||d1!==d2) return false; const yr=y2-y1; return yr>0 && yr%every===0; }
@@ -10408,6 +10411,26 @@ function ScheduleView({ appData, onSave }) {
   };
   const nthOfMonth = (dstr) => { const d=Number(dstr.slice(8,10)); return Math.floor((d-1)/7)+1; };
   const dowLabel = (dstr) => ['日','月','火','水','木','金','土'][(()=>{const [y,m,d]=dstr.split('-').map(Number);return new Date(y,m-1,d).getDay();})()];
+  // 繰り返しの内容を短い日本語に
+  const repeatSummary = (e) => {
+    const ev = Math.max(1, Number(e.repeatEvery)||1);
+    const d = e.date ? Number(e.date.slice(8,10)) : 1;
+    const mo = e.date ? Number(e.date.slice(5,7)) : 1;
+    if (e.repeat==='daily') return ev>1?`${ev}日ごと`:'毎日';
+    if (e.repeat==='weekly') return `${ev>1?ev+'週ごと':'毎週'} ${dowLabel(e.date)}曜日`;
+    if (e.repeat==='monthly') return `${ev>1?ev+'月ごと':'毎月'} ${d}日`;
+    if (e.repeat==='monthly_nth') { const w=(e.monthlyNthWeeks||[]).map(x=>x==='last'?'最終':'第'+x).join('・'); return `毎月 ${w} ${dowLabel(e.date)}曜日`; }
+    if (e.repeat==='yearly') return `${ev>1?ev+'年ごと':'毎年'} ${mo}月${d}日`;
+    return '';
+  };
+  // 指定日以降を削除: fromDate の前日を repeatUntil に。 開始日以前なら丸ごと削除。
+  const prevDayStr = (dstr) => { const [y,m,d]=dstr.split('-').map(Number); const dt=new Date(y,m-1,d-1); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; };
+  const stopSeriesFrom = (e, fromDate) => {
+    if (!fromDate) return;
+    if (fromDate <= e.date) { del(e.id); return; }
+    if (!window.confirm(`${e.title}\n${fromDate} 以降の繰り返しを削除します。よろしいですか？`)) return;
+    save(events.map(x=>x.id===e.id?{...x, repeatUntil:prevDayStr(fromDate), _savedAt:Date.now()}:x), '✓ 指定日以降の繰り返しを削除しました');
+  };
   const addMonthsToDate = (dstr, months) => { if(!dstr) return ''; const [y,m,d]=dstr.split('-').map(Number); const dt=new Date(y,m-1+months,d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; };
   const evOf = (dstr) => events.filter(e=>occursOn(e,dstr)).map(e=> e.date===dstr ? e : {...e, date:dstr, _occ:true, _baseId:e.id}).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
   const editEvent = (e) => { const be = e._occ ? (events.find(x=>x.id===e._baseId)||e) : e; setModal({...be}); };
@@ -10444,8 +10467,9 @@ function ScheduleView({ appData, onSave }) {
           <CalendarRange size={20}/>
           <span style={{fontSize:17,fontWeight:'bold'}}>スケジュール</span>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <button onClick={()=>setLabelEditorOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>✎ ラベル編集</button>
+          <button onClick={()=>setRepeatMgrOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>🔁 繰り返し設定</button>
           <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Plus size={16}/>予定を追加</button>
         </div>
       </div>
@@ -10658,6 +10682,7 @@ function ScheduleView({ appData, onSave }) {
             <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:8,flexWrap:'wrap'}}>
               <select value={modal.repeat||'none'} onChange={e=>setModal(m=>{ const rep=e.target.value; const upd={...m, repeat:rep, repeatEvery:m.repeatEvery||1}; if(rep==='monthly_nth' && (!m.monthlyNthWeeks||!m.monthlyNthWeeks.length) && m.date){ upd.monthlyNthWeeks=[nthOfMonth(m.date)]; } return upd; })} style={{padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:'white'}}>
                 <option value="none">なし</option>
+                <option value="daily">毎日</option>
                 <option value="weekly">毎週</option>
                 <option value="monthly">毎月（同じ日）</option>
                 <option value="monthly_nth">毎月（第◯曜日）</option>
@@ -10666,7 +10691,7 @@ function ScheduleView({ appData, onSave }) {
               {modal.repeat && modal.repeat!=='none' && modal.repeat!=='monthly_nth' && (
                 <div style={{display:'flex',alignItems:'center',gap:4}}>
                   <input type="number" min={1} max={99} value={modal.repeatEvery||1} onChange={e=>setModal(m=>({...m,repeatEvery:Math.max(1,Math.min(99,Number(e.target.value)||1))}))} style={{width:54,boxSizing:'border-box',padding:'8px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',textAlign:'center'}}/>
-                  <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>{modal.repeat==='weekly'?'週':modal.repeat==='monthly'?'月':'年'}ごと</span>
+                  <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>{modal.repeat==='daily'?'日':modal.repeat==='weekly'?'週':modal.repeat==='monthly'?'月':'年'}ごと</span>
                 </div>
               )}
             </div>
@@ -10681,21 +10706,8 @@ function ScheduleView({ appData, onSave }) {
                 </div>
               </div>
             )}
-            {modal.repeat && modal.repeat!=='none' && (
-              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8,flexWrap:'wrap'}}>
-                <span style={{fontSize:12,color:'#475569',fontWeight:'bold'}}>いつまで</span>
-                <input type="date" value={modal.repeatUntil||''} onChange={e=>setModal(m=>({...m,repeatUntil:e.target.value}))} style={{padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/>
-                {[['3ヶ月',3],['半年',6],['1年',12]].map(([lbl,mo])=>(
-                  <button key={lbl} type="button" onClick={()=>setModal(m=>({...m,repeatUntil:addMonthsToDate(m.date,mo)}))} style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #c7d2fe',background:'#eef2ff',color:'#4338ca',cursor:'pointer'}}>{lbl}</button>
-                ))}
-                <button type="button" onClick={()=>setModal(m=>({...m,repeatUntil:''}))} style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #e2e8f0',background:'white',color:'#64748b',cursor:'pointer'}}>無期限</button>
-              </div>
-            )}
-            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>例:「2」＋「週ごと」で隔週、「6」＋「月ごと」で半年ごと。<b>編集・削除はシリーズ全体</b>に反映されます。</div>}
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
-              <label style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>色・分類（押すとタイトルに入ります）</label>
-              <button type="button" onClick={()=>setLabelEditorOpen(true)} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>✎ ラベル編集</button>
-            </div>
+            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>例:「2」＋「週ごと」で隔週。繰り返しの<b>終了・削除</b>は、画面右上の <b>🔁 繰り返し設定</b> から「指定日以降を削除」で行えます（編集はシリーズ全体に反映）。</div>}
+            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色・分類（押すとタイトルに入ります）</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
               {colorLabels.map((cl,i)=>{
                 const selected = modal.color===cl.color;
@@ -10742,6 +10754,52 @@ function ScheduleView({ appData, onSave }) {
             ) : <div style={{marginTop:10,fontSize:11,color:'#94a3b8',textAlign:'center'}}>上限の15件です。</div>}
             <div style={{textAlign:'right',marginTop:14}}>
               <button onClick={()=>setLabelEditorOpen(false)} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>完了</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {repeatMgrOpen && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setRepeatMgrOpen(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>🔁 繰り返し設定の管理</div>
+              <button onClick={()=>setRepeatMgrOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#94a3b8'}}><X size={18}/></button>
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>設定されている繰り返し予定の一覧です。<b>種類ごと</b>に分かれています。「すべて削除」または「<b>指定日</b>を選んで<b>その日以降を削除</b>」できます。</div>
+            {(() => {
+              const reps = events.filter(e => e.repeat && e.repeat !== 'none');
+              if (!reps.length) return <div style={{fontSize:13,color:'#94a3b8',padding:'16px 0',textAlign:'center'}}>繰り返し予定はありません。</div>;
+              const groups = [['daily','毎日'],['weekly','毎週'],['monthly','毎月（同じ日）'],['monthly_nth','毎月（第◯曜日）'],['yearly','毎年']];
+              return groups.map(([key,label]) => {
+                const list = reps.filter(e => e.repeat === key).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+                if (!list.length) return null;
+                return (
+                  <div key={key} style={{marginBottom:14}}>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#4338ca',marginBottom:6,borderBottom:'1px solid #e2e8f0',paddingBottom:3}}>{label}（{list.length}件）</div>
+                    <div style={{display:'grid',gap:8}}>
+                      {list.map(e => (
+                        <div key={e.id} style={{border:'1px solid #e2e8f0',borderRadius:10,padding:'8px 10px'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6,flexWrap:'wrap'}}>
+                            <span style={{width:12,height:12,borderRadius:'50%',background:e.color||'#6366f1',flexShrink:0}}/>
+                            <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}</span>
+                            {patName(e) && <span style={{fontSize:12,color:'#6366f1',fontWeight:'bold'}}>／{patName(e)} 様</span>}
+                          </div>
+                          <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>{repeatSummary(e)}{e.start?`　${timeLabel(e)}`:''}　<span style={{color:'#94a3b8'}}>開始 {e.date}{e.repeatUntil?`／${e.repeatUntil}まで`:''}</span></div>
+                          <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                            <input type="date" value={mgrDates[e.id]||''} onChange={ev=>setMgrDates(d=>({...d,[e.id]:ev.target.value}))} style={{padding:'5px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/>
+                            <button onClick={()=>{ const fd=mgrDates[e.id]; if(!fd){alert('削除を始める日付を選んでください');return;} stopSeriesFrom(e, fd); setMgrDates(d=>{const n={...d};delete n[e.id];return n;}); }} style={{fontSize:11,fontWeight:'bold',padding:'6px 10px',borderRadius:8,border:'none',background:'#fef3c7',color:'#b45309',cursor:'pointer'}}>この日以降を削除</button>
+                            <div style={{flex:1}}/>
+                            <button onClick={()=>{ del(e.id); }} style={{fontSize:11,fontWeight:'bold',padding:'6px 10px',borderRadius:8,border:'none',background:'#fee2e2',color:'#b91c1c',cursor:'pointer'}}>すべて削除</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+            <div style={{textAlign:'right',marginTop:8}}>
+              <button onClick={()=>setRepeatMgrOpen(false)} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
             </div>
           </div>
         </div>
