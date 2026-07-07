@@ -25716,7 +25716,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const handleStatusChange = (val) => {
     if (val === '休止') setPauseModal({ isOpen: true, reason: "", fromDate: new Date().toISOString().split('T')[0] });
     else if (val === '利用中' && localPatient.status === '休止') {
-      updateLP('status', '利用中');
+      // ★ 休止→利用中(再開): 最新の未終了の休止に「終了日=今日」を記録し、休止期間を確定する
+      const today = new Date().toISOString().split('T')[0];
+      const hist = [...(localPatient.pauseHistory || [])];
+      for (let i = hist.length - 1; i >= 0; i--) { if (!hist[i].toDate) { hist[i] = { ...hist[i], toDate: today }; break; } }
+      updateLPFields({ status: '利用中', pauseHistory: hist });
     } else updateLP('status', val);
   };
   const updateSched = (i, v) => { if (!localPatient) return; const oldV = localPatient.scheduleAmPm?.[i] || ''; if(oldV === v) return; const t=new Date(); const ds=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; setSchedModal({dayIndex:i, newVal:v, oldVal:oldV, applyFrom:ds, vY:t.getFullYear(), vM:t.getMonth()}); };
@@ -26281,6 +26285,42 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               {/* ① 状態・利用開始日・利用終了日 */}
               <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => { const v = e.target.value; updateLP('endDate', v); if (v) setAutoDeleteModal({ endDate: v, years: (localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0)) }); }} /></div>
 
+              {/* ★ 休止中: 基本情報にも分かりやすく表示 (現在休止中・期間・履歴・再開) */}
+              {localPatient.status === '休止' && (() => {
+                const l = latPause(localPatient);
+                return (
+                  <div className="rounded-2xl border-2 border-orange-300 bg-orange-50 overflow-hidden">
+                    <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-3">
+                        <CalendarOff size={20} className="text-orange-500" />
+                        <div>
+                          <div className="text-sm font-bold text-orange-800">現在休止中{l?.reason ? `: ${l.reason}` : ''}</div>
+                          {l?.fromDate && <div className="text-xs text-orange-600">{fD(l.fromDate)}〜（休止開始）</div>}
+                        </div>
+                      </div>
+                      {!isOff && (
+                        <div className="flex gap-2">
+                          <button onClick={() => setPauseModal({ isOpen: true, reason: "", fromDate: new Date().toISOString().split('T')[0] })} className="px-3 py-1.5 bg-white border border-orange-300 text-orange-700 rounded-lg text-xs font-bold hover:bg-orange-100">理由変更</button>
+                          <button onClick={() => handleStatusChange('利用中')} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold">利用を再開</button>
+                        </div>
+                      )}
+                    </div>
+                    {(localPatient.pauseHistory || []).length > 0 && (
+                      <div className="px-4 pb-3">
+                        <div className="text-[11px] font-bold text-orange-700 mb-1">休止履歴（{localPatient.pauseHistory.length}件）</div>
+                        <div className="space-y-1">
+                          {[...localPatient.pauseHistory].sort((a, b) => new Date(b.fromDate) - new Date(a.fromDate)).map((h, i) => (
+                            <div key={i} className="text-[11px] text-slate-600 bg-white rounded px-2 py-1 border border-orange-100">
+                              <span className="text-slate-500">{fD(h.fromDate)}{h.toDate ? ` 〜 ${fD(h.toDate)}` : ' 〜（継続中）'}</span>　<b className="text-slate-700">{h.reason}</b>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="text-[10px] text-orange-600 mt-1">※ 終了日の修正や履歴の削除は「サービス提供内容」タブでできます。</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {/* ② 氏名・フリガナ・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
               {(() => {
                 const _splitSG = (s) => { const a=(s||'').split(/[\s　]+/).filter(Boolean); return { sn: a[0]||'', gn: a.slice(1).join(' ')||'' }; };
