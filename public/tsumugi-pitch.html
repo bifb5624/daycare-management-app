@@ -19,6 +19,7 @@
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .grid3{ display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
   .card{ background:#f8fafc; border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
+  .card.hi{ background:#f0fdf4; border-color:#bbf7d0; }
   .card .ic{ font-size:22px; }
   .card b{ color:var(--g3); }
   table{ width:100%; border-collapse:collapse; margin:12px 0; font-size:14px; }
@@ -28,7 +29,6 @@
   td.c,th.c{ text-align:center; }
   .cut{ font-weight:bold; color:#16a34a; }
   .pill{ display:inline-block; background:#ecfdf5; color:var(--g1); border:1px solid #a7f3d0; border-radius:999px; padding:2px 10px; font-size:12px; font-weight:bold; margin:2px; }
-  .pill.gray{ background:#f1f5f9; color:#64748b; border-color:#e2e8f0; }
   .warnbox{ background:#fffbeb; border:1px solid #fde68a; border-radius:14px; padding:15px 18px; color:#92400e; font-size:14px; }
   .okbox{ background:#f0fdf4; border:1px solid #bbf7d0; border-radius:14px; padding:15px 18px; color:#166534; font-size:14px; }
   .infobox{ background:#eef2ff; border:1px solid #c7d2fe; border-radius:14px; padding:15px 18px; color:#3730a3; font-size:14px; }
@@ -49,6 +49,7 @@
   .foot{ text-align:center; color:var(--sub); font-size:12px; margin-top:10px; }
   .badge-new{ background:#ef4444; color:white; border-radius:6px; font-size:11px; font-weight:bold; padding:2px 8px; margin-left:8px; vertical-align:middle; }
   .disc{ background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; padding:10px 14px; font-size:12px; color:#64748b; }
+  .rec{ display:inline-block; background:#16a34a; color:white; font-size:11px; font-weight:bold; border-radius:6px; padding:2px 8px; margin-left:6px; }
   @media print{ body{ background:white; } .slide{ box-shadow:none; break-inside:avoid; page-break-inside:avoid; margin-bottom:0; border-radius:0; border:none; border-bottom:2px solid var(--line); } .deck{ padding:0; } a{ color:inherit; } }
   @media (max-width:720px){ .grid2,.grid3,.toc{ grid-template-columns:1fr; } .rm{ grid-template-columns:96px 1fr; } h1{ font-size:28px; } .cover h1{ font-size:32px; } .slide{ padding:26px 22px; } }
 </style>
@@ -56,15 +57,13 @@
 <body>
 <div class="deck">
 
-  <!-- 表紙 -->
   <section class="slide cover">
     <div class="num-tag" style="background:rgba(255,255,255,0.25);">通所介護（半日型・リハビリ特化）management</div>
     <h1>つむぎ（Tsumugi）</h1>
-    <p class="lead">記録・書類・連携・分析を「まるっと」デジタル化するデイサービス管理アプリ<br>— 事業のご説明資料（機能・効率化・他社比較・料金の目安・ロードマップ）—</p>
+    <p class="lead">記録・書類・連携・分析を「まるっと」デジタル化するデイサービス管理アプリ<br>— 機能・効率化・他社比較・料金・従量課金（AI／FAX）・複数店舗の課金設計・ロードマップ —</p>
     <div style="margin-top:14px;font-size:12px;color:#eaf5d8;">株式会社ワンズスタイル ／ つむぎ運営</div>
   </section>
 
-  <!-- 目次 -->
   <section class="slide" id="toc">
     <div class="num-tag">CONTENTS</div>
     <h2>目次</h2>
@@ -72,46 +71,44 @@
       <a href="#s1"><span class="n">01</span> つむぎとは</a>
       <a href="#s2"><span class="n">02</span> 現状の主な機能</a>
       <a href="#s3"><span class="n">03</span> 効率化（時間と割合）</a>
-      <a href="#s4"><span class="n">04</span> 他社サービスとの比較</a>
+      <a href="#s4"><span class="n">04</span> 他社との比較・独自機能</a>
       <a href="#s5"><span class="n">05</span> 料金の目安①（対象と内訳）</a>
       <a href="#s6"><span class="n">06</span> 料金の目安②（人数・拡張）</a>
-      <a href="#s7"><span class="n">07</span> モニタリングAIの従量課金と対策</a>
-      <a href="#s8"><span class="n">08</span> 新構想：運営書類 管理アプリ</a>
-      <a href="#s9"><span class="n">09</span> ロードマップ（期間の目安）</a>
-      <a href="#s10"><span class="n">10</span> まとめ／次のステップ</a>
+      <a href="#s7"><span class="n">07</span> 従量課金：AI と 自動FAX</a>
+      <a href="#s8"><span class="n">08</span> 複数店舗・FCの課金の割り振り</a>
+      <a href="#s9"><span class="n">09</span> 新構想：運営書類 管理アプリ</a>
+      <a href="#s10"><span class="n">10</span> ロードマップ</a>
+      <a href="#s11"><span class="n">11</span> まとめ／次のステップ</a>
     </div>
   </section>
 
-  <!-- 1 -->
   <section class="slide" id="s1">
     <div class="num-tag">01 OVERVIEW</div>
     <h2>つむぎとは（3行で）</h2>
     <div class="grid3">
       <div class="card"><div class="ic">🖥️</div><b>紙とExcelをやめる</b><br>提供記録・連絡帳・日誌・計画書・モニタリングを1つに。PC/iPad/スマホで自動クラウド同期。</div>
       <div class="card"><div class="ic">🤝</div><b>家族・ケアマネと繋がる</b><br>専用の閲覧画面。お知らせ・写真・記録を共有。保険証・アセスメント等は事業所⇔ケアマネで双方向連携。</div>
-      <div class="card"><div class="ic">🤖</div><b>AIが下書きを作る</b><br>モニタリング表をAIで自動下書き。担当ケアマネへは宛先自動で送付状を作成。書類の手間を大幅削減。</div>
+      <div class="card"><div class="ic">🤖</div><b>AI＋自動FAX</b><br>モニタリング表をAIで下書き→<b>各担当ケアマネのFAX番号へ自動送信</b>（外部連携）。書類の手間を大幅削減。</div>
     </div>
     <div class="infobox" style="margin-top:14px;">半日型・リハビリ特化のデイサービスに最適化。<b>複数店舗（フランチャイズ）対応</b>で、本部（つむぎ管理局）が店舗を一元管理できます。</div>
   </section>
 
-  <!-- 2 -->
   <section class="slide" id="s2">
     <div class="num-tag">02 FEATURES</div>
     <h2>現状の主な機能（実装済み）</h2>
     <div class="grid2">
       <div class="card"><b>👤 利用者マスタ</b><ul class="tight"><li>基本情報・緊急連絡先・ケアマネ情報</li><li>CSV一括入出力（カイポケ等の書式に対応）</li><li>状態管理（利用中／休止／退所）・変更履歴</li></ul></div>
-      <div class="card"><b>📝 サービス提供記録・連絡帳・日誌</b><ul class="tight"><li>バイタル・運動・気分の入力→そのまま月表・PDF</li><li>連絡帳の作成・印刷、日誌（送迎・記録者確認）</li></ul></div>
-      <div class="card"><b>🗓 スケジュール／月間予定</b><ul class="tight"><li>基本利用曜日から予定を自動作成・振替・休止</li><li>カレンダー＋週タイムライン・繰り返し・色分類</li><li>誕生日👑／認定満了⚠️アラート</li></ul></div>
-      <div class="card"><b>📠 休み連絡・各種連絡</b><ul class="tight"><li>宛先（担当ケアマネ）を自動セット・送付履歴</li><li>複合機のFAX機能で「印刷と同じ操作」で送信可</li></ul></div>
+      <div class="card"><b>📝 提供記録・連絡帳・日誌</b><ul class="tight"><li>バイタル・運動・気分の入力→そのまま月表・PDF</li><li>連絡帳の作成・印刷、日誌（送迎・記録者確認）</li></ul></div>
+      <div class="card"><b>🗓 スケジュール／月間予定</b><ul class="tight"><li>基本利用曜日から自動作成・振替・休止</li><li>カレンダー＋週タイムライン・繰り返し・色分類</li><li>誕生日👑／認定満了⚠️アラート</li></ul></div>
+      <div class="card"><b>📠 ケアマネ送付・FAX</b><ul class="tight"><li>宛先自動・送付履歴</li><li>複合機FAX／<b>外部連携で各社へ自動一斉FAX</b></li></ul></div>
       <div class="card"><b>📊 分析（個人・稼働）</b><ul class="tight"><li>バイタル・運動・体力測定・気分のトレンド</li><li>曜日別・AM/PM別の稼働率</li></ul></div>
       <div class="card"><b>📄 計画書（加算対応）</b><ul class="tight"><li>個別機能訓練計画書（生活機能・興味関心と連携）</li><li>通所介護計画書</li></ul></div>
-      <div class="card"><b>🗂 個人ファイル・モニタリング</b><ul class="tight"><li>フェイスシート・書類保管（画像/PDFはクラウド）</li><li>モニタリング表のAI下書き＋担当ケアマネへ送付</li></ul></div>
-      <div class="card"><b>🔁 事業所⇔ケアマネ 双方向連携</b><ul class="tight"><li>介護保険証・負担割合証・アセスメントを相互共有</li><li>更新通知、介護度・負担割合はマスタへ自動反映</li></ul></div>
+      <div class="card"><b>🗂 個人ファイル・モニタリング</b><ul class="tight"><li>フェイスシート・書類保管（画像/PDFはクラウド）</li><li>モニタリング表の<b>AI下書き</b></li></ul></div>
+      <div class="card"><b>🔁 事業所⇔ケアマネ 双方向連携</b><ul class="tight"><li>保険証・負担割合証・アセスメントを相互共有</li><li>介護度・負担割合はマスタへ自動反映＋更新通知</li></ul></div>
     </div>
-    <p class="muted" style="margin-top:10px;">※ 家族/関係者アカウント、権限管理、クラウド自動保存・全端末同期、本部の複数店舗管理などを標準搭載。</p>
+    <p class="muted" style="margin-top:10px;">※ 家族/関係者アカウント、権限管理、クラウド自動保存・全端末同期、本部の複数店舗管理を標準搭載。</p>
   </section>
 
-  <!-- 3 効率化 -->
   <section class="slide" id="s3">
     <div class="num-tag">03 EFFICIENCY</div>
     <h2>どれくらい効率化する？（時間と割合）</h2>
@@ -120,82 +117,56 @@
       <tr><th>業務</th><th class="num">これまで</th><th class="num">つむぎ</th><th class="num">削減時間</th><th class="c">削減率</th></tr>
       <tr><td>モニタリング表の作成</td><td class="num">約 15時間</td><td class="num">約 2時間</td><td class="num">約 13時間</td><td class="c cut">約 85%</td></tr>
       <tr><td>提供記録・<b>連絡帳</b>の集計・転記</td><td class="num">約 8時間</td><td class="num">約 2時間</td><td class="num">約 6時間</td><td class="c cut">約 75%</td></tr>
-      <tr><td>FAX宛先・送付作業</td><td class="num">約 4時間</td><td class="num">約 1時間</td><td class="num">約 3時間</td><td class="c cut">約 75%</td></tr>
+      <tr><td>FAX宛先・送付作業</td><td class="num">約 4時間</td><td class="num">約 0.5時間</td><td class="num">約 3.5時間</td><td class="c cut">約 88%</td></tr>
       <tr><td>各種計画書の再入力</td><td class="num">約 4時間</td><td class="num">約 1.5時間</td><td class="num">約 2.5時間</td><td class="c cut">約 60%</td></tr>
       <tr><td>ケアマネとの書類やり取り</td><td class="num">約 3時間</td><td class="num">約 0.5時間</td><td class="num">約 2.5時間</td><td class="c cut">約 80%</td></tr>
-      <tr style="background:#f0fdf4;"><td><b>合計（対象業務）</b></td><td class="num"><b>約 34時間</b></td><td class="num"><b>約 7時間</b></td><td class="num"><b>約 27時間</b></td><td class="c"><b class="cut">約 80%減</b></td></tr>
+      <tr style="background:#f0fdf4;"><td><b>合計（対象業務）</b></td><td class="num"><b>約 34時間</b></td><td class="num"><b>約 6.5時間</b></td><td class="num"><b>約 27.5時間</b></td><td class="c"><b class="cut">約 80%減</b></td></tr>
     </table>
     <div class="okbox"><b>記録・書類まわりの作業を、対象業務で約80%（月およそ27時間）削減の目安。</b> 人件費換算（時給1,500円）で <b>月 約4万円相当</b>。加えて転記ミス・書類紛失の低減、家族・ケアマネ満足度の向上。</div>
-    <p class="muted">※ 規模・運用により変動する概算の目安です。</p>
+    <p class="muted">※ 規模・運用により変動する概算の目安です。自動FAX導入時はFAX作業がさらに短縮します。</p>
   </section>
 
-  <!-- 4 他社比較 -->
   <section class="slide" id="s4">
     <div class="num-tag">04 COMPARISON</div>
-    <h2>他社サービスとの比較</h2>
-    <p class="lead">総合型（例：カイポケ 等）や汎用の介護記録ソフトと比べた、つむぎの立ち位置。</p>
+    <h2>他社との比較・つむぎの独自機能</h2>
     <table>
-      <tr><th>観点</th><th class="c">総合型SaaS<br><span class="muted">(カイポケ等)</span></th><th class="c">汎用<br>介護記録ソフト</th><th class="c" style="background:#e9f9d9;">つむぎ</th></tr>
+      <tr><th>観点</th><th class="c">総合型SaaS<br><span class="muted">(カイポケ等)</span></th><th class="c">汎用<br>記録ソフト</th><th class="c" style="background:#e9f9d9;">つむぎ</th></tr>
       <tr><td>対象</td><td class="c">全サービス総合</td><td class="c">記録中心</td><td class="c"><b>半日デイ特化</b></td></tr>
-      <tr><td>半日リハビリの使いやすさ</td><td class="c">△</td><td class="c">△</td><td class="c cut">◎</td></tr>
       <tr><td>計画書の連携（生活機能・興味関心）</td><td class="c">△</td><td class="c">×</td><td class="c cut">◎</td></tr>
       <tr><td>モニタリングのAI下書き</td><td class="c">×〜△</td><td class="c">×</td><td class="c cut">◎</td></tr>
+      <tr><td>各社への自動一斉FAX</td><td class="c">△</td><td class="c">×</td><td class="c cut">◎</td></tr>
       <tr><td>ケアマネ双方向・家族閲覧</td><td class="c">〇</td><td class="c">△</td><td class="c cut">◎</td></tr>
       <tr><td>国保連請求・請求業務</td><td class="c cut">◎</td><td class="c">△</td><td class="c">未対応<br><span class="muted">(将来・要検証)</span></td></tr>
-      <tr><td>導入のしやすさ・価格感</td><td class="c">高め</td><td class="c">中</td><td class="c cut">導入しやすい</td></tr>
+      <tr><td>価格感</td><td class="c">高め</td><td class="c">中</td><td class="c cut">導入しやすい</td></tr>
     </table>
-    <h3>各社の主な機能（何ができるか）</h3>
-    <div class="grid3">
-      <div class="card"><b>総合型SaaS（カイポケ 等）</b><ul class="tight">
-        <li><b>国保連請求・実績管理</b>（最大の強み）</li>
-        <li>全サービス種別に対応（デイ/訪問/居宅 等）</li>
-        <li>ケアプラン・帳票・経営分析</li>
-        <li>給与計算・勤怠・LIFE連携 等</li>
-        <li><span class="muted">→ 網羅的だが多機能で複雑・価格は高め</span></li></ul></div>
-      <div class="card"><b>汎用 介護記録ソフト</b><ul class="tight">
-        <li>日々の介護記録・バイタル入力</li>
-        <li>帳票出力・シフト管理</li>
-        <li>タブレット記録 等</li>
-        <li><span class="muted">→ 記録中心。計画書連携やAI・家族連携は弱い</span></li></ul></div>
-      <div class="card" style="background:#f0fdf4;border-color:#bbf7d0;"><b>つむぎ</b><ul class="tight">
-        <li>半日デイ特化の記録・分析</li>
-        <li>計画書の自動連携／モニタリングAI</li>
-        <li>ケアマネ双方向・家族閲覧・写真共有</li>
-        <li><span class="muted">→ 請求は未対応。現場・書類・連携に特化</span></li></ul></div>
-    </div>
     <h3>つむぎだけ（他社にほぼ無い独自の強み）</h3>
-    <div class="okbox">
-      <ul class="tight" style="margin:2px 0;">
-        <li><b>モニタリング表をAIで自動下書き</b>し、<b>担当ケアマネ宛先を自動</b>で送付状化（作成〜送付が数分）。</li>
-        <li><b>“まるっと”計画書連携</b>：生活機能チェック・興味関心 → 個別機能訓練計画書 → 通所介護計画書へ<b>ワンタップ自動取込</b>。</li>
-        <li><b>事業所⇔ケアマネの双方向 書類連携</b>：保険証・負担割合証・アセスメントを相互反映、<b>介護度・負担割合はマスタへ自動反映＋更新通知</b>。</li>
-        <li><b>半日リハビリ特化のUI</b>：運動メニュー（2単位対応）・気分＋理由・テンキー最適化で現場が速い。</li>
-        <li><b>スケジュールの誕生日👑／認定満了⚠️アラート</b>、家族・ケアマネへの<b>お知らせ/写真共有</b>。</li>
-      </ul>
-    </div>
-    <div class="infobox"><b>まとめ：</b>総合型の強みは<b>請求</b>、つむぎの強みは<b>現場の記録・計画書連携・AI・家族/ケアマネ連携</b>。競合の弱い「デイ特化×連携×AI」で差別化し、請求は将来の検討課題とします。</div>
+    <div class="okbox"><ul class="tight" style="margin:2px 0;">
+      <li><b>モニタリング表をAIで下書き</b>し、<b>各担当ケアマネのFAX番号へ自動一斉送信</b>（作成〜送付が数分）。</li>
+      <li><b>“まるっと”計画書連携</b>：生活機能チェック・興味関心 → 個別機能訓練計画書 → 通所介護計画書へ<b>ワンタップ自動取込</b>。</li>
+      <li><b>事業所⇔ケアマネの双方向 書類連携</b>：保険証・アセスメントを相互反映、<b>介護度・負担割合はマスタへ自動反映＋更新通知</b>。</li>
+      <li><b>半日リハビリ特化のUI</b>（運動2単位・気分＋理由・テンキー最適化）、<b>誕生日/認定満了アラート</b>。</li>
+    </ul></div>
+    <p class="muted">※ 総合型の強みは「請求」。つむぎは「現場の記録・計画書連携・AI・家族/ケアマネ連携」で差別化します。</p>
   </section>
 
-  <!-- 5 料金① -->
   <section class="slide" id="s5">
     <div class="num-tag">05 PRICING（目安）</div>
     <h2>料金の目安 ①：何に対する料金？</h2>
-    <div class="okbox" style="margin-bottom:12px;">表示はすべて <b>「1事業所（1店舗）あたり・月額・税別」の目安</b>です。利用者数や端末台数での追加はありません（利用者数は下記の段階でのみ変動）。初期費用・年払い割引は別途。</div>
+    <div class="okbox" style="margin-bottom:12px;">表示はすべて <b>「1事業所（1店舗）あたり・月額・税別」の目安</b>です。端末台数での追加はありません（利用者数は下記段階でのみ変動）。<b>従量（AI・FAX）は別枠</b>で07・08にて。</div>
     <table>
       <tr><th>プラン</th><th>含まれるもの（この料金の対象）</th><th class="num">月額 目安<br>(1事業所)</th></tr>
-      <tr><td><b>ベーシック</b><br><span class="muted">まずはこれ</span></td><td>提供記録・連絡帳・日誌・スケジュール・分析・ご家族/ケアマネ閲覧・クラウド同期・複数端末・複数店舗管理</td><td class="num">¥12,000〜18,000</td></tr>
+      <tr><td><b>ベーシック</b></td><td>提供記録・連絡帳・日誌・スケジュール・分析・ご家族/ケアマネ閲覧・クラウド同期・複数端末・複数店舗管理</td><td class="num">¥12,000〜18,000</td></tr>
       <tr><td><b>計画書アドオン</b></td><td>個別機能訓練計画書＋通所介護計画書＋生活機能/興味関心（各様式の連携）</td><td class="num">＋¥5,000〜8,000</td></tr>
       <tr><td><b>ケアマネ双方向連携</b></td><td>保険証・負担割合証・アセスメント共有、更新通知（ベーシックに含める案も可）</td><td class="num">＋¥0〜3,000</td></tr>
-      <tr><td><b>モニタリングAI</b></td><td>AI下書きの基本枠込み＋超過は少額従量（詳細は07）</td><td class="num">基本枠込 ／ 超過従量</td></tr>
+      <tr><td><b>AI／自動FAX</b></td><td>基本枠込み＋超過は少額従量（詳細は07）</td><td class="num">基本枠込 ／ 超過従量</td></tr>
     </table>
-    <div class="disc">※ すべて検討用の「目安」です。実数は原価・市場・提供価値をもとに決定します。近い機能の総合型SaaSは月1〜3万円台が相場で、つむぎのフル装備でもその範囲内に収める想定です。</div>
+    <div class="disc">※ すべて検討用の「目安」。近い機能の総合型SaaSは月1〜3万円台が相場で、つむぎのフル装備でもその範囲内に収める想定です。</div>
   </section>
 
-  <!-- 6 料金② -->
   <section class="slide" id="s6">
     <div class="num-tag">06 PRICING（目安）</div>
     <h2>料金の目安 ②：利用者数・将来の拡張</h2>
-    <h3>A. 利用者数による段階（ベーシックの目安 ／ 1事業所・月）</h3>
+    <h3>A. 利用者数による段階（ベーシック ／ 1事業所・月）</h3>
     <table>
       <tr><th>登録利用者数（利用中）</th><th class="num">月額 目安</th><th>考え方</th></tr>
       <tr><td>〜20名</td><td class="num">¥12,000</td><td>小規模でも導入しやすい定額</td></tr>
@@ -203,95 +174,107 @@
       <tr><td>41〜60名</td><td class="num">¥20,000</td><td>大きめの事業所</td></tr>
       <tr><td>61名〜</td><td class="num">個別見積 ＋¥250〜300/名</td><td>大規模は1名単価で加算</td></tr>
     </table>
-    <p class="muted">※ カウントは「<b>利用中</b>」の人数を基準（退所者は含めない）。07のAI課金とも整合します。</p>
+    <p class="muted">※ カウントは「<b>利用中</b>」の人数（退所者は含めない）。07・08の従量とも整合します。</p>
     <h3>B. 将来のアドオン（追加していく機能の目安）</h3>
     <table>
       <tr><th>今後のアドオン</th><th class="num">月額 目安</th><th class="c">実現性</th></tr>
-      <tr><td>電子契約書・重要事項説明書・各種同意書</td><td class="num">＋¥3,000〜6,000</td><td class="c cut">高</td></tr>
-      <tr><td>LINE通知・勤務表（実績）自動作成</td><td class="num">＋¥3,000〜5,000</td><td class="c">中</td></tr>
-      <tr><td>LIFE CSV出力・加算算定漏れアラート</td><td class="num">＋¥3,000〜5,000</td><td class="c" style="color:var(--warn);">要検証<br><span class="muted">導入可否は今後判断</span></td></tr>
-      <tr><td>国保連請求・請求業務</td><td class="num">＋¥8,000〜15,000</td><td class="c" style="color:#b91c1c;">未確定<br><span class="muted">実現性を慎重に検討</span></td></tr>
+      <tr><td>運営書類 管理アプリ（09）</td><td class="num">＋¥3,000〜6,000</td><td class="c cut">高</td></tr>
+      <tr><td>電子契約書・重説・同意書</td><td class="num">＋¥3,000〜6,000</td><td class="c cut">高</td></tr>
+      <tr><td>LINE通知・勤務表 自動作成</td><td class="num">＋¥3,000〜5,000</td><td class="c">中</td></tr>
+      <tr><td>LIFE CSV出力・加算算定漏れアラート</td><td class="num">＋¥3,000〜5,000</td><td class="c" style="color:var(--warn);">要検証</td></tr>
+      <tr><td>国保連請求・請求業務</td><td class="num">＋¥8,000〜15,000</td><td class="c" style="color:#b91c1c;">未確定</td></tr>
     </table>
-    <div class="warnbox"><b>LIFE加算・国保連請求は「やる／やらない」を含めて慎重に検討中です。</b> 仕様が複雑で、対応するには相応の開発・保守が必要なため、<b>この資料では確約せず「将来の検討課題」</b>として位置づけています。まずは記録・書類・連携でしっかり価値を出す方針です。</div>
+    <div class="warnbox"><b>LIFE加算・国保連請求は「やる／やらない」を含め慎重に検討中</b>（仕様が複雑）。この資料では確約せず「将来の検討課題」として位置づけています。</div>
   </section>
 
-  <!-- 7 AI -->
   <section class="slide" id="s7">
-    <div class="num-tag">07 AI / VARIABLE COST</div>
-    <h2>モニタリングAIの従量課金と対策</h2>
-    <div class="grid2">
-      <div>
-        <h3>いまの状況</h3>
-        <ul class="tight">
-          <li>モニタリング表を <b>AIが自動下書き</b>。原価は <b>1回あたり数円程度</b>（実費は非常に小さい）。</li>
-          <li>現在の上限：<b>利用者数 × 3回／月</b>。</li>
-        </ul>
-        <div class="warnbox" style="margin-top:8px;"><b>ご懸念（正しい指摘）</b><br>退所者を「利用中」のままにして<b>枠を水増し</b>される可能性。→ 状態管理と課金設計で防ぎます。</div>
-      </div>
-      <div>
-        <h3>対策（推奨の3点セット）</h3>
-        <div class="step"><div class="no">1</div><div><b>「利用中」人数のみでカウント</b><br>休止・退所は枠に含めない（水増しの主因を排除／実装は容易）。</div></div>
-        <div class="step"><div class="no">2</div><div><b>月間の全体上限も併設</b><br>例：min(利用中×3, 月◯回)。異常利用を頭打ちに。</div></div>
-        <div class="step"><div class="no">3</div><div><b>超過は少額の従量</b><br>基本枠（例：利用中×2回）込み、超過は1回¥10〜20。原価が安いので少額でも成立＆抑止。</div></div>
-      </div>
+    <div class="num-tag">07 USAGE-BASED</div>
+    <h2>従量課金：モニタリングAI と 自動FAX</h2>
+    <p class="lead">つむぎには「使うほど外部に費用がかかる」機能が2つ。どちらも<b>実費は小さい</b>ので、少額の従量で回せます。</p>
+    <table>
+      <tr><th>機能</th><th>外部コスト（実費の目安）</th><th>基本枠（プラン込み）</th><th class="num">超過の従量<br>目安</th></tr>
+      <tr><td><b>モニタリングAI下書き</b><br><span class="muted">Anthropic API</span></td><td>1回あたり <b>数円</b></td><td>利用中人数 × 2回／月</td><td class="num">1回 ¥10〜20</td></tr>
+      <tr><td><b>自動FAX送信</b><br><span class="muted">外部FAX(InterFAX等)</span></td><td>1送信あたり <b>数十円</b></td><td>月 ◯件（プラン規模で設定）</td><td class="num">1送信 ¥30〜50</td></tr>
+    </table>
+    <div class="grid2" style="margin-top:6px;">
+      <div class="card"><b>不正利用（水増し）対策</b><ul class="tight">
+        <li><b>「利用中」人数のみでカウント</b>（休止・退所は枠外）</li>
+        <li><b>月間の全体上限</b>も併設（min(人数×N, 上限)）</li>
+        <li>超過は<b>課金される＝使いすぎても事業所が得しない</b>構造で抑止</li></ul></div>
+      <div class="card hi"><b>ポイント</b><ul class="tight">
+        <li>実費が小さいので<b>少額従量でも黒字＆抑止</b>が成立</li>
+        <li>アプリが<b>使用量（AI回数・FAX件数）を記録</b>→請求の根拠に</li>
+        <li>FAXは「印刷して手送り」から<b>ボタン1つで各社へ自動送信</b>へ</li></ul></div>
     </div>
-    <div class="infobox" style="margin-top:8px;"><b>結論：</b>「利用中人数ベース」＋「月間上限」＋「超過は少額従量」。悪用しても<b>超過分は課金される＝事業所が得しない構造</b>にして抑止。人数課金するなら<b>段階制ハイブリッド</b>（〜20名定額＋超過1名¥250〜300／利用中のみ）を推奨。</div>
+    <div class="disc" style="margin-top:8px;">※ 目安。実費（1回のトークン量・FAXのページ数）と目標粗利から最終決定します。外部FAXは各社アカウント作成・従量契約が前提です。</div>
   </section>
 
-  <!-- 8 新構想アプリ -->
   <section class="slide" id="s8">
-    <div class="num-tag">08 NEW CONCEPT</div>
+    <div class="num-tag">08 BILLING（複数店舗）</div>
+    <h2>複数店舗・フランチャイズの課金の割り振り</h2>
+    <p class="lead">従量（AI・FAX）を、<b>本部で一括にするか／店舗ごとにするか</b>。自社の複数店舗と加盟店で考え方が異なります。<br>前提：つむぎは<b>店舗ごとにデータ分離</b>しており、使用量を<b>店舗別に集計できます</b>。</p>
+    <table>
+      <tr><th>方式</th><th>内容</th><th>メリット</th><th>デメリット</th></tr>
+      <tr><td><b>A 本部一括</b></td><td>本部がAPI/FAXを一括契約・支払い。各店へは定額に基本枠込みで提供（超過は本部が上限内で吸収）</td><td>加盟店は分かりやすい・管理が本部集中</td><td>使いすぎ店の負担を本部が被る（→上限で管理）</td></tr>
+      <tr><td><b>B 店舗ごと従量</b></td><td>各店の使用量に応じて店舗ごとに課金</td><td>公平・本部リスクなし</td><td>毎月変動し請求が複雑</td></tr>
+      <tr style="background:#f0fdf4;"><td><b>C ハイブリッド</b><span class="rec">推奨</span></td><td>プラン定額は<b>店舗ごと</b>＋基本枠込み。<b>超過のみ店舗ごとに従量</b>。API/FAXは本部が一括契約（元請け）し、アプリの店舗別集計で超過を各店に請求</td><td>公平さと分かりやすさの両立・本部リスク小</td><td>店舗別集計の仕組みが必要（つむぎで対応可）</td></tr>
+    </table>
+    <div class="grid2" style="margin-top:6px;">
+      <div class="card"><b>🏢 自社の複数店舗（本部運営）</b><br>本部が<b>一括契約・一括管理</b>。内部の店舗別按分は任意（コスト見える化のため店舗別集計は取得）。</div>
+      <div class="card"><b>🤝 加盟店（フランチャイズ）</b><br>各店は独立事業者。<b>月額プラン（店舗ごと）＋超過従量（店舗ごと）</b>が自然。本部はAPI/FAXの<b>元請けとして一括契約</b>し、各店へ再請求。</div>
+    </div>
+    <div class="infobox" style="margin-top:10px;"><b>おすすめ：C ハイブリッド。</b>「プランは店舗ごと定額（基本枠込み）／API・FAX契約は本部一括（元請け）／超過だけ店舗ごとに従量」。将来はアプリ内に<b>店舗別 使用量ダッシュボード</b>を用意し、請求根拠を明確化します。</div>
+  </section>
+
+  <section class="slide" id="s9">
+    <div class="num-tag">09 NEW CONCEPT</div>
     <h2>新構想：運営書類 管理アプリ<span class="badge-new">NEW</span></h2>
-    <p class="lead">つむぎ（＝<b>日々の業務</b>）と連携する、<b>運営・コンプライアンス書類の「抜け漏れ防止」アプリ</b>（仮称：つむぎ運営サポート）。実地指導に強い体制づくりを支援します。</p>
+    <p class="lead">つむぎ（＝<b>日々の業務</b>）と連携する、<b>運営・コンプラ書類の「抜け漏れ防止」アプリ</b>（仮称：つむぎ運営サポート）。実地指導に強い体制づくりを支援します。</p>
     <div class="grid2">
       <div class="card"><b>📥 必須書類をまとめて保管</b><ul class="tight">
         <li>避難訓練／<b>運営推進会議</b>／BCP訓練</li>
         <li>水害・洪水対策訓練（江東区など地域指定）</li>
-        <li>研修資料・議事録／各種<b>委員会</b>資料・議事録</li>
-        <li>勤務表 など</li></ul></div>
+        <li>研修資料・議事録／各種<b>委員会</b>資料・議事録／勤務表 など</li></ul></div>
       <div class="card"><b>🔔 期限通知＆⚠️未提出アラート</b><ul class="tight">
         <li>書類ごとに<b>実施・提出の期限</b>を設定</li>
-        <li>期限が近づくと<b>通知</b>（「次はこれをやる」）</li>
-        <li>期限までに<b>未添付なら警告</b>（「◯◯の資料を作成・保管してください」）</li>
+        <li>期限が近づくと<b>通知</b>、未添付なら<b>警告</b>（「◯◯を作成・保管してください」）</li>
         <li>「<b>いつ・何を</b>」の抜け漏れをゼロに</li></ul></div>
     </div>
     <div class="grid2" style="margin-top:12px;">
       <div class="card"><b>🏢 実地指導対策</b><br>必要書類が<b>一覧＋期限管理</b>で揃うので、実地指導・監査の準備が短時間に。</div>
       <div class="card"><b>🤝 フランチャイズ展開に有利</b><br>本部から<b>研修資料・様式を各店へ配布（アップロード共有）</b>。加盟店の運営品質を底上げ。</div>
     </div>
-    <div class="infobox" style="margin-top:12px;"><b>つむぎ本体（日々の記録）× 運営サポート（運営書類・期限管理）</b>の2本立てで、「現場」と「運営・コンプラ」の両方をカバー。<b>別料金アドオン</b>として提供する想定（目安：＋¥3,000〜6,000／月）。</div>
+    <div class="infobox" style="margin-top:12px;"><b>つむぎ本体（日々の記録）× 運営サポート（運営書類・期限管理）</b>の2本立て。<b>別料金アドオン</b>の想定（目安：＋¥3,000〜6,000／月）。</div>
   </section>
 
-  <!-- 9 ロードマップ -->
-  <section class="slide" id="s9">
-    <div class="num-tag">09 ROADMAP</div>
+  <section class="slide" id="s10">
+    <div class="num-tag">10 ROADMAP</div>
     <h2>開発ロードマップ（期間の目安）</h2>
     <div class="rm">
       <div class="term" style="border-top:none;">✅ 完了済み<br><span class="muted">〜現在</span></div>
-      <div class="body" style="border-top:none;">コア機能一式（記録・連絡帳・日誌・スケジュール・分析）／計画書と各様式の連携／ケアマネ双方向連携・書類共有／モニタリングAI下書き・宛先自動送付／スケジュール強化（週表示・繰り返し・アラート）／複数店舗・権限管理・クラウド同期</div>
+      <div class="body" style="border-top:none;">コア機能一式／計画書と各様式の連携／ケアマネ双方向連携／モニタリングAI下書き／<b>各社への自動一斉FAX（外部連携）</b>／スケジュール強化／複数店舗・権限・クラウド同期</div>
       <div class="term">🟢 短期<br><span class="muted">1〜2ヶ月</span></div>
-      <div class="body">電子契約書・重要事項説明書・同意書の電子化／モニタリング課金の「上限＋従量」化／<b>運営書類 管理アプリ</b>の初版</div>
+      <div class="body">従量課金の「基本枠＋上限＋超過従量」化＋<b>店舗別 使用量ダッシュボード</b>／電子契約書・重説・同意書／<b>運営書類 管理アプリ</b>の初版</div>
       <div class="term">🟡 中期<br><span class="muted">3〜6ヶ月</span></div>
-      <div class="body">勤務表（実績）の自動作成／LINE通知／運営書類アプリの拡充（研修配布・委員会テンプレ）</div>
+      <div class="body">勤務表（実績）自動作成／LINE通知／運営書類アプリの拡充（研修配布・委員会テンプレ）</div>
       <div class="term" style="color:var(--warn);">🟠 検討中<br><span class="muted">要検証</span></div>
-      <div class="body"><b>LIFE CSV出力・加算算定漏れアラート</b>（仕様が複雑・導入可否を検討）／<b>国保連請求・請求業務</b>（実現性を慎重に判断。まずは連携での対応も選択肢）</div>
+      <div class="body"><b>LIFE CSV出力・加算アラート</b>（複雑・導入可否を検討）／<b>国保連請求・請求業務</b>（実現性を慎重に判断。連携での対応も選択肢）</div>
     </div>
-    <p class="muted" style="margin-top:10px;">※ 少人数の開発体制での目安です。優先度・ご要望・法令改正により前後します。<b>請求・LIFEは確約ではなく検討段階</b>です。</p>
+    <p class="muted" style="margin-top:10px;">※ 少人数の開発体制での目安。優先度・法令改正で前後。<b>請求・LIFEは確約ではなく検討段階</b>です。</p>
   </section>
 
-  <!-- 10 まとめ -->
-  <section class="slide" id="s10">
-    <div class="num-tag">10 SUMMARY</div>
+  <section class="slide" id="s11">
+    <div class="num-tag">11 SUMMARY</div>
     <h2>まとめ ／ 次のステップ</h2>
     <div class="grid3">
       <div class="card"><div class="ic">⏱️</div><b>効率化</b><br>記録・書類の対象業務で<b>約80%（月約27時間）</b>削減の目安。</div>
-      <div class="card"><div class="ic">💴</div><b>料金</b><br>ベーシック <b>¥12,000〜／月・1事業所</b>。機能追加で価値ベース課金、フル装備でも競合相場内。</div>
-      <div class="card"><div class="ic">🧩</div><b>拡張</b><br><b>運営書類アプリ</b>と連携で、現場＋運営・コンプラを一体化。</div>
+      <div class="card"><div class="ic">💴</div><b>料金</b><br>ベーシック <b>¥12,000〜／月・1事業所</b>＋従量（AI・FAX）。</div>
+      <div class="card"><div class="ic">🏢</div><b>複数店舗</b><br>従量は<b>本部一括契約＋超過は店舗ごと</b>（ハイブリッド）を推奨。</div>
     </div>
-    <h3>次のステップ（ご提案）</h3>
-    <div class="step"><div class="no">1</div><div><b>1店舗で試験運用</b>（既存データをCSVで移行、現場に定着）。</div></div>
-    <div class="step"><div class="no">2</div><div>料金・AI課金の<b>最終設計</b>を確定（本資料の目安をベースに）。</div></div>
-    <div class="step"><div class="no">3</div><div>短期ロードマップ（電子契約・運営書類アプリ）を実装し、<b>全店展開</b>へ。</div></div>
+    <h3>この社長会議で決めたいこと</h3>
+    <div class="step"><div class="no">1</div><div><b>従量課金の方針</b>：AI／自動FAXの基本枠・上限・超過単価を確定。</div></div>
+    <div class="step"><div class="no">2</div><div><b>課金の割り振り</b>：本部一括か店舗ごとか（推奨＝ハイブリッド）。</div></div>
+    <div class="step"><div class="no">3</div><div><b>優先順位</b>：運営書類アプリ／電子契約 等の着手順と、請求・LIFEの取り扱い。</div></div>
     <div class="foot">つむぎ運営（株式会社ワンズスタイル）／ 本資料の料金・期間・請求/LIFE対応は検討用の「目安・検討段階」です。実数・可否は原価・市場・提供価値・仕様検証をもとに決定します。</div>
   </section>
 
