@@ -10342,8 +10342,17 @@ function ScheduleView({ appData, onSave }) {
   const [curMonth, setCurMonth] = useState(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
   const [selDay, setSelDay] = useState(todayStr);
   const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color}
+  const [editLabels, setEditLabels] = useState(false); // 色ラベルの編集モード
   const events = appData.scheduleEvents || [];
   const save = (list, msg) => onSave({ ...appData, scheduleEvents: list }, msg ? { manual:true, message: msg } : undefined);
+  // ★ 色ラベル(カテゴリ): 色を押すとタイトルが自動で入る。 各種設定不要でここで編集・保存。
+  const DEFAULT_SCHED_LABELS = [{color:'#3b82f6',label:'担当者会議'},{color:'#ef4444',label:'契約'},{color:'#10b981',label:'面談'},{color:'#f59e0b',label:'避難訓練'},{color:'#8b5cf6',label:'行事'},{color:'#0ea5e9',label:'その他'}];
+  const colorLabels = (appData.systemSettings?.scheduleColorLabels && appData.systemSettings.scheduleColorLabels.length) ? appData.systemSettings.scheduleColorLabels : DEFAULT_SCHED_LABELS;
+  const saveColorLabels = (labels) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), scheduleColorLabels: labels } }, { manual:true, message:'✓ 色ラベルを保存しました' });
+  // 予定に紐づく利用者名
+  const patName = (e) => { if (e && e.patientId) { const p=(appData.patients||[]).find(x=>x.id===e.patientId); if(p) return p.name; } return ''; };
+  // 開始時刻に分を足して終了時刻を返す (HH:MM)
+  const addMin = (t,m) => { if(!t) return ''; const a=String(t).split(':'); if(a.length<2) return ''; let tot=(Number(a[0])||0)*60+(Number(a[1])||0)+m; tot=((tot%1440)+1440)%1440; return `${String(Math.floor(tot/60)).padStart(2,'0')}:${String(tot%60).padStart(2,'0')}`; };
   const upsert = () => {
     if (!modal) return;
     if (!modal.title || !modal.title.trim()) { alert('予定のタイトルを入力してください'); return; }
@@ -10407,7 +10416,7 @@ function ScheduleView({ appData, onSave }) {
                 {todayEvents.map(e=>(
                   <button key={e.id} onClick={()=>setModal({...e})} style={{textAlign:'left',display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px',cursor:'pointer'}}>
                     <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
-                    <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}</span>
+                    <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}{patName(e)?<span style={{fontSize:12,color:'#6366f1',marginLeft:6}}>／{patName(e)} 様</span>:null}</span>
                     {e.note && <span style={{fontSize:11,color:'#64748b',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.note}</span>}
                   </button>
                 ))}
@@ -10434,7 +10443,7 @@ function ScheduleView({ appData, onSave }) {
                     <button key={dstr} onClick={()=>setSelDay(dstr)} style={{minHeight:74,textAlign:'left',background:isSel?'#eef2ff':'white',border:`1px solid ${isSel?'#818cf8':'#e2e8f0'}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
                       <span style={{fontSize:12,fontWeight:'bold',alignSelf:'flex-start',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155')}}>{d}</span>
                       {evs.slice(0,3).map(e=>(
-                        <span key={e.id} style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>{e.start?`${e.start} `:''}{e.title}</span>
+                        <span key={e.id} style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%'}}>{e.start?`${e.start} `:''}{e.title}{patName(e)?`／${patName(e)}`:''}</span>
                       ))}
                       {evs.length>3 && <span style={{fontSize:9,color:'#64748b',fontWeight:'bold'}}>他{evs.length-3}件</span>}
                     </button>
@@ -10456,7 +10465,7 @@ function ScheduleView({ appData, onSave }) {
                     <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px'}}>
                       <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}</div>
+                        <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}{patName(e)?<span style={{fontSize:12,color:'#6366f1',marginLeft:6}}>／{patName(e)} 様</span>:null}</div>
                         {e.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p ? <div style={{fontSize:11,color:'#4338ca',fontWeight:'bold'}}>👤 {p.name}{p.cmOffice?`（${p.cmOffice}${p.cmName?` ${p.cmName}様`:''}）`:''}</div> : null; })()}
                         {e.note && <div style={{fontSize:12,color:'#64748b',whiteSpace:'pre-wrap'}}>{e.note}</div>}
                       </div>
@@ -10487,6 +10496,14 @@ function ScheduleView({ appData, onSave }) {
                 <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
               </div>
             </div>
+            {/* ★ 所要時間で終了を自動セット (開始時刻が必要) */}
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:12,marginTop:-4}}>
+              <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8'}}>終了を自動:</span>
+              {[['30分',30],['1時間',60],['1時間半',90],['2時間',120]].map(([lbl,mins])=>(
+                <button key={mins} type="button" disabled={!modal.start} onClick={()=>setModal(m=>({...m,end:addMin(m.start,mins)}))}
+                  style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #c7d2fe',background:modal.start?'#eef2ff':'#f1f5f9',color:modal.start?'#4338ca':'#cbd5e1',cursor:modal.start?'pointer':'default'}}>{lbl}</button>
+              ))}
+            </div>
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>タイトル</label>
             <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="例: 担当者会議 / 避難訓練 / 面談" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
             {/* ★ 担当者会議など: 対象の利用者を任意で紐付け → 担当ケアマネ事業所・担当者を表示 */}
@@ -10508,12 +10525,34 @@ function ScheduleView({ appData, onSave }) {
             )}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>メモ（任意）</label>
             <textarea value={modal.note||''} onChange={e=>setModal(m=>({...m,note:e.target.value}))} rows={3} placeholder="場所・持ち物・参加者など" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',marginBottom:12}}/>
-            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色</label>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}}>
-              {COLORS.map(c=>(
-                <button key={c} onClick={()=>setModal(m=>({...m,color:c}))} style={{width:26,height:26,borderRadius:'50%',background:c,border:modal.color===c?'3px solid #1e293b':'2px solid white',boxShadow:'0 0 0 1px #cbd5e1',cursor:'pointer'}}/>
-              ))}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+              <label style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>色・分類（押すとタイトルに入ります）</label>
+              <button type="button" onClick={()=>setEditLabels(v=>!v)} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>{editLabels?'完了':'✎ ラベル編集'}</button>
             </div>
+            {editLabels ? (
+              <div style={{marginBottom:16,display:'grid',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:10}}>
+                {colorLabels.map((cl,i)=>(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+                    <span style={{width:22,height:22,borderRadius:'50%',background:cl.color,flexShrink:0,boxShadow:'0 0 0 1px #cbd5e1'}}/>
+                    <input value={cl.label} onChange={e=>{ const next=colorLabels.map((x,j)=>j===i?{...x,label:e.target.value}:x); saveColorLabels(next); }} placeholder="分類名（例: 担当者会議）" style={{flex:1,boxSizing:'border-box',padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/>
+                  </div>
+                ))}
+                <div style={{fontSize:10,color:'#94a3b8'}}>※ ここで付けた名前が、色を押したときのタイトルになります。</div>
+              </div>
+            ) : (
+              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
+                {colorLabels.map((cl,i)=>{
+                  const selected = modal.color===cl.color;
+                  return (
+                    <button key={i} type="button" onClick={()=>setModal(m=>{ const presetTitles=colorLabels.map(x=>x.label); const keepTitle = m.title && !presetTitles.includes(m.title); return {...m, color:cl.color, title: keepTitle ? m.title : cl.label}; })}
+                      style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:16,border:selected?`2px solid ${cl.color}`:'1px solid #e2e8f0',background:selected?`${cl.color}18`:'white',cursor:'pointer'}}>
+                      <span style={{width:14,height:14,borderRadius:'50%',background:cl.color,flexShrink:0}}/>
+                      <span style={{fontSize:12,fontWeight:'bold',color:'#334155'}}>{cl.label||'（無題）'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
             <div style={{display:'flex',gap:8}}>
               {modal.id && <button onClick={()=>del(modal.id)} style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>削除</button>}
               <div style={{flex:1}}/>
