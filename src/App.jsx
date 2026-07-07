@@ -21794,18 +21794,11 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       if (!isNaN(d.getTime())) di = d.getDay();
     }
     const _dow = di >= 0 ? DOW_LABELS[di] : (r.dayOfWeek || '');
+    // ★ 時間帯(AM/PM)は基本利用曜日(scheduleAmPm)のその曜日の設定で判定する = 曜日別“稼働”は定期利用が基準。
+    //   → その曜日に基本利用が無い記録(臨時利用など)は空扱いとなり、別曜日の利用者が誤って集計されない。
     let ap = p && di >= 0 ? (p.scheduleAmPm?.[di] || '') : '';
     // 振替記録は furikaeAmpm を優先 (普段の曜日スケジュールに無い場合も正しく振り分け)
     if (r.status === '振替' && r.furikaeAmpm) ap = r.furikaeAmpm;
-    // ★ 基本利用曜日(scheduleAmPm)にその曜日が無い記録は、実際に入力された時間帯データ(AM/PMのバイタル)から
-    //   時間帯を判定する。 基本利用曜日に依存しすぎると、曜日変更や臨時利用の記録が別曜日のAMに誤集計されるため。
-    if (!ap) {
-      const _has = (suffix) => [r['temp'+suffix], r['bpUpSt'+suffix], r['bpUpEn'+suffix], r['plSt'+suffix], r['plEn'+suffix]].some(v => v != null && String(v).trim() !== '');
-      const hasAM = _has('_AM'); const hasPM = _has('_PM');
-      if (hasAM && hasPM) ap = '1日';
-      else if (hasAM) ap = 'AM';
-      else if (hasPM) ap = 'PM';
-    }
     return { ...r, amPm: ap, _dow };
   }), [recs, patMap]);
 
