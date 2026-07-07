@@ -27997,10 +27997,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none focus:border-blue-400"/>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-600 mb-1.5">適用終了日（任意）</label>
+                <label className="block text-sm font-bold text-slate-600 mb-1.5">適用終了日{careLevelModal.isCostBurden ? '（任意）' : <span className="text-red-500">（必須・認定有効期間の終了日）</span>}</label>
                 <input type="date" value={careLevelModal.to}
                   onChange={e=>setCareLevelModal({...careLevelModal, to: e.target.value})}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none focus:border-blue-400"/>
+                  className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-sm font-bold outline-none focus:border-blue-400 ${(!careLevelModal.isCostBurden && !careLevelModal.to) ? 'border-red-300' : 'border-slate-300'}`}/>
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-600 mb-1.5">備考（任意）</label>
@@ -28014,7 +28014,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             )}
             <div className="flex gap-3">
               <button onClick={()=>setCareLevelModal(null)} className="flex-1 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">キャンセル</button>
-              <button disabled={!careLevelModal.from||!careLevelModal.newValue} onClick={()=>{
+              <button disabled={!careLevelModal.from||!careLevelModal.newValue||(!careLevelModal.isCostBurden && !careLevelModal.to)} onClick={()=>{
                 if (!localPatient) return;
                 const today = new Date().toISOString().split('T')[0];
                 const isCB = careLevelModal.isCostBurden;
