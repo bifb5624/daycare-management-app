@@ -10342,7 +10342,8 @@ function ScheduleView({ appData, onSave }) {
   const [curMonth, setCurMonth] = useState(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
   const [selDay, setSelDay] = useState(todayStr);
   const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color, repeat, repeatUntil}
-  const [editLabels, setEditLabels] = useState(false); // 色ラベルの編集モード
+  const [labelEditorOpen, setLabelEditorOpen] = useState(false); // ラベル編集モーダル(ヘッダから・色/名前/追加)
+  const [iconPopup, setIconPopup] = useState(null); // {date, birthdays:[], expiries:[]}
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
   const [dragEvId, setDragEvId] = useState(null); // ドラッグ移動中の予定ID
   const events = appData.scheduleEvents || [];
@@ -10399,8 +10400,10 @@ function ScheduleView({ appData, onSave }) {
   const editEvent = (e) => { const be = e._occ ? (events.find(x=>x.id===e._baseId)||e) : e; setModal({...be}); };
   const delEvent = (e) => { del(e._occ ? e._baseId : e.id); };
   const moveEvent = (e, toDstr) => { if(!e||!toDstr) return; const id=e._occ?e._baseId:e.id; const base=events.find(x=>x.id===id); if(!base||base.date===toDstr) return; save(events.map(x=>x.id===id?{...base,date:toDstr,_savedAt:Date.now()}:x), '✓ 予定を移動しました'); };
-  // 通所予定人数(基本利用曜日ベース・休止/定休除く) と 祝日・定休
-  const attendeeCount = (dstr) => { const [y,m,d]=dstr.split('-').map(Number); const dw=new Date(y,m-1,d).getDay(); if((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) return 0; return (appData.patients||[]).filter(p=>{ if(p.status==='退所') return false; const sc=(getScheduleOnDate(p,dstr)?.[dw])||''; if(!sc) return false; if(getPauseReasonOnDate(p,dstr)) return false; return true; }).length; };
+  // 誕生日・認定有効期間終了(介護保険/認定が切れる) を日付ごとに判定
+  const activePatients = (appData.patients||[]).filter(p=>p.status!=='退所' && (p.name||'').trim());
+  const birthdaysOn = (dstr) => { const md=dstr.slice(5); return activePatients.filter(p=>{ const b=p.birthDate; return b && b.length>=10 && b.slice(5)===md; }).map(p=>({name:p.name, age: (()=>{ const [y,m,d]=dstr.split('-').map(Number); const [by]=String(p.birthDate).split('-').map(Number); let a=y-by; const bm=Number(String(p.birthDate).slice(5,7)); return a; })(), birthDate:p.birthDate})); };
+  const expiriesOn = (dstr) => { const out=[]; activePatients.forEach(p=>{ if(p.careLevelTo && p.careLevelTo===dstr) out.push({name:p.name, kind:'認定有効期間の終了', careLevel:p.careLevel}); }); return out; };
   const isHolidayDate = (dstr) => (appData.holidays||[]).some(h => (h.date||h) === dstr);
   const holidayName = (dstr) => { const h=(appData.holidays||[]).find(x=>(x.date||x)===dstr); return h && h.name ? h.name : ''; };
   const isClosedDate = (dstr) => { const [y,m,d]=dstr.split('-').map(Number); return (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(new Date(y,m-1,d).getDay()); };
@@ -10428,7 +10431,10 @@ function ScheduleView({ appData, onSave }) {
           <CalendarRange size={20}/>
           <span style={{fontSize:17,fontWeight:'bold'}}>スケジュール</span>
         </div>
-        <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Plus size={16}/>予定を追加</button>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <button onClick={()=>setLabelEditorOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>✎ ラベル編集</button>
+          <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Plus size={16}/>予定を追加</button>
+        </div>
       </div>
       <div style={{flex:1,overflow:'auto',padding:16}}>
         <div style={{maxWidth:1000,margin:'0 auto',display:'flex',flexDirection:'column',gap:16}}>
@@ -10481,7 +10487,8 @@ function ScheduleView({ appData, onSave }) {
                   const evs = evOf(dstr);
                   const isToday = dstr===todayStr;
                   const isSel = dstr===selDay;
-                  const cnt = attendeeCount(dstr);
+                  const bdays = birthdaysOn(dstr);
+                  const exps = expiriesOn(dstr);
                   const holi = isHolidayDate(dstr);
                   const closed = isClosedDate(dstr);
                   const bg = isSel ? '#eef2ff' : (holi ? '#fef2f2' : (closed ? '#f8fafc' : 'white'));
@@ -10492,7 +10499,11 @@ function ScheduleView({ appData, onSave }) {
                       style={{minHeight:78,textAlign:'left',background:bg,border:`1px solid ${isSel?'#818cf8':(dragEvId?'#c7d2fe':'#e2e8f0')}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
                         <span style={{fontSize:12,fontWeight:'bold',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(holi?'#ef4444':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155'))}}>{d}</span>
-                        {closed ? <span style={{fontSize:8,fontWeight:'bold',color:'#94a3b8'}}>定休</span> : (cnt>0 && <span style={{fontSize:9,fontWeight:'bold',color:'#0e7490',background:'#ecfeff',borderRadius:8,padding:'0 5px'}} title="通所予定人数">{cnt}名</span>)}
+                        <div style={{display:'flex',alignItems:'center',gap:1}}>
+                          {bdays.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:dstr,birthdays:bdays,expiries:[]});}} title="お誕生日" style={{fontSize:12,cursor:'pointer',lineHeight:1}}>👑</span>}
+                          {exps.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:dstr,birthdays:[],expiries:exps});}} title="要注意（認定満了など）" style={{fontSize:11,cursor:'pointer',lineHeight:1}}>⚠️</span>}
+                          {closed && <span style={{fontSize:8,fontWeight:'bold',color:'#94a3b8'}}>定休</span>}
+                        </div>
                       </div>
                       {holi && holidayName(dstr) && <span style={{fontSize:8,fontWeight:'bold',color:'#ef4444',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{holidayName(dstr)}</span>}
                       {evs.slice(0,3).map(e=>{ const drg = !e._occ && (!e.repeat||e.repeat==='none'); return (
@@ -10508,7 +10519,7 @@ function ScheduleView({ appData, onSave }) {
               )}
               {viewMode==='week' && (() => {
                 const wd = weekDaysOf(selDay);
-                const HStart=7, HEnd=19, hourH=42; const gridH=(HEnd-HStart)*hourH;
+                const HStart=8, HEnd=19, hourH=42; const gridH=(HEnd-HStart)*hourH;
                 const cols = `40px repeat(7,minmax(92px,1fr))`;
                 const toTop = (t) => { const a=String(t).split(':'); const mins=(Number(a[0])||0)*60+(Number(a[1])||0); return Math.max(0,(mins-HStart*60)/60*hourH); };
                 const durH = (e) => { if(!e.start) return hourH*0.5; const s=e.start.split(':'),en=(e.end||'').split(':'); const sm=(Number(s[0])||0)*60+(Number(s[1])||0); const em=en.length>=2?(Number(en[0])||0)*60+(Number(en[1])||0):sm+30; return Math.max(18,(Math.max(20,em-sm))/60*hourH); };
@@ -10517,11 +10528,15 @@ function ScheduleView({ appData, onSave }) {
                   <div style={{overflowX:'auto'}}>
                     <div style={{display:'grid',gridTemplateColumns:cols}}>
                       <div/>
-                      {wd.map((ds,i)=>{ const dd=ds.split('-').map(Number)[2]; const isT=ds===todayStr; const holi=isHolidayDate(ds); const closed=isClosedDate(ds); const cnt=attendeeCount(ds); return (
+                      {wd.map((ds,i)=>{ const dd=ds.split('-').map(Number)[2]; const isT=ds===todayStr; const holi=isHolidayDate(ds); const closed=isClosedDate(ds); const bdays=birthdaysOn(ds); const exps=expiriesOn(ds); return (
                         <div key={ds} onClick={()=>setSelDay(ds)} style={{textAlign:'center',padding:'4px 2px',cursor:'pointer',borderBottom:'2px solid '+(ds===selDay?'#6366f1':'#e2e8f0'),background:isT?'#eef2ff':'transparent'}}>
                           <div style={{fontSize:11,fontWeight:'bold',color:(i===0||holi)?'#ef4444':i===6?'#3b82f6':'#64748b'}}>{dow[i]}</div>
                           <div style={{fontSize:15,fontWeight:'bold',color:isT?'#4338ca':'#1e293b'}}>{dd}</div>
-                          {closed?<div style={{fontSize:8,color:'#94a3b8',fontWeight:'bold'}}>定休</div>:(cnt>0&&<div style={{fontSize:8,color:'#0e7490',fontWeight:'bold'}}>{cnt}名</div>)}
+                          <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:2,minHeight:14}}>
+                            {bdays.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:ds,birthdays:bdays,expiries:[]});}} title="お誕生日" style={{fontSize:12,cursor:'pointer'}}>👑</span>}
+                            {exps.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:ds,birthdays:[],expiries:exps});}} title="要注意" style={{fontSize:11,cursor:'pointer'}}>⚠️</span>}
+                            {closed && <span style={{fontSize:8,color:'#94a3b8',fontWeight:'bold'}}>定休</span>}
+                          </div>
                         </div>); })}
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:cols,borderBottom:'1px solid #e2e8f0'}}>
@@ -10640,37 +10655,76 @@ function ScheduleView({ appData, onSave }) {
             {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginTop:-6,marginBottom:12}}>※ 繰り返し予定の編集・削除は、シリーズ全体に反映されます。</div>}
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
               <label style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>色・分類（押すとタイトルに入ります）</label>
-              <button type="button" onClick={()=>setEditLabels(v=>!v)} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>{editLabels?'完了':'✎ ラベル編集'}</button>
+              <button type="button" onClick={()=>setLabelEditorOpen(true)} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'none',border:'none',cursor:'pointer'}}>✎ ラベル編集</button>
             </div>
-            {editLabels ? (
-              <div style={{marginBottom:16,display:'grid',gap:6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:10}}>
-                {colorLabels.map((cl,i)=>(
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
-                    <span style={{width:22,height:22,borderRadius:'50%',background:cl.color,flexShrink:0,boxShadow:'0 0 0 1px #cbd5e1'}}/>
-                    <input value={cl.label} onChange={e=>{ const next=colorLabels.map((x,j)=>j===i?{...x,label:e.target.value}:x); saveColorLabels(next); }} placeholder="分類名（例: 担当者会議）" style={{flex:1,boxSizing:'border-box',padding:'6px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/>
-                  </div>
-                ))}
-                <div style={{fontSize:10,color:'#94a3b8'}}>※ ここで付けた名前が、色を押したときのタイトルになります。</div>
-              </div>
-            ) : (
-              <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
-                {colorLabels.map((cl,i)=>{
-                  const selected = modal.color===cl.color;
-                  return (
-                    <button key={i} type="button" onClick={()=>setModal(m=>{ const presetTitles=colorLabels.map(x=>x.label); const keepTitle = m.title && !presetTitles.includes(m.title); return {...m, color:cl.color, title: keepTitle ? m.title : cl.label}; })}
-                      style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:16,border:selected?`2px solid ${cl.color}`:'1px solid #e2e8f0',background:selected?`${cl.color}18`:'white',cursor:'pointer'}}>
-                      <span style={{width:14,height:14,borderRadius:'50%',background:cl.color,flexShrink:0}}/>
-                      <span style={{fontSize:12,fontWeight:'bold',color:'#334155'}}>{cl.label||'（無題）'}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
+              {colorLabels.map((cl,i)=>{
+                const selected = modal.color===cl.color;
+                return (
+                  <button key={i} type="button" onClick={()=>setModal(m=>{ const presetTitles=colorLabels.map(x=>x.label); const keepTitle = m.title && !presetTitles.includes(m.title); return {...m, color:cl.color, title: keepTitle ? m.title : cl.label}; })}
+                    style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',borderRadius:16,border:selected?`2px solid ${cl.color}`:'1px solid #e2e8f0',background:selected?`${cl.color}18`:'white',cursor:'pointer'}}>
+                    <span style={{width:14,height:14,borderRadius:'50%',background:cl.color,flexShrink:0}}/>
+                    <span style={{fontSize:12,fontWeight:'bold',color:'#334155'}}>{cl.label||'（無題）'}</span>
+                  </button>
+                );
+              })}
+            </div>
             <div style={{display:'flex',gap:8}}>
               {modal.id && <button onClick={()=>del(modal.id)} style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>削除</button>}
               <div style={{flex:1}}/>
               <button onClick={()=>setModal(null)} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'10px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
               <button onClick={upsert} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'10px 18px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {labelEditorOpen && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setLabelEditorOpen(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:460,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>色ラベル（分類）の編集</div>
+              <button onClick={()=>setLabelEditorOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#94a3b8'}}><X size={18}/></button>
+            </div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>予定入力で色を押すと、その色と名前がタイトルに入ります。<b>色（丸を押す）</b>と<b>名前</b>を自由に設定でき、<b>最大15件</b>まで追加できます。</div>
+            <div style={{display:'grid',gap:8}}>
+              {colorLabels.map((cl,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+                  <label style={{position:'relative',width:28,height:28,flexShrink:0,cursor:'pointer'}} title="色を変更">
+                    <span style={{display:'block',width:28,height:28,borderRadius:'50%',background:cl.color,boxShadow:'0 0 0 1px #cbd5e1'}}/>
+                    <input type="color" value={cl.color||'#3b82f6'} onChange={e=>saveColorLabels(colorLabels.map((x,j)=>j===i?{...x,color:e.target.value}:x))} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer'}}/>
+                  </label>
+                  <input value={cl.label} onChange={e=>saveColorLabels(colorLabels.map((x,j)=>j===i?{...x,label:e.target.value}:x))} placeholder="分類名（例: 担当者会議）" style={{flex:1,boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
+                  <button onClick={()=>saveColorLabels(colorLabels.filter((_,j)=>j!==i))} title="このラベルを削除" style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:8,width:30,height:30,cursor:'pointer',fontWeight:'bold',flexShrink:0}}>×</button>
+                </div>
+              ))}
+            </div>
+            {colorLabels.length<15 ? (
+              <button onClick={()=>saveColorLabels([...colorLabels,{color:COLORS[colorLabels.length%COLORS.length],label:''}])} style={{marginTop:10,background:'#eef2ff',border:'1px dashed #a5b4fc',color:'#4338ca',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',width:'100%'}}>＋ ラベルを追加（{colorLabels.length}/15）</button>
+            ) : <div style={{marginTop:10,fontSize:11,color:'#94a3b8',textAlign:'center'}}>上限の15件です。</div>}
+            <div style={{textAlign:'right',marginTop:14}}>
+              <button onClick={()=>setLabelEditorOpen(false)} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>完了</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {iconPopup && (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setIconPopup(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:340,maxWidth:'100%',padding:18,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{fontSize:15,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{fmtJp(iconPopup.date)}</div>
+            {iconPopup.birthdays.length>0 && (
+              <div style={{marginBottom:iconPopup.expiries.length?12:0}}>
+                <div style={{fontSize:13,fontWeight:'bold',color:'#b45309',marginBottom:6}}>👑 お誕生日（{iconPopup.birthdays.length}名）</div>
+                {iconPopup.birthdays.map((b,i)=>(<div key={i} style={{fontSize:13,color:'#334155',padding:'3px 0'}}>{b.name} 様{b.age?`（${b.age}歳）`:''}</div>))}
+              </div>
+            )}
+            {iconPopup.expiries.length>0 && (
+              <div>
+                <div style={{fontSize:13,fontWeight:'bold',color:'#b91c1c',marginBottom:6}}>⚠️ 要注意</div>
+                {iconPopup.expiries.map((x,i)=>(<div key={i} style={{fontSize:13,color:'#334155',padding:'3px 0'}}>{x.name} 様：<b>{x.kind}</b>{x.careLevel?`（${x.careLevel}）`:''}</div>))}
+              </div>
+            )}
+            <div style={{textAlign:'right',marginTop:14}}>
+              <button onClick={()=>setIconPopup(null)} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'8px 18px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
             </div>
           </div>
         </div>
