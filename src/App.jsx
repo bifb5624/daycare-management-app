@@ -29026,7 +29026,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const [showSettingsAdminGate, setShowSettingsAdminGate] = useState(false);
   const settingsSaveAdminAuth = (auth) => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth:{ ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }); };
   const [exerciseItems, setExerciseItems] = useState(appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
-  const [newExItem, setNewExItem] = useState({ name: '', defaultUnit: '' });
+  const [newExItem, setNewExItem] = useState({ name: '', defaultUnit: '', defaultUnit2: '' });
   // 個別運動メニュー (利用者ごとに自由に組み合わせる項目: 平行棒・屋外歩行・体操 等)
   const [individualExerciseItems, setIndividualExerciseItems] = useState(appData.systemSettings?.individualExerciseItems || [
     {id:'ie_walk', name:'屋外歩行', defaultUnit:'分'},
@@ -29034,7 +29034,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     {id:'ie_stepper', name:'ステッパー', defaultUnit:'回'},
     {id:'ie_taiso', name:'体操', defaultUnit:'分'},
   ]);
-  const [newIndExItem, setNewIndExItem] = useState({ name: '', defaultUnit: '回' });
+  const [newIndExItem, setNewIndExItem] = useState({ name: '', defaultUnit: '回', defaultUnit2: '' });
   // 予定運動メニューの変更適用開始月 (デフォルト: 今月)
   const [exerciseApplyFrom, setExerciseApplyFrom] = useState(() => {
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -29557,9 +29557,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   return [...usedUnits].map(u => <option key={u} value={u}/>);
                 })()}
               </datalist>
-              <div className="flex gap-2 mb-2">
-                <input type="text" value={newExItem.name} onChange={e=>setNewExItem({...newExItem,name:e.target.value})} placeholder="例: ⑦ラットプル" className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
-                <input type="text" value={newExItem.defaultUnit||''} onChange={e=>setNewExItem({...newExItem,defaultUnit:e.target.value})} placeholder="単位" list="unit-suggestions" className="w-24 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+              <div className="flex gap-2 mb-2 items-end flex-wrap">
+                <input type="text" value={newExItem.name} onChange={e=>setNewExItem({...newExItem,name:e.target.value})} placeholder="例: ⑦ラットプル" className="flex-1 min-w-[140px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                <div className="flex flex-col"><span className="text-[9px] text-slate-400 mb-0.5">1単位目</span><input type="text" value={newExItem.defaultUnit||''} onChange={e=>setNewExItem({...newExItem,defaultUnit:e.target.value})} placeholder="例: kg" list="unit-suggestions" className="w-20 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div className="flex flex-col"><span className="text-[9px] text-slate-400 mb-0.5">2単位目</span><input type="text" value={newExItem.defaultUnit2||''} onChange={e=>setNewExItem({...newExItem,defaultUnit2:e.target.value})} placeholder="例: 回" list="unit-suggestions" className="w-20 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <button type="button" onClick={()=>{
                   if(!newExItem.name.trim()) return;
                   // ★ 同名重複チェック (normalize で半角/全角を統一して比較)
@@ -29577,8 +29578,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     return newH.sort((a,b)=>(a.effectiveTo||'').localeCompare(b.effectiveTo||''));
                   });
                   const id = 'ex_' + Date.now();
-                  setExerciseItems(prev=>[...prev, {id, name:newExItem.name.trim(), type:'text', useKeypad:true, defaultUnit:newExItem.defaultUnit||''}]);
-                  setNewExItem({name:'', defaultUnit:''});
+                  setExerciseItems(prev=>[...prev, {id, name:newExItem.name.trim(), type:'text', useKeypad:true, defaultUnit:newExItem.defaultUnit||'', defaultUnit2:newExItem.defaultUnit2||''}]);
+                  setNewExItem({name:'', defaultUnit:'', defaultUnit2:''});
                 }} className="px-4 py-2 bg-slate-800 text-white rounded-xl font-bold text-sm active:scale-95 flex items-center"><Plus size={15} className="mr-1"/>項目追加</button>
               </div>
               <button type="button" onClick={()=>{
@@ -29646,14 +29647,15 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   </div>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <input type="text" value={newIndExItem.name} onChange={e=>setNewIndExItem({...newIndExItem,name:e.target.value})} placeholder="例: ⑦エアロバイク" className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
-                <input type="text" value={newIndExItem.defaultUnit} onChange={e=>setNewIndExItem({...newIndExItem,defaultUnit:e.target.value})} placeholder="単位 (回/分等)" list="unit-suggestions" className="w-32 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+              <div className="flex gap-2 items-end flex-wrap">
+                <input type="text" value={newIndExItem.name} onChange={e=>setNewIndExItem({...newIndExItem,name:e.target.value})} placeholder="例: ⑦エアロバイク" className="flex-1 min-w-[140px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
+                <div className="flex flex-col"><span className="text-[9px] text-emerald-500 mb-0.5">1単位目</span><input type="text" value={newIndExItem.defaultUnit} onChange={e=>setNewIndExItem({...newIndExItem,defaultUnit:e.target.value})} placeholder="例: 回" list="unit-suggestions" className="w-20 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                <div className="flex flex-col"><span className="text-[9px] text-emerald-500 mb-0.5">2単位目</span><input type="text" value={newIndExItem.defaultUnit2||''} onChange={e=>setNewIndExItem({...newIndExItem,defaultUnit2:e.target.value})} placeholder="例: 分" list="unit-suggestions" className="w-20 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
                 <button type="button" onClick={()=>{
                   if(!newIndExItem.name.trim()) return;
                   const id = 'ie_' + Date.now();
-                  setIndividualExerciseItems(prev=>[...prev, {id, name:newIndExItem.name.trim(), defaultUnit:newIndExItem.defaultUnit}]);
-                  setNewIndExItem({name:'', defaultUnit:'回'});
+                  setIndividualExerciseItems(prev=>[...prev, {id, name:newIndExItem.name.trim(), defaultUnit:newIndExItem.defaultUnit, defaultUnit2:newIndExItem.defaultUnit2||''}]);
+                  setNewIndExItem({name:'', defaultUnit:'回', defaultUnit2:''});
                 }} className="px-4 py-2 bg-emerald-700 text-white rounded-xl font-bold text-sm active:scale-95 flex items-center"><Plus size={15} className="mr-1"/>追加</button>
               </div>
             </SectionCard>
