@@ -31235,8 +31235,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           @page { size: A4 portrait; margin: 0; }
         }
       `}</style>
-      <TimeKeypadModal />
-      <CarAssignModal />
+      {/* ★ 関数として呼び出す(JSXの<Comp/>で描画しない)。 こうしないと親の再描画(クラウド同期など)のたびに
+          コンポーネントが作り直されてマウントし直され、開いている送迎車のプルダウンが閉じてしまうため。 */}
+      {TimeKeypadModal()}
+      {CarAssignModal()}
       {/* 担当者追加モーダル（DailyLogView 直下に配置し、ページング複数 DiarySheet による多重マウントを回避） */}
       {addStaffModal && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}>
