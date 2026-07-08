@@ -997,6 +997,26 @@ const ADDONS = [
 const hasAnyLifeAddon = (appData) => ['kasan_kinou2','kasan_kagaku','kasan_adl'].some(k => !!(appData?.systemSettings?.addons?.[k]));
 const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
+// ★ 連絡先の統合ビュー: 主要連絡先(familyName系のフラット項目) + 追加の緊急連絡先(emergencyContacts[]) を1つのリストにまとめる。
+//   フェイスシート・緊急連絡先・家族アプリ登録 で共通に使い、双方向・同名上書きの土台にする。
+const buildPrimaryContact = (p) => {
+  if (!p) return null;
+  const name = (p.familyName || `${p.familyLastName||''} ${p.familyFirstName||''}`).trim();
+  if (!name && !(p.familyPhone||'').trim() && !(p.familyPhoneMobile||'').trim() && !(p.familyEmail||'').trim()) return null;
+  return { name, relation: p.familyRelation||'', phone: p.familyPhone||'', phoneMobile: p.familyPhoneMobile||'', email: p.familyEmail||'', kana: p.familyKana||'', _primary: true };
+};
+const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim ? [prim] : []), ...((p && p.emergencyContacts) || []) ]; };
+// ★ 同名は上書き(upsert)。 name(前後空白/全半角無視)で照合し、既存があれば新しい非空値で更新、無ければ追加。
+const upsertContactByName = (list, contact) => {
+  const norm = (s) => (s||'').normalize('NFKC').replace(/[\s　]/g,'').trim();
+  const arr = [...(list||[])];
+  const key = norm(contact.name);
+  if (!key) return arr; // 名前が無いものは追加しない
+  const i = arr.findIndex(c => norm(c.name) === key);
+  if (i >= 0) { const merged = { ...arr[i] }; Object.keys(contact).forEach(k => { if (contact[k] !== undefined && contact[k] !== '') merged[k] = contact[k]; }); arr[i] = merged; }
+  else arr.push(contact);
+  return arr;
+};
 // ★ 血圧2列目の意味を店舗設定で切替: 'end'(終了時=標準) / 'recheckStart'(開始の再検査)。ラベルのみ変更（データ列は共通）。
 const secondBpLabel = (appData) => (appData?.systemSettings?.secondBpMode === 'recheckStart') ? '再測定' : '終了';
 
@@ -12205,14 +12225,20 @@ function FamilyView() {
                         };
                       }
                       const existingContacts = p.emergencyContacts || [];
-                      const dup = existingContacts.some(c => (c.name||'').trim() === ecName && (c.relation||'').trim() === ecRelation);
+                      const _normC = (s)=>(s||'').normalize('NFKC').replace(/[\s　]/g,'').trim();
+                      const _primName = _normC(p.familyName || `${p.familyLastName||''} ${p.familyFirstName||''}`);
                       let updatedContacts;
                       if (isPrimary || isCmKind || isSelf) {
                         // ★ 代表家族は familyName 等に反映済み。 ケアマネ/その他関係者は担当欄へ。 本人は閲覧用のため
                         //   いずれも緊急連絡先(emergencyContacts)には追加しない。
                         updatedContacts = existingContacts;
+                      } else if (_primName && _normC(ecName) === _primName) {
+                        // ★ 既存の代表家族と同名 → 代表を最新の内容で上書き(緊急連絡先に重複追加しない)
+                        primaryFields = { familyName: ecName, familyLastName: ecLastName, familyFirstName: ecFirstName, familyKana:`${ecKanaLast} ${ecKanaFirst}`.trim(), familyKanaLast: ecKanaLast, familyKanaFirst: ecKanaFirst, familyRelation: ecRelation||p.familyRelation||'', familyPhone: ecPhone||p.familyPhone||'', familyPhoneMobile: ecMobile||p.familyPhoneMobile||'', familyEmail: email||p.familyEmail||'' };
+                        updatedContacts = existingContacts;
                       } else {
-                        updatedContacts = dup ? existingContacts : [...existingContacts, newEmergencyContact];
+                        // ★ 同名は上書き(upsert)、無ければ追加（新規に重複を作らない）
+                        updatedContacts = upsertContactByName(existingContacts, newEmergencyContact);
                       }
                       // ケアマネ情報
                       let cmFields = {};
@@ -37705,11 +37731,11 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
               {renderAttach('genogramFiles')}
             </Field>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
-              <div className="text-[11px] text-blue-700 mb-2 font-bold">緊急連絡先 (基本情報から自動取得)</div>
+              <div className="text-[11px] text-blue-700 mb-2 font-bold">緊急連絡先・ご家族（基本情報／家族アプリ登録と自動連携）</div>
               <div className="text-[12px]">
-                {(patient.emergencyContacts || []).length === 0 && <div className="italic text-slate-500">未登録</div>}
-                {(patient.emergencyContacts || []).slice(0,5).map((c,i) => (
-                  <div key={i} className="mb-1">{i+1}. {c.name} ({c.relation}) / {c.phone || c.phoneMobile || '-'}</div>
+                {getAllContacts(patient).length === 0 && <div className="italic text-slate-500">未登録</div>}
+                {getAllContacts(patient).slice(0,6).map((c,i) => (
+                  <div key={i} className="mb-1">{i+1}. {c.name} {c.relation?`(${c.relation})`:''} / {c.phone || c.phoneMobile || '-'}{c._primary?' 〔代表〕':''}</div>
                 ))}
               </div>
             </div>
@@ -37943,7 +37969,7 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
               <div style={{fontSize:13,fontWeight:'bold',color:'#92400e',background:'#fef3c7',padding:'6px 10px',marginBottom:8}}>③ 家族・連絡先情報</div>
               <Row label="家族構成" value={fs.familyMembers}/>
               <Row label="ジェノグラム" value={fs.genogram}/>
-              <Row label="緊急連絡先" value={(patient.emergencyContacts||[]).map((c,i)=>`${i+1}.${c.name}(${c.relation}) ${c.phone||c.phoneMobile||'-'}`).join('\n') || '－'}/>
+              <Row label="緊急連絡先" value={getAllContacts(patient).map((c,i)=>`${i+1}.${c.name}${c.relation?`(${c.relation})`:''} ${c.phone||c.phoneMobile||'-'}${c._primary?' 〔代表〕':''}`).join('\n') || '－'}/>
               <Row label="キーパーソン" value={fs.keyPerson}/>
             </div>
             <div style={{marginBottom:14}}>
