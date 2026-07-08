@@ -18012,6 +18012,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     });
   }
 
+  // ★ 本日分の人数集計 (出席/欠席/休止/振替/休業)。表に列は足さず、ヘッダーにチップ表示。検索の影響を受けないよう検索前に集計。
+  const attCounts = (filterMode === 'single')
+    ? displayRecords.reduce((c,p)=>{ const s=(p.status||'出席'); if(['出席','欠席','休止','振替','休業'].includes(s)) c[s]=(c[s]||0)+1; c._total=(c._total||0)+1; return c; }, {})
+    : null;
+
   if (searchQuery) {
     const query = searchQuery.toLowerCase();
     displayRecords = displayRecords.filter(r => r.name && (r.name.includes(query) || (r.kana && r.kana.includes(query))));
@@ -18023,6 +18028,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (name.length <= 4) return "text-xs tracking-wider";
     return "text-[10px]";
   };
+
+  const attCountChips = attCounts ? (
+    <div className="flex items-center gap-1 flex-wrap" title="本日（選択中のAM/PM）の人数">
+      {[['出席','#166534','#dcfce7'],['欠席','#991b1b','#fee2e2'],['休止','#9a3412','#ffedd5'],['振替','#1e40af','#dbeafe']].map(([label,fg,bg])=>(
+        <span key={label} style={{background:bg,color:fg,borderRadius:8,padding:'3px 9px',fontSize:12,fontWeight:'bold',whiteSpace:'nowrap'}}>{label} {attCounts[label]||0}</span>
+      ))}
+      {(attCounts['休業']||0)>0 && <span style={{background:'#f1f5f9',color:'#475569',borderRadius:8,padding:'3px 9px',fontSize:12,fontWeight:'bold'}}>休業 {attCounts['休業']}</span>}
+    </div>
+  ) : null;
 
   // ★ 全画面時: Portal で body 直下にレンダリングして親 transform の影響を完全に避ける
   const RecordContent = (
@@ -18053,6 +18067,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         className={`px-5 py-2 text-sm font-bold transition-all ${timeFilter===v?'bg-blue-600 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>{v}</button>
                     ))}
                   </div>
+                  {attCountChips}
               </div>
             )}
             {filterMode === 'month' && (
@@ -18096,6 +18111,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         // 全画面時: 浮いたボタンではなく、統合された上部ヘッダーバー
         <div className="bg-slate-800 px-4 py-2 flex items-center gap-3 flex-shrink-0 sticky top-0 z-50 shadow-md">
           <span className="text-white font-bold text-sm">サービス提供記録 入力 {selectedDate && new Date(selectedDate).toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'})}</span>
+          {attCountChips && <div className="ml-2">{attCountChips}</div>}
           <div className="flex-1"/>
           <button onClick={()=>setIsFullscreen(false)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">⛶ 通常表示に戻る</button>
           <button onClick={handleSaveClick} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap"><CloudUpload size={13} className="mr-1"/>保存</button>
