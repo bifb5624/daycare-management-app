@@ -18143,10 +18143,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
            style={{overflowX:'auto',overflowY:'hidden',height:14,flexShrink:0,marginBottom:-1}}>
         <div style={{width: tableScrollWidth, height: 1}}/>
       </div>
-      <div ref={tableScrollRef} onScroll={_syncFromTable}
-           ref={tableContainerRef}
-           className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y pinch-zoom',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
+      <div ref={el=>{ tableScrollRef.current=el; tableContainerRef.current=el; }} onScroll={_syncFromTable}
+           draggable={false} onDragStart={e=>e.preventDefault()}
+           className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y pinch-zoom',overscrollBehavior:'contain',WebkitUserDrag:'none',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
         <style>{`
+          /* iPad等: 長押しドラッグで表(セル/画像)が持ち上がって移動するのを防ぐ。スクロール(横/縦)のみ許可 */
+          .record-view-scroll, .record-view-scroll * { -webkit-user-drag: none !important; -webkit-touch-callout: none !important; }
+          .record-view-scroll img { -webkit-user-drag: none !important; pointer-events: none !important; }
           /* スクロールバーを常時表示 (macOS Safari 等) */
           .record-view-scroll::-webkit-scrollbar { width: 14px !important; height: 14px !important; -webkit-appearance: none; }
           .record-view-scroll::-webkit-scrollbar-track { background: #e2e8f0; }
