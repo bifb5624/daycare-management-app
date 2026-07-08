@@ -32273,6 +32273,27 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
               </div>
             ) : (
               <div className="space-y-2">
+                {records.length>=2 && (
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 mb-1">
+                    <div className="text-sm font-bold text-blue-700 mb-2">📊 目標の推移（見直し比較・新しい順）</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse whitespace-pre-wrap">
+                        <thead><tr className="bg-slate-50 text-slate-500"><th className="border border-slate-200 px-2 py-1 text-left w-24">作成日</th><th className="border border-slate-200 px-2 py-1 text-left">短期目標(機能/活動)</th><th className="border border-slate-200 px-2 py-1 w-14">達成</th><th className="border border-slate-200 px-2 py-1 text-left">長期目標(機能)</th><th className="border border-slate-200 px-2 py-1 w-14">達成</th></tr></thead>
+                        <tbody>
+                          {records.slice(0,4).map((r,i)=>(
+                            <tr key={r.id} className={i===0?'bg-emerald-50':''}>
+                              <td className="border border-slate-200 px-2 py-1 font-bold text-slate-700 align-top">{r.createdDate||'—'}{i===0&&<span className="ml-1 text-[9px] text-emerald-600">最新</span>}</td>
+                              <td className="border border-slate-200 px-2 py-1 align-top">{[r.shortKinou,r.shortKatsudo].filter(Boolean).join(' / ')||'—'}</td>
+                              <td className="border border-slate-200 px-2 py-1 text-center align-top">{r.shortAchieve||'—'}</td>
+                              <td className="border border-slate-200 px-2 py-1 align-top">{r.longKinou||'—'}</td>
+                              <td className="border border-slate-200 px-2 py-1 text-center align-top">{r.longAchieve||'—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {records.map(r => (
                   <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-3">
                     <div>
@@ -32802,6 +32823,27 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
               </div>
             ) : (
               <div className="space-y-2">
+                {records.length>=2 && (
+                  <div className="bg-white rounded-xl border border-slate-200 p-4 mb-1">
+                    <div className="text-sm font-bold text-blue-700 mb-2">📊 目標の推移（見直し比較・新しい順）</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse whitespace-pre-wrap">
+                        <thead><tr className="bg-slate-50 text-slate-500"><th className="border border-slate-200 px-2 py-1 text-left w-24">作成日</th><th className="border border-slate-200 px-2 py-1 text-left">短期目標</th><th className="border border-slate-200 px-2 py-1 w-14">達成</th><th className="border border-slate-200 px-2 py-1 text-left">長期目標</th><th className="border border-slate-200 px-2 py-1 w-14">達成</th></tr></thead>
+                        <tbody>
+                          {records.slice(0,4).map((r,i)=>(
+                            <tr key={r.id} className={i===0?'bg-emerald-50':''}>
+                              <td className="border border-slate-200 px-2 py-1 font-bold text-slate-700 align-top">{r.createdDate||'—'}{i===0&&<span className="ml-1 text-[9px] text-emerald-600">最新</span>}</td>
+                              <td className="border border-slate-200 px-2 py-1 align-top">{r.shortGoal||'—'}</td>
+                              <td className="border border-slate-200 px-2 py-1 text-center align-top">{r.shortAchieve||'—'}</td>
+                              <td className="border border-slate-200 px-2 py-1 align-top">{r.longGoal||'—'}</td>
+                              <td className="border border-slate-200 px-2 py-1 text-center align-top">{r.longAchieve||'—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
                 {records.map(r=>(
                   <div key={r.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-3">
                     <div>
