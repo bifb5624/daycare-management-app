@@ -997,6 +997,8 @@ const ADDONS = [
 const hasAnyLifeAddon = (appData) => ['kasan_kinou2','kasan_kagaku','kasan_adl'].some(k => !!(appData?.systemSettings?.addons?.[k]));
 const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
+// ★ 血圧2列目の意味を店舗設定で切替: 'end'(終了時=標準) / 'recheckStart'(開始の再検査)。ラベルのみ変更（データ列は共通）。
+const secondBpLabel = (appData) => (appData?.systemSettings?.secondBpMode === 'recheckStart') ? '開始再検査' : '終了';
 
 // セル幅に収まる最大フォントで表示し、はみ出す場合は自動縮小する (折り返さない)
 function AutoFitText({ text, max = 13, min = 6, bold, color }) {
@@ -18197,7 +18199,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     ['体温',`temp_${tf}`,vT,getTempColorClass(vT),vT?`${vT}℃`:'＋'],
                     ['開始 血圧',`bpSt_combo_${tf}`,(vBuSt&&vBdSt)?`${vBuSt}/${vBdSt}`:'','text-slate-800',(vBuSt||vBdSt)?`${vBuSt}/${vBdSt}`:'＋'],
                     ['開始 脈',`plSt_${tf}`,vPlSt,getPulseColorClass(vPlSt,true),vPlSt?`${vPlSt}`:'＋'],
-                    ['終了 血圧',`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋'],
+                    [`${secondBpLabel(appData)} 血圧`,`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋'],
                     ['終了 脈',`plEn_${tf}`,vPlEn,getPulseColorClass(vPlEn,true),vPlEn?`${vPlEn}`:'＋']
                   ]; })().map(([lbl,field,cur,colorCls,shown])=>{
                     const isBp = typeof field==='string' && field.includes('_combo_');
@@ -18274,7 +18276,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800 text-xs">気分<div className="text-[8px] font-normal text-slate-400">通所/帰宅</div></th>
               <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800 text-xs">体温</th>
               <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800">開始 血圧/脈</th>
-              <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800">終了 血圧/脈</th>
+              <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800">{secondBpLabel(appData)} 血圧/脈</th>
               {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map((item) => (
                 <th key={item.id} className={`px-1 py-3 font-medium text-center border whitespace-nowrap sticky top-0 z-40 text-xs ${item.type==='individual' ? 'bg-emerald-800 text-emerald-50 border-emerald-700' : 'bg-slate-800 border-slate-700 text-white'}`}>
                   {item.name}
@@ -20881,9 +20883,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   </div>
                 )}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #94a3b8'}}>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期({vitalPhase==='end'?'終了時':'通所時'})</span>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期({vitalPhase==='end'?'終了時':'通所時'})</span>
-                  {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #3b82f6',display:'inline-block'}}/>終了時(運動後・点線)</span>}
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:bpWarn?'#ef4444':'#3b82f6',display:'inline-block',borderRadius:1}}/>収縮期({vitalPhase==='end'?secondBpLabel(appData):'通所時'})</span>
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:'#f87171',display:'inline-block',borderRadius:1}}/>拡張期({vitalPhase==='end'?secondBpLabel(appData):'通所時'})</span>
+                  {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #3b82f6',display:'inline-block'}}/>{secondBpLabel(appData)}(点線)</span>}
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#bfdbfe',opacity:0.7,display:'inline-block',borderRadius:2}}/>正常 収縮100-129</span>
                   <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:10,height:8,background:'#fbcfe8',opacity:0.7,display:'inline-block',borderRadius:2}}/>正常 拡張60-84</span>
                 </div>
@@ -20929,8 +20931,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   </div>
                 )}
                 <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:8,paddingTop:8,borderTop:'1px solid #94a3b8'}}>
-                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（{vitalPhase==='end'?'終了時':'通所時'}）</span>
-                  {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #22c55e',display:'inline-block'}}/>終了時(運動後・点線)</span>}
+                  <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:12,height:2,background:pulseWarn?'#ef4444':'#22c55e',display:'inline-block',borderRadius:1}}/>脈拍（{vitalPhase==='end'?secondBpLabel(appData):'通所時'}）</span>
+                  {vitalPhase==='both' && <span style={{display:'flex',alignItems:'center',gap:3,fontSize:12,color:'#475569'}}><span style={{width:14,height:0,borderTop:'2px dashed #22c55e',display:'inline-block'}}/>{secondBpLabel(appData)}(点線)</span>}
                 </div>
                 <VitalChart field="pulse" color1={pulseWarn?'#ef4444':'#22c55e'} yMin={40} yMax={130}
                   refLines={[
@@ -21475,7 +21477,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <thead>
                 <tr style={{backgroundColor:'#f8fafc',borderBottom:'1px solid #94a3b8'}}>
                   {/* ★ 項目名を中央配置 (左寄せ → center) */}
-                  {['日付','状態','気分(通)','気分(帰)','体温','開始 血圧/脈','終了 血圧/脈',...(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(e=>e.name),'介護整体','特記'].map(h=>(
+                  {['日付','状態','気分(通)','気分(帰)','体温','開始 血圧/脈',`${secondBpLabel(appData)} 血圧/脈`,...(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(e=>e.name),'介護整体','特記'].map(h=>(
                     <th key={h} style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap',fontSize:14}}>{h}</th>
                   ))}
                 </tr>
@@ -23222,7 +23224,7 @@ function buildAllPeriodTicketHtml(appData, patient) {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;"><div><div style="font-size:17px;font-weight:bold;letter-spacing:0.1em;line-height:1.1;">${tY}年${tM}月 サービス提供記録</div><div style="font-size:26px;font-weight:bold;margin-top:8px;line-height:1.1;">${patient.name} <span style="font-size:18px;font-weight:normal;">様</span></div></div><div style="font-size:10px;color:#475569;text-align:right;line-height:1.5;"><div>提供責任者: <b>${facility.serviceResponsible||'—'}</b>　　実施時間: <b>${jisshiTime}</b></div><div style="color:#1d4ed8;font-weight:bold;margin-top:2px;">通所曜日: ${schedText||'—'}</div></div></div>
         <table style="width:100%;border-collapse:collapse;margin-bottom:0;table-layout:fixed;"><colgroup><col style="width:5%;"/><col style="width:45%;"/><col style="width:5%;"/><col style="width:45%;"/></colgroup><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">既往歴</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.kiou||''}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;">留意点</th><td style="border:1px solid #475569;font-size:10px;padding:1px 6px;vertical-align:top;">${patient.ryui||''}</td></tr></tbody></table>
         <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px;table-layout:fixed;"><tbody><tr><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;width:8%;">マッサージ</th><td style="border:1px solid #475569;font-size:11px;font-weight:bold;padding:1px 6px;width:42%;">${patient.massageNeed||'—'}</td><th style="border:1px solid #475569;background:white;color:black;font-size:10px;font-weight:normal;padding:1px 4px;text-align:center;width:8%;">温浴時電療</th><td style="border:1px solid #475569;font-size:11px;font-weight:bold;padding:1px 6px;width:42%;">${patient.onyokuDenryo||'—'}</td></tr></tbody></table>
-        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;"><thead><tr style="background:#1e293b;color:white;"><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:50px;">日付</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:34px;">状態</th><th style="border:1px solid #475569;padding:3px 1px;font-size:9px;width:60px;">気分</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:48px;">体温</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">開始 血圧(脈)</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">終了 血圧(脈)</th>${exerciseItems.map(it => `<th style="border:1px solid #475569;padding:3px 1px;font-size:9px;line-height:1.1;">${it.name}</th>`).join('')}<th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:42px;">介護整体</th></tr></thead><tbody>${tableRows}${emptyRowsHtml}</tbody></table>
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;flex:1;"><thead><tr style="background:#1e293b;color:white;"><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:50px;">日付</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:34px;">状態</th><th style="border:1px solid #475569;padding:3px 1px;font-size:9px;width:60px;">気分</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:48px;">体温</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">開始 血圧(脈)</th><th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:58px;">${secondBpLabel(appData)} 血圧(脈)</th>${exerciseItems.map(it => `<th style="border:1px solid #475569;padding:3px 1px;font-size:9px;line-height:1.1;">${it.name}</th>`).join('')}<th style="border:1px solid #475569;padding:3px 1px;font-size:10px;width:42px;">介護整体</th></tr></thead><tbody>${tableRows}${emptyRowsHtml}</tbody></table>
       </div>`;
     };
     allPages += pageGroups.map(renderPage).join('');
@@ -23559,7 +23561,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:60}}><AutoFitText text="気分" max={13} bold color="#fff"/></th>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:48}}><AutoFitText text="体温" max={13} bold color="#fff"/></th>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text="開始 血圧（脈）" max={11} bold color="#fff"/></th>
-                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text="終了 血圧（脈）" max={11} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text={`${secondBpLabel(appData)} 血圧（脈）`} max={11} bold color="#fff"/></th>
                     {(()=>{
                       // 運動メニュー項目数に応じて統一列幅を計算 (個別運動も介護整体も同じ幅)
                       const unifiedW = ex.length > 12 ? 32 : ex.length > 8 ? 36 : 42;
@@ -29708,6 +29710,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 <input type="checkbox" checked={ss.keypadDisabled !== true} onChange={e=>saveSS({ keypadDisabled: !e.target.checked }, e.target.checked ? '✓ テンキーを表示します' : '✓ テンキーを非表示にしました（通常キーボードで入力）')} className="w-5 h-5" style={{accentColor:'#2563eb'}}/>
                 <span className="text-sm font-bold text-slate-700">テンキー（点キー）を表示する{ss.keypadDisabled===true && <span className="ml-2 text-xs font-normal text-amber-600">現在OFF：通常キーボードで入力します</span>}</span>
               </label>
+            </SectionCard>
+            <SectionCard title="血圧の測定項目（2列目）">
+              <p className="text-xs text-slate-500 mb-3">提供記録入力の血圧2列目を、店舗の運用に合わせて選べます。どちらも血圧は<b>2列（開始＋2列目）</b>のままで、表の幅は変わりません。再検査などの補足は<b>特記</b>にも記入できます（分析個人の「今日の内容」に表示されます）。</p>
+              <div className="flex flex-col gap-2">
+                {[['end','開始時血圧 ＋ 終了時血圧（標準）'],['recheckStart','開始時血圧 ＋ 開始の再検査血圧（終了時を測らない店舗向け）']].map(([v,label])=>(
+                  <label key={v} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
+                    <input type="radio" name="secondBpMode" checked={(ss.secondBpMode||'end')===v} onChange={()=>saveSS({ secondBpMode: v }, '✓ 血圧2列目の設定を変更しました')} className="w-5 h-5" style={{accentColor:'#2563eb'}}/>
+                    <span className="text-sm font-bold text-slate-700">{label}</span>
+                  </label>
+                ))}
+              </div>
             </SectionCard>
             <SectionCard title="テンキー補完ボタンの管理">
               <p className="text-xs text-slate-500 mb-3">運動入力テンキーの下部に表示される「+◯◯」ボタンを管理します。{ss.keypadDisabled===true && <span className="text-amber-600 font-bold">（テンキー非表示中は使われません）</span>}</p>
