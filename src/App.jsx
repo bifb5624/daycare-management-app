@@ -31949,18 +31949,38 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
 
 // 計画書フォーム用の入力フィールド (モジュールレベルで定義し、入力中のフォーカス喪失を防ぐ)
-function KKField({ label, value, onChange, rows, ph }) {
+// suggestions: 定型文の候補。クリックで現在値の末尾に追記（空なら差し込み）。
+function KKField({ label, value, onChange, rows, ph, suggestions }) {
+  const insert = (t) => { const cur=(value||'').trim(); onChange(cur ? `${cur}\n${t}` : t); };
   return (
     <div>
-      <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:4}}>{label}</label>
+      {label ? <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:4}}>{label}</label> : null}
       {rows ? (
         <textarea value={value||''} onChange={e=>onChange(e.target.value)} rows={rows} placeholder={ph||''} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-none focus:border-blue-400"/>
       ) : (
         <input value={value||''} onChange={e=>onChange(e.target.value)} placeholder={ph||''} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
       )}
+      {suggestions?.length ? (
+        <div style={{display:'flex',flexWrap:'wrap',gap:4,marginTop:4}}>
+          {suggestions.map((s,i)=>(
+            <button type="button" key={i} onClick={()=>insert(s)} title="クリックで入力欄に追記"
+              style={{fontSize:10,padding:'2px 7px',borderRadius:999,border:'1px solid #c7d2fe',background:'#eef2ff',color:'#4338ca',cursor:'pointer',lineHeight:1.5}}>＋{s}</button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
+// 計画書 入力補助: よく使う定型文（クリックで追記）
+const TPL_HOSHIN = ['心身機能の維持・向上を図り、住み慣れた地域での生活を継続できるよう支援します。','転倒予防と下肢筋力の維持により、安全に在宅生活を続けられるよう支援します。','他者との交流や活動への参加を通じて、生活意欲・社会参加の維持を図ります。','ご本人の「できること」を活かし、自立した日常生活を支援します。'];
+const TPL_GOAL_LONG = ['自宅内を安全に歩行し、転倒なく生活できる','趣味や外出などの活動に参加し、生活意欲を維持できる','下肢筋力を維持し、外出の機会を継続できる','家庭内での役割を持ち、いきいきと生活できる'];
+const TPL_GOAL_SHORT = ['見守りのもと、屋内を安全に歩行できる','週2回の運動を継続し、下肢筋力を維持できる','レクリエーションに参加し、他者と交流できる','立ち上がり・移乗動作が安定して行える'];
+const TPL_HEALTH = ['毎回バイタル（血圧・脈拍・体温）を測定し、体調変化に留意する','服薬状況を確認し、必要時はご家族・主治医へ連絡する','水分摂取を促し、脱水・熱中症を予防する','転倒・ふらつきに注意して見守る'];
+const TPL_SOUGEI = ['自宅玄関先まで送迎（歩行見守り・乗降介助）','車椅子対応車両で送迎、乗降時は2名で介助','送迎時に体調・表情を確認し記録する'];
+const TPL_RYUI = ['転倒に注意し、移動時は見守りを行う','血圧変動に留意し、運動前後にバイタルを確認する','疲労の訴えに注意し、適宜休憩を挟む','関節痛に配慮し、無理のない範囲で実施する'];
+const TPL_KINOU = ['下肢筋力の維持・向上','立位・座位バランスの改善','関節可動域の維持・拡大','上肢機能・巧緻性の維持'];
+const TPL_KATSUDO = ['屋内を安全に歩行できる','立ち上がり・移乗が安定して行える','更衣・整容が自分で行える','トイレ動作が自立して行える'];
+const TPL_SANKA = ['外出・買い物に参加できる','趣味活動に参加できる','地域行事・交流の場に参加できる','家庭内で役割を持てる'];
 
 // 個別機能訓練 関連書類のタブ帯 (計画書3-3 / 生活機能チェック3-2 / 興味関心3-1 を相互リンク)
 const KEIKAKU_DOCS = [['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['tsusho_keikaku','通所介護計画書']];
@@ -32175,7 +32195,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
               <div className="grid md:grid-cols-1 gap-3">
                 <KKField label="治療経過（手術がある場合は手術日・術式等）" value={editing.chiryoKeika} onChange={v=>upd({chiryoKeika:v})} rows={2}/>
                 <KKField label="合併疾患・コントロール状態（高血圧・心疾患・呼吸器疾患・糖尿病等）" value={editing.gappei} onChange={v=>upd({gappei:v})} rows={2}/>
-                <KKField label="機能訓練実施上の留意事項（開始前・訓練中の留意事項、運動強度・負荷量等）" value={editing.ryuiPoint} onChange={v=>upd({ryuiPoint:v})} rows={2}/>
+                <KKField label="機能訓練実施上の留意事項（開始前・訓練中の留意事項、運動強度・負荷量等）" value={editing.ryuiPoint} onChange={v=>upd({ryuiPoint:v})} rows={2} suggestions={TPL_RYUI}/>
               </div>
             </div>
             {/* Ⅱ 目標 */}
@@ -32185,16 +32205,16 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                 <div className="space-y-2">
                   <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">短期目標（今後3ヶ月）</span>
                     <select value={editing.shortAchieve} onChange={e=>upd({shortAchieve:e.target.value})} className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"><option value="">達成度</option><option>達成</option><option>一部</option><option>未達</option></select></div>
-                  <KKField label="（機能）" value={editing.shortKinou} onChange={v=>upd({shortKinou:v})} rows={2}/>
-                  <KKField label="（活動）" value={editing.shortKatsudo} onChange={v=>upd({shortKatsudo:v})} rows={2}/>
-                  <KKField label="（参加）" value={editing.shortSanka} onChange={v=>upd({shortSanka:v})} rows={2}/>
+                  <KKField label="（機能）" value={editing.shortKinou} onChange={v=>upd({shortKinou:v})} rows={2} suggestions={TPL_KINOU}/>
+                  <KKField label="（活動）" value={editing.shortKatsudo} onChange={v=>upd({shortKatsudo:v})} rows={2} suggestions={TPL_KATSUDO}/>
+                  <KKField label="（参加）" value={editing.shortSanka} onChange={v=>upd({shortSanka:v})} rows={2} suggestions={TPL_SANKA}/>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">長期目標</span>
                     <select value={editing.longAchieve} onChange={e=>upd({longAchieve:e.target.value})} className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"><option value="">達成度</option><option>達成</option><option>一部</option><option>未達</option></select></div>
-                  <KKField label="（機能）" value={editing.longKinou} onChange={v=>upd({longKinou:v})} rows={2}/>
-                  <KKField label="（活動）" value={editing.longKatsudo} onChange={v=>upd({longKatsudo:v})} rows={2}/>
-                  <KKField label="（参加）" value={editing.longSanka} onChange={v=>upd({longSanka:v})} rows={2}/>
+                  <KKField label="（機能）" value={editing.longKinou} onChange={v=>upd({longKinou:v})} rows={2} suggestions={TPL_KINOU}/>
+                  <KKField label="（活動）" value={editing.longKatsudo} onChange={v=>upd({longKatsudo:v})} rows={2} suggestions={TPL_KATSUDO}/>
+                  <KKField label="（参加）" value={editing.longSanka} onChange={v=>upd({longSanka:v})} rows={2} suggestions={TPL_SANKA}/>
                 </div>
               </div>
             </div>
@@ -32724,18 +32744,18 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                 <KKField label="ご本人の希望・意向" value={editing.honninKibou} onChange={v=>upd({honninKibou:v})} rows={2}/>
                 <KKField label="ご家族の希望・意向" value={editing.kazokuKibou} onChange={v=>upd({kazokuKibou:v})} rows={2}/>
               </div>
-              <div className="mt-3"><KKField label="総合的な援助の方針" value={editing.hoshin} onChange={v=>upd({hoshin:v})} rows={2}/></div>
+              <div className="mt-3"><KKField label="総合的な援助の方針" value={editing.hoshin} onChange={v=>upd({hoshin:v})} rows={2} suggestions={TPL_HOSHIN}/></div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">目標</div>
               <div className="grid md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap"><span className="text-xs font-bold text-slate-600">長期目標</span><input value={editing.longPeriod} onChange={e=>upd({longPeriod:e.target.value})} placeholder="期間(例:6ヶ月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-28"/><select value={editing.longAchieve} onChange={e=>upd({longAchieve:e.target.value})} className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"><option value="">達成度</option><option>達成</option><option>一部</option><option>未達</option></select></div>
-                  <KKField label="" value={editing.longGoal} onChange={v=>upd({longGoal:v})} rows={2}/>
+                  <KKField label="" value={editing.longGoal} onChange={v=>upd({longGoal:v})} rows={2} suggestions={TPL_GOAL_LONG}/>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2 flex-wrap"><span className="text-xs font-bold text-slate-600">短期目標</span><input value={editing.shortPeriod} onChange={e=>upd({shortPeriod:e.target.value})} placeholder="期間(例:3ヶ月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-28"/><select value={editing.shortAchieve} onChange={e=>upd({shortAchieve:e.target.value})} className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"><option value="">達成度</option><option>達成</option><option>一部</option><option>未達</option></select></div>
-                  <KKField label="" value={editing.shortGoal} onChange={v=>upd({shortGoal:v})} rows={2}/>
+                  <KKField label="" value={editing.shortGoal} onChange={v=>upd({shortGoal:v})} rows={2} suggestions={TPL_GOAL_SHORT}/>
                 </div>
               </div>
             </div>
@@ -32761,9 +32781,9 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
               <datalist id="tsusho-prog-items">{TSUSHO_PROG.map(x=><option key={x} value={x}/>)}</datalist>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
-              <KKField label="健康管理上の留意点（既往・服薬・注意事項）" value={editing.healthNote} onChange={v=>upd({healthNote:v})} rows={2}/>
+              <KKField label="健康管理上の留意点（既往・服薬・注意事項）" value={editing.healthNote} onChange={v=>upd({healthNote:v})} rows={2} suggestions={TPL_HEALTH}/>
               <div className="grid md:grid-cols-2 gap-3">
-                <KKField label="送迎（有無・経路・注意）" value={editing.sougei} onChange={v=>upd({sougei:v})} rows={2}/>
+                <KKField label="送迎（有無・経路・注意）" value={editing.sougei} onChange={v=>upd({sougei:v})} rows={2} suggestions={TPL_SOUGEI}/>
                 <KKField label="特記事項" value={editing.tokki} onChange={v=>upd({tokki:v})} rows={2}/>
               </div>
             </div>
