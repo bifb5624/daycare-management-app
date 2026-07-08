@@ -18029,14 +18029,19 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     return "text-[10px]";
   };
 
-  const attCountChips = attCounts ? (
-    <div className="flex items-center gap-1 flex-wrap" title="本日（選択中のAM/PM）の人数">
-      {[['出席','#166534','#dcfce7'],['欠席','#991b1b','#fee2e2'],['休止','#9a3412','#ffedd5'],['振替','#1e40af','#dbeafe']].map(([label,fg,bg])=>(
-        <span key={label} style={{background:bg,color:fg,borderRadius:8,padding:'3px 9px',fontSize:12,fontWeight:'bold',whiteSpace:'nowrap'}}>{label} {attCounts[label]||0}</span>
-      ))}
-      {(attCounts['休業']||0)>0 && <span style={{background:'#f1f5f9',color:'#475569',borderRadius:8,padding:'3px 9px',fontSize:12,fontWeight:'bold'}}>休業 {attCounts['休業']}</span>}
-    </div>
-  ) : null;
+  const attCountChips = attCounts ? (() => {
+    // 出席=青 / 欠席=赤 / 休止=橙 / 振替=緑 / 休業=灰。 人数が0の状態は表示しない(いる状態だけ)。
+    const defs = [['出席','#1e40af','#dbeafe'],['欠席','#991b1b','#fee2e2'],['休止','#9a3412','#ffedd5'],['振替','#166534','#dcfce7'],['休業','#475569','#f1f5f9']];
+    const shown = defs.filter(([label]) => (attCounts[label]||0) > 0);
+    if (!shown.length) return null;
+    return (
+      <div className="flex items-center gap-1 flex-wrap" title="本日（選択中のAM/PM）の人数">
+        {shown.map(([label,fg,bg])=>(
+          <span key={label} style={{background:bg,color:fg,borderRadius:8,padding:'3px 9px',fontSize:12,fontWeight:'bold',whiteSpace:'nowrap'}}>{label} {attCounts[label]}</span>
+        ))}
+      </div>
+    );
+  })() : null;
 
   // ★ 全画面時: Portal で body 直下にレンダリングして親 transform の影響を完全に避ける
   const RecordContent = (
@@ -18048,7 +18053,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       } : {}),
     }}>
       {!isFullscreen ? (
-      <div className="bg-white px-4 py-3 rounded-2xl shadow-sm border border-slate-200 flex flex-row items-center gap-3 flex-shrink-0 sticky top-0 z-30 mb-4">
+      <div className="bg-white px-4 py-3 rounded-2xl shadow-sm border border-slate-200 flex flex-row items-center gap-3 flex-wrap flex-shrink-0 sticky top-0 z-30 mb-4">
           <div className="bg-slate-100 p-1 rounded-xl flex items-center">
               <button onClick={() => setFilterMode('single')} className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'single' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>本日分</button>
               <button onClick={() => setFilterMode('month')} className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'month' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>月全体</button>
@@ -20021,7 +20026,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </div>
                       {/* 血圧+脈 終了 (右下) */}
                       <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (終了)</span>
+                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 ({secondBpLabel(appData)})</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
                           {latest.bpUpEn ? <span>{latest.bpUpEn}/{latest.bpDnEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
                           {latest.plEn && <span>{latest.plEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
@@ -24760,7 +24765,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
                     <table style={{borderCollapse:'collapse', flex:'none'}}>
                       <tbody>
                         <tr>
-                          <td style={{fontSize:17, whiteSpace:'nowrap', paddingRight:4}}>終了時　血圧</td>
+                          <td style={{fontSize:17, whiteSpace:'nowrap', paddingRight:4}}>{secondBpLabel(appData)==='終了'?'終了時':secondBpLabel(appData)}　血圧</td>
                           <td style={{fontSize:29, fontWeight:'bold', whiteSpace:'nowrap', paddingRight:0, minWidth:'6em'}}>{record.bpUpEn ? `${record.bpUpEn} / ${record.bpDnEn}` : "　"}</td>
                           <td style={{fontSize:17, whiteSpace:'nowrap', paddingLeft:24, paddingRight:26}}>脈拍</td>
                           <td style={{fontSize:29, fontWeight:'bold', whiteSpace:'nowrap'}}>{record.plEn || "　"}</td>
