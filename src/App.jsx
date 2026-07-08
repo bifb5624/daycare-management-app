@@ -25863,6 +25863,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     setLocalPatient(updated);
     if (dirtyRef) dirtyRef.current = true;
   };
+  // ★ 状態・休止など「押した時点で即クラウド保存したい」変更用。 localPatient を appData へ反映し manual保存で即push。
+  const commitLP = (patch, message) => {
+    if (!localPatient) return;
+    const updated = { ...localPatient, ...patch };
+    setLocalPatient(updated);
+    if (dirtyRef) dirtyRef.current = false;
+    onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id === updated.id ? updated : p) }, { manual: true, message: message || '✓ 保存しました' });
+  };
   // ★ localPatient はマスタ画面の編集スナップショット。 個人ファイル(写真/書類/フェイスシート等)は
   //   別モーダルで appData に直接保存されるため、 localPatient を書き戻す際にこれらを「最新の appData」から
   //   引き継がないと、モーダルで追加した写真が古い localPatient で上書きされて消える。
@@ -26005,9 +26013,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const submitPause = () => {
     if (!localPatient || !pauseModal.reason || !pauseModal.fromDate) return;
     const newHistory = [...(localPatient.pauseHistory || []), { reason: pauseModal.reason, fromDate: pauseModal.fromDate }];
-    const updated = { ...localPatient, status: '休止', pauseHistory: newHistory };
-    setLocalPatient(updated);
-    onSave({ ...appData, patients: appData.patients.map(p => p.id === updated.id ? updated : p) });
+    commitLP({ status: '休止', pauseHistory: newHistory }, '✓ 休止にしました（保存済み）');
     setPauseModal({ isOpen: false, reason: "", fromDate: "" });
   };
 
@@ -26103,8 +26109,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       const today = new Date().toISOString().split('T')[0];
       const hist = [...(localPatient.pauseHistory || [])];
       for (let i = hist.length - 1; i >= 0; i--) { if (!hist[i].toDate) { hist[i] = { ...hist[i], toDate: today }; break; } }
-      updateLPFields({ status: '利用中', pauseHistory: hist });
-    } else updateLP('status', val);
+      commitLP({ status: '利用中', pauseHistory: hist }, '✓ 利用を再開しました（保存済み）');
+    } else commitLP({ status: val }, '✓ 状態を変更しました（保存済み）');
   };
   const updateSched = (i, v) => { if (!localPatient) return; const oldV = localPatient.scheduleAmPm?.[i] || ''; if(oldV === v) return; const t=new Date(); const ds=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; setSchedModal({dayIndex:i, newVal:v, oldVal:oldV, applyFrom:ds, vY:t.getFullYear(), vM:t.getMonth()}); };
 
@@ -26706,13 +26712,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                               <span className="font-bold text-slate-700">{h.reason}</span>
                               <span className="text-slate-400 ml-auto shrink-0">{fD(h.fromDate)}〜</span>
                               {h.toDate ? (
-                                <span className="text-slate-500 shrink-0 flex items-center gap-1">{fD(h.toDate)}{!isOff && <button onClick={()=>{const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:''}; updateLP('pauseHistory', newHist);}} className="text-slate-300 hover:text-red-400 text-[10px]" title="終了日をクリア">✕</button>}</span>
+                                <span className="text-slate-500 shrink-0 flex items-center gap-1">{fD(h.toDate)}{!isOff && <button onClick={()=>{const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:''}; commitLP({pauseHistory: newHist}, '✓ 終了日をクリアしました（保存済み）');}} className="text-slate-300 hover:text-red-400 text-[10px]" title="終了日をクリア">✕</button>}</span>
                               ) : (
-                                !isOff ? (<input type="date" value="" onChange={e=>{if(!e.target.value)return; const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:e.target.value}; updateLP('pauseHistory', newHist);}} className="text-[10px] border border-slate-300 rounded px-1.5 py-0.5 bg-white shrink-0" title="終了日を入力" style={{maxWidth:120}} />) : <span className="text-slate-400 shrink-0">現在</span>
+                                !isOff ? (<input type="date" value="" onChange={e=>{if(!e.target.value)return; const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:e.target.value}; commitLP({pauseHistory: newHist}, '✓ 終了日を設定しました（保存済み）');}} className="text-[10px] border border-slate-300 rounded px-1.5 py-0.5 bg-white shrink-0" title="終了日を入力" style={{maxWidth:120}} />) : <span className="text-slate-400 shrink-0">現在</span>
                               )}
                               {showCurrent && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">現在</span>}
                               {!isOff && <button onClick={()=>setPauseEditModal({origIdx, reason:h.reason||'', fromDate:h.fromDate||'', toDate:h.toDate||''})} className="text-slate-300 hover:text-blue-500 shrink-0" title="この休止履歴を編集"><Edit3 size={13}/></button>}
-                              {!isOff && <button onClick={()=>{ if(!window.confirm('この休止履歴を削除しますか？')) return; const newHist=(localPatient.pauseHistory||[]).filter((_,i)=>i!==origIdx); const _upd={pauseHistory:newHist}; if(isLatest && isCurrentlyOnPause) _upd.status='利用中'; updateLPFields(_upd); }} className="text-slate-300 hover:text-red-500 shrink-0" title="この休止履歴を削除"><Trash2 size={13}/></button>}
+                              {!isOff && <button onClick={()=>{ if(!window.confirm('この休止履歴を削除しますか？')) return; const newHist=(localPatient.pauseHistory||[]).filter((_,i)=>i!==origIdx); const _upd={pauseHistory:newHist}; if(isLatest && isCurrentlyOnPause) _upd.status='利用中'; commitLP(_upd, '✓ 休止履歴を削除しました（保存済み）'); }} className="text-slate-300 hover:text-red-500 shrink-0" title="この休止履歴を削除"><Trash2 size={13}/></button>}
                             </div>
                           );
                         })}
