@@ -945,7 +945,8 @@ const applyExUnits = (raw, item) => {
     const p1 = (parts[0] || '').trim();
     const p2 = (parts.length > 1 ? parts.slice(1).join('') : '').trim();
     const f1 = (!/[0-9０-９]/.test(p1) || (u1 && p1.endsWith(u1))) ? p1 : (u1 ? `${p1}${u1}` : p1);
-    if (!p2) return f1; // 2個目が空 → 1個目の単位だけ
+    // 2個目が空: 区切り(× or /)を押した直後はその区切りを残して表示("5×"→"5kg×")。区切りが無ければ1個目の単位だけ
+    if (!p2) return /[×xＸ*\/／]\s*$/.test(s) ? `${f1}${sep}` : f1;
     const f2 = (!/[0-9０-９]/.test(p2) || (u2 && p2.endsWith(u2))) ? p2 : (u2 ? `${p2}${u2}` : p2);
     return `${f1}${sep}${f2}`;
   }
@@ -18145,7 +18146,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       </div>
       <div ref={el=>{ tableScrollRef.current=el; tableContainerRef.current=el; }} onScroll={_syncFromTable}
            draggable={false} onDragStart={e=>e.preventDefault()}
-           className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y pinch-zoom',overscrollBehavior:'contain',WebkitUserDrag:'none',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
+           className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y',overscrollBehavior:'none',overscrollBehaviorX:'none',overscrollBehaviorY:'none',WebkitUserDrag:'none',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
         <style>{`
           /* iPad等: 長押しドラッグで表(セル/画像)が持ち上がって移動するのを防ぐ。スクロール(横/縦)のみ許可 */
           .record-view-scroll, .record-view-scroll * { -webkit-user-drag: none !important; -webkit-touch-callout: none !important; }
@@ -18241,7 +18242,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             );
           })}
         </div>
-        <table id="record-table" className="hidden md:table text-sm text-left relative" style={{
+        <table id="record-table" draggable={false} onDragStart={e=>e.preventDefault()} className="hidden md:table text-sm text-left relative" style={{
           tableLayout:'fixed',borderCollapse:'separate',borderSpacing:0,
           minWidth:'max-content',width:'max-content',
           // ★ 全画面時のみ 1.1 倍拡大 (transform-origin top-left でレイアウト整合)
@@ -18476,7 +18477,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       // ★ 値の表示フォント: ○ は大きく太く、数値は桁数で縮小
                       const _indIsCircle = cur.value==='○'||cur.value==='◯';
                       const _indValLen = String(cur.value||'').length;
-                      const _indValFs = _indIsCircle ? 22 : (_indValLen>5 ? 10 : _indValLen>3 ? 12 : 15);
+                      const _indValFs = _indIsCircle ? 22 : (_indValLen>9 ? 7 : _indValLen>7 ? 8 : _indValLen>5 ? 10 : _indValLen>3 ? 12 : 15);
                       return (
                         <td key={item.id} data-ind-cell className={`px-1 py-1 align-top border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
                           <select value={effItemId} disabled={isAbsent || isReadOnly || isPause}
@@ -18536,7 +18537,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             updateExercise(p.id, item.id, e.target.value);
                           }}
                           onBlur={(e) => { if (item.useKeypad && _keypadOn) return; updateExercise(p.id, item.id, applyExUnits(e.target.value, item)); }}
-                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
+                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 9 ? 8 : displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
                           className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
