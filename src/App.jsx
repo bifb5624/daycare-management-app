@@ -9303,17 +9303,9 @@ const getRowFromKana = (kana) => {
 const getPatientDisplayStatus = (p) => {
     if (!p) return '利用中';
     if (isPatientResigned(p)) return '退所済み';
-    if (p.status === '休止' || p.status === '一時中止') {
-        // 休止履歴の最新エントリに toDate が設定されていて、今日がその日を過ぎていたら自動で利用中に戻す
-        const hist = p.pauseHistory || [];
-        const last = hist[hist.length - 1];
-        if (last && last.toDate) {
-            const today = new Date(); today.setHours(0,0,0,0);
-            const to = new Date(last.toDate); to.setHours(0,0,0,0);
-            if (today > to) return '利用中';
-        }
-        return '休止';
-    }
+    // ★ 休止は「利用を再開」を押すまで（status を利用中に戻すまで）ずっと休止のまま。
+    //   終了日(toDate)は履歴上の記録であって、日付経過での自動復帰はしない（表示と実データの不整合を防ぐ）。
+    if (p.status === '休止' || p.status === '一時中止') return '休止';
     return '利用中';
 };
 
