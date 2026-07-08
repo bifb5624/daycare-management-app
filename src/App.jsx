@@ -18472,7 +18472,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const patDefault = selItem ? (((_datedInd.find(x => x.itemId === selItem.id)?.defaultValue) ?? (patSettings.find(x => x.itemId === selItem.id)?.defaultValue)) || '') : '';
                       // ★ 種目名はセル幅(60px)に合わせて可変フォント: 短い名前は大きく、3〜4文字以上は縮小して収める
                       const _indName = selItem?.name || '';
-                      const _indNameFs = _indName.length<=2 ? 15 : _indName.length===3 ? 13 : _indName.length===4 ? 11 : _indName.length<=6 ? 10 : 9;
+                      const _indNameFs = !_indName ? 11 : _indName.length<=2 ? 15 : _indName.length===3 ? 13 : _indName.length===4 ? 11 : _indName.length<=6 ? 10 : 9;
                       // ★ 値の表示フォント: ○ は大きく太く、数値は桁数で縮小
                       const _indIsCircle = cur.value==='○'||cur.value==='◯';
                       const _indValLen = String(cur.value||'').length;
@@ -18483,7 +18483,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: e.target.value})}
                             className="w-full px-0.5 mb-1 font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
                             style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center',fontSize:_indNameFs,height:24,boxSizing:'border-box',lineHeight:1}}>
-                            <option value="">— 選択 —</option>
+                            <option value="">—</option>
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
                           {/* ★ 他の運動メニューと同様: 規定値(個別運動デフォルト)を薄グレーのプレースホルダーで背景表示。 タップでテンキーを開く */}
