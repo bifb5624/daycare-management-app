@@ -18312,7 +18312,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   {filterMode === 'month' && (
                     <td className={`px-2 py-2 font-bold text-center border border-slate-300 sticky left-0 z-30 whitespace-nowrap text-xs ${(isAbsent || isPause) ? 'bg-slate-100' : isActiveRow ? 'bg-blue-100' : 'bg-white group-hover:bg-blue-50'}`}>{p.date}</td>
                   )}
-                  <td className={`font-bold sticky z-30 ${filterMode === 'month' ? 'left-[80px]' : 'left-0'} ${(isAbsent || isPause) ? 'bg-slate-100' : isActiveRow ? 'bg-blue-100' : 'bg-white group-hover:bg-blue-50'}`} style={{padding:'4px 6px',height:64,verticalAlign:'middle',borderTop:'1px solid #cbd5e1',borderBottom:'1px solid #cbd5e1',borderRight:'1px solid #cbd5e1',borderLeft:isActiveRow?'3px solid #2563eb':(filterMode==='month'?'none':'1px solid #cbd5e1')}}>
+                  <td className={`font-bold sticky z-30 ${filterMode === 'month' ? 'left-[80px]' : 'left-0'} ${(isAbsent || isPause) ? 'bg-slate-100' : isActiveRow ? 'bg-blue-100' : 'bg-white group-hover:bg-blue-50'}`} style={{padding:'3px 6px',height:54,verticalAlign:'middle',borderTop:'1px solid #cbd5e1',borderBottom:'1px solid #cbd5e1',borderRight:'1px solid #cbd5e1',borderLeft:isActiveRow?'3px solid #2563eb':(filterMode==='month'?'none':'1px solid #cbd5e1')}}>
                     {(()=>{
                       const _fr = (appData.fitnessRecords||[]).filter(r=>r.patientId===masterData.id).sort((a,b)=>b.date.localeCompare(a.date));
                       const _cycle = appData.systemSettings?.fitnessCycle;
@@ -18481,11 +18481,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const _indValLen = String(cur.value||'').length;
                       const _indValFs = _indIsCircle ? 21 : (_indValLen>=8 ? 7 : _indValLen>=6 ? 8 : _indValLen>=5 ? 9 : _indValLen>=4 ? 11 : _indValLen>=3 ? 12 : 15);
                       return (
-                        <td key={item.id} data-ind-cell className={`px-1 py-0.5 align-middle border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
+                        <td key={item.id} data-ind-cell className={`px-1 py-0 align-middle border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
                           <select value={effItemId} disabled={isAbsent || isReadOnly || isPause}
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: e.target.value})}
-                            className="w-full px-0.5 mb-0.5 font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
-                            style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center',fontSize:_indNameFs,height:22,boxSizing:'border-box',lineHeight:1}}>
+                            className="w-full px-0.5 mb-0 font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
+                            style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center',fontSize:_indNameFs,height:19,boxSizing:'border-box',lineHeight:1}}>
                             <option value="">—</option>
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
@@ -18495,7 +18495,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             onChange={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: e.target.value})}
                             onBlur={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: applyExUnits(e.target.value, selItem)})}
                             placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${exUnitLabel(selItem)}`:''}`:'未選択'}
-                            style={{fontSize:_indValFs,padding:'0 1px',height:36,boxSizing:'border-box',letterSpacing:'-0.3px',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
+                            style={{fontSize:_indValFs,padding:'0 1px',height:31,boxSizing:'border-box',letterSpacing:'-0.3px',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
                             className={`w-full text-center border rounded bg-white outline-none disabled:opacity-40 placeholder-slate-400 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-emerald-300 focus:border-emerald-500'}`}/>
                         </td>
                       );
