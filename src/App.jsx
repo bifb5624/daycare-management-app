@@ -9303,9 +9303,19 @@ const getRowFromKana = (kana) => {
 const getPatientDisplayStatus = (p) => {
     if (!p) return '利用中';
     if (isPatientResigned(p)) return '退所済み';
-    // ★ 休止は「利用を再開」を押すまで（status を利用中に戻すまで）ずっと休止のまま。
-    //   終了日(toDate)は履歴上の記録であって、日付経過での自動復帰はしない（表示と実データの不整合を防ぐ）。
-    if (p.status === '休止' || p.status === '一時中止') return '休止';
+    if (p.status === '休止' || p.status === '一時中止') {
+        // ★ 現在有効な休止＝「開始日が最も新しい」エントリ（配列末尾ではなくfromDate最新で判定）。
+        //   その休止に終了日(toDate)が設定され、今日がそれを過ぎていれば自動で利用中へ。
+        //   終了日が無ければ、再開を押すまでずっと休止のまま（勝手に戻らない）。
+        const hist = p.pauseHistory || [];
+        const active = hist.length ? [...hist].sort((a,b)=> new Date(b.fromDate) - new Date(a.fromDate))[0] : null;
+        if (active && active.toDate) {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const to = new Date(active.toDate); to.setHours(0,0,0,0);
+            if (today > to) return '利用中';
+        }
+        return '休止';
+    }
     return '利用中';
 };
 
@@ -18160,7 +18170,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
             const isReadOnly = !isEditMode;
             const isAbsent = p.status === '欠席' || p.status === '休業';
-            const isPause = masterData.status === '休止';
+            const isPause = getPatientDisplayStatus(masterData) === '休止';
             const config = getStatusConfig(p.status);
             const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
             const tf = (timeFilter==='AM'||timeFilter==='PM') ? timeFilter : 'AM';
@@ -18281,7 +18291,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
               const isReadOnly = !isEditMode; 
               const isAbsent = p.status === '欠席' || p.status === '休業';
-              const isPause = masterData.status === '休止';
+              const isPause = getPatientDisplayStatus(masterData) === '休止';
               const nameParts = (p.name || "").split(/[\s　]+/);
               const config = getStatusConfig(p.status);
               // ★ 選択中セルの利用者を明示ハイライト (iPadのタッチで:hoverが残り前の人が光る問題対策)
@@ -25539,8 +25549,8 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
 
 // ★ 日付などの入力。 モジュールレベルで定義(コンポーネント内に置くと毎レンダリングで作り直され、
 //   入力中に再マウントされて日付ピッカーが開けない/クリックできない原因になる)
-function LabelInput({ label, disabled, value, onChange, type = "text", placeholder = "" }) {
-  return (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
+function LabelInput({ label, disabled, value, onChange, onBlur, onFocus, type = "text", placeholder = "" }) {
+  return (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} onBlur={onBlur} onFocus={onFocus} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 }
 function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
@@ -25700,6 +25710,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [schedModal, setSchedModal] = useState(null); // {dayIndex, newVal, oldVal, applyFrom}
   const [plannedExModal, setPlannedExModal] = useState(null); // {pat, next, fromY, fromM} 運動メニュー値変更の適用開始月
   const [autoDeleteModal, setAutoDeleteModal] = useState(null); // {endDate, years} 利用終了日設定時の自動削除選択
+  const endDateFocusRef = React.useRef(''); // 利用終了日: フォーカス時の値。確定(blur)時に変化があればモーダル表示
   const [keypad, setKeypad] = useState({ isOpen: false, field: null, exerciseId: null, value: "", isFirstInput: false, mode: 'exercise' });
   // ★ 重複利用者の統合 (記録は統合先へ引き継ぐ)
   const [mergeModal, setMergeModal] = useState(null); // {open:true}
@@ -26626,7 +26637,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
             {activeDetailTab === 'basic' && (<>
               {/* ① 状態・利用開始日・利用終了日 */}
-              <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onChange={e => { const v = e.target.value; updateLP('endDate', v); if (v) setAutoDeleteModal({ endDate: v, years: (localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0)) }); }} /></div>
+              <div className="grid grid-cols-3 gap-4"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : (<select value={localPatient.status || "利用中"} onChange={e => handleStatusChange(e.target.value)} disabled={isOff} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60"><option value="利用中">利用中</option><option value="休止">休止</option></select>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onFocus={() => { endDateFocusRef.current = localPatient.endDate || ''; }} onChange={e => updateLP('endDate', e.target.value)} onBlur={e => { const v = e.target.value; if (v && v !== endDateFocusRef.current) setAutoDeleteModal({ endDate: v, years: (localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0)) }); }} /></div>
 
               {/* ★ 休止情報・休止履歴 (現在休止中の表示＋理由の追加/変更・開始日/終了日の編集・削除をここで完結) */}
               {(localPatient.status === '休止' || (localPatient.pauseHistory||[]).length > 0) && (() => {
