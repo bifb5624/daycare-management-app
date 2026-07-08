@@ -18137,7 +18137,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       </div>
       )}
 
-      <style>{`#record-table tbody tr { min-height: 32px !important; } #record-table tbody tr td { min-height: 32px !important; padding-top: 2px !important; padding-bottom: 2px !important; box-sizing: border-box !important; } /* 個別運動列は行高さを拡大 (プルダウン+ラベル+入力) */ #record-table tbody tr td[data-ind-cell] { min-height: 70px !important; height: auto !important; max-height: none !important; overflow: visible !important; vertical-align: top !important; }  #record-table tr.readonly-row input:disabled, #record-table tr.readonly-row button:disabled, #record-table tr.readonly-row textarea:disabled, #record-table tr.readonly-row select:disabled { opacity: 1 !important; color: #000 !important; -webkit-text-fill-color: #000 !important; } /* 列見出しを縦スクロール時も常に上部固定 + 行高を狭く */ #record-table thead th { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important; padding-top: 4px !important; padding-bottom: 4px !important; line-height: 1.1 !important; font-size: 11px !important; }`}</style>
+      <style>{`#record-table tbody tr { min-height: 32px !important; } #record-table tbody tr td { min-height: 32px !important; padding-top: 2px !important; padding-bottom: 2px !important; box-sizing: border-box !important; } /* 個別運動列: 他の列と同じ行高に収める (min-height強制を外す) */ #record-table tbody tr td[data-ind-cell] { min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; vertical-align: middle !important; }  #record-table tr.readonly-row input:disabled, #record-table tr.readonly-row button:disabled, #record-table tr.readonly-row textarea:disabled, #record-table tr.readonly-row select:disabled { opacity: 1 !important; color: #000 !important; -webkit-text-fill-color: #000 !important; } /* 列見出しを縦スクロール時も常に上部固定 + 行高を狭く */ #record-table thead th { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important; padding-top: 4px !important; padding-bottom: 4px !important; line-height: 1.1 !important; font-size: 11px !important; }`}</style>
       {/* 画面上部の横スクロールバー: 下のテーブルスクロールと scrollLeft を同期 */}
       <div ref={topScrollRef} onScroll={_syncFromTop}
            className="bg-slate-100 border border-slate-300 rounded-t-xl"
@@ -18477,13 +18477,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       // ★ 値の表示フォント: ○ は大きく太く、数値は桁数で縮小
                       const _indIsCircle = cur.value==='○'||cur.value==='◯';
                       const _indValLen = String(cur.value||'').length;
-                      const _indValFs = _indIsCircle ? 22 : (_indValLen>9 ? 7 : _indValLen>7 ? 8 : _indValLen>5 ? 10 : _indValLen>3 ? 12 : 15);
+                      const _indValFs = _indIsCircle ? 21 : (_indValLen>=8 ? 7 : _indValLen>=6 ? 8 : _indValLen>=5 ? 9 : _indValLen>=4 ? 11 : _indValLen>=3 ? 12 : 15);
                       return (
-                        <td key={item.id} data-ind-cell className={`px-1 py-1 align-top border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
+                        <td key={item.id} data-ind-cell className={`px-1 py-0.5 align-middle border border-emerald-200 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-emerald-50/40'}`}>
                           <select value={effItemId} disabled={isAbsent || isReadOnly || isPause}
                             onChange={e=>updateExercise(p.id, item.id, {...cur, itemId: e.target.value})}
-                            className="w-full px-0.5 mb-1 font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
-                            style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center',fontSize:_indNameFs,height:24,boxSizing:'border-box',lineHeight:1}}>
+                            className="w-full px-0.5 mb-0.5 font-bold bg-white border border-emerald-300 rounded outline-none focus:border-emerald-500 disabled:opacity-50 appearance-none"
+                            style={{WebkitAppearance:'none',MozAppearance:'none',backgroundImage:'none',textAlignLast:'center',fontSize:_indNameFs,height:22,boxSizing:'border-box',lineHeight:1}}>
                             <option value="">—</option>
                             {enabledItems.map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
                           </select>
@@ -18493,7 +18493,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             onChange={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: e.target.value})}
                             onBlur={_keypadOn ? undefined : (e)=>updateExercise(p.id, item.id, {...cur, itemId: cur.itemId||effItemId, value: applyExUnits(e.target.value, selItem)})}
                             placeholder={selItem?`${patDefault||''}${(patDefault && selItem.defaultUnit)?`${exUnitLabel(selItem)}`:''}`:'未選択'}
-                            style={{fontSize:_indValFs,padding:'0 2px',height:42,boxSizing:'border-box',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
+                            style={{fontSize:_indValFs,padding:'0 1px',height:36,boxSizing:'border-box',letterSpacing:'-0.3px',fontWeight: _indIsCircle ? 900 : 'bold', WebkitTextStroke: _indIsCircle ? '1.1px currentColor' : undefined, lineHeight:1, cursor: selItem?'pointer':'default'}}
                             className={`w-full text-center border rounded bg-white outline-none disabled:opacity-40 placeholder-slate-400 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-emerald-300 focus:border-emerald-500'}`}/>
                         </td>
                       );
