@@ -10317,7 +10317,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
           </div>
         </Card>
         {/* 計画書 (アドオン) */}
-        {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'seikatsu_kinou') || hasAddon(appData,'kyomi_kanshin') || hasAddon(appData,'tsusho_keikaku')) && (
+        {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'seikatsu_kinou') || hasAddon(appData,'kyomi_kanshin') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
           <Card>
             <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>📝 計画書（アドオン）</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
@@ -10325,6 +10325,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
               {hasAddon(appData,'tsusho_keikaku') && <Tile icon={<FileText size={22}/>} label="通所介護計画書" color="#0891b2" view="tsusho_keikaku"/>}
               {hasAddon(appData,'seikatsu_kinou') && <Tile icon={<FileText size={22}/>} label="生活機能" color="#8b5cf6" view="seikatsu_kinou"/>}
               {hasAddon(appData,'kyomi_kanshin') && <Tile icon={<FileText size={22}/>} label="興味関心" color="#ec4899" view="kyomi_kanshin"/>}
+              {hasAnyLifeAddon(appData) && <Tile icon={<Activity size={22}/>} label="LIFE・加算" color="#0d9488" view="life_hub"/>}
             </div>
           </Card>
         )}
@@ -15763,6 +15764,8 @@ export default function App() {
   const kinouKeikakuSaveFnRef = React.useRef(null);
   const tsushoKeikakuDirtyRef = React.useRef(false);
   const tsushoKeikakuSaveFnRef = React.useRef(null);
+  const lifeHubDirtyRef = React.useRef(false);
+  const lifeHubSaveFnRef = React.useRef(null);
   const seikatsuKinouDirtyRef = React.useRef(false);
   const seikatsuKinouSaveFnRef = React.useRef(null);
   const kyomiKanshinDirtyRef = React.useRef(false);
@@ -16089,6 +16092,7 @@ export default function App() {
                    (currentView === 'general_fax' && generalFaxDirtyRef.current) ||
                    (currentView === 'kinou_keikaku' && kinouKeikakuDirtyRef.current) ||
                    (currentView === 'tsusho_keikaku' && tsushoKeikakuDirtyRef.current) ||
+                   (currentView === 'life_hub' && lifeHubDirtyRef.current) ||
                    (currentView === 'seikatsu_kinou' && seikatsuKinouDirtyRef.current) ||
                    (currentView === 'kyomi_kanshin' && kyomiKanshinDirtyRef.current);
     if (isDirty && view !== currentView) {
@@ -16853,6 +16857,9 @@ export default function App() {
               {hasAddon(appData,'tsusho_keikaku') && (
                 <SidebarItem icon={<FileText size={18} />} label="通所介護計画書" active={currentView === 'tsusho_keikaku'} onClick={() => navigateTo('tsusho_keikaku')} />
               )}
+              {hasAnyLifeAddon(appData) && (
+                <SidebarItem icon={<Activity size={18} />} label="LIFE・加算" active={currentView === 'life_hub'} onClick={() => navigateTo('life_hub')} />
+              )}
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
                 <SidebarItem icon={<BarChart3 size={18} />} label="分析（個人）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
@@ -16887,6 +16894,7 @@ export default function App() {
                  currentView === 'schedule' ? 'スケジュール' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
                  currentView === 'tsusho_keikaku' ? '通所介護計画書' :
+                 currentView === 'life_hub' ? 'LIFE・加算' :
                  currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
                  currentView === 'kyomi_kanshin' ? '興味・関心チェックシート' :
                  currentView === 'master' ? '利用者マスタ管理' :
@@ -16949,6 +16957,7 @@ export default function App() {
              currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
+             currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
              currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
              currentView === 'dash_operation' ? <OperationDashboardView appData={appData} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} setAppData={setAppData} /> :
@@ -32919,6 +32928,165 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         </div>`;
         return <div id="tk-print-area" style={{display:'none'}} dangerouslySetInnerHTML={{__html:html}}/>;
       })()}
+    </div>
+  );
+}
+
+// === LIFE・加算 共通ハブ (Phase1: ADL評価=Barthel Index。3加算が共有する土台) ===
+// Barthel Index: 10項目・各固定配点・合計0〜100点。科学的介護推進体制加算/ADL維持等加算/個別機能訓練加算Ⅱ で共通利用。
+const BARTHEL_ITEMS = [
+  { key:'eat',      label:'食事',                 opts:[[10,'自立'],[5,'一部介助'],[0,'全介助']] },
+  { key:'transfer', label:'移乗（ベッド⇔車椅子）', opts:[[15,'自立'],[10,'軽介助・監視'],[5,'座位可・多介助'],[0,'全介助']] },
+  { key:'groom',    label:'整容',                 opts:[[5,'自立'],[0,'介助']] },
+  { key:'toilet',   label:'トイレ動作',           opts:[[10,'自立'],[5,'一部介助'],[0,'全介助']] },
+  { key:'bath',     label:'入浴',                 opts:[[5,'自立'],[0,'介助']] },
+  { key:'walk',     label:'歩行（平地45m）',       opts:[[15,'自立'],[10,'介助歩行'],[5,'車椅子操作可'],[0,'全介助']] },
+  { key:'stairs',   label:'階段昇降',             opts:[[10,'自立'],[5,'介助・監視'],[0,'不能']] },
+  { key:'dress',    label:'更衣',                 opts:[[10,'自立'],[5,'一部介助'],[0,'全介助']] },
+  { key:'stool',    label:'排便コントロール',      opts:[[10,'失禁なし'],[5,'時に失禁'],[0,'失禁あり']] },
+  { key:'urine',    label:'排尿コントロール',      opts:[[10,'失禁なし'],[5,'時に失禁'],[0,'失禁あり']] },
+];
+const barthelTotal = (items) => BARTHEL_ITEMS.reduce((s,it)=>s+(Number(items?.[it.key])||0), 0);
+function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef }) {
+  const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
+  const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
+  const [pid, setPid] = React.useState((targetPatientId!=null && (appData.patients||[]).some(p=>p.id===targetPatientId)) ? targetPatientId : (patients[0]?.id ?? null));
+  const patient = (appData.patients||[]).find(p => p.id === pid);
+  const addons = appData.systemSettings?.addons || {};
+  const _age = (bd)=>{ if(!bd) return ''; const d=new Date(bd),n=new Date(); let a=n.getFullYear()-d.getFullYear(); if(n.getMonth()<d.getMonth()||(n.getMonth()===d.getMonth()&&n.getDate()<d.getDate()))a--; return a; };
+  const today = new Date().toISOString().slice(0,10);
+  const adlRecords = (appData.adlRecords||[]).filter(r => r.patientId===pid).sort((a,b)=>(b.evalDate||'').localeCompare(a.evalDate||''));
+  const [editing, setEditing] = React.useState(null);
+  const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
+  const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
+  const save = () => {
+    if (!editing) return;
+    const rec = { ...editing, total: barthelTotal(editing.items), _savedAt: Date.now() };
+    const list = [...(appData.adlRecords||[])];
+    const i = list.findIndex(r=>r.id===rec.id);
+    if (i>=0) list[i]=rec; else list.push(rec);
+    onSave({ ...appData, adlRecords:list }, { manual:true, message:'✓ ADL評価（Barthel）を保存しました' });
+    if (dirtyRef) dirtyRef.current=false;
+    setEditing(null);
+  };
+  React.useEffect(()=>{ if(saveFnRef) saveFnRef.current = ()=>{ if(editing) save(); }; });
+  const delRec = (id)=>{ if(!window.confirm('このADL評価を削除しますか？')) return; onSave({ ...appData, adlRecords:(appData.adlRecords||[]).filter(r=>r.id!==id) }, { manual:true, message:'削除しました' }); if(editing?.id===id) setEditing(null); };
+  const enabledKasan = [
+    ['kasan_kinou2','🏃 個別機能訓練加算Ⅱ','個別機能訓練計画（3-3/3-1/3-2）＋ADLをLIFEへ。'],
+    ['kasan_kagaku','🔬 科学的介護推進体制加算','ADL・IADL・口腔・栄養・認知症・既往等の総論を6ヶ月ごとにLIFEへ。'],
+    ['kasan_adl','📈 ADL維持等加算','評価開始月と6ヶ月後のBarthelからADL利得を算定しLIFEへ。'],
+  ].filter(([k])=>addons[k]);
+  const curTotal = editing ? barthelTotal(editing.items) : (adlRecords[0]?.total ?? null);
+  const prevTotal = editing ? (adlRecords[0]?.total ?? null) : (adlRecords[1]?.total ?? null);
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
+          {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        <div className="flex-1"/>
+        {!editing && <button onClick={()=>setEditing(blank())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ ADL評価を新規作成</button>}
+        {editing && <>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={save} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">💾 保存</button>
+        </>}
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+        {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : (
+        <div className="max-w-4xl mx-auto space-y-4">
+          {/* この店で有効な加算 */}
+          <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4">
+            <div className="text-sm font-bold text-indigo-700 mb-2">この事業所で算定中の加算（本部の店舗設定でON/OFF）</div>
+            {enabledKasan.length===0 ? (
+              <div className="text-xs text-indigo-900 opacity-70">現在ONの加算がありません。本部の「店舗設定 → アドオン」で、個別機能訓練加算Ⅱ／科学的介護推進体制加算／ADL維持等加算 を有効にしてください。</div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-2">
+                {enabledKasan.map(([k,label,desc])=>(
+                  <div key={k} className="bg-white rounded-lg border border-indigo-200 p-3">
+                    <div className="text-xs font-bold text-slate-700">{label}</div>
+                    <div className="text-[11px] text-slate-500 mt-1 leading-snug">{desc}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="text-[11px] text-indigo-900 opacity-70 mt-2">※ 下の <b>共通データ（ADL＝Barthel Index）</b> は、上記どの加算にも自動で反映されます。各加算の固有項目は順次追加します。</div>
+          </div>
+
+          {/* 共通データ: 基本情報 */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="text-sm font-bold text-blue-700 mb-1">共通データ ①利用者基本情報（自動）</div>
+            <div className="text-sm text-slate-700">{patient?.name} 様　／　{patient?.gender||'—'}　／　{_age(patient?.birthDate)!==''?`${_age(patient?.birthDate)}歳`:'—'}　／　{patient?.careLevel||'要介護度未設定'}</div>
+          </div>
+
+          {/* 共通データ: ADL(Barthel) */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <div className="text-sm font-bold text-blue-700">共通データ ②ADL評価（Barthel Index・0〜100点）</div>
+              {curTotal!=null && <div className="text-sm font-bold text-slate-700">合計 <span className="text-xl text-emerald-600">{curTotal}</span> / 100点{prevTotal!=null && <span className={`ml-2 text-xs ${curTotal-prevTotal>0?'text-emerald-600':curTotal-prevTotal<0?'text-red-500':'text-slate-400'}`}>前回比 {curTotal-prevTotal>0?'+':''}{curTotal-prevTotal}</span>}</div>}
+            </div>
+            {editing ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">評価日</label><input type="date" value={editing.evalDate} onChange={e=>{setEditing(x=>({...x,evalDate:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">評価者</label><input value={editing.evaluator} onChange={e=>{setEditing(x=>({...x,evaluator:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                </div>
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
+                  {BARTHEL_ITEMS.map(it=>(
+                    <div key={it.key} className="flex items-center gap-3 px-3 py-2 flex-wrap">
+                      <div className="w-40 text-sm font-bold text-slate-700 shrink-0">{it.label}</div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {it.opts.map(([sc,lb])=>{ const on=Number(editing.items?.[it.key])===sc; return (
+                          <button key={sc} onClick={()=>setItem(it.key,sc)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>{sc}点 {lb}</button>
+                        ); })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">備考</label><textarea value={editing.note} onChange={e=>{setEditing(x=>({...x,note:e.target.value}));markDirty();}} rows={2} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-none"/></div>
+              </div>
+            ) : adlRecords.length===0 ? (
+              <div className="text-sm text-slate-400 py-6 text-center">まだADL評価がありません。「＋ ADL評価を新規作成」から入力してください。</div>
+            ) : (
+              <div className="space-y-3">
+                {adlRecords.length>=2 && (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead><tr className="bg-slate-50 text-slate-500"><th className="border border-slate-200 px-2 py-1 text-left w-28">評価日</th><th className="border border-slate-200 px-2 py-1 w-20">合計</th>{BARTHEL_ITEMS.map(it=><th key={it.key} className="border border-slate-200 px-1 py-1">{it.label.slice(0,2)}</th>)}</tr></thead>
+                      <tbody>
+                        {adlRecords.slice(0,4).map((r,i)=>(
+                          <tr key={r.id} className={i===0?'bg-emerald-50':''}>
+                            <td className="border border-slate-200 px-2 py-1 font-bold text-slate-700">{r.evalDate}{i===0&&<span className="ml-1 text-[9px] text-emerald-600">最新</span>}</td>
+                            <td className="border border-slate-200 px-2 py-1 text-center font-bold">{r.total}</td>
+                            {BARTHEL_ITEMS.map(it=><td key={it.key} className="border border-slate-200 px-1 py-1 text-center text-slate-500">{r.items?.[it.key]??'—'}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {adlRecords.map(r=>(
+                  <div key={r.id} className="bg-slate-50 rounded-lg border border-slate-200 p-3 flex items-center justify-between gap-3">
+                    <div><div className="font-bold text-slate-800 text-sm">{r.evalDate}　合計 {r.total}/100{r.evaluator?`　評価者: ${r.evaluator}`:''}</div>{r.note&&<div className="text-xs text-slate-500 mt-0.5 truncate" style={{maxWidth:420}}>{r.note}</div>}</div>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={()=>setEditing(r)} className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg text-xs font-bold">編集</button>
+                      <button onClick={()=>delRec(r.id)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold">削除</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {!editing && (
+            <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-xs text-amber-800 leading-relaxed">
+              <b>次の開発予定：</b> 各加算の固有項目フォーム（科学的介護推進体制＝口腔/栄養/認知症/既往 等、ADL維持等＝利得算定、個別機能訓練Ⅱ＝計画連携）と、<b>LIFE連携CSVの書き出し</b>。CSVは公式のLIFE連携仕様に合わせて実装します（要・最新仕様確認）。
+            </div>
+          )}
+        </div>
+        )}
+      </div>
     </div>
   );
 }
