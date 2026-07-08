@@ -33628,9 +33628,12 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const exerciseChangeText = (_added.length||_removed.length)
       ? `${_added.length?'今月から追加/再開: '+_added.join('、'):''}${_added.length&&_removed.length?' / ':''}${_removed.length?'今月は実施なし: '+_removed.join('、'):''}`
       : '前月から運動メニューに大きな変更なし';
-    // ★ 個別機能訓練計画書(あれば)の目標 → ②目標の達成・進捗の評価に使う
+    // ★ 通所介護計画書 / 個別機能訓練計画書(あれば)の目標 → ②目標の達成・進捗の評価に使う
+    const _tk = (appData.tsushoKeikakuRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>String(b.createdAt||b.createdDate||'').localeCompare(String(a.createdAt||a.createdDate||'')));
     const _kk = (appData.kinouKeikakuRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>String(b.createdAt||b.createdDate||'').localeCompare(String(a.createdAt||a.createdDate||'')));
-    const _goalText = _kk.length ? [_kk[0].shortKinou&&`短期(機能): ${_kk[0].shortKinou}`, _kk[0].shortKatsudo&&`短期(活動): ${_kk[0].shortKatsudo}`, _kk[0].longKinou&&`長期(機能): ${_kk[0].longKinou}`].filter(Boolean).join(' / ') : '';
+    const _tkGoal = _tk.length ? [_tk[0].shortGoal&&`【通所介護計画】短期: ${_tk[0].shortGoal}`, _tk[0].longGoal&&`【通所介護計画】長期: ${_tk[0].longGoal}`].filter(Boolean).join(' / ') : '';
+    const _kkGoal = _kk.length ? [_kk[0].shortKinou&&`短期(機能): ${_kk[0].shortKinou}`, _kk[0].shortKatsudo&&`短期(活動): ${_kk[0].shortKatsudo}`, _kk[0].longKinou&&`長期(機能): ${_kk[0].longKinou}`].filter(Boolean).join(' / ') : '';
+    const _goalText = [_tkGoal, _kkGoal].filter(Boolean).join('\n');
     // ★ 欠席・休みの状況(回数・理由) → 休みが多い場合の④⑤判断に使う
     const _absRecs = (appData.ticketRecords||[]).filter(r => { const _m=r.date?.match(/(\d+)月/); return r.patientId===patient.id && _m && parseInt(_m[1])===tM && (r.status==='欠席'||r.status==='休止'||r.status==='休業'); });
     const _absCount = _absRecs.length;
@@ -33661,7 +33664,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 通所時の気分: ${d.avgMoodLabel||'不明'}
 体力測定(任意・行わない事業所もあり): ${fitnessText}
 特記事項: ${d.tokki||'なし'}
-${_goalText ? `個別機能訓練計画の目標: ${_goalText}\n（②目標の達成・進捗は、この目標に対する取り組み状況・達成度を書いてください）` : '個別機能訓練計画の目標: 未設定（一般的な生活機能の維持・向上の観点で評価してください）'}
+${_goalText ? `計画の目標（通所介護計画・個別機能訓練計画）:\n${_goalText}\n（②目標の達成・進捗は、これらの目標に対する取り組み状況・達成度を書いてください）` : '計画の目標: 未設定（一般的な生活機能の維持・向上の観点で評価してください）'}
 
 各項目で、必ず下記の選択肢から最も適切なものを1つ"sel"に選び、"text"に2〜3文の所見を上記の文体・観点で書いてください。当月に通所が無い場合は①を必ず「実施できなかった」にしてください。
 ${optionsDesc}
@@ -33696,6 +33699,12 @@ ${optionsDesc}
     existing.push({ id:`${patient.id}_${tY}-${String(tM).padStart(2,'0')}_${Date.now()}`, patientId:patient.id, period:monthLabelStr, createdDate:new Date().toLocaleDateString('ja-JP'), createdAt:Date.now(), summary:sm, sheet });
     onSave({...appData, monitoringRecords: existing});
     setResults(prev=>({...prev,[patient.id]:{text:sm, confirmed:true, loading:false, error:null, editing:false}}));
+  };
+  // ★ 計画書連携: この利用者の最新の通所介護計画書の目標をモニタリング表に表示（②目標の評価対象を明示）
+  const latestPlanGoals = (pid) => {
+    const r = (appData.tsushoKeikakuRecords||[]).filter(x=>x.patientId===pid).sort((a,b)=>(b.createdDate||'').localeCompare(a.createdDate||''))[0];
+    if (!r || (!r.longGoal && !r.shortGoal)) return null;
+    return { long:r.longGoal||'', longP:r.longPeriod||'', short:r.shortGoal||'', shortP:r.shortPeriod||'', created:r.createdDate||'' };
   };
   const buildSheetHtml = (patient, sheet, forFax, pageBreak) => {
     const f = appData.systemSettings?.facilityInfo || {};
@@ -33734,6 +33743,11 @@ ${optionsDesc}
           <td ${infoLab}>モニタリング実施者</td><td ${infoVal} colspan="3">${escSheet(sheet.recorder)||''}</td>
         </tr>
       </table>
+      ${(() => { const g = latestPlanGoals(patient.id); if(!g) return ''; return `<div style="font-size:12px;font-weight:bold;margin:8px 0 4px;">【通所介護計画の目標】<span style="font-weight:normal;font-size:9.5px;color:#555;">（計画作成日 ${escSheet(g.created)}／②はこの目標に対する達成・進捗を評価）</span></div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;table-layout:fixed;">
+        <tr><td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;width:80px;">長期目標</td><td style="${bd}padding:5px 9px;font-size:11px;line-height:1.6;">${escSheet(g.long)||'&nbsp;'}${g.longP?`<span style="color:#555;font-size:9.5px;">（期間 ${escSheet(g.longP)}）</span>`:''}</td></tr>
+        <tr><td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;">短期目標</td><td style="${bd}padding:5px 9px;font-size:11px;line-height:1.6;">${escSheet(g.short)||'&nbsp;'}${g.shortP?`<span style="color:#555;font-size:9.5px;">（期間 ${escSheet(g.shortP)}）</span>`:''}</td></tr>
+      </table>`; })()}
       <div style="font-size:12px;font-weight:bold;margin:8px 0 4px;">【モニタリング結果】</div>
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
         <tr>
