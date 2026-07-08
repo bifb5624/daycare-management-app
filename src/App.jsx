@@ -10334,7 +10334,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
         {/* 計画書 (アドオン) */}
         {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'seikatsu_kinou') || hasAddon(appData,'kyomi_kanshin') || hasAddon(appData,'tsusho_keikaku')) && (
           <Card>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>📝 計画書（アドオン）</div>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>計画書（アドオン）</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
               {hasAddon(appData,'kinou_keikaku') && <Tile icon={<FileText size={22}/>} label="個別機能訓練計画書" color="#6366f1" view="kinou_keikaku"/>}
               {hasAddon(appData,'tsusho_keikaku') && <Tile icon={<FileText size={22}/>} label="通所介護計画書" color="#0891b2" view="tsusho_keikaku"/>}
@@ -11166,7 +11166,7 @@ function FamilyAdminView({ appData, onSave }) {
             <div>
               <div className="text-[11px] font-bold text-slate-500 mb-1.5">送付先（このお知らせを見られる人）</div>
               <div className="flex gap-2 flex-wrap items-center">
-                {[['family','👪 ご家族'],['caremanager','📋 ケアマネ'],['related','🤝 その他関係者']].map(([k,label])=>{
+                {[['family','ご家族'],['caremanager','ケアマネ'],['related','その他関係者']].map(([k,label])=>{
                   const on = (postForm.audience||[]).includes(k);
                   return (
                     <button key={k} type="button" onClick={()=>setPostForm(f=>{ const cur=f.audience||[]; return {...f, audience: cur.includes(k) ? cur.filter(x=>x!==k) : [...cur,k]}; })}
@@ -11185,7 +11185,7 @@ function FamilyAdminView({ appData, onSave }) {
                 {(postForm.audience||[]).includes('family') && (
                   <div className="border-2 border-blue-100 rounded-xl p-2 bg-blue-50/40">
                     <div className="flex items-center justify-between mb-1.5 px-1">
-                      <span className="text-[11px] font-bold text-blue-700">👪 ご家族に送る利用者を選択（{matchedByFilter.filter(p=>postForm.patientIds.includes(p.id)).length}名）</span>
+                      <span className="text-[11px] font-bold text-blue-700">ご家族に送る利用者を選択（{matchedByFilter.filter(p=>postForm.patientIds.includes(p.id)).length}名）</span>
                       <div className="flex gap-1">
                         <button onClick={()=>checkAllFiltered(postForm, setPostForm)} className="px-2 py-0.5 text-[10px] font-bold bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded">該当を全選択</button>
                         <button onClick={()=>uncheckAll(postForm, setPostForm)} className="px-2 py-0.5 text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-500 rounded">クリア</button>
@@ -14214,7 +14214,7 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
         {resetStep > 0 ? (
           /* ===== パスワード忘れ → メール自己リセット ===== */
           <>
-            <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>📧 管理者パスワードの再設定</div>
+            <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>管理者パスワードの再設定</div>
             {resetStep === 1 ? (
               <>
                 <div style={{fontSize:12,color:'#64748b',marginBottom:14}}>登録済みの再設定用メールアドレスを入力してください。確認コードをメールでお送りします。</div>
@@ -14241,7 +14241,7 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
           </>
         ) : (
         <>
-        <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>🔑 {mode==='set'?'管理者パスワードを設定':'管理者パスワードを入力'}</div>
+        <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>{mode==='set'?'管理者パスワードを設定':'管理者パスワードを入力'}</div>
         <div style={{fontSize:12,color:'#64748b',marginBottom:16}}>{adminName} 様（管理者）{mode==='set'?'の初回設定です。以降、管理者として入る時に必要になります。':'として入るにはパスワードが必要です。'}</div>
         <input type="password" value={pw} onChange={e=>setPw(e.target.value)} placeholder={mode==='set'?'新しいパスワード(4文字以上)':'パスワード'} autoFocus
           onKeyDown={e=>{ if(e.key==='Enter' && mode==='verify') submit(); }}
@@ -14791,11 +14791,11 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                       </div>
                     </div>
                     <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                      <button onClick={()=>setShowLoginFor(prev => ({...prev, [s.id]: !prev[s.id]}))} style={{padding:'8px 12px',background:showing?'#94c456':'white',color:showing?'white':'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🔑 {showing?'隠す':'ログイン情報'}</button>
-                      <button onClick={()=>setAddonModal({storeId:s.id, storeName:s.name})} style={{padding:'8px 12px',background:'white',color:'#0e7490',border:'1px solid #67e8f9',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>🧩 アドオン</button>
-                      <button disabled={addonBusy===s.id} onClick={()=>resetStoreAdminPw(s.id, s.name)} style={{padding:'8px 12px',background:'white',color:'#b45309',border:'1px solid #fcd34d',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer',opacity:addonBusy===s.id?0.5:1}}>🔑 管理者PWリセット</button>
+                      <button onClick={()=>setShowLoginFor(prev => ({...prev, [s.id]: !prev[s.id]}))} style={{padding:'8px 12px',background:showing?'#94c456':'white',color:showing?'white':'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>{showing?'隠す':'ログイン情報'}</button>
+                      <button onClick={()=>setAddonModal({storeId:s.id, storeName:s.name})} style={{padding:'8px 12px',background:'white',color:'#0e7490',border:'1px solid #67e8f9',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>アドオン</button>
+                      <button disabled={addonBusy===s.id} onClick={()=>resetStoreAdminPw(s.id, s.name)} style={{padding:'8px 12px',background:'white',color:'#b45309',border:'1px solid #fcd34d',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer',opacity:addonBusy===s.id?0.5:1}}>管理者PWリセット</button>
                       <button onClick={()=>onSelectStore(s)} style={{padding:'8px 14px',background:'white',color:'#3d5021',border:'1px solid #94c456',borderRadius:8,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>この店舗を開く →</button>
-                      <button onClick={()=>setEditStore({ id:s.id, name:s.name||'', short_name:s.short_name||'', org_name:s.org_name||'', zip_code:s.zip_code||'', address:s.address||'', phone:s.phone||'', fax:s.fax||'', loading:false, error:'' })} style={{padding:'8px 12px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>✏️ 編集</button>
+                      <button onClick={()=>setEditStore({ id:s.id, name:s.name||'', short_name:s.short_name||'', org_name:s.org_name||'', zip_code:s.zip_code||'', address:s.address||'', phone:s.phone||'', fax:s.fax||'', loading:false, error:'' })} style={{padding:'8px 12px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>編集</button>
                       <button onClick={async ()=>{
                         if (!window.confirm(`「${s.name}」を完全に削除します。\n\n・全てのデータ (利用者・記録・お知らせ・メンバー)\n・店舗管理者アカウント\n・家族アカウント / 招待\n\nこの操作は元に戻せません。本当に実行しますか?`)) return;
                         if (!window.confirm(`もう一度確認: 「${s.name}」を本当に削除しますか?`)) return;
@@ -14811,7 +14811,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                   </div>
                   {showing && (
                     <div style={{marginTop:10,padding:'10px 12px',background:'white',border:'1px solid #94c456',borderRadius:10}}>
-                      <div style={{fontSize:11,fontWeight:'bold',color:'#3d5021',marginBottom:6}}>🔑 この店舗のログイン情報</div>
+                      <div style={{fontSize:11,fontWeight:'bold',color:'#3d5021',marginBottom:6}}>この店舗のログイン情報</div>
                       {staffList.length === 0 ? (
                         <div style={{fontSize:11,color:'#dc2626'}}>⚠ ログイン情報が登録されていません。「+ 店舗を追加」または「+ 店舗管理者を追加」から発行してください。</div>
                       ) : (
@@ -14846,7 +14846,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         </div>
         {/* 店舗ログイン情報の説明 (店舗作成時に同時発行されるため、ここはガイダンスのみ) */}
         <div style={{background:'white',borderRadius:16,padding:24,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
-          <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>🔑 店舗ログイン情報について</div>
+          <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>店舗ログイン情報について</div>
           <div style={{fontSize:11,color:'#64748b',lineHeight:1.8}}>
             ・店舗のログイン ID とパスワードは、<b>店舗を作成する時に同時に発行</b>されます。<br/>
             ・店舗管理者の追加は不要です (店舗側でログイン後、最初のメンバーを「管理者」として追加する流れ)。<br/>
