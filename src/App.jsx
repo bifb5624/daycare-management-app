@@ -18628,11 +18628,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       );
                     })()}
                   </td>
-                  <td className={`px-1 py-2 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-slate-50'}`} style={{overflow:'visible',position:'relative',zIndex:50}}>
+                  <td className={`px-1 py-2 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-slate-50'}`} style={{overflow:'visible',position:'relative',zIndex:200}}>
                      {(()=>{ const _targets=appData.systemSettings?.fitnessTargets; const _cl=masterData.careLevel||'';
                        // ★ 未定義のときだけ全表示。配列 (空 or 値あり) は明示設定としてフィルタ
                        const _show = !_targets ? true : (_targets.length > 0 && _targets.includes(_cl));
-                       return (<div style={{display:'flex',flexDirection:'row',gap:2,alignItems:'center',justifyContent:'center',overflow:'visible',position:'relative',zIndex:100}}>
+                       return (<div style={{display:'flex',flexDirection:'row',gap:2,alignItems:'center',justifyContent:'center',overflow:'visible',position:'relative',zIndex:200,background:(isAbsent||isPause)?undefined:'inherit'}}>
                          <button onClick={()=>{navigateTo('master',p.patientId||p.id);}} title="利用者マスタ" onPointerEnter={(e)=>showTip&&showTip("利用者マスタ",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><Users size={13}/></button>
                          <button onClick={()=>navigateTo('ticket',p.patientId||p.id)} title="サービス提供記録" onPointerEnter={(e)=>showTip&&showTip("サービス提供記録",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><FileText size={13}/></button>
                          <button onClick={()=>navigateTo('dash_personal',p.patientId||p.id)} title="分析" onPointerEnter={(e)=>showTip&&showTip("分析",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><BarChart3 size={13}/></button>
