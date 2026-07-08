@@ -987,8 +987,13 @@ const ADDONS = [
   { key: 'kinou_keikaku', label: '個別機能訓練計画書', icon: '📝', desc: '個別機能訓練加算の計画書を作成・印刷（運動・バイタル・体力測定から自動補完）' },
   { key: 'tsusho_keikaku', label: '通所介護計画書', icon: '📄', desc: '通所介護計画書の作成・印刷（個別機能訓練計画書・興味関心から自動取込）' },
   { key: 'assessment', label: 'アセスメント・居宅訪問', icon: '🏠', desc: 'アセスメント記録・居宅訪問記録の作成・保管', soon: true },
-  { key: 'life', label: 'LIFE連携（科学的介護）', icon: '🔬', desc: 'LIFE（科学的介護情報システム）提出用データの出力', soon: true },
+  // === LIFE（科学的介護）関連加算：加算ごとに独立アドオン（まとめて算定・個別算定のどちらにも対応）===
+  { key: 'kasan_kinou2', label: '個別機能訓練加算Ⅱ（LIFE）', icon: '🏃', desc: '個別機能訓練計画（3-3/3-1/3-2）のLIFE標準項目・提出用データ', life: true },
+  { key: 'kasan_kagaku', label: '科学的介護推進体制加算（LIFE）', icon: '🔬', desc: 'ADL・栄養・口腔・認知症・既往等の総論項目をLIFE提出用に記録', life: true },
+  { key: 'kasan_adl', label: 'ADL維持等加算（LIFE）', icon: '📈', desc: 'Barthel Index（ADL）の評価開始/終了と ADL利得の算定・提出', life: true },
 ];
+// 上記3加算が共有する土台＝ADL評価（Barthel Index）。いずれかのアドオンがONなら利用可能。
+const hasAnyLifeAddon = (appData) => ['kasan_kinou2','kasan_kagaku','kasan_adl'].some(k => !!(appData?.systemSettings?.addons?.[k]));
 const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
 
