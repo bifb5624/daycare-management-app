@@ -37133,7 +37133,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           patient={patient}
           appData={appData}
           initial={faceSheet}
-          onSave={(fsData, removedAtts)=>{
+          canEditContacts={true}
+          onSave={(fsData, removedAtts, contactPatch)=>{
             // ★ 削除された添付は personalFile.trash へ (7日間復元可)
             const now = new Date().toISOString();
             const trashAdds = (removedAtts||[]).map(a => ({ ...a, _deletedAt: now, _kind: 'fs', _field: a._field }));
@@ -37145,8 +37146,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
-            // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)
-            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']) }, undefined, {
+            // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)も同時に患者へ書き戻す(双方向連携)
+            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}) }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
@@ -37510,7 +37511,7 @@ function MonthlyServicePdfPreview({ patient, snapshot, onClose }) {
 // ===========================================
 // フェイスシート 入力フォーム
 // ===========================================
-function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
+function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditContacts }) {
   const today = new Date().toISOString().slice(0,10);
   const staffList = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
   const [fs, setFs] = useState({
@@ -37561,7 +37562,20 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
   const update = (key, val) => setFs(prev => ({ ...prev, [key]: val }));
   // ★ フォーム保存時にまとめて「ゴミ箱」へ移す削除予定の添付 (キャンセル時は移動しない)
   const [removedAtts, setRemovedAtts] = useState([]);
-  const handleSubmit = () => { onSave(fs, removedAtts); };
+  // ★ 連絡先(代表家族＋追加緊急連絡先)をフェイスシートからも編集可能に。保存時に patient へ書き戻す(双方向・同名upsert)。
+  const [contacts, setContacts] = useState(() => getAllContacts(patient).map(c => ({ name:c.name||'', relation:c.relation||'', phone:c.phone||'', phoneMobile:c.phoneMobile||'', email:c.email||'' })));
+  const setContact = (i, patch) => setContacts(prev => prev.map((c,idx)=> idx===i ? {...c, ...patch} : c));
+  const buildContactPatch = () => {
+    const clean = contacts.map(c=>({ name:(c.name||'').trim(), relation:(c.relation||'').trim(), phone:(c.phone||'').trim(), phoneMobile:(c.phoneMobile||'').trim(), email:(c.email||'').trim() })).filter(c=>c.name||c.phone||c.phoneMobile);
+    const [first, ...rest] = clean;
+    const patch = {};
+    if (first) { const parts=first.name.split(/[\s　]+/).filter(Boolean); patch.familyName=first.name; patch.familyLastName=parts[0]||first.name; patch.familyFirstName=parts.slice(1).join(' ')||''; patch.familyRelation=first.relation; patch.familyPhone=first.phone; patch.familyPhoneMobile=first.phoneMobile; patch.familyEmail=first.email; }
+    let ec = [...(patient.emergencyContacts||[])];
+    rest.forEach(c => { ec = upsertContactByName(ec, c); });
+    patch.emergencyContacts = ec;
+    return patch;
+  };
+  const handleSubmit = () => { onSave(fs, removedAtts, canEditContacts ? buildContactPatch() : null); };
   // ★ 添付ファイルの追加 (画像/PDF を base64 で保持)
   const addAttach = async (key, e) => {
     const files = rejectVideos(e.target.files);
@@ -37730,15 +37744,41 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose }) {
                 placeholder="家族関係の説明 (図は下から画像/PDFを添付できます)" className={textareaCls}/>
               {renderAttach('genogramFiles')}
             </Field>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
-              <div className="text-[11px] text-blue-700 mb-2 font-bold">緊急連絡先・ご家族（基本情報／家族アプリ登録と自動連携）</div>
-              <div className="text-[12px]">
-                {getAllContacts(patient).length === 0 && <div className="italic text-slate-500">未登録</div>}
-                {getAllContacts(patient).slice(0,6).map((c,i) => (
-                  <div key={i} className="mb-1">{i+1}. {c.name} {c.relation?`(${c.relation})`:''} / {c.phone || c.phoneMobile || '-'}{c._primary?' 〔代表〕':''}</div>
-                ))}
+            {canEditContacts ? (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[11px] text-blue-700 font-bold">緊急連絡先・ご家族（基本情報／家族アプリ登録と双方向連携）</div>
+                  <button type="button" onClick={()=>setContacts(prev=>[...prev,{name:'',relation:'',phone:'',phoneMobile:'',email:''}])} className="text-[11px] font-bold text-blue-600 bg-white border border-blue-300 px-2 py-0.5 rounded hover:bg-blue-100">＋ 追加</button>
+                </div>
+                {contacts.length===0 && <div className="text-[11px] text-slate-400 mb-1">未登録</div>}
+                <div className="space-y-2">
+                  {contacts.map((c,i)=>(
+                    <div key={i} className="bg-white border border-blue-100 rounded p-2">
+                      <div className="text-[10px] font-bold text-slate-400 mb-1">{i===0?'代表（1件目）':`${i+1}件目`}</div>
+                      <div className="grid grid-cols-2 gap-2 mb-1">
+                        <input value={c.name} onChange={e=>setContact(i,{name:e.target.value})} placeholder="氏名" className="px-2 py-1 border border-slate-300 rounded text-[13px] outline-none"/>
+                        <input value={c.relation} onChange={e=>setContact(i,{relation:e.target.value})} placeholder="続柄(例:長女)" className="px-2 py-1 border border-slate-300 rounded text-[13px] outline-none"/>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="tel" inputMode="numeric" value={formatJpPhone(c.phone||'')} onChange={e=>setContact(i,{phone:toHankaku(e.target.value).replace(/[^0-9]/g,'')})} placeholder="電話(固定)" className="px-2 py-1 border border-slate-300 rounded text-[13px] outline-none"/>
+                        <input type="tel" inputMode="numeric" value={formatJpPhone(c.phoneMobile||'')} onChange={e=>setContact(i,{phoneMobile:toHankaku(e.target.value).replace(/[^0-9]/g,'')})} placeholder="電話(携帯)" className="px-2 py-1 border border-slate-300 rounded text-[13px] outline-none"/>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1.5">※ ここで入れた内容は基本情報の緊急連絡先にも反映されます（同名は最新で上書き）。削除は基本情報タブで行えます。</div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
+                <div className="text-[11px] text-blue-700 mb-2 font-bold">緊急連絡先・ご家族（基本情報／家族アプリ登録と自動連携）</div>
+                <div className="text-[12px]">
+                  {getAllContacts(patient).length === 0 && <div className="italic text-slate-500">未登録</div>}
+                  {getAllContacts(patient).slice(0,6).map((c,i) => (
+                    <div key={i} className="mb-1">{i+1}. {c.name} {c.relation?`(${c.relation})`:''} / {c.phone || c.phoneMobile || '-'}{c._primary?' 〔代表〕':''}</div>
+                  ))}
+                </div>
+              </div>
+            )}
             <Field label="キーパーソン (主たる介護者・意思決定者)">
               <input value={fs.keyPerson} onChange={e=>update('keyPerson', e.target.value)}
                 placeholder="例: 長男 田中一郎" className={inputCls}/>
