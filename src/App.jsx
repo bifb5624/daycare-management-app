@@ -18237,7 +18237,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     </button>
                     );})}
                 </div>}
-                <input type="text" disabled={dis} value={p.tokki||''} onChange={e=>updateRow(p.id,'tokki',e.target.value)} placeholder={isAbsent?'欠席理由...':'特記...'} className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-50"/>
+                <input type="text" disabled={isReadOnly} value={p.tokki||''} onChange={e=>updateRow(p.id,'tokki',e.target.value)} placeholder={isReadOnly?'':(isAbsent?'欠席理由...':(isPause?'休止中の特記...':'特記...'))} className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-50"/>
               </div>
             );
           })}
@@ -21749,13 +21749,26 @@ function OpsCard({title, accent='#3b82f6', children}) {
   );
 }
 
-function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, periodLabel}) {
+function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, periodLabel, period}) {
   const Card = OpsCard;
-  const [aY, aM2] = attrMonth.split('-').map(Number);
-  const monthOptions = Array.from({length:12},(_,i)=>{
+  // ★ 期間セレクタ(1ヶ月/3ヶ月/半年/1年)に応じて表示する月を絞る。過去で記録が無い月は非表示。当月は常に表示。
+  const _N = ({'1':1,'3':3,'6':6,'12':12})[period] || 12;
+  const _curYM = `${tY}-${String(tM).padStart(2,'0')}`;
+  const _recsInMonth = (ym) => {
+    const [yy, mm] = ym.split('-').map(Number);
+    return (appData.ticketRecords||[]).some(r => {
+      if(!r.date) return false;
+      if(typeof r.date==='string' && r.date.includes('月')){ const m=parseInt(r.date.split('月')[0]); return m===mm && (r.year==null || r.year===yy); }
+      return String(r.date).startsWith(ym);
+    });
+  };
+  const monthOptions = Array.from({length:_N},(_,i)=>{
     const d=new Date(tY, tM-1-i, 1);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  }).reverse();
+  }).reverse().filter(m => m===_curYM || _recsInMonth(m));
+  // 選択中の月が候補外(期間変更等)になったら、候補内の最新月を表示
+  const _effMonth = monthOptions.includes(attrMonth) ? attrMonth : (monthOptions[monthOptions.length-1] || attrMonth);
+  const [aY, aM2] = _effMonth.split('-').map(Number);
   const monthStr = `${aY}-${String(aM2).padStart(2,'0')}`;
   // ticketRecordsのdateは「4月1日」形式なのでmonth labelで照合
   const monthLabel = `${aM2}月`;
@@ -21817,7 +21830,7 @@ function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, perio
   return (
     <Card title={`利用者属性　${periodLabel || `${aY}年${aM2}月`}（${aY}年${aM2}月時点 対象${activePats.length}名）`} accent='#ec4899'>
       <div data-print-strip="attr-months" style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:14}}>
-        {monthOptions.map(m=>{const [my,mm]=m.split('-').map(Number);return <button key={m} onClick={()=>setAttrMonth(m)} style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:'bold',border:`1.5px solid ${m===attrMonth?'#ec4899':'#e2e8f0'}`,background:m===attrMonth?'#fce7f3':'white',color:m===attrMonth?'#be185d':'#64748b',cursor:'pointer'}}>{mm}月</button>;})}
+        {monthOptions.map(m=>{const [my,mm]=m.split('-').map(Number);return <button key={m} onClick={()=>setAttrMonth(m)} style={{padding:'3px 10px',borderRadius:20,fontSize:11,fontWeight:'bold',border:`1.5px solid ${m===_effMonth?'#ec4899':'#e2e8f0'}`,background:m===_effMonth?'#fce7f3':'white',color:m===_effMonth?'#be185d':'#64748b',cursor:'pointer'}}>{mm}月</button>;})}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:14}}>
         <div style={{background:'#f8fafc',borderRadius:12,padding:'12px'}}>
@@ -22467,7 +22480,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
         {k.map(({patient,days},idx) => (
           <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #94a3b8',minWidth:0}}>
-            <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'':idx===1?'':''):`${idx+1}.`}</span>
+            <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
             <span style={{fontSize:12,fontWeight:'bold',color:'#000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
             <span style={{fontSize:12,fontWeight:'bold',color:'#000',whiteSpace:'nowrap',flexShrink:0,marginLeft:4}}>{days}日</span>
           </div>
@@ -22992,7 +23005,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
         {/* 7. 利用者属性分析 */}
         <div id="ops-attr" data-sec="ops-attr" style={{scrollMarginTop:170}}/>
-        <AttrSection appData={appData} tY={tY} tM={tM} baseMonth={baseMonth} attrMonth={attrMonth} setAttrMonth={setAttrMonth} periodLabel={periodLabel}/>
+        <AttrSection appData={appData} tY={tY} tM={tM} baseMonth={baseMonth} attrMonth={attrMonth} setAttrMonth={setAttrMonth} periodLabel={periodLabel} period={period}/>
 
         {/* 2.5 気分割合 */}
         <div id="ops-mood" data-sec="ops-mood" style={{scrollMarginTop:170}}/>
@@ -23055,7 +23068,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                   <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:12}}>
                     {list.map(({patient,rate}, idx) => (
                       <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{idx<3?(idx===0?'':idx===1?'':''):`${idx+1}.`}</span>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{`${idx+1}.`}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#3b82f6',flexShrink:0,marginLeft:4}}>{rate}%</span>
                       </div>
@@ -23082,7 +23095,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                   <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:12}}>
                     {list.map(({patient,rate}, idx) => (
                       <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{idx<3?(idx===0?'':idx===1?'':''):`${idx+1}.`}</span>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{`${idx+1}.`}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#ef4444',flexShrink:0,marginLeft:4}}>{rate}%</span>
                       </div>
@@ -23112,7 +23125,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
                   {list.map(({reason,count}, idx) => (
                     <div key={reason} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                      <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{idx<3?(idx===0?'':idx===1?'':''):`${idx+1}.`}</span>
+                      <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
                       <span style={{fontSize:12,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{reason}</span>
                       <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',flexShrink:0,marginLeft:4}}>{count}件</span>
                     </div>
