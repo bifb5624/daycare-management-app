@@ -9706,6 +9706,20 @@ function SidebarItem({ icon, label, active, onClick, badge }) {
     </button>
   );
 }
+// 折りたたみグループ (計画書などをまとめる)。子が選択中なら自動で開く。
+function SidebarGroup({ icon, label, activeChild, children }) {
+  const [open, setOpen] = React.useState(!!activeChild);
+  React.useEffect(() => { if (activeChild) setOpen(true); }, [activeChild]);
+  return (
+    <div>
+      <button onClick={() => setOpen(o => !o)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeChild && !open ? 'bg-blue-600/20 text-white font-bold' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
+        {icon}<span className="text-sm whitespace-nowrap flex-1 text-left">{label}</span>
+        {open ? <ChevronDown size={16} className="shrink-0"/> : <ChevronRight size={16} className="shrink-0"/>}
+      </button>
+      {open && <div className="mt-1 ml-4 pl-2 border-l border-slate-700 space-y-1">{children}</div>}
+    </div>
+  );
+}
 
 // === 新規アカウント登録完了画面 (URL ?signup=... でアクセス) ===
 function SignupCompleteView({ context, appData, onSave }) {
@@ -10317,7 +10331,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
           </div>
         </Card>
         {/* 計画書 (アドオン) */}
-        {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'seikatsu_kinou') || hasAddon(appData,'kyomi_kanshin') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
+        {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'seikatsu_kinou') || hasAddon(appData,'kyomi_kanshin') || hasAddon(appData,'tsusho_keikaku')) && (
           <Card>
             <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>📝 計画書（アドオン）</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
@@ -10325,7 +10339,6 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
               {hasAddon(appData,'tsusho_keikaku') && <Tile icon={<FileText size={22}/>} label="通所介護計画書" color="#0891b2" view="tsusho_keikaku"/>}
               {hasAddon(appData,'seikatsu_kinou') && <Tile icon={<FileText size={22}/>} label="生活機能" color="#8b5cf6" view="seikatsu_kinou"/>}
               {hasAddon(appData,'kyomi_kanshin') && <Tile icon={<FileText size={22}/>} label="興味関心" color="#ec4899" view="kyomi_kanshin"/>}
-              {hasAnyLifeAddon(appData) && <Tile icon={<Activity size={22}/>} label="LIFE・加算" color="#0d9488" view="life_hub"/>}
             </div>
           </Card>
         )}
@@ -16851,14 +16864,18 @@ export default function App() {
               <SidebarItem icon={<FileText size={18} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
-              {hasAddon(appData,'kinou_keikaku') && (
-                <SidebarItem icon={<FileText size={18} />} label="個別機能訓練計画書" active={currentView === 'kinou_keikaku'} onClick={() => navigateTo('kinou_keikaku')} />
-              )}
-              {hasAddon(appData,'tsusho_keikaku') && (
-                <SidebarItem icon={<FileText size={18} />} label="通所介護計画書" active={currentView === 'tsusho_keikaku'} onClick={() => navigateTo('tsusho_keikaku')} />
-              )}
-              {hasAnyLifeAddon(appData) && (
-                <SidebarItem icon={<Activity size={18} />} label="LIFE・加算" active={currentView === 'life_hub'} onClick={() => navigateTo('life_hub')} />
+              {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
+                <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['kinou_keikaku','tsusho_keikaku','life_hub'].includes(currentView)}>
+                  {hasAddon(appData,'tsusho_keikaku') && (
+                    <SidebarItem icon={<FileText size={16} />} label="通所介護計画書" active={currentView === 'tsusho_keikaku'} onClick={() => navigateTo('tsusho_keikaku')} />
+                  )}
+                  {hasAddon(appData,'kinou_keikaku') && (
+                    <SidebarItem icon={<FileText size={16} />} label="個別機能訓練計画書" active={currentView === 'kinou_keikaku'} onClick={() => navigateTo('kinou_keikaku')} />
+                  )}
+                  {hasAnyLifeAddon(appData) && (
+                    <SidebarItem icon={<Activity size={16} />} label="LIFE・加算" active={currentView === 'life_hub'} onClick={() => navigateTo('life_hub')} />
+                  )}
+                </SidebarGroup>
               )}
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
