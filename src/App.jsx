@@ -998,7 +998,7 @@ const hasAnyLifeAddon = (appData) => ['kasan_kinou2','kasan_kagaku','kasan_adl']
 const ADDON_BY_KEY = Object.fromEntries(ADDONS.map(a => [a.key, a]));
 const hasAddon = (appData, key) => !!(appData?.systemSettings?.addons?.[key]);
 // ★ 血圧2列目の意味を店舗設定で切替: 'end'(終了時=標準) / 'recheckStart'(開始の再検査)。ラベルのみ変更（データ列は共通）。
-const secondBpLabel = (appData) => (appData?.systemSettings?.secondBpMode === 'recheckStart') ? '開始再検査' : '終了';
+const secondBpLabel = (appData) => (appData?.systemSettings?.secondBpMode === 'recheckStart') ? '再測定' : '終了';
 
 // セル幅に収まる最大フォントで表示し、はみ出す場合は自動縮小する (折り返さない)
 function AutoFitText({ text, max = 13, min = 6, bold, color }) {
@@ -29714,7 +29714,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             <SectionCard title="血圧の測定項目（2列目）">
               <p className="text-xs text-slate-500 mb-3">提供記録入力の血圧2列目を、店舗の運用に合わせて選べます。どちらも血圧は<b>2列（開始＋2列目）</b>のままで、表の幅は変わりません。再検査などの補足は<b>特記</b>にも記入できます（分析個人の「今日の内容」に表示されます）。</p>
               <div className="flex flex-col gap-2">
-                {[['end','開始時血圧 ＋ 終了時血圧（標準）'],['recheckStart','開始時血圧 ＋ 開始の再検査血圧（終了時を測らない店舗向け）']].map(([v,label])=>(
+                {[['end','開始時血圧 ＋ 終了時血圧（標準）'],['recheckStart','開始時血圧 ＋ 再測定血圧（終了時を測らない店舗向け）']].map(([v,label])=>(
                   <label key={v} className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 cursor-pointer">
                     <input type="radio" name="secondBpMode" checked={(ss.secondBpMode||'end')===v} onChange={()=>saveSS({ secondBpMode: v }, '✓ 血圧2列目の設定を変更しました')} className="w-5 h-5" style={{accentColor:'#2563eb'}}/>
                     <span className="text-sm font-bold text-slate-700">{label}</span>
@@ -33399,6 +33399,21 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const prevBpVals = prevAttended.filter(r=>r.bpUpSt).map(r=>parseInt(r.bpUpSt));
     const prevAvgBp  = prevBpVals.length ? Math.round(prevBpVals.reduce((a,b)=>a+b,0)/prevBpVals.length) : null;
 
+    // ★ 情報量を増やす: 特記(日付つき全件)・血圧詳細(拡張期/範囲/高血圧日)・脈・体温最高・2列目血圧・気分分布
+    const _num = (v) => { const n=parseInt(v); return isNaN(n)?null:n; };
+    const tokkiDetail = attended.filter(r=>(r.tokki||'').trim()).map(r=>`${r.date}: ${String(r.tokki).trim()}`);
+    const bpDnVals = attended.map(r=>_num(r.bpDnSt)).filter(n=>n!=null);
+    const avgBpDn = bpDnVals.length ? Math.round(bpDnVals.reduce((a,b)=>a+b,0)/bpDnVals.length) : null;
+    const minBp = bpVals.length ? Math.min(...bpVals) : null;
+    const highBpDays = attended.filter(r=>{const s=_num(r.bpUpSt),dn=_num(r.bpDnSt); return (s!=null&&s>=140)||(dn!=null&&dn>=90);}).length;
+    const pulseVals = attended.map(r=>_num(r.plSt)).filter(n=>n!=null);
+    const avgPulse = pulseVals.length ? Math.round(pulseVals.reduce((a,b)=>a+b,0)/pulseVals.length) : null;
+    const maxTemp = tempVals.length ? Math.max(...tempVals).toFixed(1) : null;
+    const bp2Vals = attended.map(r=>_num(r.bpUpEn)).filter(n=>n!=null);
+    const avgBp2 = bp2Vals.length ? Math.round(bp2Vals.reduce((a,b)=>a+b,0)/bp2Vals.length) : null;
+    const moodDist = {};
+    attended.forEach(r=>[r.kibunArrival,r.kibunDeparture].forEach(v=>{ if(MOOD_LABEL[v]) moodDist[v]=(moodDist[v]||0)+1; }));
+    const moodDistText = ['excellent','good','normal','bad','terrible'].filter(k=>moodDist[k]).map(k=>`${MOOD_LABEL[k]}×${moodDist[k]}`).join('、');
     return {
       name: patient.name,
       careLevel: patient.careLevel,
@@ -33408,10 +33423,10 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       planned: planned.length,
       rate,
       prevRate,
-      avgBp, maxBp, prevAvgBp,
-      avgTemp,
-      avgMoodKey, avgMoodLabel: avgMoodKey ? MOOD_LABEL[avgMoodKey] : null,
-      tokki: tokkiList,
+      avgBp, maxBp, minBp, avgBpDn, highBpDays, avgPulse, avgBp2, prevAvgBp,
+      avgTemp, maxTemp,
+      avgMoodKey, avgMoodLabel: avgMoodKey ? MOOD_LABEL[avgMoodKey] : null, moodDistText,
+      tokki: tokkiList, tokkiDetail,
       fitnessRecs,
       fitnessItems: appData.systemSettings?.fitnessItems || [],
     };
@@ -33440,11 +33455,11 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
 利用者名：${d.name}（${d.careLevel||''}）
 対象月：${d.month}
-血圧平均：${d.avgBp||'不明'}mmHg（最高${d.maxBp||'不明'}）　前月平均：${d.prevAvgBp||'不明'}mmHg
-体温平均：${d.avgTemp||'不明'}℃
-気分：${d.avgMoodLabel||'不明'}
+血圧(開始)平均：${d.avgBp||'不明'}/${d.avgBpDn||'?'}mmHg（範囲${d.minBp||'?'}〜${d.maxBp||'?'}、前月${d.prevAvgBp||'不明'}）${d.highBpDays?`　血圧が高めの日${d.highBpDays}回`:''}${d.avgBp2!=null?`　${secondBpLabel(appData)}時平均${d.avgBp2}`:''}
+脈拍平均：${d.avgPulse||'不明'}回/分　体温平均：${d.avgTemp||'不明'}℃（最高${d.maxTemp||'不明'}℃）
+気分：平均${d.avgMoodLabel||'不明'}${d.moodDistText?`（内訳${d.moodDistText}）`:''}
 体力測定（直近）：${fitnessText}
-特記事項：${d.tokki||'特になし'}
+特記事項（日付つき全件）：${d.tokkiDetail&&d.tokkiDetail.length?d.tokkiDetail.join(' / '):'特になし'}
 
 出力ルール：
 ・報告文の本文2文のみ出力。前置き・補足・文字数・説明は一切不要
@@ -33917,10 +33932,12 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 欠席・休みの状況: 当月 欠席/休み ${_absCount}回。 理由: ${_absReasons}
 取り組んだ運動メニュー: ${exerciseNowText}
 運動メニューの変化: ${exerciseChangeText}
-バイタル(参考): 血圧平均${d.avgBp||'不明'}mmHg（前月${d.prevAvgBp||'不明'}）、体温平均${d.avgTemp||'不明'}℃
-通所時の気分: ${d.avgMoodLabel||'不明'}
+バイタル(参考): 血圧(開始)平均${d.avgBp||'不明'}/${d.avgBpDn||'?'}mmHg（範囲${d.minBp||'?'}〜${d.maxBp||'?'}、前月平均${d.prevAvgBp||'不明'}）${d.highBpDays?`、血圧が高め(収縮期140/拡張期90以上)の日 ${d.highBpDays}回`:''}${d.avgBp2!=null?`、${secondBpLabel(appData)}時 収縮期平均${d.avgBp2}`:''}
+脈拍: 平均${d.avgPulse||'不明'}回/分　体温: 平均${d.avgTemp||'不明'}℃（最高${d.maxTemp||'不明'}℃）
+通所時の気分: 平均${d.avgMoodLabel||'不明'}${d.moodDistText?`（内訳: ${d.moodDistText}）`:''}
 体力測定(任意・行わない事業所もあり): ${fitnessText}
-特記事項: ${d.tokki||'なし'}
+特記（当月の記録・日付つき全件。体調・気分・出来事・ご家族/職員の気づき等。③満足度・④心身の変化・⑤今後の方向性に反映すること）:
+${d.tokkiDetail && d.tokkiDetail.length ? '・'+d.tokkiDetail.join('\n・') : 'なし'}
 ${_goalText ? `計画の目標（通所介護計画・個別機能訓練計画）:\n${_goalText}\n（②目標の達成・進捗は、これらの目標に対する取り組み状況・達成度を書いてください）` : '計画の目標: 未設定（一般的な生活機能の維持・向上の観点で評価してください）'}
 
 各項目で、必ず下記の選択肢から最も適切なものを1つ"sel"に選び、"text"に2〜3文の所見を上記の文体・観点で書いてください。当月に通所が無い場合は①を必ず「実施できなかった」にしてください。
