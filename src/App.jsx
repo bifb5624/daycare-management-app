@@ -21448,6 +21448,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <span style={{fontSize:14,color:'#334155'}}>{r.createdDate||''}</span>
                     </div>
                     <div style={{fontSize:14,color:'#475569',lineHeight:1.8,whiteSpace:'pre-wrap'}}>{r.summary}</div>
+                    {(() => { const s3 = r.sheet?.s3; const sel = (s3&&typeof s3==='object')?s3.sel:''; const txt = (s3&&typeof s3==='object')?s3.text:(typeof s3==='string'?s3:''); if(!sel && !txt) return null; return (
+                      <div style={{marginTop:8,padding:'8px 12px',background:'#f0fdf4',borderRadius:8,border:'1px solid #d1fae5'}}>
+                        <div style={{fontSize:12,fontWeight:'bold',color:'#065f46',marginBottom:txt?3:0}}>④ 生活状況及び心身の状況の変化{sel?`：${sel}`:''}</div>
+                        {txt && <div style={{fontSize:13,color:'#475569',lineHeight:1.7,whiteSpace:'pre-wrap'}}>{txt}</div>}
+                      </div>
+                    ); })()}
                   </div>
               ))}
             </div>
@@ -33934,6 +33940,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 ・機能訓練（運動）と生活機能・生活の様子の観点で、利用者本位にやさしく記述してください。
 ・所見は「〜の様子がみられた」「今後も見守りが必要」「継続して支援していく」等の、見守り・支援の語調にしてください。
 ・評価は【厳しすぎず、やわらかく前向き】に。できていない点を断定・否定しすぎず、良い面や意欲にも触れてください。
+・【分量・優先順位（重要）】変化・気づき・特筆すべき点（血圧が高めの日・気分の変化・特記の出来事・運動や体力の変化 等）を優先して記載し、変化のない項目は「大きな変化なし」程度に簡潔にまとめてよい。全項目を細かく埋めようとせず、ケアマネが2分程度でサッと読める分量に。各項目のtextは原則1〜3文以内。
 ・ただし機能訓練・生活支援の【専門用語を適度に】交え、専門職らしい所見にしてください（例: 下肢筋力の維持、立位・歩行バランス、関節可動域、活動意欲、生活リハビリ、離床機会、転倒予防 等を文脈に応じて自然に）。専門用語の多用や堅すぎる表現は避け、読みやすさを保つこと。
 ・体力測定の数値が無くても構いません。運動の記録・通所の様子・気分・特記から柔軟に評価してください（体力測定にこだわらない）。
 ・運動メニューの変更（マシンの増減等）があれば、その点に触れてください。運動機能・筋力・気分の観点を重視してください。
