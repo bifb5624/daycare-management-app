@@ -76,9 +76,10 @@
       <a href="#s6"><span class="n">06</span> 料金の目安②（人数・拡張）</a>
       <a href="#s7"><span class="n">07</span> 従量課金：AI と 自動FAX</a>
       <a href="#s8"><span class="n">08</span> 複数店舗・FCの課金の割り振り</a>
-      <a href="#s9"><span class="n">09</span> 新構想：運営書類 管理アプリ</a>
-      <a href="#s10"><span class="n">10</span> ロードマップ</a>
-      <a href="#s11"><span class="n">11</span> まとめ／次のステップ</a>
+      <a href="#s9"><span class="n">09</span> 収益シミュレーション（70名）</a>
+      <a href="#s10"><span class="n">10</span> 新構想：運営書類 管理アプリ</a>
+      <a href="#s11"><span class="n">11</span> ロードマップ</a>
+      <a href="#s12"><span class="n">12</span> まとめ／次のステップ</a>
     </div>
   </section>
 
@@ -227,7 +228,44 @@
   </section>
 
   <section class="slide" id="s9">
-    <div class="num-tag">09 NEW CONCEPT</div>
+    <div class="num-tag">09 PROFIT SIM</div>
+    <h2>収益シミュレーション（70名規模・1店舗／月）</h2>
+    <p class="lead">「AI・FAXの実費」と「店舗からもらう金額」を並べ、<b>当社の取り分（粗利）</b>を可視化。数字はすべて税別の目安。</p>
+
+    <h3>① FAX送信サービスの比較（送信専用・1店舗の目安）</h3>
+    <table>
+      <tr><th>サービス</th><th class="num">月額基本</th><th class="num">送信 1ページ</th><th>特徴</th></tr>
+      <tr style="background:#f0fdf4;"><td><b>InterFAX</b>（今回採用）</td><td class="num">¥1,000</td><td class="num">約 ¥22</td><td>導入が簡単・<b>基本料が安い</b>。少量に最適</td></tr>
+      <tr><td>NetFAX（国内）</td><td class="num">¥3,000</td><td class="num">約 ¥6〜</td><td>ページ単価が安く<b>大量向き</b>。基本料は高め</td></tr>
+      <tr><td>Telnyx（海外）</td><td class="num">実質 ¥0〜</td><td class="num">約 ¥1〜2</td><td>最安。英語/開発者向け・<b>国内送達は要検証</b></td></tr>
+    </table>
+    <div class="infobox" style="margin-top:2px;"><b>分岐点＝月 約125ページ。</b> それ未満は InterFAX が安く、超えると国内NetFAXが有利。<b>70名のモニタリングだけ（月70ページ）なら InterFAX が正解</b>。将来 計画書も送って量が増えたら NetFAX/Telnyx へ切替（アプリは送信部分の差し替えのみ）。</div>
+
+    <h3>② 使用量と実費（70名・InterFAX基準）</h3>
+    <table>
+      <tr><th>項目</th><th class="num">月の量</th><th class="num">月 実費</th><th class="num">年 実費</th></tr>
+      <tr><td>モニタリングAI 下書き（70名×2回）</td><td class="num">140回</td><td class="num">約 ¥700</td><td class="num">約 ¥8,400</td></tr>
+      <tr><td>自動FAX：モニタリング(実績)のみ（1p×70件）</td><td class="num">70ページ</td><td class="num">約 ¥2,540</td><td class="num">約 ¥30,500</td></tr>
+      <tr><td>＋計画書もFAX（通所+個別、半年ごと 約3.5p）</td><td class="num">+約41ページ</td><td class="num">+約 ¥900</td><td class="num">+約 ¥10,800</td></tr>
+      <tr style="background:#f8fafc;"><td><b>実費 合計（AI＋モニタリングFAX＋計画書FAX＋基本料）</b></td><td class="num">—</td><td class="num"><b>約 ¥4,140</b></td><td class="num"><b>約 ¥49,700</b></td></tr>
+    </table>
+    <p class="muted">※ FAX基本料¥1,000/月は上表の実費に内包。AIはモデルにより¥3〜10/回で変動（代表値¥5）。計画書FAXなしなら 月の実費は約¥3,240。</p>
+
+    <h3>③ 店舗からの収入と、当社の取り分（粗利）</h3>
+    <table>
+      <tr><th>区分</th><th class="num">金額／月</th><th class="num">金額／年</th></tr>
+      <tr><td>店舗サブスク（ベーシック70名 ¥22,000＋計画書アドオン ¥6,000）</td><td class="num">¥28,000</td><td class="num">¥336,000</td></tr>
+      <tr><td>従量請求（AI 140回×¥15＝¥2,100 ＋ FAX 111件×¥40＝¥4,440）</td><td class="num">約 ¥6,540</td><td class="num">約 ¥78,500</td></tr>
+      <tr style="background:#ecfdf5;"><td><b>店舗が当社に支払う 合計</b></td><td class="num"><b>約 ¥34,540</b></td><td class="num"><b>約 ¥414,500</b></td></tr>
+      <tr><td>当社の外部実費（②合計＋インフラ¥1,500）</td><td class="num">− 約 ¥5,640</td><td class="num">− 約 ¥67,700</td></tr>
+      <tr style="background:#f0fdf4;"><td><b>粗利（＝当社の取り分・実費差引後）</b></td><td class="num"><b>約 ¥28,900</b></td><td class="num"><b>約 ¥346,800</b></td></tr>
+    </table>
+    <div class="okbox"><b>店舗が払う 約¥34,540 のうち、外部にかかる実費は 約¥5,640（約16%）。残り 約84%（月 約¥28,900・年 約35万円／店舗）が当社の取り分。</b> FAX・AIの従量は実費が小さいため、<b>サブスク本体がほぼ丸ごと利益</b>になります。<br><span class="muted">※ 粗利＝外部実費（AI・FAX・インフラ）差引後。開発・サポートの人件費は別。店舗が増えるほど1店舗あたりの実費比率は下がり、利益率は上がります。</span></div>
+    <div class="disc" style="margin-top:8px;">前提：70名全員が「利用中」＝毎月モニタリングをFAX、計画書は半年ごとにFAX。数字は検討用の目安で、実費（トークン量・ページ数）と最終単価で変動します。</div>
+  </section>
+
+  <section class="slide" id="s10">
+    <div class="num-tag">10 NEW CONCEPT</div>
     <h2>新構想：運営書類 管理アプリ<span class="badge-new">NEW</span></h2>
     <p class="lead">つむぎ（＝<b>日々の業務</b>）と連携する、<b>運営・コンプラ書類の「抜け漏れ防止」アプリ</b>（仮称：つむぎ運営サポート）。実地指導に強い体制づくりを支援します。</p>
     <div class="grid2">
@@ -247,8 +285,8 @@
     <div class="infobox" style="margin-top:12px;"><b>つむぎ本体（日々の記録）× 運営サポート（運営書類・期限管理）</b>の2本立て。<b>別料金アドオン</b>の想定（目安：＋¥3,000〜6,000／月）。</div>
   </section>
 
-  <section class="slide" id="s10">
-    <div class="num-tag">10 ROADMAP</div>
+  <section class="slide" id="s11">
+    <div class="num-tag">11 ROADMAP</div>
     <h2>開発ロードマップ（期間の目安）</h2>
     <div class="rm">
       <div class="term" style="border-top:none;">✅ 完了済み<br><span class="muted">〜現在</span></div>
@@ -263,8 +301,8 @@
     <p class="muted" style="margin-top:10px;">※ 少人数の開発体制での目安。優先度・法令改正で前後。<b>請求・LIFEは確約ではなく検討段階</b>です。</p>
   </section>
 
-  <section class="slide" id="s11">
-    <div class="num-tag">11 SUMMARY</div>
+  <section class="slide" id="s12">
+    <div class="num-tag">12 SUMMARY</div>
     <h2>まとめ ／ 次のステップ</h2>
     <div class="grid3">
       <div class="card"><div class="ic">⏱️</div><b>効率化</b><br>記録・書類の対象業務で<b>約80%（月約27時間）</b>削減の目安。</div>
