@@ -16347,7 +16347,7 @@ export default function App() {
     );
   }
   return (
-    <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15}}>
+    <div className="flex h-screen bg-slate-100 text-slate-800" style={{fontFamily:'"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic","YuGothic","Noto Sans JP","メイリオ",Meiryo,sans-serif',fontSize:15,height:'100dvh'}}>
       <GlobalStyle />
       {/* ★ スタッフ切替で管理者を選んだ時の認証 */}
       {pendingStaffSwitch && (
@@ -18025,7 +18025,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     <div className={`flex flex-col w-full mx-auto relative ${isFullscreen?'':'h-full'}`} style={{
       minWidth:0, overflowX:'hidden',
       ...(isFullscreen ? {
-        position: 'fixed', inset: 0, height: '100vh', width: '100vw',
+        position: 'fixed', inset: 0, height: '100dvh', width: '100vw',
         background: 'white', zIndex: 9999,
       } : {}),
     }}>
@@ -18146,7 +18146,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       </div>
       <div ref={el=>{ tableScrollRef.current=el; tableContainerRef.current=el; }} onScroll={_syncFromTable}
            draggable={false} onDragStart={e=>e.preventDefault()}
-           className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y',overscrollBehavior:'none',overscrollBehaviorX:'none',overscrollBehaviorY:'none',WebkitUserDrag:'none',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
+           className="bg-white rounded-b-xl rounded-tr-xl shadow-md border border-slate-300 flex-1 min-h-0 relative pb-16 record-view-scroll" style={{WebkitOverflowScrolling:'auto',touchAction:'pan-x pan-y pinch-zoom',overscrollBehavior:'none',overscrollBehaviorX:'none',overscrollBehaviorY:'none',WebkitUserDrag:'none',userSelect:'none',WebkitUserSelect:'none',WebkitTouchCallout:'none',msUserSelect:'none',MozUserSelect:'none',overflowY:'scroll',overflowX:'scroll'}}>
         <style>{`
           /* iPad等: 長押しドラッグで表(セル/画像)が持ち上がって移動するのを防ぐ。スクロール(横/縦)のみ許可 */
           .record-view-scroll, .record-view-scroll * { -webkit-user-drag: none !important; -webkit-touch-callout: none !important; }
@@ -18301,10 +18301,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   //   100vh - 80px (title bar + scrollbar の最小) / 10
                   //   minHeight も同じ式で「行が縮まない」よう強制
                   height: isFullscreen
-                    ? `calc((100vh - 80px) / ${Math.min(10, Math.max(1, localPatients.length))})`
+                    ? `calc((100dvh - 80px) / ${Math.min(10, Math.max(1, localPatients.length))})`
                     : dynamicRowHeight,
                   minHeight: isFullscreen
-                    ? `calc((100vh - 80px) / ${Math.min(10, Math.max(1, localPatients.length))})`
+                    ? `calc((100dvh - 80px) / ${Math.min(10, Math.max(1, localPatients.length))})`
                     : 48,
                 }}>
                   {filterMode === 'month' && (
