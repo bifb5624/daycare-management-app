@@ -15978,8 +15978,10 @@ export default function App() {
     const seen = new Set();
     const mk = (name, role) => `${normalizeName(name||'').trim()}|${role||''}`;
     const out = [];
-    (appData.storeMembers||[]).forEach(m => { if(!m||!m.name||!m.name.trim()) return; const k=mk(m.name,m.roleLabel); if(seen.has(k))return; seen.add(k); out.push({ id:m.id, name:m.name, lastName:m.lastName, firstName:m.firstName, roleLabel:m.roleLabel||'', isAdmin: m.isAdmin||m.roleLabel==='管理者' }); });
-    (appData.diarySettings?.staff||[]).forEach(s => { if(!s||!s.name||!s.name.trim()) return; const k=mk(s.name,s.role); if(seen.has(k))return; seen.add(k); out.push({ id:s.id, name:s.name, roleLabel:s.role||'', isAdmin: s.role==='管理者' }); });
+    // ★ つむぎ管理局(確認用ログイン=hq_viewer)はメンバーに出さない
+    const _isHq = (o) => o && (o.id==='hq_viewer' || o.id==='ds_sync_hq_viewer' || o._syncedFromMemberId==='hq_viewer' || (o.name==='管理局' && (o.roleLabel==='管理者'||o.role==='管理者')));
+    (appData.storeMembers||[]).forEach(m => { if(!m||!m.name||!m.name.trim()||_isHq(m)) return; const k=mk(m.name,m.roleLabel); if(seen.has(k))return; seen.add(k); out.push({ id:m.id, name:m.name, lastName:m.lastName, firstName:m.firstName, roleLabel:m.roleLabel||'', isAdmin: m.isAdmin||m.roleLabel==='管理者' }); });
+    (appData.diarySettings?.staff||[]).forEach(s => { if(!s||!s.name||!s.name.trim()||_isHq(s)) return; const k=mk(s.name,s.role); if(seen.has(k))return; seen.add(k); out.push({ id:s.id, name:s.name, roleLabel:s.role||'', isAdmin: s.role==='管理者' }); });
     return out;
   }, [appData.storeMembers, appData.diarySettings?.staff]);
   // ★ 起動/更新時に「今の時刻」とサービス提供時間(各種設定)から AM/PM を自動選択。
@@ -16298,6 +16300,8 @@ export default function App() {
       onSelect={(m) => {
         sessionStorage.setItem('tsumugiActiveRecorder', JSON.stringify(m));
         setActiveRecorder(m);
+        // ★ つむぎ管理局(確認用)はメンバー/担当職員に登録しない
+        if (m.id === 'hq_viewer') return;
         // ★ ログインで選んだ記録者を日誌の担当職員にも確実に登録しておく。
         //   これが無いと日誌を開いても名前一致せず自動チェックされず、
         //   「日誌でスタッフを切り替えないと反映されない」状態になっていた。
