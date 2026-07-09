@@ -1455,21 +1455,45 @@ function appendValueHistory(existingHist, oldValue, newValue, from, to) {
 }
 
 // ★ 介護度/負担割合などの変更履歴を読み取り表示 (事業所・ケアマネ両画面で共通・インラインstyle)。
-function ValueHistoryList({ title, hist }) {
+//   onChangeHist を渡すと、その場で「編集(上書き)/削除」ができる(=間違えて入力した履歴を後から修正)。
+//   履歴配列を書き換えて保存するだけなので、支援経過表(この履歴から自動生成)にも即反映される。
+function ValueHistoryList({ title, hist, onChangeHist, valueOptions }) {
   const list = Array.isArray(hist) ? hist : [];
+  const [editIdx, setEditIdx] = React.useState(null); // list 内の実インデックス
+  const [draft, setDraft] = React.useState(null);
   if (!list.length) return null;
   const fmt = (s) => { if (!s) return '?'; const d = new Date(s); return isNaN(d) ? s : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
   const today = new Date().toISOString().split('T')[0];
-  const sorted = [...list].sort((a, b) => String(b.from || '').localeCompare(String(a.from || '')));
+  const editable = typeof onChangeHist === 'function';
+  const sorted = list.map((h, realIdx) => ({ h, realIdx })).sort((a, b) => String(b.h.from || '').localeCompare(String(a.h.from || '')));
+  const iStyle = { fontSize: 11, padding: '3px 5px', border: '1px solid #cbd5e1', borderRadius: 6, background: 'white' };
+  const startEdit = (realIdx, h) => { setEditIdx(realIdx); setDraft({ value: h.value || '', from: h.from || '', to: h.to || '', note: h.note || '' }); };
+  const saveEdit = () => { onChangeHist(list.map((h, i) => i === editIdx ? { ...h, value: draft.value, from: draft.from || null, to: draft.to || null, note: draft.note || '' } : h)); setEditIdx(null); setDraft(null); };
+  const del = (realIdx) => { if (!window.confirm('この履歴を削除しますか？\n（支援経過表からも削除されます）')) return; onChangeHist(list.filter((_, i) => i !== realIdx)); if (editIdx === realIdx) { setEditIdx(null); setDraft(null); } };
   return (
     <div style={{ marginTop: 6 }}>
       <div style={{ fontSize: 10, fontWeight: 'bold', color: '#94a3b8', marginBottom: 2 }}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {sorted.slice(0, 8).map((h, i) => (
-          <div key={i} style={{ fontSize: 11, color: '#64748b' }}>
-            <span style={{ color: '#94a3b8' }}>{fmt(h.from)}{h.to ? ` 〜 ${fmt(h.to)}` : ' 〜'}</span>　<b style={{ color: '#334155' }}>{h.value}</b>
-            {h.from && h.from > today ? <span style={{ marginLeft: 4, fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '0 5px', borderRadius: 4, fontWeight: 'bold' }}>予定</span> : null}
-            {h.note ? `（${h.note}）` : ''}
+        {sorted.slice(0, 8).map(({ h, realIdx }) => (editable && editIdx === realIdx) ? (
+          <div key={realIdx} style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, padding: 4 }}>
+            {Array.isArray(valueOptions) && valueOptions.length
+              ? <select value={draft.value} onChange={e => setDraft(d => ({ ...d, value: e.target.value }))} style={iStyle}>{valueOptions.map(v => <option key={v} value={v}>{v}</option>)}</select>
+              : <input value={draft.value} onChange={e => setDraft(d => ({ ...d, value: e.target.value }))} style={{ ...iStyle, width: 90 }} />}
+            <input type="date" value={draft.from} onChange={e => setDraft(d => ({ ...d, from: e.target.value }))} style={iStyle} />
+            <span style={{ color: '#94a3b8', fontSize: 11 }}>〜</span>
+            <input type="date" value={draft.to} onChange={e => setDraft(d => ({ ...d, to: e.target.value }))} style={iStyle} />
+            <button type="button" onClick={saveEdit} style={{ fontSize: 11, fontWeight: 'bold', color: 'white', background: '#2563eb', border: 'none', borderRadius: 6, padding: '4px 9px', cursor: 'pointer' }}>保存</button>
+            <button type="button" onClick={() => { setEditIdx(null); setDraft(null); }} style={{ fontSize: 11, fontWeight: 'bold', color: '#475569', background: '#e2e8f0', border: 'none', borderRadius: 6, padding: '4px 9px', cursor: 'pointer' }}>取消</button>
+          </div>
+        ) : (
+          <div key={realIdx} style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ color: '#94a3b8' }}>{fmt(h.from)}{h.to ? ` 〜 ${fmt(h.to)}` : ' 〜'}</span>　<b style={{ color: '#334155' }}>{h.value}</b>
+              {h.from && h.from > today ? <span style={{ marginLeft: 4, fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '0 5px', borderRadius: 4, fontWeight: 'bold' }}>予定</span> : null}
+              {h.note ? `（${h.note}）` : ''}
+            </span>
+            {editable && <button type="button" onClick={() => startEdit(realIdx, h)} title="編集" style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: 2 }}>✎</button>}
+            {editable && <button type="button" onClick={() => del(realIdx)} title="削除" style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 'bold', padding: 2 }}>×</button>}
           </div>
         ))}
       </div>
@@ -12871,7 +12895,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
               <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
             </select>
             <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-              <div><label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>有効期間（開始）</label><input type="date" value={mCostFrom} onChange={(e) => setMCostFrom(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} /></div>
+              <div><label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>有効期間（開始）</label><input type="date" value={mCostFrom} onChange={(e) => { const v=e.target.value; setMCostFrom(v); if(v && !mCostTo){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); setMCostTo(d.toISOString().slice(0,10)); } }} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} /></div>
               <div><label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>有効期間（終了）</label><input type="date" value={mCostTo} onChange={(e) => setMCostTo(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} /></div>
             </div>
             <ValueHistoryList title="負担割合の変更履歴" hist={patient?.costBurdenHistory} />
@@ -36330,7 +36354,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
       np.careLevelHistory = appendValueHistory(patient.careLevelHistory, patient.careLevel, patch.careLevel, patch.careLevelFrom ?? patient.careLevelFrom, patch.careLevelTo ?? patient.careLevelTo);
     }
     if ('costBurden' in patch && String(patch.costBurden||'') !== String(patient.costBurden||'')) {
-      np.costBurdenHistory = appendValueHistory(patient.costBurdenHistory, patient.costBurden, patch.costBurden, null, null);
+      np.costBurdenHistory = appendValueHistory(patient.costBurdenHistory, patient.costBurden, patch.costBurden, patch.costBurdenFrom ?? patient.costBurdenFrom, patch.costBurdenTo ?? patient.costBurdenTo);
     }
     savePatientTop(np, { manual:true, message:'✓ 利用者マスタに反映しました' });
   };
@@ -36848,16 +36872,24 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                             <input type="date" value={patient.careLevelTo||''} onChange={e=>saveMaster({careLevelTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
                           </div>
                         </div>
-                        <ValueHistoryList title="介護度の変更履歴" hist={patient.careLevelHistory} />
+                        <ValueHistoryList title="介護度の変更履歴" hist={patient.careLevelHistory} onChangeHist={(nh)=>savePatientTop({careLevelHistory:nh},{manual:true,message:'✓ 履歴を更新しました'})} valueOptions={['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5']} />
                       </div>
                     )}
                     {key === 'docBurden' && (
                       <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
                         <label className="block text-[11px] font-bold text-slate-500 mb-0.5">負担割合（入力すると利用者マスタに自動反映）</label>
-                        <select value={patient.costBurden||''} onChange={e=>saveMaster({costBurden:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+                        <select value={patient.costBurden||''} onChange={e=>saveMaster({costBurden:e.target.value, costBurdenFrom:patient.costBurdenFrom, costBurdenTo:patient.costBurdenTo})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
                           <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
                         </select>
-                        <ValueHistoryList title="負担割合の変更履歴" hist={patient.costBurdenHistory} />
+                        <div className="mt-2">
+                          <label className="block text-[11px] font-bold text-slate-500 mb-0.5">有効期間（負担割合証は通常1年。開始日を入れると1年後を自動設定）</label>
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <input type="date" value={patient.costBurdenFrom||''} onChange={e=>{ const v=e.target.value; const patch={costBurdenFrom:v}; if(v && !patient.costBurdenTo){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); patch.costBurdenTo=d.toISOString().slice(0,10); } saveMaster(patch); }} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <span className="text-slate-400">〜</span>
+                            <input type="date" value={patient.costBurdenTo||''} onChange={e=>saveMaster({costBurdenTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                          </div>
+                        </div>
+                        <ValueHistoryList title="負担割合の変更履歴" hist={patient.costBurdenHistory} onChangeHist={(nh)=>savePatientTop({costBurdenHistory:nh},{manual:true,message:'✓ 履歴を更新しました'})} valueOptions={['70%','80%','90%']} />
                       </div>
                     )}
                   </div>
