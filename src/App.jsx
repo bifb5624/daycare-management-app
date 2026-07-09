@@ -37742,6 +37742,17 @@ function MonthlyServicePdfPreview({ patient, snapshot, onClose }) {
 // ===========================================
 // フェイスシート 入力フォーム
 // ===========================================
+// ★ Field は「安定した参照」にするためコンポーネント外(モジュール直下)で定義する。
+//   もし FaceSheetForm の描画関数内で定義すると、再描画のたびに別コンポーネント扱いとなり
+//   中の入力欄が毎回アンマウント→フォーカスが即座に外れる(入力できない)不具合になる。
+const _FSField = ({ label, children, required }) => (
+  <div style={{marginBottom:8}}>
+    <div style={{fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>
+      {label} {required && <span style={{color:'#dc2626'}}>*</span>}
+    </div>
+    {children}
+  </div>
+);
 function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditContacts }) {
   const today = new Date().toISOString().slice(0,10);
   // ★ 開いている間はクラウドポーリングを止める(再描画で入力欄のフォーカスが外れる/添付が中断するのを防ぐ)
@@ -37826,7 +37837,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
       const { blob, dataUrl, contentType } = await processUploadFile(f); // ★ 画像は圧縮、PDFはそのまま
       const att = { id: `fsf_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image' };
       let stored = null;
-      if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` });
+      if (isSupabaseEnabled) { try { stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` }); } catch (err) { console.warn('[fs] upload failed → inline fallback', err); } }
       if (stored?.path) { att.storagePath = stored.path; } // ★ 非公開: パスのみ保持
       else if (dataUrl) { att.data = dataUrl; }
       if (!att.storagePath && !att.data) continue;
@@ -37845,7 +37856,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
       const { blob, dataUrl, contentType } = await processUploadFile(f);
       const att = { id: `fsl_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image', label: attachLabel };
       let stored = null;
-      if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` });
+      if (isSupabaseEnabled) { try { stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` }); } catch (err) { console.warn('[fs] upload failed → inline fallback', err); } }
       if (stored?.path) att.storagePath = stored.path; else if (dataUrl) att.data = dataUrl;
       if (!att.storagePath && !att.data) continue;
       added.push(att);
@@ -37885,14 +37896,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     </div>
   );
 
-  const Field = ({ label, children, required }) => (
-    <div style={{marginBottom:8}}>
-      <div style={{fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>
-        {label} {required && <span style={{color:'#dc2626'}}>*</span>}
-      </div>
-      {children}
-    </div>
-  );
+  const Field = _FSField; // ★ 安定参照(モジュール直下定義)を使う = 再描画で入力欄が再マウントされずフォーカスが外れない
   const inputCls = 'w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-amber-500';
   const textareaCls = inputCls + ' resize-y';
 
