@@ -682,12 +682,16 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
       if (String(p.id) !== String(patientId)) return p;
       // emergencyContacts は配列マージ (重複防止)。 ★ 墓石(_deletedEC: 事業所側で削除した連絡先)は復活させない
       const _ecKey = c => `${(c.name||'').trim()}|${(c.relation||'').trim()}|${(c.phone||'').trim()}|${(c.phoneMobile||'').trim()}`;
+      // ★ ケアマネ由来の連絡先は緊急連絡先(家族)には一切残さない(事業所名/事業所電話/FAXを持つ or 続柄がケアマネ系)。
+      //   これで「ケアマネが緊急連絡先に混入 → 削除しても復活」を根絶する。
+      const _isCmC = c => !!(c && (c.cmOffice || c.officePhone || c.officeFax || /ケアマネ|介護支援|居宅/.test(String(c.relation||''))));
       const _ecTomb = new Set(p._deletedEC || []);
-      let mergedContacts = (p.emergencyContacts || []).filter(c => !_ecTomb.has(_ecKey(c)));
+      let mergedContacts = (p.emergencyContacts || []).filter(c => !_ecTomb.has(_ecKey(c)) && !_isCmC(c));
       if (patientPatch.emergencyContacts) {
         const incoming = patientPatch.emergencyContacts || [];
         incoming.forEach(c => {
           if (_ecTomb.has(_ecKey(c))) return; // 削除済み(墓石)は追加しない
+          if (_isCmC(c)) return;              // ケアマネは緊急連絡先に追加しない
           const dup = mergedContacts.some(ex =>
             (ex.name||'').trim() === (c.name||'').trim() &&
             (ex.relation||'').trim() === (c.relation||'').trim()

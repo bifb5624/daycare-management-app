@@ -1261,6 +1261,9 @@ const getFitnessItemsForPatient = (appData, patient, fallbackItems) => {
 // 日本の電話番号フォーマッタ: ハイフン無しの数字 → 自動でハイフン付与
 // ★ 稼働率/出席率の「予定(分母)」判定。 振替=出席扱い。 振替済みの欠席(tokkiに「へ振替」)は相殺で分母から除外。
 const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
+// ★ 事業所側の編集モーダル(フェイスシート等)を開いている間は true。 その間はクラウドポーリング(checkAndPull)を
+//   スキップし、appData 差し替えによる再描画/再マウントで入力欄のフォーカスが外れる・添付が中断するのを防ぐ。
+const officeEditingActive = { current: false };
 const formatJpPhone = (s) => {
   const digits = (s || '').replace(/[^0-9]/g, '');
   if (!digits) return '';
@@ -13707,6 +13710,17 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     familyPhoneMobile: myInfoForm.phoneMobile,
                     familyEmail: myInfoForm.email,
                   };
+                } else if (loggedAcc?.kind === 'caremanager') {
+                  // ★ ケアマネは緊急連絡先(家族)には入れない。 担当ケアマネ情報(cmName/cmOffice/cmPhone)を更新し、
+                  //   既に緊急連絡先に混入しているケアマネは除去する(「削除しても復活」不具合の根絶)。
+                  const _cmName = `${myInfoForm.lastName||''} ${myInfoForm.firstName||''}`.trim() || myInfoForm.name || patient.cmName || '';
+                  updatedPatient = {
+                    ...patient,
+                    cmName: _cmName,
+                    cmOffice: myInfoForm.cmOffice || patient.cmOffice || '',
+                    cmPhone: myInfoForm.phone || patient.cmPhone || '',
+                    emergencyContacts: (patient.emergencyContacts||[]).filter(ec => !isCmContact(ec)),
+                  };
                 } else {
                   // 子 → emergencyContacts 内の自分のエントリを更新 (なければ追加)
                   const existing = patient.emergencyContacts || [];
@@ -13764,6 +13778,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         familyPhone: updatedPatient.familyPhone,
                         familyPhoneMobile: updatedPatient.familyPhoneMobile,
                         familyEmail: updatedPatient.familyEmail,
+                        docUpdates: updatedPatient.docUpdates,
+                      } : (loggedAcc?.kind === 'caremanager') ? {
+                        // ケアマネ: 担当ケアマネ情報を更新。 emergencyContacts は掃除済みを送り、マージ側でもケアマネを除去
+                        cmName: updatedPatient.cmName,
+                        cmOffice: updatedPatient.cmOffice,
+                        cmPhone: updatedPatient.cmPhone,
+                        emergencyContacts: updatedPatient.emergencyContacts,
                         docUpdates: updatedPatient.docUpdates,
                       } : {
                         emergencyContacts: updatedPatient.emergencyContacts,
@@ -15567,6 +15588,9 @@ export default function App() {
         const forcePull = pendingPullForStoreRef.current === newStoreId;
         if (forcePull) {
           pendingPullForStoreRef.current = null;
+        } else if (officeEditingActive.current) {
+          // ★ フェイスシート等の編集モーダルを開いている間は pull しない (入力中の再描画・添付中断を防ぐ)
+          return;
         } else {
           // ★ ローカル編集中はリモートで上書きしない (5秒以内に編集していたら pull スキップ)
           //   (ユーザーの編集が Supabase に push される前に pull で消されるバグ対応)
@@ -25945,6 +25969,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const _buildLocalPatient = (p) => {
     if (!p) return null;
     let lp = JSON.parse(JSON.stringify(p));
+    // ★ ケアマネは緊急連絡先に含めない。 古いデータで混入していれば編集スナップショット時点で除去し、
+    //   保存すると恒久的に消える(「削除しても復活」不具合の後始末)。
+    if (Array.isArray(lp.emergencyContacts)) lp.emergencyContacts = lp.emergencyContacts.filter(ec => !isCmContact(ec));
     const _sp = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
     // ★ 主要連絡先(familyName)が未設定なら、登録済み家族アカウント / 緊急連絡先から自動反映。
     if (!lp.familyName) {
@@ -26007,7 +26034,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   // ★ 状態・休止など「押した時点で即クラウド保存したい」変更用。 localPatient を appData へ反映し manual保存で即push。
   const commitLP = (patch, message) => {
     if (!localPatient) return;
-    const updated = { ...localPatient, ...patch };
+    // 最新appData(ファイル・状態)を土台にし、意図した変更(patch)を最後に上書き = 状態変更は確実に反映しつつ古い値で他項目を巻き戻さない
+    const updated = { ...withLatestFiles(localPatient), ...patch };
     setLocalPatient(updated);
     if (dirtyRef) dirtyRef.current = false;
     onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id === updated.id ? updated : p) }, { manual: true, message: message || '✓ 保存しました' });
@@ -26018,12 +26046,20 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   // ★ 個人ファイル系(別モーダルで保存)は保存時に最新appDataを優先。 ただし emergencyContacts/relatedParties は
   //   基本情報フォームで直接編集(削除含む)するため除外する(=ここに入れると削除が保存時に上書きされ復活してしまう)。
   const FILE_FIELDS = ['personalFile','faceSheet','docInsurance','docBurden','medicationImages','docOther'];
+  // ★ 利用状態(休止/退所)まわりは別フロー(commitLP/状態変更・利用再開)で更新される。
+  //   基本情報など「状態と無関係な項目」を保存する時に、古い localPatient スナップショットで
+  //   status/pauseHistory/開始日/終了日 を巻き戻して 休止→利用中 に戻ってしまう不具合を防ぐため、
+  //   保存時は常に最新 appData の値を優先する(=状態は明示操作でしか変わらない)。
+  // status/pauseHistory は常に即時保存フロー(commitLP)経由でのみ変更する = フォーム編集(updateLP)では触らない。
+  // よって最新appData優先にしても編集を失わず、古いスナップショットでの巻き戻しだけを防げる。
+  // (開始日/終了日はフォームで直接編集するため sticky にしない=編集が消えてしまうため)
+  const STICKY_FIELDS = ['status','pauseHistory'];
   const withLatestFiles = (lp) => {
     if (!lp) return lp;
     const cur = (appData.patients||[]).find(p => p.id === lp.id);
     if (!cur) return lp;
     const merged = { ...lp };
-    FILE_FIELDS.forEach(k => { if (cur[k] !== undefined) merged[k] = cur[k]; });
+    [...FILE_FIELDS, ...STICKY_FIELDS].forEach(k => { if (cur[k] !== undefined) merged[k] = cur[k]; });
     return merged;
   };
   const saveLP = (field, value) => {
@@ -26104,14 +26140,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (pendingTickets) { next.ticketRecords = pendingTickets; setPendingTickets(null); }
     if (localPatient) {
       const prev = (appData.patients||[]).find(p => p.id === localPatient.id) || {};
-      let pat = {...localPatient};
+      // ★ 最新appData(状態/休止/ファイル)を土台に = 古いスナップショットで 休止→利用中 等に巻き戻さない
+      let pat = withLatestFiles({...localPatient});
       ['kiou','ryui','scheduleAmPm','costBurden','status'].forEach(field => {
         const ov = Array.isArray(prev[field]) ? JSON.stringify(prev[field]||[]) : (prev[field]||'');
         const nv = Array.isArray(pat[field]) ? JSON.stringify(pat[field]||[]) : (pat[field]||'');
         if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
       });
       if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
-      pat = withLatestFiles(pat);
       next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
     }
     onSave(next);
@@ -26168,14 +26204,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (pendingShifts) { next.monthlyShifts = pendingShifts; setPendingShifts(null); }
     if (pendingTickets) { next.ticketRecords = pendingTickets; setPendingTickets(null); }
     const prev = (appData.patients||[]).find(p => p.id === localPatient.id) || {};
-    let pat = {...localPatient};
+    // ★ 最新appData(状態/休止/ファイル)を土台に = 古いスナップショットで 休止→利用中 等に巻き戻さない
+    let pat = withLatestFiles({...localPatient});
     ['kiou','ryui','scheduleAmPm','costBurden','status'].forEach(field => {
       const ov = Array.isArray(prev[field]) ? JSON.stringify(prev[field]||[]) : (prev[field]||'');
       const nv = Array.isArray(pat[field]) ? JSON.stringify(pat[field]||[]) : (pat[field]||'');
       if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
     });
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
-    pat = withLatestFiles(pat);
     next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
     // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合のみ「何月から適用するか」を確認。
     //    キー順・空値の差で誤検知しないよう正規化して比較 (運動メニュー以外の編集では出さない)
@@ -27010,13 +27046,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div className="border-t border-slate-200 pt-4"><h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>担当ケアマネジャー</h3>
                 <div className="grid grid-cols-2 gap-4 mb-3">
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label>
-                    <select disabled={isOff} value={localPatient.cmOffice||''} onChange={e=>{const office=e.target.value;const offices=appData.systemSettings?.cmOffices||[];const officeData=offices.find(o=>o.name===office);const u={...localPatient,cmOffice:office,cmName:'',cmPhone:'',cmFax:officeData?.fax||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?u:p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                    <select disabled={isOff} value={localPatient.cmOffice||''} onChange={e=>{const office=e.target.value;const offices=appData.systemSettings?.cmOffices||[];const officeData=offices.find(o=>o.name===office);const u={...localPatient,cmOffice:office,cmName:'',cmPhone:'',cmFax:officeData?.fax||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                       <option value="">未選択</option>{(appData.systemSettings?.cmOffices||[]).map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
                       {localPatient.cmOffice && !(appData.systemSettings?.cmOffices||[]).some(o=>o.name===localPatient.cmOffice) && <option value={localPatient.cmOffice}>{localPatient.cmOffice}（未登録）</option>}
                     </select>
                   </div>
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">担当者名</label>
-                    <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?u:p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                    <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                       <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
                       {localPatient.cmName && !(appData.systemSettings?.careManagers||[]).some(c=>c.office===localPatient.cmOffice&&c.name===localPatient.cmName) && <option value={localPatient.cmName}>{localPatient.cmName}（未登録）</option>}
                     </select>
@@ -27492,7 +27528,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   const newHist=[...(localPatient.pauseHistory||[])];
                   newHist[pauseEditModal.origIdx]={ ...newHist[pauseEditModal.origIdx], reason:pauseEditModal.reason.trim(), fromDate:pauseEditModal.fromDate, ...(pauseEditModal.toDate?{toDate:pauseEditModal.toDate}:{toDate:undefined}) };
                   if(!pauseEditModal.toDate) delete newHist[pauseEditModal.origIdx].toDate;
-                  updateLPFields({pauseHistory:newHist});
+                  commitLP({pauseHistory:newHist}, '✓ 休止履歴を更新しました（保存済み）');
                   setPauseEditModal(null);
                 }} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">保存</button>
               </div>
@@ -28652,7 +28688,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   const upd = { ...localPatient, [histKey]: hist };
                   setLocalPatient(upd);
                   if (dirtyRef) dirtyRef.current = false;
-                  onSave({...appData, patients: appData.patients.map(p=>p.id===upd.id?upd:p)});
+                  onSave({...appData, patients: appData.patients.map(p=>p.id===upd.id?withLatestFiles(upd):p)});
                 } else {
                   // 即時適用
                   if (oldValue && oldValue !== careLevelModal.newValue) {
@@ -28669,7 +28705,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   const upd = { ...localPatient, ...updates };
                   setLocalPatient(upd);
                   if (dirtyRef) dirtyRef.current = false;
-                  onSave({...appData, patients: appData.patients.map(p=>p.id===upd.id?upd:p)});
+                  onSave({...appData, patients: appData.patients.map(p=>p.id===upd.id?withLatestFiles(upd):p)});
                 }
                 setCareLevelModal(null);
               }} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 shadow-lg active:scale-95">
@@ -28735,7 +28771,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const upd={...localPatient,...updates};
                 setLocalPatient(upd);
                 if(dirtyRef) dirtyRef.current=false;
-                onSave({...appData,patients:appData.patients.map(p=>p.id===upd.id?upd:p)});
+                onSave({...appData,patients:appData.patients.map(p=>p.id===upd.id?withLatestFiles(upd):p)});
                 setCmChangeModal(null);
               }} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 shadow-lg active:scale-95">
                 {cmChangeModal.from>new Date().toISOString().split('T')[0]?'予定として保存':'確定'}
@@ -28780,7 +28816,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const upd={...localPatient,[histKey]:hist};
                 setLocalPatient(upd);
                 if(dirtyRef) dirtyRef.current=false;
-                onSave({...appData,patients:appData.patients.map(p=>p.id===upd.id?upd:p)});
+                onSave({...appData,patients:appData.patients.map(p=>p.id===upd.id?withLatestFiles(upd):p)});
                 setEditHistModal(null);
               }} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg active:scale-95">保存</button>
             </div>
@@ -28805,7 +28841,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const upd={...localPatient,[histKey]:hist};
                 setLocalPatient(upd);
                 if(dirtyRef) dirtyRef.current=false;
-                onSave({...appData,patients:appData.patients.map(p=>p.id===upd.id?upd:p)});
+                onSave({...appData,patients:appData.patients.map(p=>p.id===upd.id?withLatestFiles(upd):p)});
                 setDeleteHistConfirm(null);
               }} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-red-600 hover:bg-red-700 shadow-lg active:scale-95">削除する</button>
             </div>
@@ -37638,6 +37674,8 @@ function MonthlyServicePdfPreview({ patient, snapshot, onClose }) {
 // ===========================================
 function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditContacts }) {
   const today = new Date().toISOString().slice(0,10);
+  // ★ 開いている間はクラウドポーリングを止める(再描画で入力欄のフォーカスが外れる/添付が中断するのを防ぐ)
+  React.useEffect(() => { officeEditingActive.current = true; return () => { officeEditingActive.current = false; }; }, []);
   const staffList = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
   const [fs, setFs] = useState({
     // ① 受付・作成情報
