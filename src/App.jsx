@@ -12843,7 +12843,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
         <div style={{ fontSize: 17, fontWeight: 'bold', color: '#0f172a', marginBottom: 4 }}>保険証・負担割合証・アセスメント</div>
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>{patient?.name} 様。ここで登録・更新した書類は事業所側の個人ファイルに反映され、双方で最新のものを共有できます（既存の書類に追記され、上書きはしません）。</div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
-          <DocSection label="介護保険証" list={ins} setter={setIns} tag="ins" accept="image/*,application/pdf" _noborder />
+          {DocSection({ label:"介護保険証", list:ins, setter:setIns, tag:"ins", accept:"image/*,application/pdf", _noborder:true })}
           <div style={{ marginTop: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 6 }}>保険証の内容（入力すると事業所の利用者マスタに自動反映）</div>
             <div style={{ marginBottom: 8 }}>
@@ -12864,7 +12864,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
           </div>
         </div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
-          <DocSection label="負担割合証" list={bur} setter={setBur} tag="bur" accept="image/*,application/pdf" _noborder />
+          {DocSection({ label:"負担割合証", list:bur, setter:setBur, tag:"bur", accept:"image/*,application/pdf", _noborder:true })}
           <div style={{ marginTop: 8, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: 10 }}>
             <label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>負担割合（入力すると事業所の利用者マスタに自動反映）</label>
             <select value={mCostBurden} onChange={(e) => setMCostBurden(e.target.value)} style={{ width: '100%', maxWidth: 220, fontSize: 14, fontWeight: 'bold', padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }}>
@@ -12881,7 +12881,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
           <div style={{ fontSize: 13, fontWeight: 'bold', color: '#0f172a', marginBottom: 8 }}>アセスメントシート</div>
           <textarea value={asmtText} onChange={(e) => setAsmtText(e.target.value)} placeholder="アセスメント内容を手入力できます（写真・PDFの添付も可能）。" rows={6} style={{ width: '100%', fontSize: 13, padding: 10, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6 }} />
           <div style={{ marginTop: 10 }}>
-            <DocSection label="添付ファイル" list={asmtFiles} setter={setAsmtFiles} tag="asmt" accept="image/*,application/pdf" />
+            {DocSection({ label:"添付ファイル", list:asmtFiles, setter:setAsmtFiles, tag:"asmt", accept:"image/*,application/pdf" })}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
