@@ -10264,6 +10264,22 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
     ...(appData.familyPersonalAnnouncements||[]).map(a=>({...a,_kind:'個別'})),
   ].filter(a=>a.title||a.body).sort((a,b)=>(b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||'')).slice(0,4);
   const patName = (pid) => (appData.patients||[]).find(p=>p.id===pid)?.name || '';
+  // ★ お知らせの既読管理: スタッフ切替で選択中の人単位(端末ローカル保存)。 見たら薄いグレー(未読は色付き)。
+  const _staffKey = (activeRecorder?.name ? normalizeName(activeRecorder.name).trim() : '') || '_';
+  const [readMap, setReadMap] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('tsumugiNoticeReads')||'{}'); } catch { return {}; } });
+  const isRead = (id) => (readMap[_staffKey]||[]).includes(String(id));
+  const markRead = (id) => {
+    if (id==null) return;
+    setReadMap(prev => {
+      const arr = prev[_staffKey]||[];
+      if (arr.includes(String(id))) return prev;
+      const next = { ...prev, [_staffKey]: [...arr, String(id)].slice(-1000) };
+      try { localStorage.setItem('tsumugiNoticeReads', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const [noticeDetail, setNoticeDetail] = React.useState(null);
+  const openDetail = (d) => { setNoticeDetail(d); if (d) markRead(d.id); };
   const Card = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
   const Tile = ({icon, label, sub, color, view}) => (
     <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
@@ -10297,16 +10313,18 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
             <Card style={{borderColor:'#c7d2fe'}}>
               <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span></div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                {all.map(a=>(
-                  <div key={a.id} style={{border:`1px solid ${a.m.color}44`,background:a.m.bg,borderRadius:10,padding:'8px 12px'}}>
+                {all.map(a=>{ const _r=isRead(a.id); return (
+                  <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a.m.emoji} ${a.m.label}`,badgeColor:a.m.color,date:a.date,title:a.title,body:a.body})}
+                    style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'44'}`,background:_r?'#f8fafc':a.m.bg,borderRadius:10,padding:'8px 12px',opacity:_r?0.72:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-                      <span style={{fontSize:10,fontWeight:'bold',color:'white',background:a.m.color,borderRadius:5,padding:'2px 7px'}}>{a.m.emoji} {a.m.label}</span>
+                      <span style={{fontSize:10,fontWeight:'bold',color:'white',background:_r?'#94a3b8':a.m.color,borderRadius:5,padding:'2px 7px'}}>{a.m.emoji} {a.m.label}</span>
                       {a.date && <span style={{fontSize:10,color:'#94a3b8'}}>{a.date}</span>}
+                      {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
                     </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{a.title}</div>
-                    {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6}}>{a.body}</div>}
-                  </div>
-                ))}
+                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>{a.title}</div>
+                    {a.body && <div style={{fontSize:12,color:_r?'#94a3b8':'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6,maxHeight:40,overflow:'hidden'}}>{a.body}</div>}
+                  </button>
+                ); })}
               </div>
             </Card>
           );
@@ -10343,26 +10361,28 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
             const ext = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[]).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice).map(u => ({...u, _pid:p.id, _pname:p.name}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,8);
             // ★ 常時表示: 更新が無くてもカードは出し、無い旨を表示する
             const _fmt = (iso)=>{ try{ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch{ return ''; } };
+            const _unread = ext.filter(u=>!isRead(u.id)).length;
             return (
               <Card>
-                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:ext.length?'#f59e0b':'#cbd5e1',borderRadius:999,padding:'1px 7px'}}>{ext.length}</span></div>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:_unread?'#f59e0b':'#cbd5e1',borderRadius:999,padding:'1px 7px'}}>{_unread}</span></div>
                 {ext.length===0 ? (
                   <div style={{fontSize:12,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
                 ) : (<>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                  {ext.map(u=>(
-                    <button key={u.id} onClick={()=>navigateTo('master', u._pid)} style={{textAlign:'left',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:10,padding:'8px 10px',cursor:'pointer'}}>
+                  {ext.map(u=>{ const _r=isRead(u.id); const _c=u.by==='caremanager'?'#0891b2':'#7c3aed'; return (
+                    <button key={u.id} onClick={()=>openDetail({id:u.id,badge:u.by==='caremanager'?'ケアマネ':'ご家族',badgeColor:_c,date:_fmt(u.at),title:`利用者：${u._pname} 様`,body:`更新内容：${(u.items||[]).join('・')||'更新'}${u.byName?`\n更新者：${u.byName}`:''}`,patientId:u._pid})} style={{textAlign:'left',background:_r?'#f8fafc':'#fffbeb',border:`1px solid ${_r?'#e2e8f0':'#fde68a'}`,borderRadius:10,padding:'8px 10px',cursor:'pointer',opacity:_r?0.72:1}}>
                       <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3,flexWrap:'wrap'}}>
-                        <span style={{fontSize:9,fontWeight:'bold',color:'white',background:u.by==='caremanager'?'#0891b2':'#7c3aed',borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
-                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b'}}>利用者：{u._pname} 様</span>
+                        <span style={{fontSize:9,fontWeight:'bold',color:'white',background:_r?'#94a3b8':_c,borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>利用者：{u._pname} 様</span>
                         <span style={{fontSize:10,color:'#b45309',marginLeft:'auto'}}>{_fmt(u.at)}</span>
+                        {_r && <span style={{fontSize:9,color:'#94a3b8'}}>既読</span>}
                       </div>
-                      <div style={{fontSize:12,color:'#78350f',fontWeight:'bold'}}>更新内容：{(u.items||[]).join('・')||'更新'}</div>
-                      {u.byName?<div style={{fontSize:11,color:'#a16207',marginTop:1}}>更新者：{u.byName}</div>:null}
+                      <div style={{fontSize:12,color:_r?'#94a3b8':'#78350f',fontWeight:'bold'}}>更新内容：{(u.items||[]).join('・')||'更新'}</div>
+                      {u.byName?<div style={{fontSize:11,color:_r?'#b0bccb':'#a16207',marginTop:1}}>更新者：{u.byName}</div>:null}
                     </button>
-                  ))}
+                  ); })}
                 </div>
-                <div style={{fontSize:10,color:'#a16207',marginTop:6}}>タップで利用者を開いて内容を確認できます（確認すると消えます）。</div>
+                <div style={{fontSize:10,color:'#a16207',marginTop:6}}>タップで詳細を表示（見ると既読＝グレーになります／既読は担当者ごと）。</div>
                 </>)}
               </Card>
             );
@@ -10374,16 +10394,17 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
             </div>
             {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                {news.map(a=>(
-                  <div key={a.id} style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'7px 10px'}}>
+                {news.map(a=>{ const _r=isRead(a.id); const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
+                  <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:_r?'#f1f5f9':'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'7px 10px',opacity:_r?0.72:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
-                      <span style={{fontSize:9,fontWeight:'bold',color:a._kind==='個別'?'#b45309':'#1d4ed8',background:a._kind==='個別'?'#fef3c7':'#dbeafe',borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
+                      <span style={{fontSize:9,fontWeight:'bold',color:_r?'#94a3b8':_c,background:_r?'#eef2f6':(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
                       <span style={{fontSize:10,color:'#94a3b8'}}>{a.date||''}</span>
+                      {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
                     </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{a.title||'(写真)'}</div>
-                    {a.body && <div style={{fontSize:11,color:'#64748b',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
-                  </div>
-                ))}
+                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>{a.title||'(写真)'}</div>
+                    {a.body && <div style={{fontSize:11,color:_r?'#94a3b8':'#64748b',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
+                  </button>
+                ); })}
               </div>
             )}
           </Card>
@@ -10423,6 +10444,23 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
           <Tile icon={<Settings size={22}/>} label="各種設定" color="#475569" view="settings"/>
         </div>
       </div>
+      {/* ★ お知らせ詳細モーダル */}
+      {noticeDetail && (
+        <div onClick={()=>setNoticeDetail(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,padding:20,width:460,maxWidth:'96vw',maxHeight:'85vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+              {noticeDetail.badge && <span style={{fontSize:11,fontWeight:'bold',color:'white',background:noticeDetail.badgeColor||'#64748b',borderRadius:6,padding:'2px 9px'}}>{noticeDetail.badge}</span>}
+              {noticeDetail.date && <span style={{fontSize:11,color:'#94a3b8'}}>{noticeDetail.date}</span>}
+            </div>
+            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10,lineHeight:1.4}}>{noticeDetail.title}</div>
+            {noticeDetail.body && <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-wrap',lineHeight:1.75}}>{noticeDetail.body}</div>}
+            <div style={{display:'flex',gap:8,marginTop:20,justifyContent:'flex-end'}}>
+              {noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId;setNoticeDetail(null);navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#4338ca',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>利用者を開く</button>}
+              <button onClick={()=>setNoticeDetail(null)} style={{padding:'9px 18px',borderRadius:10,border:'1px solid #cbd5e1',background:'#f8fafc',color:'#475569',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
