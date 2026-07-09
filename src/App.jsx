@@ -29418,12 +29418,36 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const newOnyoku = onyokuInput.split(/[、,]+/).map(s => s.trim()).filter(s => s);
     const newMassageStaff = massageStaffInput.split(/[、,]+/).map(s => s.trim()).filter(s => s);
     if (dirtyRef) dirtyRef.current = false;
-    const diarySettings = diarySettingsRef.current || appData.diarySettings;
+    let diarySettings = diarySettingsRef.current || appData.diarySettings;
+    let _facilityInfo = facilityInfo;
+    const _nm = (n)=>normalizeName(n||'').trim();
+    // ★ 管理者の相互連携: 事業所管理者(facilityInfo.manager) ⇄ 日誌の管理者(staff role='管理者') ⇄ スタッフ切替(storeMembers.isAdmin)
+    //   事業所管理者名を優先。 未設定なら日誌の管理者名を採用。 決めた管理者を3箇所すべてに反映する。
+    let _staff = [...(diarySettings.staff||[])];
+    const _fiMgr = (_facilityInfo.manager||'').trim();
+    const _diaryAdmin = _staff.find(s=>s.role==='管理者' && s.name && s.name.trim());
+    const _adminName = _fiMgr || (_diaryAdmin?.name || '');
+    if (_adminName) {
+      if (_fiMgr !== _adminName) _facilityInfo = { ..._facilityInfo, manager: _adminName };
+      // 日誌: 管理者名の在籍者を「管理者」に(他は変更しない)
+      if (!_staff.some(s=>_nm(s.name)===_nm(_adminName) && s.role==='管理者')) {
+        _staff = _staff.map(s => _nm(s.name)===_nm(_adminName) ? { ...s, role:'管理者' } : s);
+      }
+    }
+    diarySettings = { ...diarySettings, staff: _staff };
     // ★ 担当職員(diarySettings.staff)を master としてスタッフ切替(storeMembers)を同期。
     //   担当職員から削除した人はスタッフ切替からも消え、残った人は維持(相互反映・重複は集約)。
     const _staffKeys = new Set((diarySettings.staff||[]).filter(s=>s&&s.name&&s.name.trim()).map(s => `${normalizeName(s.name||'').trim()}|${s.role||''}`));
-    const _syncedStoreMembers = (appData.storeMembers||[]).filter(m => m && m.name && _staffKeys.has(`${normalizeName(m.name||'').trim()}|${m.roleLabel||''}`));
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    let _syncedStoreMembers = (appData.storeMembers||[]).filter(m => m && m.name && _staffKeys.has(`${normalizeName(m.name||'').trim()}|${m.roleLabel||''}`));
+    // ★ 管理者はスタッフ切替(storeMembers)にも「管理者」として確実に反映
+    if (_adminName) {
+      if (_syncedStoreMembers.some(m=>_nm(m.name)===_nm(_adminName))) {
+        _syncedStoreMembers = _syncedStoreMembers.map(m => _nm(m.name)===_nm(_adminName) ? { ...m, roleLabel:'管理者', isAdmin:true } : m);
+      } else {
+        _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
+      }
+    }
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -30905,8 +30929,8 @@ function DiarySettingsPanel({ appData, dsRef, markDirty }) {
           <div className="space-y-2">
             {(ds[`schedule${ap}`]||[]).map((item,i)=>(
               <div key={item.id} className="flex items-center gap-2">
-                <input defaultValue={item.time} onBlur={e=>onBlurSched(ap,i,'time',e.target.value)} placeholder="時間" className="w-[130px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
-                <input defaultValue={item.content} onBlur={e=>onBlurSched(ap,i,'content',e.target.value)} placeholder="内容" className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
+                <input defaultValue={item.time} onChange={e=>onBlurSched(ap,i,'time',e.target.value)} onBlur={e=>onBlurSched(ap,i,'time',e.target.value)} placeholder="時間" className="w-[130px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                <input defaultValue={item.content} onChange={e=>onBlurSched(ap,i,'content',e.target.value)} onBlur={e=>onBlurSched(ap,i,'content',e.target.value)} placeholder="内容" className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
                 <button onClick={()=>mutate({...dsRef.current,[`schedule${ap}`]:dsRef.current[`schedule${ap}`].filter((_,j)=>j!==i)})} className="text-red-400 hover:text-red-600"><X size={16}/></button>
               </div>
             ))}
