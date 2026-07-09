@@ -13370,8 +13370,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             const pf = patient?.personalFile || {};
             const prevHist = Array.isArray(pf.faceSheetHistory) ? pf.faceSheetHistory : [];
             const version = ((prevHist[prevHist.length-1]||{}).version || 0) + 1;
-            const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
-            const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
+            const { genogramFiles, floorPlanFiles, pickupRouteFiles, faceSheetFiles, labeledFiles, ...textOnly } = newFs;
+            const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy:_by, source:'caremanager', snapshot }].slice(-20);
             const newPatient = { ...patient, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
@@ -37169,8 +37169,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             // ★ 変更ごとに版を追加 (テキストのみのスナップショット・最新20件)
             const prevHist = personalFile.faceSheetHistory || [];
             const version = ((prevHist[prevHist.length-1]||{}).version || 0) + 1;
-            const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
-            const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
+            const { genogramFiles, floorPlanFiles, pickupRouteFiles, faceSheetFiles, labeledFiles, ...textOnly } = newFs;
+            const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
             // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
             savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
@@ -37585,7 +37585,12 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     genogramFiles: initial?.genogramFiles || [],
     floorPlanFiles: initial?.floorPlanFiles || [],
     pickupRouteFiles: initial?.pickupRouteFiles || [],
+    // ★ 新方式の添付: フェイスシート原本(1枚) + 項目を選んで添付(ラベル付き)
+    faceSheetFiles: initial?.faceSheetFiles || [],
+    labeledFiles: initial?.labeledFiles || [],
   });
+  const ATTACH_LABELS = ['ジェノグラム（家族関係図）','自宅の見取り図','送迎経路','送迎時の注意点','主治医・医療機関','その他'];
+  const [attachLabel, setAttachLabel] = useState(ATTACH_LABELS[0]);
   const update = (key, val) => setFs(prev => ({ ...prev, [key]: val }));
   // ★ フォーム保存時にまとめて「ゴミ箱」へ移す削除予定の添付 (キャンセル時は移動しない)
   const [removedAtts, setRemovedAtts] = useState([]);
@@ -37621,6 +37626,24 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
       added.push(att);
     }
     if (added.length) setFs(prev => ({ ...prev, [key]: [...(prev[key]||[]), ...added] }));
+  };
+  // ★ 項目を選んで添付: labeledFiles にラベル付きで追加
+  const addLabeledAttach = async (e) => {
+    const files = rejectVideos(e.target.files);
+    e.target.value = '';
+    if (files.length === 0) return;
+    const added = [];
+    for (const f of files) {
+      const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+      const { blob, dataUrl, contentType } = await processUploadFile(f);
+      const att = { id: `fsl_${Date.now()}_${Math.random().toString(36).slice(2,7)}`, name: f.name, type: isPdf ? 'pdf' : 'image', label: attachLabel };
+      let stored = null;
+      if (isSupabaseEnabled) stored = await supabaseUploadFile(blob, { name: f.name, contentType, prefix: `fs/${patient.id}` });
+      if (stored?.path) att.storagePath = stored.path; else if (dataUrl) att.data = dataUrl;
+      if (!att.storagePath && !att.data) continue;
+      added.push(att);
+    }
+    if (added.length) setFs(prev => ({ ...prev, labeledFiles: [...(prev.labeledFiles||[]), ...added] }));
   };
   const removeAttach = (key, id) => {
     setFs(prev => {
@@ -37768,8 +37791,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
             </Field>
             <Field label="ジェノグラム (家族関係図)">
               <textarea rows={3} value={fs.genogram} onChange={e=>update('genogram', e.target.value)}
-                placeholder="家族関係の説明 (図は下から画像/PDFを添付できます)" className={textareaCls}/>
-              {renderAttach('genogramFiles')}
+                placeholder="家族関係の説明（図は下の「項目を選んで添付」から添付できます）" className={textareaCls}/>
             </Field>
             {canEditContacts ? (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-2">
@@ -37903,12 +37925,10 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-3">⑦ その他 (実務上あると便利)</div>
             <Field label="自宅の見取り図">
-              <textarea rows={2} value={fs.floorPlan} onChange={e=>update('floorPlan', e.target.value)} placeholder="自由記述 (図は下から画像/PDFを添付できます)" className={textareaCls}/>
-              {renderAttach('floorPlanFiles')}
+              <textarea rows={2} value={fs.floorPlan} onChange={e=>update('floorPlan', e.target.value)} placeholder="自由記述（画像は下の「項目を選んで添付」から添付できます）" className={textareaCls}/>
             </Field>
             <Field label="送迎経路">
-              <textarea rows={2} value={fs.pickupRoute} onChange={e=>update('pickupRoute', e.target.value)} placeholder="自由記述 (地図は下から画像/PDFを添付できます)" className={textareaCls}/>
-              {renderAttach('pickupRouteFiles')}
+              <textarea rows={2} value={fs.pickupRoute} onChange={e=>update('pickupRoute', e.target.value)} placeholder="自由記述（地図は下の「項目を選んで添付」から添付できます）" className={textareaCls}/>
             </Field>
             <Field label="送迎時の留意点">
               <textarea rows={2} value={fs.pickupNotes} onChange={e=>update('pickupNotes', e.target.value)}
@@ -37919,6 +37939,34 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
             </Field>
             <Field label="性格・ケアに役立つ個別情報">
               <textarea rows={3} value={fs.personality} onChange={e=>update('personality', e.target.value)} className={textareaCls}/>
+            </Field>
+          </div>
+          {/* ★ 添付ファイル: フェイスシート原本(1枚) + 項目を選んで添付 */}
+          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+            <div className="text-sm font-bold text-amber-800 mb-3">📎 添付ファイル</div>
+            <Field label="フェイスシート（原本）を添付">
+              {renderAttach('faceSheetFiles')}
+            </Field>
+            <Field label="項目を選んで画像/PDFを添付">
+              <div className="flex items-center gap-2 flex-wrap">
+                <select value={attachLabel} onChange={e=>setAttachLabel(e.target.value)} className={inputCls} style={{maxWidth:240}}>
+                  {ATTACH_LABELS.map(l=><option key={l} value={l}>{l}</option>)}
+                </select>
+                <label className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[12px] font-bold cursor-pointer">画像/PDFを添付<input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={addLabeledAttach}/></label>
+              </div>
+              {(fs.labeledFiles||[]).length>0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {(fs.labeledFiles||[]).map(att=>(
+                    <div key={att.id} className="relative w-20 border border-slate-200 rounded-lg overflow-hidden bg-white">
+                      <StoredFileLink file={att} className="block">
+                        {att.type==='image' ? <StoredImage file={att} alt={att.name} className="w-20 h-20 object-cover"/> : <div className="w-20 h-20 flex flex-col items-center justify-center"><div className="text-[9px] font-bold text-slate-500">PDF</div></div>}
+                      </StoredFileLink>
+                      <div className="text-[8px] text-center text-slate-500 px-0.5 truncate" title={att.label||''}>{att.label||''}</div>
+                      <button type="button" onClick={()=>removeAttach('labeledFiles', att.id)} className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </Field>
           </div>
         </div>
@@ -37939,6 +37987,8 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
   const [downloading, setDownloading] = useState(false);
   // ★ 添付資料 (ジェノグラム/見取り図/送迎経路) を PDF に載せる。 署名URLを事前解決。
   const allAtts = [
+    ...(fs.faceSheetFiles||[]).map(a=>({ ...a, _group:'フェイスシート（原本）' })),
+    ...(fs.labeledFiles||[]).map(a=>({ ...a, _group:a.label||'添付' })),
     ...(fs.genogramFiles||[]).map(a=>({ ...a, _group:'ジェノグラム' })),
     ...(fs.floorPlanFiles||[]).map(a=>({ ...a, _group:'自宅の見取り図' })),
     ...(fs.pickupRouteFiles||[]).map(a=>({ ...a, _group:'送迎経路' })),
