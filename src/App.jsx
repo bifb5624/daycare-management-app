@@ -1013,6 +1013,13 @@ const buildPrimaryContact = (p) => {
 // ★ ケアマネ由来の連絡先は緊急連絡先(家族)には出さない。 事業所名/事業所電話/FAX を持つ or 続柄がケアマネ系。
 const isCmContact = (c) => !!(c && (c.cmOffice || c.officePhone || c.officeFax || /ケアマネ|介護支援|居宅/.test(String(c.relation||''))));
 const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c))) ]; };
+// ★ 家族・ケアマネの外部操作を事業所へ通知するための docUpdates エントリを患者に追加(union-mergeで同期)。
+//   by='family'|'caremanager' / readOffice=false(事業所が未確認) / readCm=true(操作者本人)
+const appendDocUpdate = (patient, by, byName, items) => {
+  const now = new Date().toISOString();
+  const log = Array.isArray(patient?.docUpdates) ? patient.docUpdates : [];
+  return [...log, { id: `du_${now}_${Math.round(Math.random()*1e6)}`, at: now, by, byName: byName || '', items: [...new Set(items)], readOffice: false, readCm: true }].slice(-50);
+};
 // ★ 同名は上書き(upsert)。 name(前後空白/全半角無視)で照合し、既存があれば新しい非空値で更新、無ければ追加。
 const upsertContactByName = (list, contact) => {
   const norm = (s) => (s||'').normalize('NFKC').replace(/[\s　]/g,'').trim();
@@ -10327,6 +10334,30 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
               </div>
             )}
           </Card>
+          {(() => {
+            // ★ 家族・ケアマネがビューアから行った編集/添付/招待/登録の未確認通知を集約
+            const ext = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[]).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice).map(u => ({...u, _pid:p.id, _pname:p.name}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,8);
+            if (!ext.length) return null;
+            const _fmt = (iso)=>{ try{ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch{ return ''; } };
+            return (
+              <Card>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:'#f59e0b',borderRadius:999,padding:'1px 7px'}}>{ext.length}</span></div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {ext.map(u=>(
+                    <button key={u.id} onClick={()=>navigateTo('master', u._pid)} style={{textAlign:'left',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:10,padding:'7px 10px',cursor:'pointer'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2,flexWrap:'wrap'}}>
+                        <span style={{fontSize:9,fontWeight:'bold',color:'white',background:u.by==='caremanager'?'#0891b2':'#7c3aed',borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b'}}>{u._pname} 様</span>
+                        <span style={{fontSize:10,color:'#b45309'}}>{_fmt(u.at)}</span>
+                      </div>
+                      <div style={{fontSize:12,color:'#78350f'}}>{(u.items||[]).join('・')}{u.byName?` — ${u.byName}`:''}</div>
+                    </button>
+                  ))}
+                </div>
+                <div style={{fontSize:10,color:'#a16207',marginTop:6}}>タップで利用者を開いて内容を確認できます（確認すると消えます）。</div>
+              </Card>
+            );
+          })()}
           <Card>
             <div style={{fontSize:14,fontWeight:'bold',color:'#0369a1',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
               <span style={{display:'flex',alignItems:'center',gap:6}}>お知らせ</span>
@@ -12272,7 +12303,7 @@ function FamilyView() {
                           relatedFields.relatedParties = [...existingRp, { name: rpName, relation: ecRelation, office: cmOfficeName, phone: cmOfficePhone, fax: cmOfficeFax, addedByFamilyAccountId: newAccId }];
                         }
                       }
-                      return {...p, emergencyContacts: updatedContacts, ...primaryFields, ...cmFields, ...relatedFields};
+                      return {...p, emergencyContacts: updatedContacts, ...primaryFields, ...cmFields, ...relatedFields, docUpdates: appendDocUpdate(p, (isCmKind?'caremanager':'family'), (ecName || `${ecLastName} ${ecFirstName}`.trim()), [`新規アカウント登録（${ecRelation||(isCmKind?'ケアマネ':'ご家族')}）`])};
                     }),
                   };
                   try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
@@ -13378,7 +13409,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, faceSheetFiles, labeledFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy:_by, source:'caremanager', snapshot }].slice(-20);
-            const newPatient = { ...patient, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+            const newPatient = { ...patient, docUpdates: appendDocUpdate(patient, 'caremanager', _by, ['フェイスシートの編集']), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
             try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
             setData(updated);
@@ -13518,6 +13549,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         address: patientForm.address,
                         kiou: patientForm.kiou,
                         ryui: patientForm.ryui,
+                        // ★ 事業所へ通知
+                        docUpdates: appendDocUpdate(patient, (loggedAcc?.kind==='caremanager'?'caremanager':'family'), (loggedAcc?.displayName||''), ['利用者情報の編集']),
                         // ★ 医療情報(かかりつけ医/医療機関/連絡先)はフェイスシートにも同期(双方向)
                         personalFile: { ...(patient.personalFile||{}), faceSheet: { ...((patient.personalFile||{}).faceSheet||{}), chronicDiseases: patientForm.doctor, medicalInstitution: patientForm.medicalInstitution, medicalContact: patientForm.medicalContact } },
                       };
@@ -13543,6 +13576,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                               address: updatedPatient.address,
                               kiou: updatedPatient.kiou,
                               ryui: updatedPatient.ryui,
+                              docUpdates: updatedPatient.docUpdates,
                             });
                           } catch (e) { console.warn('[supabase] patient sync failed', e); }
                         }
@@ -13701,6 +13735,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   }
                   updatedPatient = { ...patient, emergencyContacts: newContacts };
                 }
+                // ★ 事業所へ通知
+                updatedPatient = { ...updatedPatient, docUpdates: appendDocUpdate(patient, (loggedAcc?.kind==='caremanager'?'caremanager':'family'), (loggedAcc?.displayName||''), ['登録者情報の編集']) };
                 // ローカル反映
                 const updated = {
                   ...data,
@@ -13725,8 +13761,10 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         familyPhone: updatedPatient.familyPhone,
                         familyPhoneMobile: updatedPatient.familyPhoneMobile,
                         familyEmail: updatedPatient.familyEmail,
+                        docUpdates: updatedPatient.docUpdates,
                       } : {
                         emergencyContacts: updatedPatient.emergencyContacts,
+                        docUpdates: updatedPatient.docUpdates,
                       });
                       const _r = await Promise.race([ _p, new Promise((res)=>setTimeout(()=>res('timeout'), 10000)) ]);
                       _synced = _r !== 'timeout';
@@ -14098,7 +14136,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       email: em, relation: inviteFamForm.relation || '',
                       expiresAt: new Date(Date.now() + 14*24*60*60*1000).toISOString(),
                     };
-                    const updated = { ...data, familyInvites: [...(data.familyInvites||[]), newInvite] };
+                    // ★ 事業所へ通知(招待発行)
+                    const _invPatients = (data.patients||[]).map(p => p.id === patient.id ? { ...p, docUpdates: appendDocUpdate(p, (loggedAcc?.kind==='caremanager'?'caremanager':'family'), (loggedAcc?.displayName||''), [`家族・関係者を招待（${inviteFamForm.relation||'続柄未設定'}）`]) } : p);
+                    const updated = { ...data, familyInvites: [...(data.familyInvites||[]), newInvite], patients: _invPatients };
                     try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
                     setData(updated);
                     if (isSupabaseEnabled) {
