@@ -921,6 +921,11 @@ const GlobalStyle = () => React.createElement('style', null, GLOBAL_STYLE);
 
 // === 年齢計算ヘルパー ===
 const calcAge = (birthDate) => { if(!birthDate) return null; const b=new Date(birthDate); const n=new Date(); let age=n.getFullYear()-b.getFullYear(); if(n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate())) age--; return age; };
+// === 和暦 ⇄ 西暦 ヘルパー (生年月日の和暦入力用) ===
+const WAREKI_ERAS = [['明治',1868],['大正',1912],['昭和',1926],['平成',1989],['令和',2019]];
+const warekiParts = (iso) => { if(!iso) return {era:'',ey:'',m:'',day:''}; const d=new Date(iso); if(isNaN(d.getTime())) return {era:'',ey:'',m:'',day:''}; const y=d.getFullYear(); const e=[...WAREKI_ERAS].reverse().find(([,s])=>y>=s)||WAREKI_ERAS[0]; return {era:e[0], ey:y-e[1]+1, m:d.getMonth()+1, day:d.getDate()}; };
+const warekiToIso = (era, ey, m, day) => { const e=WAREKI_ERAS.find(([n])=>n===era); if(!e||!ey||!m||!day) return ''; const y=e[1]+Number(ey)-1; if(!(y>=1868 && Number(m)>=1 && Number(m)<=12 && Number(day)>=1 && Number(day)<=31)) return ''; return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`; };
+const warekiStr = (iso) => { const w=warekiParts(iso); return w.era ? `${w.era}${w.ey}年${w.m}月${w.day}日` : ''; };
 
 // === 名前の正規化ヘルパー (NFKC で半角/全角カナを統一) ===
 //    例: 「①ﾊﾞｲｸ」 = 「①バイク」 として比較できるよう
@@ -26826,7 +26831,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     <div>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
                       <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
-                      {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
+                      {/* ★ 和暦でも入力可能 (西暦と自動連動) */}
+                      {(() => { const wp = warekiParts(localPatient.birthDate); const setW = (patch) => { const nw = {...wp, ...patch}; const iso = warekiToIso(nw.era||'昭和', nw.ey, nw.m, nw.day); if(iso) updateLP('birthDate', iso); }; const inC="px-1.5 py-1 bg-white border border-slate-300 rounded text-sm font-bold outline-none disabled:opacity-60 text-center"; return (
+                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                          <span className="text-[11px] font-bold text-slate-400">和暦</span>
+                          <select disabled={isOff} value={wp.era||''} onChange={e=>setW({era:e.target.value})} className={inC}><option value="">元号</option>{WAREKI_ERAS.map(([n])=><option key={n} value={n}>{n}</option>)}</select>
+                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.ey||''} onChange={e=>setW({ey:e.target.value})} placeholder="年" className={`${inC} w-14`}/><span className="text-[12px] text-slate-500">年</span>
+                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.m||''} onChange={e=>setW({m:e.target.value})} placeholder="月" className={`${inC} w-12`}/><span className="text-[12px] text-slate-500">月</span>
+                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.day||''} onChange={e=>setW({day:e.target.value})} placeholder="日" className={`${inC} w-12`}/><span className="text-[12px] text-slate-500">日</span>
+                        </div>
+                      ); })()}
+                      {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}{warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
                     </div>
                   </div>
                 </div>
