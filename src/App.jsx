@@ -12244,10 +12244,13 @@ function FamilyView() {
                       let cmFields = {};
                       if (isCaremanager) {
                         const cmFullName = `${cmManagerLast} ${cmManagerFirst}`.trim();
+                        const _n=(s)=>(s||'').normalize('NFKC').replace(/[\s　]/g,'').trim();
+                        // 未割当、または「同じ担当ケアマネ」の再登録なら最新の連絡先で更新(古い電話/FAXの刷新)。 別のケアマネは上書きしない。
+                        const sameCm = (!p.cmOffice && !p.cmName) || (_n(p.cmOffice)===_n(cmOfficeName) && _n(p.cmName)===_n(cmFullName));
                         if (!p.cmOffice) cmFields.cmOffice = cmOfficeName;
                         if (!p.cmName) cmFields.cmName = cmFullName;
-                        if (!p.cmPhone) cmFields.cmPhone = cmManagerDirect || cmOfficePhone;
-                        if (!p.cmFax) cmFields.cmFax = cmOfficeFax;
+                        if (!p.cmPhone || sameCm) { const v = cmManagerDirect || cmOfficePhone; if (v) cmFields.cmPhone = v; }
+                        if (!p.cmFax || sameCm) { if (cmOfficeFax) cmFields.cmFax = cmOfficeFax; }
                       }
                       // ★ その他関係者: 利用者マスタの「その他関係者」に自動追加 (同名+同事業所は重複追加しない)
                       let relatedFields = {};
@@ -27690,7 +27693,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 ec[0] = { ...(ec[0]||{}), ...(emName?{name:emName}:{}), ...(emRel?{relation:emRel}:{}), ...(emPhone?{phone:emPhone}:{}) };
                 np.emergencyContacts = ec;
               }
-              if (doctor) { const pf=np.personalFile||{}; np.personalFile={...pf, faceSheet:{...(pf.faceSheet||{}), chronicDiseases: doctor}}; }
+              if (doctor) { np.doctor = doctor; const pf=np.personalFile||{}; np.personalFile={...pf, faceSheet:{...(pf.faceSheet||{}), chronicDiseases: doctor}}; }
               return np;
             };
             let added=0, updated=0, skipped=0;
@@ -37146,8 +37149,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
-            // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)も同時に患者へ書き戻す(双方向連携)
-            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}) }, undefined, {
+            // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
+            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), doctor: (newFs.chronicDiseases||'') }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
@@ -37536,7 +37539,8 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     benefitLimit: initial?.benefitLimit || '',
     otherWelfare: initial?.otherWelfare || '',
     // ⑤ 医療・健康情報 (主治医/医療機関/連絡先 を3項目に分割。chronicDiseases は旧データ=主治医欄として継続使用)
-    chronicDiseases: initial?.chronicDiseases || '',
+    //   ★ 基本情報/家族アプリ/CSVの かかりつけ医(patient.doctor) を初期値にフォールバック(双方向連携)
+    chronicDiseases: initial?.chronicDiseases || patient?.doctor || '',
     medicalInstitution: initial?.medicalInstitution || '',
     medicalContact: initial?.medicalContact || '',
     medication: initial?.medication || '',
