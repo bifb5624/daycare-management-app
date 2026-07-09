@@ -18112,8 +18112,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       {!isFullscreen ? (
       <div className="bg-white px-4 py-3 rounded-2xl shadow-sm border border-slate-200 flex flex-row items-center gap-3 flex-wrap flex-shrink-0 sticky top-0 z-30 mb-4">
           <div className="bg-slate-100 p-1 rounded-xl flex items-center">
-              <button onClick={() => setFilterMode('single')} className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'single' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>本日分</button>
-              <button onClick={() => setFilterMode('month')} className={`px-5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'month' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>月全体</button>
+              <button onClick={() => setFilterMode('single')} className={`px-3.5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'single' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>本日</button>
+              <button onClick={() => setFilterMode('month')} className={`px-3.5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'month' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>月全体</button>
           </div>
             {filterMode === 'single' && (
               <div className="flex items-center gap-2">
@@ -18126,7 +18126,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   <div className="flex rounded-xl overflow-hidden border border-slate-300">
                     {['AM','PM'].map(v=>(
                       <button key={v} type="button" onClick={()=>setTimeFilter(v)}
-                        className={`px-5 py-2 text-sm font-bold transition-all ${timeFilter===v?'bg-blue-600 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>{v}</button>
+                        className={`px-4 py-2 text-sm font-bold transition-all ${timeFilter===v?'bg-blue-600 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>{v}</button>
                     ))}
                   </div>
                   {attCountChips}
@@ -18154,7 +18154,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             )}
             <div className="relative flex items-center bg-slate-50 border border-slate-300 rounded-xl px-3 py-2">
               <Search size={18} className="text-slate-400 mr-2" />
-              <input type="text" value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)} placeholder="氏名で絞り込み..." className="bg-transparent outline-none text-sm w-40 font-bold text-slate-700" />
+              <input type="text" value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)} placeholder="氏名で検索" className="bg-transparent outline-none text-sm w-24 font-bold text-slate-700" />
               {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><X size={16} /></button>}
             </div>
             <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -18165,7 +18165,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <CloudUpload size={15} className="mr-1" /> 保存
               </button>
               <button onClick={() => { handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center shadow-lg transition-all active:scale-95 whitespace-nowrap">
-                <Printer size={15} className="mr-1" /> 連絡帳へ
+                <Printer size={15} className="mr-1" /> 連絡帳
               </button>
             </div>
       </div>
