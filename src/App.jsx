@@ -1264,10 +1264,95 @@ const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.
 // ★ 事業所側の編集モーダル(フェイスシート等)を開いている間は true。 その間はクラウドポーリング(checkAndPull)を
 //   スキップし、appData 差し替えによる再描画/再マウントで入力欄のフォーカスが外れる・添付が中断するのを防ぐ。
 const officeEditingActive = { current: false };
-// ★ 家族・関係者(ケアマネ等)の新規登録時に同意いただく規約/ポリシーの版。 内容を更新したら版と日付を上げる
-//   → 将来「ログイン後に最新版へ再同意」ゲートで参照する。 管理局が文面を改定=この定数を更新して全店へ反映。
+// ★ 同意ポリシー(規約/プライバシー/事業所重要事項)の既定の版。 内容を更新したら版と日付を上げる。
+//   管理局が文面を改定=この定数を更新して全店へ即反映(デプロイ)。 各事業所は「各種設定」で上書き編集も可能(社労士確認後の微修正等)。
+//   ログイン/入場時に「同意済みの版 ≠ 現在の版」なら再同意ゲートを表示する。
 const FAMILY_CONSENT_VERSION = '2.0';
 const FAMILY_CONSENT_DATE = '2026-07-09';
+const OFFICE_CONSENT_VERSION = '1.0';
+const OFFICE_CONSENT_DATE = '2026-07-09';
+// {facility}=事業所名 / {tel}=電話 を差し込むトークン付きの既定文
+const POLICY_DEFAULT_FAMILY_TEXT = `【利用規約】
+1. 本サービスは「{facility}」のご利用者ご本人・ご家族・関係者(担当ケアマネジャー等)専用の、情報閲覧・連絡サービスです。
+2. アカウント(ID・パスワード)はご本人のみが使用し、第三者への譲渡・貸与・共有はできません。
+3. 画面・写真・記録の内容を、SNS等への転載や目的外での第三者提供・不正利用はできません(スクリーンショットの拡散を含む)。
+4. 担当ケアマネジャー等の専門職は、職務上知り得た情報について守秘義務を負い、ケアマネジメント等の目的以外に利用しません。
+5. なりすまし・不正アクセス・システムへの妨害行為を禁止します。
+6. 退会(アカウント削除)をご希望の場合は事業所窓口へお申し出ください。
+7. システムの停止・不具合・通信障害等により生じた損害について、事業所は合理的な範囲を超える責任を負いません。本サービスは予告なく変更・停止される場合があります。
+
+【プライバシーポリシー／個人情報の取り扱い】
+1. 取得する情報: 氏名・フリガナ・続柄・電話番号・メールアドレス・ログインID・パスワード(暗号化)・アクセスログ・端末情報、および閲覧対象となるご利用者の介護・健康に関する情報。
+2. 要配慮個人情報: ご利用者の病歴・服薬・心身の状態・介護度など(要配慮個人情報)を取得・記録し、サービス提供に必要な範囲で事業所・ご家族・担当関係者と共有します。ご登録はこれに同意いただくものです。
+3. 利用目的: 介護記録・連絡・お知らせの提供、緊急連絡先の管理、サービスの維持・改善のため。
+4. 外部サービスの利用(委託): データの保管・配信・メール送信・AIによる記録要約等のため、外部のクラウド事業者(例: Supabase／Vercel／Brevo／Anthropic 等)を利用します。これらの処理・保管の一部は日本国外で行われる場合があります。委託先には適切な安全管理を求めます。
+5. AIの利用: 記録の要約・下書き作成等のため、必要な範囲で情報を外部のAIサービスに送信して処理する場合があります。
+6. 写真・書類: 顔写真や各種書類(介護保険証・負担割合証等)の画像を保存する場合があります。
+7. 第三者提供: 法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。
+8. 本人(ご利用者)の同意: ご家族・関係者による閲覧は、ご本人(又はその代理人)の同意のもとで行われます。
+9. 安全管理: 通信の暗号化・アクセス制御等の安全管理措置を講じます。
+10. 保管期間: 退所後5年間、または介護保険法等の法令で定める期間。
+11. 開示・訂正・利用停止・削除、および本ポリシーの改定通知: 事業所窓口へお問い合わせください。改定時は本サービス上でお知らせします。
+12. お問い合わせ: {facility}{tel}`;
+const POLICY_DEFAULT_OFFICE_TEXT = `つむぎ ご利用にあたっての重要事項・同意事項(事業所様)
+
+【サービスの位置づけ】
+1. 本サービス「つむぎ」は、通所介護等の事業所様の記録・連絡・書類作成等を支援する業務システムです。介護報酬の算定・記録保存等の最終的な責任は事業所様に帰属します。
+2. 事業所様は、本サービスで取り扱うご利用者の個人情報・要配慮個人情報について、個人情報保護法・介護保険関係法令に基づき適切に管理する責任を負います。
+
+【データの取り扱い・委託】
+3. 本サービスは、データの保管・配信・メール送信・AIによる記録要約等のため、外部のクラウド事業者(Supabase／Vercel／Brevo／Anthropic 等)を利用します。処理・保管の一部は日本国外で行われる場合があります。
+4. 事業所様は、ご利用者・ご家族から、上記を含む個人情報の取り扱い(外部委託・国外処理・AI利用・家族/ケアマネへの共有)について必要な同意を取得するものとします(本サービスの家族・関係者登録画面の同意取得機能をご利用いただけます)。
+5. AI機能(記録要約・下書き・モニタリング等)は補助を目的とし、生成物の最終確認・修正は事業所様が行うものとします。
+
+【アカウント・セキュリティ】
+6. スタッフのアカウント・パスワードは適切に管理し、離職者のアカウント停止等を速やかに行ってください。
+7. 端末の紛失・共有端末での離席等に留意し、情報漏えい防止に努めるものとします。
+
+【外部送信機能(FAX等)】
+8. モニタリング表・書類のFAX送信等、外部へ送信する機能は、送信先・内容を事業所様の責任でご確認のうえご利用ください。
+
+【料金・変更・免責】
+9. 料金・従量課金(AI・FAX等)の内容は別途ご案内に従います。
+10. 本サービスは機能の追加・変更・一時停止を行う場合があります。重要な変更時は本サービス上でお知らせし、必要に応じて改めて同意をお願いする場合があります。
+11. システムの不具合・通信障害・外部サービスの停止等により生じた損害について、運営者は法令で許容される範囲で責任を限定します。重要データは控えの保持を推奨します。
+
+【改定】
+12. 本重要事項は、運営(つむぎ管理局)が改定する場合があります。改定後にログインした際、最新版への同意をお願いすることがあります。`;
+// 有効ポリシー: 事業所の上書き(systemSettings.policies[kind]) があればそれ、無ければ既定
+function getEffectivePolicy(kind, systemSettings) {
+  const ov = systemSettings?.policies?.[kind];
+  if (ov && ov.version && String(ov.text||'').trim()) return { version: String(ov.version), date: ov.date || '', text: String(ov.text) };
+  if (kind === 'office') return { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT };
+  return { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT };
+}
+const renderPolicyText = (text, facility, tel) => String(text || '').replace(/\{facility\}/g, facility || '当事業所').replace(/\{tel\}/g, tel ? ` / TEL ${tel}` : '');
+// ★ 最新版の同意を求めるゲート(家族/ケアマネ=ログイン後 / 事業所=入場後)。 同意するまで先へ進めない。
+function ConsentGateModal({ title, subtitle, policy, facility, tel, agreeLabel, onAgree, onCancel, cancelLabel, busy }) {
+  const [checked, setChecked] = React.useState(false);
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.72)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div style={{background:'white',borderRadius:16,width:580,maxWidth:'96vw',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+        <div style={{padding:'16px 18px',borderBottom:'1px solid #e2e8f0'}}>
+          <div style={{fontSize:16,fontWeight:'bold',color:'#166534'}}>{title}</div>
+          {subtitle && <div style={{fontSize:11,color:'#64748b',marginTop:3,lineHeight:1.5}}>{subtitle}</div>}
+          <div style={{fontSize:10,color:'#65a30d',fontWeight:'bold',marginTop:4}}>第{policy.version}版{policy.date?`（${String(policy.date).replace(/-/g,'/')}改定）`:''}</div>
+        </div>
+        <div style={{flex:1,overflow:'auto',padding:'14px 18px',fontSize:12,color:'#334155',lineHeight:1.8,whiteSpace:'pre-wrap'}}>{renderPolicyText(policy.text, facility, tel)}</div>
+        <div style={{padding:'12px 18px',borderTop:'1px solid #e2e8f0'}}>
+          <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:13,color:'#166534',cursor:'pointer',marginBottom:10}}>
+            <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)} style={{marginTop:2,accentColor:'#16a34a'}}/>
+            <span>上記の内容を確認し、<b>同意します</b></span>
+          </label>
+          <div style={{display:'flex',gap:8}}>
+            {onCancel && <button type="button" onClick={onCancel} style={{flex:1,padding:'11px',borderRadius:10,border:'1px solid #cbd5e1',background:'#f1f5f9',color:'#475569',fontWeight:'bold',cursor:'pointer'}}>{cancelLabel||'あとで'}</button>}
+            <button type="button" disabled={!checked||busy} onClick={onAgree} style={{flex:2,padding:'11px',borderRadius:10,border:'none',background:(checked&&!busy)?'#16a34a':'#cbd5e1',color:'white',fontWeight:'bold',cursor:(checked&&!busy)?'pointer':'not-allowed'}}>{busy?'保存中…':(agreeLabel||'同意して進む')}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 const formatJpPhone = (s) => {
   const digits = (s || '').replace(/[^0-9]/g, '');
   if (!digits) return '';
@@ -11681,6 +11766,7 @@ function FamilyView() {
   const [authAccId, setAuthAccId] = useState(()=> sessionStorage.getItem('familyAuthAccId') || null);
   // ★ 事業所管理者プレビュー: 管理者ID/PWでログインすると、ご家族/ケアマネ画面をデモ確認できる
   const [adminPreview, setAdminPreview] = useState(null); // null | { storeName }
+  const [reconsentBusy, setReconsentBusy] = useState(false); // 再同意ゲートの保存中
   // ★ 家族側の店舗 ID (ログイン後に判明) → 店舗ごとの app_state を pull するため
   //   最優先は sessionStorage の familyAuthStoreId (ログイン時に必ず保存される)
   //   data.familyAccounts は遅れて反映されるので、 これだけだと「データ取得中」ループになる
@@ -12003,6 +12089,7 @@ function FamilyView() {
                 kind: la.kind || 'family', relation: la.relation || '',
                 displayName: la.display_name || '', email: la.email || '',
                 role: la.role || 'member', lastLogin: new Date().toISOString(),
+                consents: la.consents || null, // ★ 同意済みの版を保持(再同意ゲートの判定用)
                 _fromSupabase: true,
               })),
             };
@@ -12276,12 +12363,7 @@ function FamilyView() {
                     createdAt: new Date().toISOString().slice(0,10),
                     invitedByAccountId: invite.createdByAccountId || null,
                     // 利用規約・プライバシーポリシーへの同意記録 (版を上げたらログイン後に再同意させる想定)
-                    consents: {
-                      version: FAMILY_CONSENT_VERSION,
-                      termsVersion: FAMILY_CONSENT_VERSION,
-                      privacyVersion: FAMILY_CONSENT_VERSION,
-                      acceptedAt: new Date().toISOString(),
-                    },
+                    consents: (() => { const _v = getEffectivePolicy('family', data.systemSettings).version; return { version: _v, termsVersion: _v, privacyVersion: _v, acceptedAt: new Date().toISOString() }; })(),
                   };
                   const ecLastName = (signupForm.ecLastName||'').trim();
                   const ecFirstName = (signupForm.ecFirstName||'').trim();
@@ -12443,6 +12525,8 @@ function FamilyView() {
                   try {
                     sessionStorage.setItem('familyAuthPid', String(invite.patientId));
                     sessionStorage.setItem('familyAuthAccId', String(newAccId));
+                    // ★ 登録時に同意済みの版を端末にも記録 → 登録直後に再同意ゲートを出さない
+                    try { const _m = JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}'); _m[String(newAccId)] = getEffectivePolicy('family', data.systemSettings).version; localStorage.setItem('tsumugiFamilyConsent', JSON.stringify(_m)); } catch {}
                     // ★ 店舗 ID を確実に保存 (招待 → 無ければ Supabase 返却値)。
                     //   これが入っていれば「全店舗走査フォールバック」を回避でき、別店舗の同番号利用者に化けない。
                     const _autoStoreId = invite.storeId || invite.store_id || _sbStoreId || null;
@@ -12659,32 +12743,13 @@ function FamilyView() {
                       <div style={{fontSize:10,color:'#64748b',marginTop:6}}>※ 個人の電話番号は上の「ご登録者情報」に入力してください。</div>
                     </div>
                   )}
-                  {/* 利用規約・プライバシーポリシー 同意 */}
+                  {/* 利用規約・プライバシーポリシー 同意 (有効ポリシー=事業所の上書き or 既定) */}
+                  {(() => { const _effPol = getEffectivePolicy('family', data.systemSettings); return (
                   <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:12,padding:14,marginBottom:12,marginTop:8}}>
                     <div style={{fontSize:12,fontWeight:'bold',color:'#166534',marginBottom:2}}>利用規約・プライバシーポリシー</div>
-                    <div style={{fontSize:10,color:'#65a30d',fontWeight:'bold',marginBottom:8}}>第{FAMILY_CONSENT_VERSION}版（{FAMILY_CONSENT_DATE.replace(/-/g,'/')}改定）</div>
-                    <div style={{maxHeight:240,overflow:'auto',background:'white',border:'1px solid #d1fae5',borderRadius:8,padding:'10px 12px',fontSize:11,color:'#334155',lineHeight:1.75,marginBottom:10}}>
-                      <b style={{color:'#166534'}}>【利用規約】</b><br/>
-                      1. 本サービスは「{_inviteInfo.facilityName||facility.name||'当事業所'}」のご利用者ご本人・ご家族・関係者（担当ケアマネジャー等）専用の、情報閲覧・連絡サービスです。<br/>
-                      2. アカウント（ID・パスワード）はご本人のみが使用し、第三者への譲渡・貸与・共有はできません。<br/>
-                      3. 画面・写真・記録の内容を、SNS等への転載や目的外での第三者提供・不正利用はできません（スクリーンショットの拡散を含む）。<br/>
-                      4. 担当ケアマネジャー等の専門職は、職務上知り得た情報について守秘義務を負い、ケアマネジメント等の目的以外に利用しません。<br/>
-                      5. なりすまし・不正アクセス・システムへの妨害行為を禁止します。<br/>
-                      6. 退会（アカウント削除）をご希望の場合は事業所窓口へお申し出ください。<br/>
-                      7. システムの停止・不具合・通信障害等により生じた損害について、事業所は合理的な範囲を超える責任を負いません。本サービスは予告なく変更・停止される場合があります。<br/><br/>
-                      <b style={{color:'#166534'}}>【プライバシーポリシー／個人情報の取り扱い】</b><br/>
-                      1. 取得する情報: 氏名・フリガナ・続柄・電話番号・メールアドレス・ログインID・パスワード（暗号化）・アクセスログ・端末情報、および閲覧対象となるご利用者の介護・健康に関する情報。<br/>
-                      2. <b>要配慮個人情報</b>: ご利用者の病歴・服薬・心身の状態・介護度など（要配慮個人情報）を取得・記録し、サービス提供に必要な範囲で事業所・ご家族・担当関係者と共有します。ご登録はこれに同意いただくものです。<br/>
-                      3. 利用目的: 介護記録・連絡・お知らせの提供、緊急連絡先の管理、サービスの維持・改善のため。<br/>
-                      4. <b>外部サービスの利用（委託）</b>: データの保管・配信・メール送信・AIによる記録要約等のため、外部のクラウド事業者（例: Supabase／Vercel／Brevo／Anthropic 等）を利用します。これらの処理・保管の<b>一部は日本国外で行われる場合があります</b>。委託先には適切な安全管理を求めます。<br/>
-                      5. <b>AIの利用</b>: 記録の要約・下書き作成等のため、必要な範囲で情報を外部のAIサービスに送信して処理する場合があります。<br/>
-                      6. 写真・書類: 顔写真や各種書類（介護保険証・負担割合証等）の画像を保存する場合があります。<br/>
-                      7. 第三者提供: 法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。<br/>
-                      8. 本人（ご利用者）の同意: ご家族・関係者による閲覧は、ご本人（又はその代理人）の同意のもとで行われます。<br/>
-                      9. 安全管理: 通信の暗号化・アクセス制御等の安全管理措置を講じます。<br/>
-                      10. 保管期間: 退所後5年間、または介護保険法等の法令で定める期間。<br/>
-                      11. 開示・訂正・利用停止・削除、および本ポリシーの改定通知: 事業所窓口へお問い合わせください。改定時は本サービス上でお知らせします。<br/>
-                      12. お問い合わせ: {_inviteInfo.facilityName||facility.name||'当事業所'}{(_inviteInfo.facilityPhone||facility.phone)?` / TEL ${_inviteInfo.facilityPhone||facility.phone}`:''}<br/>
+                    <div style={{fontSize:10,color:'#65a30d',fontWeight:'bold',marginBottom:8}}>第{_effPol.version}版{_effPol.date?`（${String(_effPol.date).replace(/-/g,'/')}改定）`:''}</div>
+                    <div style={{maxHeight:240,overflow:'auto',background:'white',border:'1px solid #d1fae5',borderRadius:8,padding:'10px 12px',fontSize:11,color:'#334155',lineHeight:1.75,marginBottom:10,whiteSpace:'pre-wrap'}}>
+                      {renderPolicyText(_effPol.text, _inviteInfo.facilityName||facility.name||'当事業所', _inviteInfo.facilityPhone||facility.phone)}
                     </div>
                     <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'#166534',cursor:'pointer',marginBottom:6}}>
                       <input type="checkbox" checked={signupForm.agreedTerms||false} onChange={e=>setSignupForm(f=>({...f,agreedTerms:e.target.checked,error:''}))}
@@ -12697,6 +12762,7 @@ function FamilyView() {
                       <span><b>プライバシーポリシー</b>および<b>個人情報の取り扱い</b>に同意します <span style={{color:'#dc2626'}}>*</span></span>
                     </label>
                   </div>
+                  ); })()}
                   {signupForm.error && <div style={{color:'#ef4444',fontSize:12,fontWeight:'bold',marginBottom:10,textAlign:'center',background:'#fef2f2',padding:'8px 10px',borderRadius:8}}>{signupForm.error}</div>}
                   <button type="submit" disabled={!(signupForm.agreedTerms && signupForm.agreedPrivacy) || signupForm.checking || signupForm.submitting}
                     style={{width:'100%',padding:'13px',background: (signupForm.agreedTerms && signupForm.agreedPrivacy && !signupForm.checking && !signupForm.submitting)?'#7daa3d':'#cbd5e1',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:(signupForm.agreedTerms && signupForm.agreedPrivacy)?'pointer':'not-allowed',marginTop:6,boxShadow:'0 4px 12px rgba(125,170,61,0.3)'}}>
@@ -12774,6 +12840,35 @@ function FamilyView() {
     setAuthPid(null);
     setAuthAccId(null);
   } : null;
+  // ★ 最新版の同意ゲート(家族/ケアマネ): 同意済みの版が現行版と異なれば、閲覧前に再同意を求める。 プレビューは除外。
+  const _isPreviewAcc = String(authAccId||'').startsWith('preview_');
+  const _famAcc = (data.familyAccounts||[]).find(a => String(a.id) === String(authAccId));
+  const _effFamPol = getEffectivePolicy('family', data.systemSettings);
+  // 同意済みの版: DB(consents)優先。 端末ローカルにも記録し、DBにconsents列が無い環境でも毎回聞かないようにする。
+  const _localFamConsentV = (()=>{ try { return (JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}')||{})[String(authAccId)] || ''; } catch { return ''; } })();
+  const _famConsented = String(_famAcc?.consents?.version || _famAcc?.consents?.termsVersion || _localFamConsentV || '0');
+  if (!_isPreviewAcc && _famAcc && _famConsented !== String(_effFamPol.version)) {
+    const _famFacility = data.systemSettings?.facilityInfo?.name || facility.name || '当事業所';
+    const _famTel = data.systemSettings?.facilityInfo?.phone || facility.phone || '';
+    return <ConsentGateModal
+      title="最新の利用規約・プライバシーポリシーへの同意"
+      subtitle="内容が更新されました。ご確認のうえ同意して進んでください。"
+      policy={_effFamPol} facility={_famFacility} tel={_famTel}
+      busy={reconsentBusy}
+      onAgree={async () => {
+        setReconsentBusy(true);
+        const _v = _effFamPol.version;
+        const _consents = { version:_v, termsVersion:_v, privacyVersion:_v, acceptedAt:new Date().toISOString() };
+        const upd = { ...data, familyAccounts: (data.familyAccounts||[]).map(a => String(a.id)===String(authAccId) ? { ...a, consents:_consents } : a) };
+        try { localStorage.setItem('daycareAppData_v3', JSON.stringify(upd)); } catch {}
+        // ★ 端末ローカルにも同意版を記録(DBにconsents列が無くても毎回聞かないように)
+        try { const _m = JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}'); _m[String(authAccId)] = _v; localStorage.setItem('tsumugiFamilyConsent', JSON.stringify(_m)); } catch {}
+        setData(upd);
+        try { await supabaseUpdateFamilyAccount?.(authAccId, { consents:_consents }); } catch(e) { console.warn('[consent] update failed', e); }
+        setReconsentBusy(false);
+      }}
+    />;
+  }
   return <FamilyPatientView data={data} setData={setData} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} editingRef={editingRef} />;
 }
 
@@ -16464,6 +16559,25 @@ export default function App() {
         });
       }) : null}
     />;
+  }
+  // ★ 事業所の同意ゲート: 入場後、事業所重要事項の最新版に未同意なら同意を求める(管理局のプレビュー入場は除外)。
+  if (isSupabaseEnabled && staffSession?.storeId && activeRecorder && staffSession.role !== 'super_admin' && dataLoadedForStoreRef.current === staffSession.storeId) {
+    const _effOfficePol = getEffectivePolicy('office', appData.systemSettings);
+    const _officeConsented = String(appData.systemSettings?.officeConsent?.version || '0');
+    if (_officeConsented !== String(_effOfficePol.version)) {
+      const _ofFacility = appData.systemSettings?.facilityInfo?.name || staffSession.storeName || '当事業所';
+      const _ofTel = appData.systemSettings?.facilityInfo?.phone || '';
+      return <ConsentGateModal
+        title="つむぎ ご利用にあたっての重要事項（事業所様）"
+        subtitle="内容が更新されました。管理者の方がご確認のうえ、同意して進んでください。"
+        policy={_effOfficePol} facility={_ofFacility} tel={_ofTel}
+        agreeLabel="同意して利用を開始"
+        onAgree={() => {
+          const _v = _effOfficePol.version;
+          handleSaveToCloud({ ...appData, systemSettings: { ...(appData.systemSettings||{}), officeConsent: { version:_v, acceptedAt:new Date().toISOString(), acceptedBy: activeRecorder?.name||'' } } }, { manual:true, message:'✓ 重要事項に同意しました' });
+        }}
+      />;
+    }
   }
   // Supabase 未接続時: 環境変数設定を促す画面
   if (!isSupabaseEnabled && !session) {
@@ -29435,6 +29549,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const [officeSearch, setOfficeSearch] = useState('');   // ★ ケアマネ事業所の検索
   const [managerSearch, setManagerSearch] = useState(''); // ★ 担当ケアマネの検索
   const [facilityInfo, setFacilityInfo] = useState(appData.systemSettings?.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" });
+  // ★ 同意ポリシー(家族/事業所)の編集。 版を上げるとログイン/入場時に再同意を求める。
+  const [policyFamily, setPolicyFamily] = useState(() => appData.systemSettings?.policies?.family || { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT });
+  const [policyOffice, setPolicyOffice] = useState(() => appData.systemSettings?.policies?.office || { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT });
 
   // dirtyRef: facilityInfo等が変わったらdirtyをセット
   const setDirty = React.useCallback(() => { if (dirtyRef) dirtyRef.current = true; }, [dirtyRef]);
@@ -29528,7 +29645,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
       }
     }
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, policies: { family: policyFamily, office: policyOffice } } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -30055,6 +30172,33 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 ))}
               </div>
             </SectionCard>
+            {(isAdmin || isSuperAdmin) && (
+            <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集">
+              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                家族・ケアマネの登録画面と、事業所の入場時に表示する同意文を編集できます。<b>社労士等の確認後に文面を修正</b>してご利用ください。<br/>
+                文中の <b>{'{facility}'}</b>=事業所名、<b>{'{tel}'}</b>=電話番号 に自動で置き換わります。<br/>
+                <b className="text-amber-700">「版」を上げて保存すると</b>、次回ログイン/入場時に<b>再同意</b>を求めます（同意状況は担当者・利用者ごとに記録）。<br/>
+                <span className="text-slate-400">※ ここは各事業所ごとの設定です。空欄や版を下げた場合は、つむぎ標準の既定文が使われます。</span>
+              </p>
+              {[
+                { key:'family', label:'家族・ケアマネ向け（利用規約・プライバシーポリシー）', st:policyFamily, set:setPolicyFamily, def:{version:FAMILY_CONSENT_VERSION,date:FAMILY_CONSENT_DATE,text:POLICY_DEFAULT_FAMILY_TEXT} },
+                { key:'office', label:'事業所向け（ご利用にあたっての重要事項）', st:policyOffice, set:setPolicyOffice, def:{version:OFFICE_CONSENT_VERSION,date:OFFICE_CONSENT_DATE,text:POLICY_DEFAULT_OFFICE_TEXT} },
+              ].map(({key,label,st,set,def})=>(
+                <div key={key} className="mb-5 border border-slate-200 rounded-xl p-3 bg-slate-50">
+                  <div className="text-sm font-bold text-slate-700 mb-2">{label}</div>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <label className="text-xs font-bold text-slate-500">版</label>
+                    <input value={st.version||''} onChange={e=>set(s=>({...s,version:e.target.value}))} placeholder="例: 2.1" className="w-24 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
+                    <label className="text-xs font-bold text-slate-500 ml-2">改定日</label>
+                    <input type="date" value={st.date||''} onChange={e=>set(s=>({...s,date:e.target.value}))} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                    <button type="button" onClick={()=>{ if(window.confirm('つむぎ標準の既定文に戻しますか？（未保存の編集は失われます）')) set({...def}); }} className="ml-auto text-xs font-bold text-slate-500 bg-white border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-100">既定文に戻す</button>
+                  </div>
+                  <textarea value={st.text||''} onChange={e=>set(s=>({...s,text:e.target.value}))} rows={10} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs outline-none resize-y leading-relaxed" style={{whiteSpace:'pre-wrap'}}/>
+                </div>
+              ))}
+              <p className="text-[11px] text-slate-400">編集後は画面右上（またはこのページ）の<b>保存</b>で反映されます。</p>
+            </SectionCard>
+            )}
             <SectionCard title="テンキー補完ボタンの管理">
               <p className="text-xs text-slate-500 mb-3">運動入力テンキーの下部に表示される「+◯◯」ボタンを管理します。{ss.keypadDisabled===true && <span className="text-amber-600 font-bold">（テンキー非表示中は使われません）</span>}</p>
               <div className="flex flex-wrap gap-2 mb-4">
