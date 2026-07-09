@@ -1264,6 +1264,10 @@ const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.
 // ★ 事業所側の編集モーダル(フェイスシート等)を開いている間は true。 その間はクラウドポーリング(checkAndPull)を
 //   スキップし、appData 差し替えによる再描画/再マウントで入力欄のフォーカスが外れる・添付が中断するのを防ぐ。
 const officeEditingActive = { current: false };
+// ★ 家族・関係者(ケアマネ等)の新規登録時に同意いただく規約/ポリシーの版。 内容を更新したら版と日付を上げる
+//   → 将来「ログイン後に最新版へ再同意」ゲートで参照する。 管理局が文面を改定=この定数を更新して全店へ反映。
+const FAMILY_CONSENT_VERSION = '2.0';
+const FAMILY_CONSENT_DATE = '2026-07-09';
 const formatJpPhone = (s) => {
   const digits = (s || '').replace(/[^0-9]/g, '');
   if (!digits) return '';
@@ -12271,10 +12275,11 @@ function FamilyView() {
                     email: email,
                     createdAt: new Date().toISOString().slice(0,10),
                     invitedByAccountId: invite.createdByAccountId || null,
-                    // 利用規約・プライバシーポリシーへの同意記録 (バージョン番号は後で変えられる)
+                    // 利用規約・プライバシーポリシーへの同意記録 (版を上げたらログイン後に再同意させる想定)
                     consents: {
-                      termsVersion: '1.0',
-                      privacyVersion: '1.0',
+                      version: FAMILY_CONSENT_VERSION,
+                      termsVersion: FAMILY_CONSENT_VERSION,
+                      privacyVersion: FAMILY_CONSENT_VERSION,
                       acceptedAt: new Date().toISOString(),
                     },
                   };
@@ -12656,22 +12661,30 @@ function FamilyView() {
                   )}
                   {/* 利用規約・プライバシーポリシー 同意 */}
                   <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:12,padding:14,marginBottom:12,marginTop:8}}>
-                    <div style={{fontSize:12,fontWeight:'bold',color:'#166534',marginBottom:8}}>利用規約・プライバシーポリシー</div>
-                    <div style={{maxHeight:160,overflow:'auto',background:'white',border:'1px solid #d1fae5',borderRadius:8,padding:'10px 12px',fontSize:11,color:'#334155',lineHeight:1.7,marginBottom:10}}>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#166534',marginBottom:2}}>利用規約・プライバシーポリシー</div>
+                    <div style={{fontSize:10,color:'#65a30d',fontWeight:'bold',marginBottom:8}}>第{FAMILY_CONSENT_VERSION}版（{FAMILY_CONSENT_DATE.replace(/-/g,'/')}改定）</div>
+                    <div style={{maxHeight:240,overflow:'auto',background:'white',border:'1px solid #d1fae5',borderRadius:8,padding:'10px 12px',fontSize:11,color:'#334155',lineHeight:1.75,marginBottom:10}}>
                       <b style={{color:'#166534'}}>【利用規約】</b><br/>
-                      1. 本サービスは「{_inviteInfo.facilityName||facility.name||'当事業所'}」の利用者ご家族・関係者専用です。<br/>
-                      2. アカウント情報は他人に譲渡・貸与できません。<br/>
-                      3. ご利用者の医療・介護情報を不正に開示・利用しないでください。<br/>
-                      4. システム停止・不具合により生じた損害について事業所は責任を負いません。<br/>
-                      5. 本サービスの利用は予告なく停止される場合があります。<br/><br/>
-                      <b style={{color:'#166534'}}>【プライバシーポリシー】</b><br/>
-                      1. 収集する情報: 氏名、フリガナ、続柄、メールアドレス、電話番号、ログインID、パスワード (暗号化)、アクセスログ。<br/>
-                      2. 利用目的: ご利用者の介護記録・連絡・お知らせの提供と緊急連絡先管理のため。<br/>
-                      3. 第三者提供: 法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。<br/>
-                      4. 委託先: メール送信のためメール配信サービス (Brevo) を利用します。<br/>
-                      5. 保管期間: 退所後 5年間、または法令で定める期間。<br/>
-                      6. 開示・訂正・削除: 事業所窓口までお問い合わせください。<br/>
-                      7. お問い合わせ: {_inviteInfo.facilityName||facility.name||'当事業所'}{(_inviteInfo.facilityPhone||facility.phone)?` / TEL ${_inviteInfo.facilityPhone||facility.phone}`:''}<br/>
+                      1. 本サービスは「{_inviteInfo.facilityName||facility.name||'当事業所'}」のご利用者ご本人・ご家族・関係者（担当ケアマネジャー等）専用の、情報閲覧・連絡サービスです。<br/>
+                      2. アカウント（ID・パスワード）はご本人のみが使用し、第三者への譲渡・貸与・共有はできません。<br/>
+                      3. 画面・写真・記録の内容を、SNS等への転載や目的外での第三者提供・不正利用はできません（スクリーンショットの拡散を含む）。<br/>
+                      4. 担当ケアマネジャー等の専門職は、職務上知り得た情報について守秘義務を負い、ケアマネジメント等の目的以外に利用しません。<br/>
+                      5. なりすまし・不正アクセス・システムへの妨害行為を禁止します。<br/>
+                      6. 退会（アカウント削除）をご希望の場合は事業所窓口へお申し出ください。<br/>
+                      7. システムの停止・不具合・通信障害等により生じた損害について、事業所は合理的な範囲を超える責任を負いません。本サービスは予告なく変更・停止される場合があります。<br/><br/>
+                      <b style={{color:'#166534'}}>【プライバシーポリシー／個人情報の取り扱い】</b><br/>
+                      1. 取得する情報: 氏名・フリガナ・続柄・電話番号・メールアドレス・ログインID・パスワード（暗号化）・アクセスログ・端末情報、および閲覧対象となるご利用者の介護・健康に関する情報。<br/>
+                      2. <b>要配慮個人情報</b>: ご利用者の病歴・服薬・心身の状態・介護度など（要配慮個人情報）を取得・記録し、サービス提供に必要な範囲で事業所・ご家族・担当関係者と共有します。ご登録はこれに同意いただくものです。<br/>
+                      3. 利用目的: 介護記録・連絡・お知らせの提供、緊急連絡先の管理、サービスの維持・改善のため。<br/>
+                      4. <b>外部サービスの利用（委託）</b>: データの保管・配信・メール送信・AIによる記録要約等のため、外部のクラウド事業者（例: Supabase／Vercel／Brevo／Anthropic 等）を利用します。これらの処理・保管の<b>一部は日本国外で行われる場合があります</b>。委託先には適切な安全管理を求めます。<br/>
+                      5. <b>AIの利用</b>: 記録の要約・下書き作成等のため、必要な範囲で情報を外部のAIサービスに送信して処理する場合があります。<br/>
+                      6. 写真・書類: 顔写真や各種書類（介護保険証・負担割合証等）の画像を保存する場合があります。<br/>
+                      7. 第三者提供: 法令に基づく場合を除き、ご本人の同意なく第三者へ提供しません。<br/>
+                      8. 本人（ご利用者）の同意: ご家族・関係者による閲覧は、ご本人（又はその代理人）の同意のもとで行われます。<br/>
+                      9. 安全管理: 通信の暗号化・アクセス制御等の安全管理措置を講じます。<br/>
+                      10. 保管期間: 退所後5年間、または介護保険法等の法令で定める期間。<br/>
+                      11. 開示・訂正・利用停止・削除、および本ポリシーの改定通知: 事業所窓口へお問い合わせください。改定時は本サービス上でお知らせします。<br/>
+                      12. お問い合わせ: {_inviteInfo.facilityName||facility.name||'当事業所'}{(_inviteInfo.facilityPhone||facility.phone)?` / TEL ${_inviteInfo.facilityPhone||facility.phone}`:''}<br/>
                     </div>
                     <label style={{display:'flex',alignItems:'flex-start',gap:8,fontSize:12,color:'#166534',cursor:'pointer',marginBottom:6}}>
                       <input type="checkbox" checked={signupForm.agreedTerms||false} onChange={e=>setSignupForm(f=>({...f,agreedTerms:e.target.checked,error:''}))}
