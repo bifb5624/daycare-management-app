@@ -11746,11 +11746,14 @@ function FamilyView() {
     cmNewManager:{lastName:'', firstName:'', phoneDirect:''},
     error:'', done:false
   });
+  // ★ 編集フォーム(フェイスシート/利用者情報)を開いている間はポーリング反映を止める(入力中に再描画でフォーカスが外れるのを防ぐ)
+  const editingRef = React.useRef(false);
   // データ更新を購読 (事業所側で更新されたら反映)
   useEffect(()=>{
     const reload = () => {
       // ★ 管理者プレビュー(架空データ)中は実データで上書きしない
       try { if (String(sessionStorage.getItem('familyAuthAccId')||'').startsWith('preview_')) return; } catch {}
+      if (editingRef.current) return; // 編集中はスキップ
       const merged = loadDataMerged();
       if (merged) setData(merged);
     };
@@ -12846,6 +12849,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
     const sorted = [...myPeers].sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
     return sorted[0]?.id === loggedAcc.id;
   }, [myPeers, loggedAcc]);
+  // ★ 利用者基本情報の編集可否: 代表家族 or ケアマネ(全項目編集可)
+  const canEditMyInfo = isPrimaryAcc || isCmAccount;
   // 親アカウント招待用 (親のみ他メンバーを招待できる)
   const [inviteFamilyOpen, setInviteFamilyOpen] = useState(false);
   // 一覧モーダル内のモード ('list' = 一覧表示 / 'new' = 新規登録フォーム)
@@ -12853,6 +12858,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   // ★ 利用者・登録者情報モーダル (家族側で連絡先を編集 → 利用者マスタへ反映)
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [cmFaceSheetOpen, setCmFaceSheetOpen] = useState(false); // ★ ケアマネ: フェイスシート編集
+  // ★ 編集フォームを開いている間はポーリング反映を止める(フォーカス喪失防止)
+  React.useEffect(() => { editingRef.current = !!(myInfoOpen || cmFaceSheetOpen); }, [myInfoOpen, cmFaceSheetOpen]);
   const [cmFaceSheetSaving, setCmFaceSheetSaving] = useState(false);
   const [cmDocsOpen, setCmDocsOpen] = useState(false); // ★ ケアマネ: 保険証・負担割合証・アセスメント
   const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
@@ -13455,7 +13462,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     {editableFields.map(f => (
                       <div key={f.key}>
                         <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label}</label>
-                        {!isPrimaryAcc ? (
+                        {!canEditMyInfo ? (
                           <div style={{
                             width:'100%', padding:'9px 12px',
                             background:'#f8fafc', border:'1px solid #e2e8f0',
@@ -13479,7 +13486,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 <div style={{display:'flex',gap:8,marginTop:14}}>
                   <button onClick={()=>setMyInfoOpen(false)} disabled={patientForm.saving}
                     style={{flex:1,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:patientForm.saving?'not-allowed':'pointer'}}>閉じる</button>
-                  {isPrimaryAcc && (
+                  {canEditMyInfo && (
                     <button onClick={async () => {
                       // ★ 保存前に確認ダイアログ
                       if (!window.confirm('この保存した内容は事業所側にも変更されてしまいます。 よろしいでしょうか?')) return;
