@@ -10341,11 +10341,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
           {(() => {
             // ★ 家族・ケアマネがビューアから行った編集/添付/招待/登録の未確認通知を集約
             const ext = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[]).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice).map(u => ({...u, _pid:p.id, _pname:p.name}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,8);
-            if (!ext.length) return null;
+            // ★ 常時表示: 更新が無くてもカードは出し、無い旨を表示する
             const _fmt = (iso)=>{ try{ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch{ return ''; } };
             return (
               <Card>
-                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:'#f59e0b',borderRadius:999,padding:'1px 7px'}}>{ext.length}</span></div>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:ext.length?'#f59e0b':'#cbd5e1',borderRadius:999,padding:'1px 7px'}}>{ext.length}</span></div>
+                {ext.length===0 ? (
+                  <div style={{fontSize:12,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
+                ) : (<>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
                   {ext.map(u=>(
                     <button key={u.id} onClick={()=>navigateTo('master', u._pid)} style={{textAlign:'left',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:10,padding:'8px 10px',cursor:'pointer'}}>
@@ -10360,6 +10363,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
                   ))}
                 </div>
                 <div style={{fontSize:10,color:'#a16207',marginTop:6}}>タップで利用者を開いて内容を確認できます（確認すると消えます）。</div>
+                </>)}
               </Card>
             );
           })()}
