@@ -17769,7 +17769,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       };
       if (srcIdx>=0) updatedRecords[srcIdx]=srcRecord; else updatedRecords.push(srcRecord);
     } else if (isNowAbsent) {
-      // 欠席/休業: シフトはそのまま、チケットレコードのみ更新
+      // 欠席/休業: チケットレコード + 月間スケジュール(シフト)の両方を更新
+      //   ★ ここで setShift しないと、利用者マスタの月間スケジュール(monthlyShifts を参照)が
+      //     出席のまま残り、提供記録入力と表示がズレる。 両方に反映して同期させる。
+      setShift(id, srcD, newStatus);
       const srcDateStr = `${srcD.getMonth()+1}月${srcD.getDate()}日`;
       const srcDowStr = dayNames[srcD.getDay()];
       const srcIdx = updatedRecords.findIndex(r=>r.patientId===id&&r.date===srcDateStr);
@@ -17783,13 +17786,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false
       };
       if (srcIdx>=0) updatedRecords[srcIdx]=absRecord; else updatedRecords.push(absRecord);
+    } else {
+      // 出席 に戻す等: この日の欠席/振替オーバーライドを基本スケジュール(〇)に戻す。
+      //   ★ 一度 欠席 にした後で 出席 に戻したとき、月間スケジュールが欠席のまま残らないように。
+      setShift(id, srcD, '〇');
     }
 
-    // 振替も自動保存しない: monthlyShifts の変更は appData に直接マージせず、
-    // 保存ボタン押下時にチケットレコード経由で月間シフトに反映する
-    // (保留: updatedShifts は保存ボタン時に使うので appData.monthlyShifts ではなく
-    //  pendingShifts に積んでおく)
-    if (newStatus === '振替' && furikaeDate) {
+    // ★ monthlyShifts の変更は保存ボタン押下時にまとめて反映(pending に積む)。
+    //   振替 だけでなく 欠席/休業/出席戻し でも積み、利用者マスタの月間スケジュールと同期させる。
+    const _shiftTouched = (newStatus === '振替' && furikaeDate) || isNowAbsent || (!isNowAbsent && newStatus !== '振替');
+    if (_shiftTouched) {
       setPendingFurikaeShifts(prev => [...prev, {shifts: updatedShifts}]);
     }
     if (dirtyRef) dirtyRef.current = true;
