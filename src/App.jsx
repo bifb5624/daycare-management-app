@@ -1005,7 +1005,9 @@ const buildPrimaryContact = (p) => {
   if (!name && !(p.familyPhone||'').trim() && !(p.familyPhoneMobile||'').trim() && !(p.familyEmail||'').trim()) return null;
   return { name, relation: p.familyRelation||'', phone: p.familyPhone||'', phoneMobile: p.familyPhoneMobile||'', email: p.familyEmail||'', kana: p.familyKana||'', _primary: true };
 };
-const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim ? [prim] : []), ...((p && p.emergencyContacts) || []) ]; };
+// ★ ケアマネ由来の連絡先は緊急連絡先(家族)には出さない。 事業所名/事業所電話/FAX を持つ or 続柄がケアマネ系。
+const isCmContact = (c) => !!(c && (c.cmOffice || c.officePhone || c.officeFax || /ケアマネ|介護支援|居宅/.test(String(c.relation||''))));
+const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c))) ]; };
 // ★ 同名は上書き(upsert)。 name(前後空白/全半角無視)で照合し、既存があれば新しい非空値で更新、無ければ追加。
 const upsertContactByName = (list, contact) => {
   const norm = (s) => (s||'').normalize('NFKC').replace(/[\s　]/g,'').trim();
@@ -27028,8 +27030,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 </div>
                 <div className="mt-4">
                   <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-500">追加の緊急連絡先</span>{!isOff&&<button type="button" onClick={()=>updateLP('emergencyContacts',[...(localPatient.emergencyContacts||[]),{name:'',relation:'',phone:'',phoneMobile:'',email:''}])} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-100">＋ 追加</button>}</div>
-                  {(localPatient.emergencyContacts||[]).length===0&&<div className="text-xs text-slate-400 py-2">追加の緊急連絡先なし</div>}
-                  {(localPatient.emergencyContacts||[]).map((ec,ei)=>(
+                  {(localPatient.emergencyContacts||[]).filter(c=>!isCmContact(c)).length===0&&<div className="text-xs text-slate-400 py-2">追加の緊急連絡先なし</div>}
+                  {(localPatient.emergencyContacts||[]).map((ec,ei)=>({ec,ei})).filter(({ec})=>!isCmContact(ec)).map(({ec,ei})=>(
                     <div key={ei} className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
                       <div className="flex justify-between mb-2"><span className="text-[10px] font-bold text-slate-400">{ei+1}件目</span>{!isOff&&<button type="button" onClick={()=>{
                         // ★ 削除した緊急連絡先は「墓石(_deletedEC)」に記録 → 加算マージで復活しないようにする
