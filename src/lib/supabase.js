@@ -441,6 +441,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         out[k] = [...byId.values()];
         return;
       }
+      // ★ scheduleAmPm(基本利用日)は「無し」も意図的な設定値。 index 単位の空欄補完をすると、
+      //   ある曜日を「無し」にしても クラウドの旧値(AM/PM)で復活してしまう。 最後の編集(ローカル)を優先する。
+      if (k === 'scheduleAmPm') { out[k] = (lv !== undefined) ? lv : cv; return; }
       const lObj = lv && typeof lv === 'object' && !Array.isArray(lv);
       const cObj = cv && typeof cv === 'object' && !Array.isArray(cv);
       // プレーンオブジェクト(plannedExercises 等): キー単位で「ローカル空欄のみクラウドで補完」
