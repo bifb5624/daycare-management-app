@@ -12857,7 +12857,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
-  const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', email:'', doctor:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
+  const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', email:'', doctor:'', medicalInstitution:'', medicalContact:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
   // モーダルを開いたタイミングで loggedAcc + patient から現在の情報を読み込み
   React.useEffect(() => {
     if (!myInfoOpen) return;
@@ -12925,7 +12925,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       hihokenNum: patient?.hihokenNum || '',
       phone: patient?.phone || '',
       email: patient?.email || '',
-      doctor: patient?.doctor || '',
+      doctor: patient?.doctor || patient?.personalFile?.faceSheet?.chronicDiseases || '',
+      medicalInstitution: patient?.medicalInstitution || patient?.personalFile?.faceSheet?.medicalInstitution || '',
+      medicalContact: patient?.medicalContact || patient?.personalFile?.faceSheet?.medicalContact || '',
       address: patient?.address || '',
       kiou: patient?.kiou || '',
       ryui: patient?.ryui || '',
@@ -13431,6 +13433,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     {key:'phone',      label:'電話番号',       type:'text', placeholder:'03-XXXX-XXXX'},
                     {key:'email',      label:'メールアドレス', type:'email', placeholder:'example@xxx.com'},
                     {key:'doctor',     label:'かかりつけ医',   type:'text', placeholder:'例: ○○クリニック / 山田 太郎 医師'},
+                    {key:'medicalInstitution', label:'医療機関名',   type:'text', placeholder:'例: ○○総合病院'},
+                    {key:'medicalContact',     label:'医療機関の連絡先', type:'text', placeholder:'例: 03-XXXX-XXXX'},
                     {key:'address',    label:'住所',           type:'text'},
                     {key:'kiou',       label:'既往歴',         type:'textarea'},
                     {key:'ryui',       label:'留意点',         type:'textarea'},
@@ -13489,9 +13493,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         phone: patientForm.phone,
                         email: patientForm.email,
                         doctor: patientForm.doctor,
+                        medicalInstitution: patientForm.medicalInstitution,
+                        medicalContact: patientForm.medicalContact,
                         address: patientForm.address,
                         kiou: patientForm.kiou,
                         ryui: patientForm.ryui,
+                        // ★ 医療情報(かかりつけ医/医療機関/連絡先)はフェイスシートにも同期(双方向)
+                        personalFile: { ...(patient.personalFile||{}), faceSheet: { ...((patient.personalFile||{}).faceSheet||{}), chronicDiseases: patientForm.doctor, medicalInstitution: patientForm.medicalInstitution, medicalContact: patientForm.medicalContact } },
                       };
                       const updated = {
                         ...data,
@@ -37150,7 +37158,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
             // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
-            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), doctor: (newFs.chronicDiseases||'') }, undefined, {
+            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
@@ -37541,8 +37549,8 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     // ⑤ 医療・健康情報 (主治医/医療機関/連絡先 を3項目に分割。chronicDiseases は旧データ=主治医欄として継続使用)
     //   ★ 基本情報/家族アプリ/CSVの かかりつけ医(patient.doctor) を初期値にフォールバック(双方向連携)
     chronicDiseases: initial?.chronicDiseases || patient?.doctor || '',
-    medicalInstitution: initial?.medicalInstitution || '',
-    medicalContact: initial?.medicalContact || '',
+    medicalInstitution: initial?.medicalInstitution || patient?.medicalInstitution || '',
+    medicalContact: initial?.medicalContact || patient?.medicalContact || '',
     medication: initial?.medication || '',
     allergies: initial?.allergies || '',
     adlLevel: initial?.adlLevel || '',
