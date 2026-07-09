@@ -21672,9 +21672,13 @@ function QuickNav({ navigateTo, currentView, patientId, appData }) {
 // === SalesCalendarModal (売上入力 年間カレンダー) ===
 function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
   const salesRecs = appData.salesRecords || [];
+  const _startYear = appData.systemSettings?.salesStartYear || null; // 各種設定の「売上の開始年度」
+  const _fyOf = (y,m) => (m>=4 ? y : y-1); // その年月が属する年度(4月始まり)
+  // year = 年度(開始年=4月始まり)。 例: 2025 → 2025年4月〜2026年3月
   const [year, setYear] = React.useState(() => {
-    if (initialMonth) return parseInt(initialMonth.split('-')[0]);
-    return new Date().getFullYear();
+    const n = new Date();
+    if (initialMonth) { const [iy,im]=initialMonth.split('-').map(Number); return _fyOf(iy,im); }
+    return _fyOf(n.getFullYear(), n.getMonth()+1);
   });
   const [selectedMonth, setSelectedMonth] = React.useState(initialMonth || null);
   const [inputValue, setInputValue] = React.useState(() => {
@@ -21709,11 +21713,14 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
     setSelectedMonth(null);
   };
 
+  // ★ 年度(4月〜翌3月)の順で並べる。 1〜3月は翌年になる。
   const months = Array.from({length:12},(_,i)=>{
-    const m = i+1;
-    const key = `${year}-${String(m).padStart(2,'0')}`;
+    const m = ((3+i)%12)+1;          // 4,5,...,12,1,2,3
+    const cy = m>=4 ? year : year+1; // 1〜3月は翌暦年
+    const key = `${cy}-${String(m).padStart(2,'0')}`;
     return { m, key };
   });
+  const warekiFy = (()=>{ const e=[...WAREKI_ERAS].reverse().find(([,s])=>year>=s); return e?`${e[0]}${year-e[1]+1}` : ''; })();
 
   const navBtn = {
     background:'#f1f5f9', border:'none', borderRadius:8, width:30, height:30,
@@ -21727,10 +21734,10 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
 
         {/* ヘッダー */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-          <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>売上入力</div>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <button style={navBtn} onClick={()=>{setYear(y=>y-1);setSelectedMonth(null);}}>‹</button>
-            <span style={{fontSize:15,fontWeight:'bold',color:'#1e293b',minWidth:64,textAlign:'center'}}>{year}年</span>
+          <div><div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>売上入力</div><div style={{fontSize:10,color:'#94a3b8',fontWeight:'bold'}}>年度（4月〜翌3月）</div></div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <button style={{...navBtn, opacity:(_startYear && year<=_startYear)?0.35:1, cursor:(_startYear && year<=_startYear)?'not-allowed':'pointer'}} disabled={!!(_startYear && year<=_startYear)} onClick={()=>{setYear(y=>y-1);setSelectedMonth(null);}}>‹</button>
+            <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:120,textAlign:'center'}}>{year}年度{warekiFy?<span style={{fontSize:11,color:'#64748b',display:'block'}}>（{warekiFy}年度）</span>:null}</span>
             <button style={navBtn} onClick={()=>{setYear(y=>y+1);setSelectedMonth(null);}}>›</button>
           </div>
         </div>
@@ -21786,12 +21793,12 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
                 ) : (
                   <div>
                     {/* 今年度売上 */}
-                    <div style={{fontSize:14,fontWeight:'bold',color:sales?'#1d4ed8':'#cbd5e1',letterSpacing:'-0.3px',marginBottom:3}}>
-                      {sales ? `¥${(sales/10000).toFixed(0)}万` : '—'}
+                    <div style={{fontSize:13,fontWeight:'bold',color:sales?'#1d4ed8':'#cbd5e1',letterSpacing:'-0.3px',marginBottom:3}}>
+                      {sales ? `¥${Number(sales).toLocaleString()}` : '—'}
                     </div>
                     {/* 前年度売上 */}
-                    <div style={{fontSize:14,color:prevSales?'#94a3b8':'#e2e8f0',letterSpacing:'-0.3px'}}>
-                      {prevSales ? `前年 ¥${(prevSales/10000).toFixed(0)}万` : '前年 —'}
+                    <div style={{fontSize:12,color:prevSales?'#94a3b8':'#e2e8f0',letterSpacing:'-0.3px'}}>
+                      {prevSales ? `前年 ¥${Number(prevSales).toLocaleString()}` : '前年 —'}
                     </div>
                     {/* 前年比 */}
                     {sales && prevSales ? (()=>{
@@ -22757,7 +22764,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
               });
               const pl = mRecs.filter(r=>isPlannedRec(r));
               const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
-              const rate = pl.length ? Math.round(at.length/pl.length*100) : 0;
+              // ★ データが無い月(未来・記録なし)は 0 ではなく null にして、グラフ・表で非表示にする(0へ急落させない)
+              const rate = pl.length ? Math.round(at.length/pl.length*100) : null;
               // 営業日数（その月の平日数）
               const workDays = getWorkingDays(yr, mo);
               // 前年稼働率（前年同月のチケットレコードから計算）
@@ -22814,8 +22822,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 diffPrevYear: d.sales - d.prevSales,
                 diffPrevMonth: d.sales - d.prevMonthSales,
                 ratioPrevMonth: d.prevMonthSales > 0 ? Math.round(d.sales / d.prevMonthSales * 1000) / 10 : null,
-                diffRatePrevYear: d.prevRate !== null ? d.rate - d.prevRate : null,
-                diffRatePrevMonth: d.prevMonthRate !== null ? d.rate - d.prevMonthRate : null,
+                diffRatePrevYear: (d.rate !== null && d.prevRate !== null) ? d.rate - d.prevRate : null,
+                diffRatePrevMonth: (d.rate !== null && d.prevMonthRate !== null) ? d.rate - d.prevMonthRate : null,
               };
             });
             
@@ -22940,7 +22948,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                       <tr>
                         <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#eab308'}}>今年度稼働率</td>
                         {chartDataWithDiff.map(d=>(
-                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:RC(d.rate)}}>{d.rate}%</td>
+                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.rate!=null?RC(d.rate):'#cbd5e1'}}>{d.rate!=null?`${d.rate}%`:'—'}</td>
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
@@ -29826,6 +29834,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     <span className="text-sm font-bold text-slate-700">{label}</span>
                   </label>
                 ))}
+              </div>
+            </SectionCard>
+            <SectionCard title="売上入力の開始年度">
+              <p className="text-xs text-slate-500 mb-3">分析（稼働）の「売上入力」で、この年度より前には戻れないようにします（＝事業開始年度を指定）。売上は<b>年度（4月〜翌3月）</b>で入力・表示され、和暦も併記されます。</p>
+              <div className="flex items-center gap-2">
+                <input type="number" inputMode="numeric" value={ss.salesStartYear||''} onChange={e=>saveSS({ salesStartYear: e.target.value?Number(e.target.value):null }, '✓ 売上の開始年度を設定しました')} placeholder="例: 2023" className="w-32 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
+                <span className="text-sm font-bold text-slate-600">年度{ss.salesStartYear?`（${(()=>{const e=[...WAREKI_ERAS].reverse().find(([,s])=>ss.salesStartYear>=s);return e?`${e[0]}${ss.salesStartYear-e[1]+1}`:'';})()}年度〜）`:''}</span>
               </div>
             </SectionCard>
             <SectionCard title="テンキー補完ボタンの管理">
