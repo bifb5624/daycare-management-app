@@ -12883,6 +12883,12 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
                 <span style={{ color: '#94a3b8' }}>〜</span>
                 <input type="date" value={mCareTo} onChange={(e) => setMCareTo(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} />
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 'bold', color: '#94a3b8' }}>期間を自動設定</span>
+                {[1,2,3,4,5].map(yr => (
+                  <button key={yr} type="button" onClick={() => { const base = mCareFrom || new Date().toISOString().slice(0,10); const d = new Date(base); d.setFullYear(d.getFullYear()+yr); d.setDate(d.getDate()-1); setMCareFrom(base); setMCareTo(d.toISOString().slice(0,10)); }} style={{ fontSize: 11, fontWeight: 'bold', color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 8px', cursor: 'pointer' }}>{yr}年</button>
+                ))}
+              </div>
             </div>
             <ValueHistoryList title="介護度の変更履歴" hist={patient?.careLevelHistory} />
           </div>
@@ -36870,6 +36876,12 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                             <input type="date" value={patient.careLevelFrom||''} onChange={e=>saveMaster({careLevelFrom:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
                             <span className="text-slate-400">〜</span>
                             <input type="date" value={patient.careLevelTo||''} onChange={e=>saveMaster({careLevelTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                          </div>
+                          <div className="flex items-center gap-1 flex-wrap mt-1">
+                            <span className="text-[10px] font-bold text-slate-400">期間を自動設定</span>
+                            {[1,2,3,4,5].map(yr=>(
+                              <button key={yr} type="button" onClick={()=>{ const base=patient.careLevelFrom||new Date().toISOString().slice(0,10); const d=new Date(base); d.setFullYear(d.getFullYear()+yr); d.setDate(d.getDate()-1); saveMaster({careLevelFrom:base, careLevelTo:d.toISOString().slice(0,10)}); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 hover:bg-blue-100">{yr}年</button>
+                            ))}
                           </div>
                         </div>
                         <ValueHistoryList title="介護度の変更履歴" hist={patient.careLevelHistory} onChangeHist={(nh)=>savePatientTop({careLevelHistory:nh},{manual:true,message:'✓ 履歴を更新しました'})} valueOptions={['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5']} />
