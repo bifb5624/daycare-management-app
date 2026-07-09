@@ -726,16 +726,23 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
           mergedContacts2 = [...mergedContacts2, { name: incName, relation: incRel, phone: patientPatch.familyPhone||'', phoneMobile: patientPatch.familyPhoneMobile||'', email: patientPatch.familyEmail||'' }];
         }
       }
+      // ★ docUpdates(更新通知ログ)は id で和集合マージ → 家族/CMの操作を事業所へ確実に届ける(上書きで消さない)
+      let mergedDocUpdates = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+      if (Array.isArray(patientPatch.docUpdates)) {
+        const _seenDu = new Set(mergedDocUpdates.map(u => u && u.id));
+        patientPatch.docUpdates.forEach(u => { if (u && u.id && !_seenDu.has(u.id)) { mergedDocUpdates = [...mergedDocUpdates, u]; _seenDu.add(u.id); } });
+        mergedDocUpdates = mergedDocUpdates.slice(-50);
+      }
       const filteredPatch = {};
       Object.keys(patientPatch).forEach(k => {
-        if (k === 'emergencyContacts' || k === 'relatedParties') return;
+        if (k === 'emergencyContacts' || k === 'relatedParties' || k === 'docUpdates') return;
         const v = patientPatch[k];
         if (v === undefined || v === null || v === '') return;
         // 別人が代表フィールドを上書きしようとした場合のみスキップ (本人/初回はそのまま反映)
         if (FAMILY_PRIMARY.includes(k) && isDifferentPerson) return;
         filteredPatch[k] = v;
       });
-      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated };
+      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated, docUpdates: mergedDocUpdates };
     });
     // ★ ケアマネ事業所/担当者マスタ (systemSettings) も、家族(関係者)登録で増えた分を統合 (重複は追加しない)
     let nextSettings = currentData.systemSettings || {};
@@ -760,6 +767,42 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
     return true;
   } catch (e) {
     console.warn('[supabase] mergePatientFromFamily failed', e);
+    return false;
+  }
+}
+
+// ★ 家族/ケアマネ側の操作(招待発行・新規登録など)を事業所へ「確実に」通知するための汎用プリミティブ。
+//    patient.docUpdates に1件を id で和集合追記して upsert する。
+//    (既存ログ・他端末の追記は温存し、同じ id は二重登録しない=冪等)。
+export async function supabaseAppendDocUpdate(storeId, patientId, entry) {
+  if (!supabase || !storeId || !patientId || !entry) return false;
+  try {
+    const row = await supabaseLoadStateForStore(storeId);
+    if (!row || !row.data) return false;
+    const currentData = row.data;
+    const now = new Date().toISOString();
+    const e = {
+      id: entry.id || `du_${now}_${Math.round(Math.random() * 1e6)}`,
+      at: entry.at || now,
+      by: entry.by || 'family',
+      byName: entry.byName || '',
+      items: [...new Set(entry.items || [])],
+      readOffice: false,
+      readCm: true,
+    };
+    let matched = false, already = false;
+    const patients = (currentData.patients || []).map(p => {
+      if (String(p.id) !== String(patientId)) return p;
+      matched = true;
+      const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+      if (log.some(u => u && u.id === e.id)) { already = true; return p; } // 既に反映済み
+      return { ...p, docUpdates: [...log, e].slice(-50) };
+    });
+    if (!matched || already) return matched; // 対象なし=false / 既反映=true (再送しない)
+    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
+    return true;
+  } catch (err) {
+    console.warn('[supabase] appendDocUpdate failed', err);
     return false;
   }
 }

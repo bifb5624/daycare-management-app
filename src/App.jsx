@@ -34,6 +34,7 @@ import {
   supabaseDeleteInviteByCode,
   supabaseListInvitesAndAccountsForPatient,
   supabaseMergePatientFromFamily,
+  supabaseAppendDocUpdate,
   supabaseMergeFaceSheetFromCM,
   supabaseMergePatientDocsFromCM,
   supabaseMarkDocUpdatesRead,
@@ -12351,6 +12352,7 @@ function FamilyView() {
                             cmPhone: patchedPatient.cmPhone,
                             cmFax: patchedPatient.cmFax,
                             relatedParties: patchedPatient.relatedParties || [],
+                            docUpdates: patchedPatient.docUpdates,
                           }, isCaremanager ? { cmOffices: nextCmOffices, careManagers: nextCareManagers } : undefined);
                         }
                       }
@@ -14136,8 +14138,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       email: em, relation: inviteFamForm.relation || '',
                       expiresAt: new Date(Date.now() + 14*24*60*60*1000).toISOString(),
                     };
-                    // ★ 事業所へ通知(招待発行)
-                    const _invPatients = (data.patients||[]).map(p => p.id === patient.id ? { ...p, docUpdates: appendDocUpdate(p, (loggedAcc?.kind==='caremanager'?'caremanager':'family'), (loggedAcc?.displayName||''), [`家族・関係者を招待（${inviteFamForm.relation||'続柄未設定'}）`]) } : p);
+                    // ★ 事業所へ通知(招待発行)。 同じ id をローカル・クラウド双方で使い、二重通知を防ぐ(冪等)。
+                    const _invDu = { id: `du_${Date.now()}_${Math.round(Math.random()*1e6)}`, at: new Date().toISOString(), by: (loggedAcc?.kind==='caremanager'?'caremanager':'family'), byName: (loggedAcc?.displayName||''), items: [`家族・関係者を招待（${inviteFamForm.relation||'続柄未設定'}）`], readOffice:false, readCm:true };
+                    const _invPatients = (data.patients||[]).map(p => p.id === patient.id ? { ...p, docUpdates: [...(Array.isArray(p.docUpdates)?p.docUpdates:[]), _invDu].slice(-50) } : p);
                     const updated = { ...data, familyInvites: [...(data.familyInvites||[]), newInvite], patients: _invPatients };
                     try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
                     setData(updated);
@@ -14154,6 +14157,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         facilityPhone: facility?.phone || '',
                         expiresAt: newInvite.expiresAt,
                       }).catch(err => console.warn('[supabase] invite push failed', err));
+                      // ★ 招待発行の通知を事業所へ確実に同期
+                      if (_storeId) supabaseAppendDocUpdate(_storeId, patient.id, _invDu).catch(err => console.warn('[supabase] invite notify failed', err));
                     }
                     const baseUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '');
                     const tk = encodeInviteToken({ c: code, p: patient.id, s: _inviteStoreId||'', e: em, r: inviteFamForm.relation||'', x: newInvite.expiresAt||'', fn: (appData.systemSettings?.facilityInfo?.name)||'', fp: (appData.systemSettings?.facilityInfo?.phone)||'' });
@@ -21712,9 +21717,12 @@ function QuickNav({ navigateTo, currentView, patientId, appData }) {
 // === SalesCalendarModal (売上入力 年間カレンダー) ===
 function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
   const salesRecs = appData.salesRecords || [];
-  const _startYear = appData.systemSettings?.salesStartYear || null; // 各種設定の「売上の開始年度」
-  const _fyOf = (y,m) => (m>=4 ? y : y-1); // その年月が属する年度(4月始まり)
-  // year = 年度(開始年=4月始まり)。 例: 2025 → 2025年4月〜2026年3月
+  // ★ 年度の区切りは 事業所情報＞年度設定「年度開始月」(fiscalStartMonth) に従う。 未設定は6月始まり。
+  const _fsm = appData.systemSettings?.facilityInfo?.fiscalStartMonth || 6;
+  const _endM = _fsm === 1 ? 12 : _fsm - 1;               // 年度の最終月
+  const _fyRange = _fsm === 1 ? '1月〜12月' : `${_fsm}月〜翌${_endM}月`;
+  const _fyOf = (y,m) => (m>=_fsm ? y : y-1);             // その年月が属する年度(開始月始まり)
+  // year = 年度(開始年)。 例: 開始月6 → 2025年度 = 2025年6月〜2026年5月
   const [year, setYear] = React.useState(() => {
     const n = new Date();
     if (initialMonth) { const [iy,im]=initialMonth.split('-').map(Number); return _fyOf(iy,im); }
@@ -21753,10 +21761,10 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
     setSelectedMonth(null);
   };
 
-  // ★ 年度(4月〜翌3月)の順で並べる。 1〜3月は翌年になる。
+  // ★ 年度(開始月〜翌年の前月)の順で並べる。 開始月未満の月は翌暦年になる。
   const months = Array.from({length:12},(_,i)=>{
-    const m = ((3+i)%12)+1;          // 4,5,...,12,1,2,3
-    const cy = m>=4 ? year : year+1; // 1〜3月は翌暦年
+    const m = ((_fsm-1+i)%12)+1;        // 開始月, ..., 12, 1, ..., 前月
+    const cy = m>=_fsm ? year : year+1; // 開始月未満の月は翌暦年
     const key = `${cy}-${String(m).padStart(2,'0')}`;
     return { m, key };
   });
@@ -21774,9 +21782,9 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
 
         {/* ヘッダー */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-          <div><div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>売上入力</div><div style={{fontSize:10,color:'#94a3b8',fontWeight:'bold'}}>年度（4月〜翌3月）</div></div>
+          <div><div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>売上入力</div><div style={{fontSize:10,color:'#94a3b8',fontWeight:'bold'}}>年度（{_fyRange}）</div></div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <button style={{...navBtn, opacity:(_startYear && year<=_startYear)?0.35:1, cursor:(_startYear && year<=_startYear)?'not-allowed':'pointer'}} disabled={!!(_startYear && year<=_startYear)} onClick={()=>{setYear(y=>y-1);setSelectedMonth(null);}}>‹</button>
+            <button style={navBtn} onClick={()=>{setYear(y=>y-1);setSelectedMonth(null);}}>‹</button>
             <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:120,textAlign:'center'}}>{year}年度{warekiFy?<span style={{fontSize:11,color:'#64748b',display:'block'}}>（{warekiFy}年度）</span>:null}</span>
             <button style={navBtn} onClick={()=>{setYear(y=>y+1);setSelectedMonth(null);}}>›</button>
           </div>
@@ -21790,7 +21798,8 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
             const prevSales = rec?.prevSales || null;
             const isSelected = selectedMonth === key;
             const today = new Date();
-            const isCurrent = today.getFullYear()===year && today.getMonth()+1===m;
+            const _cy = parseInt(key.split('-')[0]); // その月の暦年(年度により翌年になる)
+            const isCurrent = today.getFullYear()===_cy && today.getMonth()+1===m;
             return (
               <div key={key}
                 onClick={()=>handleMonthClick(key)}
@@ -21811,9 +21820,10 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
                   <div onClick={e=>e.stopPropagation()}>
                     <input
                       autoFocus
-                      type="number"
+                      type="text"
+                      inputMode="numeric"
                       value={inputValue}
-                      onChange={e=>setInputValue(e.target.value)}
+                      onChange={e=>setInputValue(toHankaku(e.target.value).replace(/[^0-9]/g,''))}
                       style={{width:'100%',padding:'5px 6px',borderRadius:6,border:'2px solid #3b82f6',fontSize:14,textAlign:'right',outline:'none',boxSizing:'border-box'}}
                       onKeyDown={e=>{if(e.key==='Enter')handleSave();if(e.key==='Escape')setSelectedMonth(null);}}
                     />
@@ -22314,16 +22324,27 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     return months;
   }, [period, tY, tM, customFrom, customTo]);
 
-  const recs = React.useMemo(() => (appData.ticketRecords||[]).filter(r => {
-    const mM = r.date ? r.date.match(/(\d+)月/) : null;
-    if (!mM) return false;
-    if (targetMonths === null) return true;
-    const mo = parseInt(mM[1]);
-    // ★ 年が記録にあれば「年月」で厳密一致 (別の年の同じ月の記録が混ざり、曜日がズレるのを防ぐ)。
-    //   年が無い旧記録は従来どおり月のみで一致。
-    if (r.year) return targetMonths.includes(`${r.year}-${String(mo).padStart(2,'0')}`);
-    return targetMonths.some(ym => parseInt(ym.split('-')[1]) === mo);
-  }), [appData.ticketRecords, targetMonths]);
+  const recs = React.useMemo(() => {
+    const _now = new Date();
+    const _curY = _now.getFullYear(), _curM = _now.getMonth()+1, _curD = _now.getDate();
+    const _dayOf = (r) => { const dm = String(r.date||'').match(/(\d+)月(\d+)日/); return dm ? parseInt(dm[2]) : (/^\d{4}-\d{2}-\d{2}/.test(r.date||'') ? parseInt(String(r.date).slice(8,10)) : null); };
+    return (appData.ticketRecords||[]).filter(r => {
+      const mM = r.date ? r.date.match(/(\d+)月/) : null;
+      if (!mM) return false;
+      const mo = parseInt(mM[1]);
+      // 期間フィルタ: 年が記録にあれば「年月」で厳密一致 (別の年の同じ月が混ざるのを防ぐ)。 年が無い旧記録は月のみで一致。
+      let matched;
+      if (targetMonths === null) matched = true;
+      else if (r.year) matched = targetMonths.includes(`${r.year}-${String(mo).padStart(2,'0')}`);
+      else matched = targetMonths.some(ym => parseInt(ym.split('-')[1]) === mo);
+      if (!matched) return false;
+      // ★ 当月(実際の今月)は「今日まで」で集計。 未来の予定日(まだ来ていない回)を分母に入れない
+      //   → 曜日別・稼働率が未実施の回を先取りカウントして水増しするのを防ぐ(=現段階の稼働率)。
+      const recY = r.year ? Number(r.year) : _curY; // 年不明は当年扱いで判定
+      if (recY === _curY && mo === _curM) { const d = _dayOf(r); if (d != null && d > _curD) return false; }
+      return true;
+    });
+  }, [appData.ticketRecords, targetMonths]);
 
   const recsAP = React.useMemo(() => recs.map(r => {
     const p = patMap[r.patientId];
@@ -22798,6 +22819,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
               const mRecs = allTicketRecs.filter(r => {
                 const m2 = r.date?.match(/(\d+)月/);
                 if (!(m2 && parseInt(m2[1]) === mo)) return false;
+                // ★ 年がある記録は該当年だけを対象に (別年の同月が混ざるのを防ぎ、左上の稼働率と一致させる)
+                if (r.year && Number(r.year) !== yr) return false;
                 // ★ 当月は「現時点(今日)まで」で稼働率を算出。未来の予定日を分母に入れない(現段階の稼働率)
                 if (_isCurMonth) { const d = _dayOf(r); if (d != null && d > _now.getDate()) return false; }
                 return true;
@@ -29874,13 +29897,6 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     <span className="text-sm font-bold text-slate-700">{label}</span>
                   </label>
                 ))}
-              </div>
-            </SectionCard>
-            <SectionCard title="売上入力の開始年度">
-              <p className="text-xs text-slate-500 mb-3">分析（稼働）の「売上入力」で、この年度より前には戻れないようにします（＝事業開始年度を指定）。売上は<b>年度（4月〜翌3月）</b>で入力・表示され、和暦も併記されます。</p>
-              <div className="flex items-center gap-2">
-                <input type="number" inputMode="numeric" value={ss.salesStartYear||''} onChange={e=>saveSS({ salesStartYear: e.target.value?Number(e.target.value):null }, '✓ 売上の開始年度を設定しました')} placeholder="例: 2023" className="w-32 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
-                <span className="text-sm font-bold text-slate-600">年度{ss.salesStartYear?`（${(()=>{const e=[...WAREKI_ERAS].reverse().find(([,s])=>ss.salesStartYear>=s);return e?`${e[0]}${ss.salesStartYear-e[1]+1}`:'';})()}年度〜）`:''}</span>
               </div>
             </SectionCard>
             <SectionCard title="テンキー補完ボタンの管理">
