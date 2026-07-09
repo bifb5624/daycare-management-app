@@ -10345,13 +10345,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
                 <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:'#f59e0b',borderRadius:999,padding:'1px 7px'}}>{ext.length}</span></div>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
                   {ext.map(u=>(
-                    <button key={u.id} onClick={()=>navigateTo('master', u._pid)} style={{textAlign:'left',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:10,padding:'7px 10px',cursor:'pointer'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2,flexWrap:'wrap'}}>
+                    <button key={u.id} onClick={()=>navigateTo('master', u._pid)} style={{textAlign:'left',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:10,padding:'8px 10px',cursor:'pointer'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3,flexWrap:'wrap'}}>
                         <span style={{fontSize:9,fontWeight:'bold',color:'white',background:u.by==='caremanager'?'#0891b2':'#7c3aed',borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
-                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b'}}>{u._pname} 様</span>
-                        <span style={{fontSize:10,color:'#b45309'}}>{_fmt(u.at)}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b'}}>利用者：{u._pname} 様</span>
+                        <span style={{fontSize:10,color:'#b45309',marginLeft:'auto'}}>{_fmt(u.at)}</span>
                       </div>
-                      <div style={{fontSize:12,color:'#78350f'}}>{(u.items||[]).join('・')}{u.byName?` — ${u.byName}`:''}</div>
+                      <div style={{fontSize:12,color:'#78350f',fontWeight:'bold'}}>更新内容：{(u.items||[]).join('・')||'更新'}</div>
+                      {u.byName?<div style={{fontSize:11,color:'#a16207',marginTop:1}}>更新者：{u.byName}</div>:null}
                     </button>
                   ))}
                 </div>
@@ -12691,7 +12692,7 @@ function FamilyView() {
     setAuthPid(null);
     setAuthAccId(null);
   } : null;
-  return <FamilyPatientView data={data} setData={setData} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} />;
+  return <FamilyPatientView data={data} setData={setData} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} editingRef={editingRef} />;
 }
 
 // === 家族画面 - 利用者ごとのコンテンツ ===
@@ -12848,7 +12849,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
   );
 }
 
-function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient }) {
+function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient, editingRef }) {
   const [tab, setTab] = useState('news');
   // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
   const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','all'
@@ -12903,7 +12904,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [myInfoOpen, setMyInfoOpen] = useState(false);
   const [cmFaceSheetOpen, setCmFaceSheetOpen] = useState(false); // ★ ケアマネ: フェイスシート編集
   // ★ 編集フォームを開いている間はポーリング反映を止める(フォーカス喪失防止)
-  React.useEffect(() => { editingRef.current = !!(myInfoOpen || cmFaceSheetOpen); }, [myInfoOpen, cmFaceSheetOpen]);
+  React.useEffect(() => { if (editingRef) editingRef.current = !!(myInfoOpen || cmFaceSheetOpen); }, [myInfoOpen, cmFaceSheetOpen]);
   const [cmFaceSheetSaving, setCmFaceSheetSaving] = useState(false);
   const [cmDocsOpen, setCmDocsOpen] = useState(false); // ★ ケアマネ: 保険証・負担割合証・アセスメント
   const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
