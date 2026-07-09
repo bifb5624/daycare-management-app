@@ -21409,7 +21409,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         <tbody>
                           {[...fitnessRecs].reverse().slice(0,8).map((r,ri)=>(
                             <tr key={r.id} style={{borderBottom:'1px solid #f8fafc',background:ri%2===0?'white':'#fafbfc'}}>
-                              <td style={{padding:'4px 8px',fontWeight:'bold',color:'#475569'}}>{r.date}</td>
+                              <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#475569'}}>{r.date}</td>
                               {fitnessItems.map(it=>(
                                 <td key={it.id} style={{padding:'4px 8px',textAlign:'center',fontWeight:'bold',color:'#1e293b'}}>
                                   {r.values?.[it.id]!==undefined&&r.values[it.id]!==''?<>{r.values[it.id]}<span style={{fontSize:8,color:'#94a3b8',marginLeft:1}}>{it.unit}</span></>:<span style={{color:'#cbd5e1'}}>—</span>}
@@ -22745,9 +22745,15 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
             const chartData = displayMonths.map(({ yr, mo, key }, idx) => {
               const sales = salesRecs.find(s => s.month === key);
               // 稼働率計算（月番号のみで照合、年情報なし）
+              const _now = new Date();
+              const _isCurMonth = (yr === _now.getFullYear() && mo === (_now.getMonth()+1));
+              const _dayOf = (r) => { const dm = r.date?.match(/(\d+)月(\d+)日/); return dm ? parseInt(dm[2]) : (r.date && /^\d{4}-\d{2}-\d{2}/.test(r.date) ? parseInt(r.date.slice(8,10)) : null); };
               const mRecs = allTicketRecs.filter(r => {
                 const m2 = r.date?.match(/(\d+)月/);
-                return m2 && parseInt(m2[1]) === mo;
+                if (!(m2 && parseInt(m2[1]) === mo)) return false;
+                // ★ 当月は「現時点(今日)まで」で稼働率を算出。未来の予定日を分母に入れない(現段階の稼働率)
+                if (_isCurMonth) { const d = _dayOf(r); if (d != null && d > _now.getDate()) return false; }
+                return true;
               });
               const pl = mRecs.filter(r=>isPlannedRec(r));
               const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
@@ -22850,7 +22856,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         />
                         <Tooltip 
                           formatter={(value, name) => {
-                            if (name === '今年度売上' || name === '前年度売上') return [`¥${value.toLocaleString()}`, name];
+                            if (name === '売上' || name === '前年売上') return [`¥${value.toLocaleString()}`, name];
                             return [`${value}%`, name];
                           }}
                           contentStyle={{fontSize:13,borderRadius:8,border:'1px solid #94a3b8'}}
@@ -22861,10 +22867,10 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                           iconType="square"
                           iconSize={10}
                         />
-                        <Bar yAxisId="sales" dataKey="sales" name="今年度売上" fill="#5b8def" barSize={14} radius={[2,2,0,0]}/>
-                        <Bar yAxisId="sales" dataKey="prevSales" name="前年度売上" fill="#9ca3af" barSize={14} radius={[2,2,0,0]}/>
-                        <Line yAxisId="rate" type="monotone" dataKey="rate" name="今年度稼働率" stroke="#eab308" strokeWidth={2} dot={{fill:'#eab308',r:3}}/>
-                        <Line yAxisId="rate" type="monotone" dataKey="prevRate" name="前年度稼働率" stroke="#9ca3af" strokeWidth={2} dot={{fill:'#9ca3af',r:3}} strokeDasharray="4 2"/>
+                        <Bar yAxisId="sales" dataKey="sales" name="売上" fill="#5b8def" barSize={14} radius={[2,2,0,0]}/>
+                        <Bar yAxisId="sales" dataKey="prevSales" name="前年売上" fill="#9ca3af" barSize={14} radius={[2,2,0,0]}/>
+                        <Line yAxisId="rate" type="monotone" dataKey="rate" name="稼働率" stroke="#eab308" strokeWidth={2} dot={{fill:'#eab308',r:3}}/>
+                        <Line yAxisId="rate" type="monotone" dataKey="prevRate" name="前年稼働率" stroke="#9ca3af" strokeWidth={2} dot={{fill:'#9ca3af',r:3}} strokeDasharray="4 2"/>
                       </ComposedChart>
                     </ResponsiveContainer>
                   </div>
@@ -22883,7 +22889,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                     </thead>
                     <tbody>
                       <tr>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#3b82f6'}}>今年度売上</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#3b82f6'}}>今年度売上</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:'#1e293b',cursor:'pointer'}} 
                               onClick={()=>setSalesEditModal({month:d.month})}>
@@ -22892,7 +22898,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#64748b'}}>前年度売上</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#64748b'}}>前年度売上</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',color:'#64748b'}}>
                             {d.prevSales ? `¥${d.prevSales.toLocaleString()}` : '-'}
@@ -22900,7 +22906,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#3b82f6'}}>売上前年比</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#3b82f6'}}>売上前年比</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffPrevYear>=0?'#3b82f6':'#dc2626'}}>
                             {d.sales || d.prevSales ? (d.diffPrevYear>=0?'+':'')+`¥${d.diffPrevYear.toLocaleString()}` : '-'}
@@ -22908,7 +22914,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#06b6d4'}}>前月売上差</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#06b6d4'}}>前月売上差</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffPrevMonth>=0?'#3b82f6':'#dc2626'}}>
                             {d.sales || d.prevMonthSales ? (d.diffPrevMonth>=0?'+':'')+`¥${d.diffPrevMonth.toLocaleString()}` : '-'}
@@ -22916,7 +22922,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#06b6d4'}}>前月売上比</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#06b6d4'}}>前月売上比</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.ratioPrevMonth!==null?(d.ratioPrevMonth>=100?'#3b82f6':'#dc2626'):'#94a3b8'}}>
                             {d.ratioPrevMonth !== null ? `${d.ratioPrevMonth}%` : '—'}
@@ -22924,7 +22930,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#0891b2'}}>稼働日数</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#0891b2'}}>稼働日数</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:'#0891b2'}}>
                             {d.workDays}日
@@ -22932,19 +22938,19 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#eab308'}}>今年度稼働率</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#eab308'}}>今年度稼働率</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:RC(d.rate)}}>{d.rate}%</td>
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#94a3b8'}}>前年度稼働率</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#94a3b8'}}>前年度稼働率</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',color:'#94a3b8'}}>{d.prevRate !== null ? `${d.prevRate}%` : '—'}</td>
                         ))}
                       </tr>
                       <tr>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#7c3aed'}}>稼働率前年比</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#7c3aed'}}>稼働率前年比</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffRatePrevYear!==null?(d.diffRatePrevYear>=0?'#3b82f6':'#dc2626'):'#94a3b8'}}>
                             {d.diffRatePrevYear !== null ? (d.diffRatePrevYear>=0?'+':'')+d.diffRatePrevYear+'%' : '—'}
@@ -22952,7 +22958,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',color:'#06b6d4'}}>前月稼働率比</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#06b6d4'}}>前月稼働率比</td>
                         {chartDataWithDiff.map(d=>(
                           <td key={d.month} style={{padding:'4px 6px',textAlign:'right',fontWeight:'bold',color:d.diffRatePrevMonth!==null?(d.diffRatePrevMonth>=0?'#3b82f6':'#dc2626'):'#94a3b8'}}>
                             {d.diffRatePrevMonth !== null ? (d.diffRatePrevMonth>=0?'+':'')+d.diffRatePrevMonth+'%' : '—'}
