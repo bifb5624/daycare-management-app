@@ -29645,7 +29645,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
       }
     }
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, policies: { family: policyFamily, office: policyOffice } } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -30172,9 +30172,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 ))}
               </div>
             </SectionCard>
-            {(isAdmin || isSuperAdmin) && (
-            <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集">
+            {isSuperAdmin && (
+            <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集 ｜ 管理局専用">
               <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                <b className="text-indigo-700">つむぎ管理局のみが編集できます</b>（事業所ごとの誤編集を防ぐため）。事業所名・電話は自動ではめ込まれます。<br/>
                 家族・ケアマネの登録画面と、事業所の入場時に表示する同意文を編集できます。<b>社労士等の確認後に文面を修正</b>してご利用ください。<br/>
                 文中の <b>{'{facility}'}</b>=事業所名、<b>{'{tel}'}</b>=電話番号 に自動で置き換わります。<br/>
                 <b className="text-amber-700">「版」を上げて保存すると</b>、次回ログイン/入場時に<b>再同意</b>を求めます（同意状況は担当者・利用者ごとに記録）。<br/>
