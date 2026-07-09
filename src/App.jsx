@@ -12668,6 +12668,8 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
   const [mCareFrom, setMCareFrom] = useState(patient?.careLevelFrom || '');
   const [mCareTo, setMCareTo] = useState(patient?.careLevelTo || '');
   const [mCostBurden, setMCostBurden] = useState(patient?.costBurden || '');
+  const [mCostFrom, setMCostFrom] = useState(patient?.costBurdenFrom || '');
+  const [mCostTo, setMCostTo] = useState(patient?.costBurdenTo || '');
   const [asmtText, setAsmtText] = useState(asmt0.text || '');
   const [asmtFiles, setAsmtFiles] = useState(() => Array.isArray(asmt0.files) ? asmt0.files : []);
   const [busy, setBusy] = useState('');
@@ -12706,10 +12708,10 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
     const newAsmtFiles = asmtFiles.filter(d => !origAsmt.current.has(String(d.id)));
     const pf = patient.personalFile || {};
     const asmt = { ...(pf.assessment || {}), text: asmtText, files: asmtFiles, updatedAt: now, updatedBy: byName };
-    const np = { ...patient, docInsurance: ins, docBurden: bur, careLevel: mCareLevel, careLevelFrom: mCareFrom, careLevelTo: mCareTo, costBurden: mCostBurden, personalFile: { ...pf, assessment: asmt } };
+    const np = { ...patient, docInsurance: ins, docBurden: bur, careLevel: mCareLevel, careLevelFrom: mCareFrom, careLevelTo: mCareTo, costBurden: mCostBurden, costBurdenFrom: mCostFrom, costBurdenTo: mCostTo, personalFile: { ...pf, assessment: asmt } };
     onSaved(np);
     if (isSupabaseEnabled && storeId) {
-      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, master: { careLevel: mCareLevel, careLevelFrom: mCareFrom, careLevelTo: mCareTo, costBurden: mCostBurden }, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
+      try { await supabaseMergePatientDocsFromCM(storeId, patient.id, { docInsurance: newIns, docBurden: newBur, master: { careLevel: mCareLevel, careLevelFrom: mCareFrom, careLevelTo: mCareTo, costBurden: mCostBurden, costBurdenFrom: mCostFrom, costBurdenTo: mCostTo }, assessmentText: asmtText, assessmentFiles: newAsmtFiles }, { byName }); }
       catch (e) { console.warn('[cmDocs] cloud sync failed', e); }
     }
     setSaving(false);
@@ -12784,6 +12786,10 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
             <select value={mCostBurden} onChange={(e) => setMCostBurden(e.target.value)} style={{ width: '100%', maxWidth: 220, fontSize: 14, fontWeight: 'bold', padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }}>
               <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
             </select>
+            <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+              <div><label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>有効期間（開始）</label><input type="date" value={mCostFrom} onChange={(e) => setMCostFrom(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} /></div>
+              <div><label style={{ display: 'block', fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 3 }}>有効期間（終了）</label><input type="date" value={mCostTo} onChange={(e) => setMCostTo(e.target.value)} style={{ fontSize: 14, padding: '7px 8px', border: '1px solid #cbd5e1', borderRadius: 8, background: 'white' }} /></div>
+            </div>
             <ValueHistoryList title="負担割合の変更履歴" hist={patient?.costBurdenHistory} />
           </div>
         </div>
