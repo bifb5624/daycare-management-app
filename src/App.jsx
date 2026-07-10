@@ -15644,6 +15644,8 @@ export default function App() {
   //   (＝クラウド側に変化なし) 場合は setAppData をスキップし、アプリ全体データの再生成による
   //   メモリ肥大→WebViewクラッシュ(エラーコード5)を防ぐ。
   const lastAppliedSigRef = React.useRef(null);
+  // ★ 最後に実際にクラウド反映した時刻。 updated_at 判定が万一取りこぼしても、一定時間経過で必ず再取得する安全網。
+  const lastAppliedAtRef = React.useRef(0);
   useEffect(()=>{
     const isRemote = applyingRemoteRef.current;
     applyingRemoteRef.current = false;
@@ -15798,13 +15800,17 @@ export default function App() {
         }
         // ★ クラウド側に変化が無ければ setAppData しない (アプリ全体データの再生成を避け、
         //   長時間表示によるメモリ肥大→クラッシュ を防止)。 forcePull / 初回は必ず反映。
+        //   ただし updated_at 判定の取りこぼし対策として、一定時間(10秒)反映が無ければ強制的に反映する
+        //   (これが無いと「他端末の更新が自動で反映されず、再読み込みしないと出ない」不具合が起きる)。
         const _sig = row.updated_at || null;
-        if (!forcePull && _sig && lastAppliedSigRef.current === _sig) {
+        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 10000;
+        if (!forcePull && !_stale && _sig && lastAppliedSigRef.current === _sig) {
           dataLoadedForStoreRef.current = newStoreId;
           storeTransitionRef.current = false;
           return;
         }
         lastAppliedSigRef.current = _sig;
+        lastAppliedAtRef.current = Date.now();
         // 通常: 既存データをロード。 pull 由来なので push しない (他端末の入力を上書きしない)。
         applyingRemoteRef.current = true;
         setAppData(prev => {
