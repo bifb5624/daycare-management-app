@@ -9277,7 +9277,13 @@ const getPauseReasonOnDate = (p, dateStr) => {
     if (!p || p.status !== '休止' || !p.pauseHistory || p.pauseHistory.length === 0) return null;
     const targetDate = new Date(dateStr);
     const sorted = [...p.pauseHistory].sort((a, b) => new Date(b.fromDate) - new Date(a.fromDate));
-    const match = sorted.find(h => new Date(h.fromDate) <= targetDate);
+    // ★ fromDate <= 対象日 <= toDate(設定があれば) の「期間内」だけ休止扱い。
+    //   toDate 未設定は無期限休止。 これが無いと開始日以降が丸ごと休止になってしまう(期間指定が効かない)。
+    const match = sorted.find(h => {
+        if (new Date(h.fromDate) > targetDate) return false;
+        if (h.toDate) { const td = new Date(h.toDate); td.setHours(23, 59, 59, 999); if (targetDate > td) return false; }
+        return true;
+    });
     return match ? { reason: match.reason, fromDate: match.fromDate } : null;
 };
 
