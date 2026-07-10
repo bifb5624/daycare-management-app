@@ -22185,9 +22185,10 @@ function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, perio
       })
       .map(r=>r.patientId)
   );
-  const activePats = attendedIds.size > 0
-    ? (appData.patients||[]).filter(p=>attendedIds.has(p.id))
-    : (appData.patients||[]).filter(p=>getPatientDisplayStatus(p)==='利用中');
+  // ★ 利用者属性(年齢/男女比/介護度)は「現在の在籍者(利用中＋休止)」全員を対象にする。
+  //   以前は「今月出席した人」だけを対象にしていたため、今月まだ出席していない在籍者(例: 最高齢の方)が
+  //   統計から漏れ、最高年齢などがずれていた。 退所済みのみ除外する。
+  const activePats = (appData.patients||[]).filter(p=>getPatientDisplayStatus(p)!=='退所済み');
   const total = activePats.length||1;
   const males = activePats.filter(p=>p.gender==='男性');
   const females = activePats.filter(p=>p.gender==='女性');
@@ -22730,13 +22731,28 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       {dow:'水', idx:3},{dow:'木', idx:4},{dow:'金', idx:5},{dow:'土', idx:6}
     ];
     const days = allDays.filter(d => !closed.includes(d.idx)).map(d => d.dow);
+    // ★ 本日の「まだ始まっていない時間帯」は集計に入れない (例: 午前中は本日PMをまだカウントしない → 午後になったらPMも反映)。
+    const _fiDow = appData?.systemSettings?.facilityInfo || {};
+    const _parseStart = (s) => { const m = String(s||'').match(/(\d{1,2})[:：](\d{2})/); return m ? (+m[1]*60 + +m[2]) : null; };
+    const _amStart = _parseStart(_fiDow.serviceTimeAM);
+    const _pmStart = _parseStart(_fiDow.serviceTimePM) ?? (12*60); // PM開始が不明なら正午を仮定
+    const _nowD = new Date();
+    const _nowMin = _nowD.getHours()*60 + _nowD.getMinutes();
+    const _todayMD = `${_nowD.getMonth()+1}月${_nowD.getDate()}日`;
+    const _todayYr = _nowD.getFullYear();
+    const _slotNotStarted = (r, ap) => {
+      if (!(r.date === _todayMD && (r.year == null || Number(r.year) === _todayYr))) return false; // 本日の記録だけ対象
+      const start = ap === 'AM' ? _amStart : _pmStart;
+      if (start == null) return false; // 時刻不明なら従来どおり集計
+      return _nowMin < start; // その時間帯がまだ始まっていない
+    };
     return days.map(dow => {
       const dayRecs = recsAP.filter(r => r._dow === dow);
       // 1日 (終日) の利用者は AM と PM の両方に含める。
       // 合計 = AM + PM (各セッション件数の総和) で整合する
       const calcRate = (ap) => {
-        const sub = ap === 'AM' ? dayRecs.filter(r => r.amPm === 'AM' || r.amPm === '1日')
-          : ap === 'PM' ? dayRecs.filter(r => r.amPm === 'PM' || r.amPm === '1日')
+        const sub = ap === 'AM' ? dayRecs.filter(r => (r.amPm === 'AM' || r.amPm === '1日') && !_slotNotStarted(r,'AM'))
+          : ap === 'PM' ? dayRecs.filter(r => (r.amPm === 'PM' || r.amPm === '1日') && !_slotNotStarted(r,'PM'))
           : null; // null = all (合計は別計算)
         if (!sub) return null;
         const pl = sub.filter(r => isPlannedRec(r));
@@ -22754,8 +22770,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       const amPats = {}, pmPats = {};
       dayRecs.forEach(r => {
         const ap = r.amPm;
-        const inAM = ap === 'AM' || ap === '1日';
-        const inPM = ap === 'PM' || ap === '1日';
+        const inAM = (ap === 'AM' || ap === '1日') && !_slotNotStarted(r,'AM');
+        const inPM = (ap === 'PM' || ap === '1日') && !_slotNotStarted(r,'PM');
         // ★ amPm が空 (その曜日にスケジュールが無い=別曜日の記録が誤混入) の場合は AM に入れない。
         //   以前は AM 扱い(fallback)にしていたため、別曜日の利用者が誤って表示されていた。
         if (inAM) {
