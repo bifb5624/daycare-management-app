@@ -16269,9 +16269,9 @@ export default function App() {
 
   const handleSaveToCloud = (newData, options = {}) => {
     setAppData(newData);
-    // ★ 手動保存ボタン押下時 (options.manual=true) のみトーストを表示
-    //   自動保存・編集中の付随保存ではトーストを出さない
-    if (options.manual) {
+    // ★ 手動保存ボタン (options.manual) / 自動保存 (options.silent) は即時クラウド保存する。
+    //   silent は成功トーストを出さない (自動保存の連続表示を避ける)。 失敗時のみ通知する。
+    if (options.manual || options.silent) {
       // ★ 手動保存は debounce(1.5秒)を待たず即時クラウド保存する。
       //   保存直後に別画面へ移動 → pull で古いクラウドデータに上書きされて
       //   入力が消える、というレースを防ぐ (保存と同時にクラウドを最新化)。
@@ -16294,18 +16294,24 @@ export default function App() {
           .then(() => supabaseMergeAndSyncStateForStore(staffSession.storeId, newData))
           .then(ok => { if (ok === false) { setToastMsg('⚠ クラウド保存に失敗しました。通信状況を確認して、もう一度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); } })
           .catch(e => { console.warn('[supabase] immediate save failed', e); setToastMsg('⚠ クラウド保存に失敗しました。通信を確認して再度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); });
-        setToastMsg(options.message || '保存されました');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+        if (!options.silent) {
+          setToastMsg(options.message || '保存されました');
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 3000);
+        }
       } else if (isSupabaseEnabled && staffSession?.storeId && !options.allowEmpty && !_hasRealData) {
         // 利用者0件(未ロード等)で push 抑止 → 端末ローカルのみ。 誤解を避ける表示
-        setToastMsg('端末に保存しました（クラウド同期は数秒後に自動実行）');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+        if (!options.silent) {
+          setToastMsg('端末に保存しました（クラウド同期は数秒後に自動実行）');
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 3000);
+        }
       } else {
-        setToastMsg(options.message || '保存されました');
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+        if (!options.silent) {
+          setToastMsg(options.message || '保存されました');
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 3000);
+        }
       }
     }
   };
@@ -26592,7 +26598,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     setPauseModal({ isOpen: false, reason: "", fromDate: "" });
   };
 
-  const saveMasterInfo = () => {
+  const saveMasterInfo = (auto = false) => {
     if (!localPatient) return;
     if (dirtyRef) dirtyRef.current = false;
     let next = { ...appData };
@@ -26620,17 +26626,20 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const indChanged = _normIND(prev.individualExercises) !== _normIND(pat.individualExercises);
     // ★ 運動メニュー/個別運動(設定値)が変わったら「いつから」を確認 (規定値は翌月から適用・備考へ自動記載)
     if (peChanged || indChanged) {
-      setPlannedExModal({ pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) });
+      const _ctx = { pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) };
+      // ★ 自動保存では「いつから」モーダルを出さず、当日付で確定してサイレント保存する。
+      if (auto) { applyPlannedExChange(new Date().toISOString().slice(0,10), _ctx, { silent: true }); return; }
+      setPlannedExModal(_ctx);
       return;
     }
-    // ★ manual:true でトースト表示
-    onSave(next, { manual: true, message: '✓ 利用者マスタを保存しました' });
+    onSave(next, auto ? { silent: true } : { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
   // サービス提供内容(運動メニュー・個別運動の規定値)の変更を適用。
   //   ★ 規定値の切替は【翌月1日から】。 備考(serviceChanges)は選んだ日付で記載 → その月の月別提供記録に「6/15 …（7月から）」と自動掲載。
-  const applyPlannedExChange = (fromDate) => {
-    if (!plannedExModal) return;
-    const { pat, next, prevPlanned, prevHistory, prevIndividual, prevIndHistory } = plannedExModal;
+  const applyPlannedExChange = (fromDate, ctxOverride, opts = {}) => {
+    const ctx = ctxOverride || plannedExModal;
+    if (!ctx) return;
+    const { pat, next, prevPlanned, prevHistory, prevIndividual, prevIndHistory } = ctx;
     const fd = String(fromDate || new Date().toISOString().slice(0,10)).slice(0,10);
     const dd = new Date(fd);
     // ★ 履歴の from は「選んだ日付」。 提供記録入力のグレー数値は当日から反映、月別提供記録の設定数値は月初判定なので翌月から反映される。
@@ -26673,9 +26682,22 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     pat2.serviceChanges = sc;
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
-    setPlannedExModal(null);
-    onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
+    if (!ctxOverride) setPlannedExModal(null);
+    if (opts.silent) onSave(next2, { silent: true });
+    else onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
   };
+
+  // ★ 自動保存: 基本情報/サービス提供内容/月間スケジュールの変更を、入力が止まって約1.5秒後に自動でクラウド保存。
+  //   保存ボタンの押し忘れを防ぐ。 dirty のときだけ発火し、保存で dirty=false になるのでループしない。
+  //   「いつから」モーダル表示中は待つ。
+  const autoSaveTimerRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!localPatient || !dirtyRef?.current || plannedExModal) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => { try { saveMasterInfo(true); } catch (e) { console.warn('[autosave] master failed', e); } }, 1500);
+    return () => { if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPatient, pendingShifts, pendingTickets]);
 
   const handleStatusChange = (val) => {
     if (val === '休止') setPauseModal({ isOpen: true, reason: "", fromDate: new Date().toISOString().split('T')[0] });
