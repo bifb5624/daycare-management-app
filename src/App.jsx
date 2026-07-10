@@ -15640,6 +15640,10 @@ export default function App() {
   //   pull で受け取ったデータを そのまま push し返すと、別端末で入力した新しいデータを
   //   古い内容で上書きしてしまう (複数端末でデータが消える原因)。 pull 由来の変更は push しない。
   const applyingRemoteRef = React.useRef(false);
+  // ★ 直近にクラウドから反映した更新時刻(署名)。 4秒ポーリングで updated_at が変わっていない
+  //   (＝クラウド側に変化なし) 場合は setAppData をスキップし、アプリ全体データの再生成による
+  //   メモリ肥大→WebViewクラッシュ(エラーコード5)を防ぐ。
+  const lastAppliedSigRef = React.useRef(null);
   useEffect(()=>{
     const isRemote = applyingRemoteRef.current;
     applyingRemoteRef.current = false;
@@ -15792,6 +15796,15 @@ export default function App() {
             return;
           }
         }
+        // ★ クラウド側に変化が無ければ setAppData しない (アプリ全体データの再生成を避け、
+        //   長時間表示によるメモリ肥大→クラッシュ を防止)。 forcePull / 初回は必ず反映。
+        const _sig = row.updated_at || null;
+        if (!forcePull && _sig && lastAppliedSigRef.current === _sig) {
+          dataLoadedForStoreRef.current = newStoreId;
+          storeTransitionRef.current = false;
+          return;
+        }
+        lastAppliedSigRef.current = _sig;
         // 通常: 既存データをロード。 pull 由来なので push しない (他端末の入力を上書きしない)。
         applyingRemoteRef.current = true;
         setAppData(prev => {
@@ -18626,7 +18639,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         const _isBaseSel = _baseSel==='AM'||_baseSel==='PM'||_baseSel==='1日';
                         const _isFuriSrc = p.status==='欠席' && /へ振替/.test(p.tokki||'');
                         return (<>
-                          {appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}
+                          {appSettings.statusOptions.filter(o=>o.label!=='振替').map(o=><option key={o.label} value={o.label}>{o.label}</option>)}
                           {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
                         </>);
                       })()}</select>}
@@ -18803,9 +18816,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             <option value="振替">振替</option>
                             <option value="取り消し">取り消し</option>
                           </>
-                        ) : (
-                          appSettings.statusOptions.map(opt => <option key={opt.label} value={opt.label}>{opt.label}</option>)
-                        )}
+                        ) : (() => {
+                          const _dowSel = new Date(selectedDate).getDay();
+                          const _baseSel = getScheduleOnDate(p, selectedDate)?.[_dowSel] || '';
+                          const _isBaseSel = _baseSel==='AM'||_baseSel==='PM'||_baseSel==='1日';
+                          const _isFuriSrc = p.status==='欠席' && /へ振替/.test(p.tokki||'');
+                          return (<>
+                            {appSettings.statusOptions.filter(o=>o.label!=='振替').map(opt => <option key={opt.label} value={opt.label}>{opt.label}</option>)}
+                            {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
+                          </>);
+                        })()}
                       </select>
                     )}
                   </td>
@@ -26798,6 +26818,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const mDays = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const allD = Array.from({ length: mDays }, (_, i) => i + 1);
   const dN = ['日', '月', '火', '水', '木', '金', '土'];
+  // ★ 過去に「提供記録入力」で欠席/休業にした日を月間スケジュールにも反映する。
+  //   monthlyShifts に明示的な値が無くても、その日の ticketRecord が欠席/休業なら補完表示。
+  //   (以前は monthlyShifts しか見ておらず、提供記録で欠席にした過去の日が「出席」のまま見えていた)
+  const _mSchedRecStatus = {};
+  (appData.ticketRecords || []).forEach(r => {
+    if (!localPatient || r.patientId !== localPatient.id) return;
+    const dm = (r.date || '').match(/(\d+)月(\d+)日/);
+    if (!dm || parseInt(dm[1]) !== (currentMonth.getMonth() + 1)) return;
+    const ry = r.year || currentMonth.getFullYear();
+    if (ry !== currentMonth.getFullYear()) return;
+    if (r.status === '欠席' || r.status === '休業') _mSchedRecStatus[parseInt(dm[2])] = r.status;
+  });
   const curSt = (ov, ib) => ov !== undefined ? ov : (ib ? "〇" : "空欄");
   const sSt = (st, cl, hl) => { if (hl) return { t: "休業", c: "text-white bg-slate-600 font-bold" }; if (cl) return { t: "", c: "bg-slate-100" }; if (st === "〇" || st === "出席") return { t: "出席", c: "text-blue-700 font-bold bg-blue-50" }; if (st === "欠席") return { t: "欠席", c: "text-red-600 font-bold bg-red-50" }; if (st === "休止") return { t: "休止", c: "text-orange-600 font-bold bg-orange-50" }; if (st === "臨時") return { t: "臨時", c: "text-cyan-700 font-bold bg-cyan-50" }; if (typeof st === 'string' && st.startsWith("振")) { const m = st.match(/振\((.+?)\)/); return { t: "振替", sub: m ? m[1] : "", c: "text-emerald-700 font-bold bg-emerald-50 leading-tight" }; } if (st === "休業") return { t: "休業", c: "text-white font-bold bg-slate-600" }; return { t: "", c: "bg-white" }; };
   // 振替の取り消し（MasterView 月間スケジュール用）
@@ -27624,7 +27656,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div><label className="block text-sm font-bold text-slate-600 mb-3">基本利用曜日</label><div className="grid grid-cols-7 gap-2">{['日', '月', '火', '水', '木', '金', '土'].map((d, i) => { const v = localPatient.scheduleAmPm?.[i] || ""; const isClosed = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(i); const colorCls = isClosed ? 'bg-slate-100 border-slate-200 text-slate-400' : v === 'AM' ? 'bg-red-50 border-red-300 text-red-700' : v === 'PM' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-400'; return (<div key={d} className="flex flex-col"><span className={`text-center text-[13px] font-bold mb-1 ${i===0?'text-red-400':i===6?'text-blue-400':'text-slate-500'}`}>{d}</span>{isClosed ? (<div className={`w-full h-[42px] flex items-center justify-center text-[14px] font-bold text-center border rounded-xl box-border bg-slate-100 border-slate-200 text-slate-400`}>定休</div>) : (<select disabled={isOff} value={v} onChange={e => updateSched(i, e.target.value)} className={`w-full h-[42px] text-[14px] font-bold text-center border rounded-xl box-border outline-none cursor-pointer disabled:opacity-60 ${colorCls}`}><option value="">無</option><option value="AM">AM</option><option value="PM">PM</option></select>)}</div>); })}</div></div>
               {/* 月間スケジュール */}
               <div><div className="flex items-center justify-between mb-2"><label className="text-sm font-bold text-slate-600 flex items-center gap-1.5"><CalendarCheck size={16} />月間スケジュール</label><div className="flex items-center gap-2"><button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-1 hover:bg-slate-200 rounded text-slate-500"><ChevronLeft size={16} /></button><span className="text-base font-bold text-slate-700 tabular-nums w-28 text-center">{currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月</span><button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-1 hover:bg-slate-200 rounded text-slate-500"><ChevronRight size={16} /></button></div></div>
-                <div className="flex border border-slate-200 rounded-xl bg-slate-50 p-1 gap-0.5">{allD.map(d => { const dO = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d); const dow = dO.getDay(); const ds = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const cl = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dow); const hl = appData.holidays?.some(h => (h.date || h) === ds); const base = getScheduleOnDate(localPatient, ds)?.[dow] || ""; const bAM = base === "AM" || base === "1日"; const bPM = base === "PM" || base === "1日"; const sh = effShifts?.[mKey]?.[localPatient.id] || {}; const pi = getPauseReasonOnDate(localPatient, ds); /* 休止中: 基本利用日 (bAM/bPM=true) の枠だけ「休止」表示。それ以外は通常空欄 */ const cA = pi ? (bAM ? sSt("休止", cl, hl) : sSt("空欄", cl, hl)) : sSt(curSt(sh[`${d}_AM`], bAM), cl, hl); const cP = pi ? (bPM ? sSt("休止", cl, hl) : sSt("空欄", cl, hl)) : sSt(curSt(sh[`${d}_PM`], bPM), cl, hl); const ok = !cl && !hl && !pi && !isOff; return (<div key={d} className="flex-1 min-w-0 flex flex-col items-stretch bg-white border border-slate-200 rounded overflow-hidden"><div className={`w-full text-center text-[11px] font-bold py-1 bg-slate-100 border-b border-slate-200 leading-tight ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-600'}`}>{d}<br/><span className="text-[9px] font-normal">{dN[dow]}</span></div><button disabled={!ok} title={cA.sub ? `${cA.sub} 分の振替` : undefined} onClick={() => ok && shiftTog(d, "AM")} className={`h-9 flex items-center justify-center border-b border-slate-100 text-[10px] leading-none whitespace-pre-wrap ${cA.c} ${ok ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>{cA.t}</button><button disabled={!ok} title={cP.sub ? `${cP.sub} 分の振替` : undefined} onClick={() => ok && shiftTog(d, "PM")} className={`h-9 flex items-center justify-center text-[10px] leading-none whitespace-pre-wrap ${cP.c} ${ok ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>{cP.t}</button></div>); })}</div>
+                <div className="flex border border-slate-200 rounded-xl bg-slate-50 p-1 gap-0.5">{allD.map(d => { const dO = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d); const dow = dO.getDay(); const ds = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const cl = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dow); const hl = appData.holidays?.some(h => (h.date || h) === ds); const base = getScheduleOnDate(localPatient, ds)?.[dow] || ""; const bAM = base === "AM" || base === "1日"; const bPM = base === "PM" || base === "1日"; const sh = effShifts?.[mKey]?.[localPatient.id] || {}; const pi = getPauseReasonOnDate(localPatient, ds); /* 休止中: 基本利用日 (bAM/bPM=true) の枠だけ「休止」表示。それ以外は通常空欄 */ const _shAM = sh[`${d}_AM`] !== undefined ? sh[`${d}_AM`] : (bAM && _mSchedRecStatus[d] ? _mSchedRecStatus[d] : undefined); const _shPM = sh[`${d}_PM`] !== undefined ? sh[`${d}_PM`] : (bPM && _mSchedRecStatus[d] ? _mSchedRecStatus[d] : undefined); const cA = pi ? (bAM ? sSt("休止", cl, hl) : sSt("空欄", cl, hl)) : sSt(curSt(_shAM, bAM), cl, hl); const cP = pi ? (bPM ? sSt("休止", cl, hl) : sSt("空欄", cl, hl)) : sSt(curSt(_shPM, bPM), cl, hl); const ok = !cl && !hl && !pi && !isOff; return (<div key={d} className="flex-1 min-w-0 flex flex-col items-stretch bg-white border border-slate-200 rounded overflow-hidden"><div className={`w-full text-center text-[11px] font-bold py-1 bg-slate-100 border-b border-slate-200 leading-tight ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-600'}`}>{d}<br/><span className="text-[9px] font-normal">{dN[dow]}</span></div><button disabled={!ok} title={cA.sub ? `${cA.sub} 分の振替` : undefined} onClick={() => ok && shiftTog(d, "AM")} className={`h-9 flex items-center justify-center border-b border-slate-100 text-[10px] leading-none whitespace-pre-wrap ${cA.c} ${ok ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>{cA.t}</button><button disabled={!ok} title={cP.sub ? `${cP.sub} 分の振替` : undefined} onClick={() => ok && shiftTog(d, "PM")} className={`h-9 flex items-center justify-center text-[10px] leading-none whitespace-pre-wrap ${cP.c} ${ok ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>{cP.t}</button></div>); })}</div>
                 <div className="flex gap-2 mt-2 text-[11px] text-slate-400 font-bold flex-wrap items-center"><span>上段:AM/下段:PM</span><span className="text-blue-600 bg-blue-50 px-1 rounded">出席</span><span className="text-red-500 bg-red-50 px-1 rounded">欠席</span><span className="text-emerald-600 bg-emerald-50 px-1 rounded">振替</span><span className="text-cyan-700 bg-cyan-50 px-1 rounded">臨時</span><span className="text-white bg-slate-600 px-1 rounded">休業</span><span>空欄=非利用日</span></div></div>
               {/* お迎え時間: 基本利用曜日に設定がある日のみ表示 */}
               {(() => {
