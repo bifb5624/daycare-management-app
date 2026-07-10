@@ -17899,35 +17899,44 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     const yr = dObj.getFullYear();
     const thisDateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`;
     const recs = appData.ticketRecords || [];
-    const rec = recs.find(r => r.patientId === id && r.date === thisDateStr && (r.status === '振替' || r.status === '欠席'));
-    if (!rec) return;
-    let destDateStr = '', srcDateStr = '', destAmpm = 'AM';
-    if (rec.status === '振替') {
+    const _p = (appData.patients||[]).find(x=>x.id===id);
+    const _dow = dObj.getDay();
+    const _base = getScheduleOnDate(_p, selectedDate)?.[_dow] || '';
+    const _isBaseDay = _base==='AM'||_base==='PM'||_base==='1日';
+    const rec = recs.find(r => r.patientId === id && r.date === thisDateStr);
+    let destDateStr = '', srcDateStr = '', destAmpm = 'AM', destAny = false;
+    if (rec && rec.status === '振替') {
       // この日が振替先。 振替元は tokki「M月D日…分振替」から逆引き
       destDateStr = thisDateStr;
       destAmpm = rec.furikaeAmpm || 'AM';
       const m = (rec.tokki||'').match(/^(\d+月\d+日)(?:AM|PM|1日)?分振替$/);
       srcDateStr = m ? m[1] : '';
-    } else {
-      // この日が振替元(欠席)。 振替先は tokki「M月D日…へ振替」から逆引き。 ただの欠席は対象外
+    } else if (rec && rec.status === '欠席' && /へ振替/.test(rec.tokki||'')) {
+      // この日が振替元(欠席)。 振替先は tokki「M月D日…へ振替」から逆引き
       srcDateStr = thisDateStr;
       const m = (rec.tokki||'').match(/^(\d+月\d+日)(AM|PM|1日)?へ振替/);
-      if (!m) return;
-      destDateStr = m[1];
-      destAmpm = m[2] || 'AM';
+      if (m) { destDateStr = m[1]; destAmpm = m[2] || 'AM'; }
+    } else if (!_isBaseDay) {
+      // ★ 基本利用日でない日に出席等で残っている(振替の残骸など) → この日から外す。
+      //   この日を振替先とする欠席(振替元)があれば出席に戻す。
+      destDateStr = thisDateStr; destAny = true; destAmpm = '1日';
+      const srcRec = recs.find(r => r.patientId===id && r.status==='欠席' && (r.tokki||'').includes(thisDateStr) && (r.tokki||'').includes('へ振替'));
+      if (srcRec) srcDateStr = srcRec.date;
+    } else {
+      return; // 基本利用日の通常の出席等は取り消し対象外
     }
     const _mk = (mdStr) => { const mm = String(mdStr).match(/(\d+)月(\d+)日/); return mm ? { mk: `${yr}-${String(+mm[1]).padStart(2,'0')}`, day: +mm[2] } : null; };
     const dMK = _mk(destDateStr), sMK = _mk(srcDateStr);
-    // 墓石にする記録id(振替先の振替 + 振替元の欠席)を収集
+    // 墓石にする記録id(振替先/この日の記録 + 振替元の欠席)を収集
     const _removedIds = [];
     recs.forEach(r => {
       if (r.patientId !== id) return;
-      if (destDateStr && r.date === destDateStr && r.status === '振替' && r.id != null) _removedIds.push(String(r.id));
+      if (destDateStr && r.date === destDateStr && (destAny || r.status === '振替') && r.id != null) _removedIds.push(String(r.id));
       if (srcDateStr && r.date === srcDateStr && r.status === '欠席' && r.id != null) _removedIds.push(String(r.id));
     });
     setPendingCancellations(prev => [...prev, {
       patientId: id,
-      destDateStr, destMK: dMK?.mk, destDay: dMK?.day, destAmpm,
+      destDateStr, destMK: dMK?.mk, destDay: dMK?.day, destAmpm, destAny,
       srcDateStr, srcMK: sMK?.mk, srcDay: sMK?.day,
       removedIds: _removedIds,
       restore: true, // 振替元を出席に戻す
@@ -18218,10 +18227,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       let newShifts = JSON.parse(JSON.stringify(appData.monthlyShifts || {}));
       // ★ 振替の取り消し(保留分): 振替先=記録/シフト削除、振替元=出席に戻す(欠席の記録/シフトも削除)。 削除idは墓石へ。
       const _cancelTomb = [];
-      pendingCancellations.forEach(({patientId, destDateStr, destDay, destMK, destAmpm, srcDateStr, srcMK, srcDay, restore, removedIds}) => {
+      pendingCancellations.forEach(({patientId, destDateStr, destDay, destMK, destAmpm, srcDateStr, srcMK, srcDay, restore, removedIds, destAny}) => {
           (removedIds||[]).forEach(rid => _cancelTomb.push(String(rid)));
-          // 振替先の 振替 記録を削除
-          updatedTicketRecords = updatedTicketRecords.filter(r => !(r.patientId === patientId && r.date === destDateStr && r.status === '振替'));
+          // 振替先(またはこの日)の記録を削除。 destAny=true の時は状態を問わず削除(基本利用日以外の残骸を消す)
+          updatedTicketRecords = updatedTicketRecords.filter(r => !(r.patientId === patientId && r.date === destDateStr && (destAny || r.status === '振替')));
           // 振替先の 振 シフトを削除
           if (destMK && newShifts[destMK]?.[patientId]) {
               if (destAmpm === '1日') { delete newShifts[destMK][patientId][`${destDay}_AM`]; delete newShifts[destMK][patientId][`${destDay}_PM`]; }
@@ -18610,7 +18619,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <button onClick={()=>setPatientInfoModal(masterData)} className="font-bold text-base text-slate-800 flex items-center gap-1 min-w-0"><span className="truncate">{p.name}</span><span className="text-[10px] text-blue-500 shrink-0">ⓘ</span></button>
                   {isReadOnly||isPause ? <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${config.lightColor} ${config.textColor}`}>{p.status||'出席'}</span>
-                    : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{p.status==='振替'?(<><option value="振替">振替</option><option value="取り消し">取り消し</option></>):(p.status==='欠席' && /へ振替/.test(p.tokki||''))?(<>{appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}<option value="取り消し">振替を取り消し</option></>):appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}</select>}
+                    : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{(()=>{
+                        if (p.status==='振替') return (<><option value="振替">振替</option><option value="取り消し">取り消し</option></>);
+                        const _dowSel = new Date(selectedDate).getDay();
+                        const _baseSel = getScheduleOnDate(p, selectedDate)?.[_dowSel] || '';
+                        const _isBaseSel = _baseSel==='AM'||_baseSel==='PM'||_baseSel==='1日';
+                        const _isFuriSrc = p.status==='欠席' && /へ振替/.test(p.tokki||'');
+                        return (<>
+                          {appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}
+                          {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
+                        </>);
+                      })()}</select>}
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {['arrival','departure'].map(t=>{ const mo=KIBUN_MOODS.find(m=>m.key===p[t==='arrival'?'kibunArrival':'kibunDeparture']); return (
