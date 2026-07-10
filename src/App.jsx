@@ -17702,10 +17702,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     try { return JSON.stringify((appData.ticketRecords || []).filter(r => { const m = r.date?.match(/(\d+)月/); return m && parseInt(m[1]) === selM; })); }
     catch { return String((appData.ticketRecords || []).length); }
   }, [appData.ticketRecords, selectedDate]);
+  const _rvPrevDateRef = React.useRef(selectedDate);
   useEffect(() => {
     if (!appData || !appData.patients) return;
-    // ★ ユーザーが編集中 (dirty) の場合はリセットしない (入力途中で値が消えるバグ防止)
-    if (dirtyRef?.current) return;
+    const _dateChanged = _rvPrevDateRef.current !== selectedDate;
+    _rvPrevDateRef.current = selectedDate;
+    // ★ 同じ日で編集中(dirty)の間は、クラウド同期等の appData 変化で入力途中を上書きしない。
+    //   ただし日付が変わった時は必ず作り直す(前の日の編集中フラグが残っていて、別の日のリストが
+    //   古いまま=表示人数がおかしくなるのを防ぐ)。
+    if (!_dateChanged && dirtyRef?.current) return;
     const dayOfWeek = new Date(selectedDate).getDay();
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
@@ -17720,6 +17725,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           const isBasePM = baseAmPm === "PM" || baseAmPm === "1日";
           const stateAM = shiftAM !== undefined ? shiftAM : (isBaseAM ? "〇" : "空欄");
           const statePM = shiftPM !== undefined ? shiftPM : (isBasePM ? "〇" : "空欄");
+          // ★ 休止中の人は「通所予定の基本利用日」のみ表示する。 基本利用日でない日には出さない
+          //   (過去の記録やシフトが残っていても、休止者が全曜日・全時間帯に出てしまうのを防ぐ)。
+          if (getPauseReasonOnDate(p, selectedDate) && !(isBaseAM || isBasePM)) return false;
           const comingAM = stateAM === "〇" || stateAM === "出席" || stateAM.startsWith("振") || stateAM === "欠席";
           const comingPM = statePM === "〇" || statePM === "出席" || statePM.startsWith("振") || statePM === "欠席";
           const targetDateStr2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
