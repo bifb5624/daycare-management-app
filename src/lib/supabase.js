@@ -401,8 +401,19 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         });
         out[k] = mo; return;
       }
-      if (_isEmptyVal(av)) { out[k] = bv; return; }
-      if (_isEmptyVal(bv)) { out[k] = av; return; }
+      // ★ スカラー(特記/気分理由 等): 片方が空・片方が非空のとき。
+      //   従来は無条件で「非空」を優先していたため、特記を削除して保存しても古い値が復活して消せなかった。
+      //   → 「新しい方が(strictlyに)空にした」= 明示的な削除 のときはクリアを反映する。
+      //   それ以外(古い/同時刻の空 vs 非空)は、非空を維持して「空データが入力済みを消す」事故を防ぐ。
+      const aEmpty = _isEmptyVal(av), bEmpty = _isEmptyVal(bv);
+      if (aEmpty && bEmpty) { out[k] = av; return; }
+      if (aEmpty !== bEmpty) {
+        const newerIsEmpty = aNewer ? aEmpty : bEmpty;
+        const newerStrict = aNewer ? (at > bt) : (bt > at);
+        if (newerIsEmpty && newerStrict) { out[k] = aNewer ? av : bv; return; } // 新しい方が削除 → 反映
+        out[k] = aEmpty ? bv : av; // それ以外は非空を維持
+        return;
+      }
       out[k] = aNewer ? av : bv; // 両方非空の競合 → 新しい方
     });
     out._savedAt = Math.max(at, bt);
