@@ -16049,7 +16049,9 @@ export default function App() {
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   });
   const [targetPatientId, setTargetPatientId] = useState(null);
-  const [navConfirm, setNavConfirm] = useState(null); // {view, patientId}
+  // ★ 遷移先で特定セクションにスクロール/フォーカスさせるヒント ('schedule'=月間スケジュール, 'holidays'=施設休業日)
+  const [navFocus, setNavFocus] = useState(null);
+  const [navConfirm, setNavConfirm] = useState(null); // {view, patientId, focus}
 
   // ── ログイン状態 ──────────────────────────
   // staffSession (Supabase 由来) を主とし、session は既存コード互換のため派生させる
@@ -16429,7 +16431,7 @@ export default function App() {
     }
   }, []);
 
-  const navigateTo = (view, patientId = null) => {
+  const navigateTo = (view, patientId = null, focus = null) => {
     const isDirty = (currentView === 'record' && recordDirtyRef.current) ||
                    (currentView === 'master' && masterDirtyRef.current) ||
                    (currentView === 'settings' && settingsDirtyRef.current) ||
@@ -16446,10 +16448,11 @@ export default function App() {
                    (currentView === 'seikatsu_kinou' && seikatsuKinouDirtyRef.current) ||
                    (currentView === 'kyomi_kanshin' && kyomiKanshinDirtyRef.current);
     if (isDirty && view !== currentView) {
-      setNavConfirm({ view, patientId });
+      setNavConfirm({ view, patientId, focus });
       return;
     }
     if (patientId) setTargetPatientId(patientId);
+    setNavFocus(focus || null);
     setCurrentView(view);
   };
 
@@ -17320,9 +17323,9 @@ export default function App() {
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
-             currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} /> :
+             currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} /> :
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
-             currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} /> :
+             currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'diary' ? <DailyLogView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} dirtyRef={diaryDirtyRef} saveFnRef={diarySaveFnRef} /> :
              currentView === 'absence_fax' ? <AbsenceFaxView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={absenceDirtyRef} saveFnRef={absenceSaveFnRef} /> :
@@ -17489,6 +17492,7 @@ export default function App() {
                 setNavConfirm(null);
                 setTimeout(() => {
                   if (_nav.patientId) setTargetPatientId(_nav.patientId);
+                  setNavFocus(_nav.focus || null);
                   setCurrentView(_nav.view);
                 }, 0);
               }} className="w-full py-3 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 active:scale-95">
@@ -17506,6 +17510,7 @@ export default function App() {
                 absenceDirtyRef.current = false;
                 generalFaxDirtyRef.current = false;
                 if (navConfirm.patientId) setTargetPatientId(navConfirm.patientId);
+                setNavFocus(navConfirm.focus || null);
                 setCurrentView(navConfirm.view);
                 setNavConfirm(null);
               }} className="w-full py-3 rounded-xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 active:scale-95">
@@ -17887,8 +17892,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     //   休止=利用者マスタ管理、振替=月間スケジュール(マスタ内)、休業=各種設定(施設休業日)。
     if (newStatus === '__jump_pause' || newStatus === '__jump_furikae' || newStatus === '__jump_kyugyo') {
       const _pid = (localPatients.find(x => x.id === id)?.patientId) || id;
-      if (newStatus === '__jump_kyugyo') { navigateTo && navigateTo('settings'); }
-      else { navigateTo && navigateTo('master', _pid); }
+      if (newStatus === '__jump_kyugyo') { navigateTo && navigateTo('settings', null, 'holidays'); }
+      else { navigateTo && navigateTo('master', _pid, 'schedule'); }
       return;
     }
     if (newStatus === '取り消し') {
@@ -26109,8 +26114,9 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
 function LabelInput({ label, disabled, value, onChange, onBlur, onFocus, type = "text", placeholder = "" }) {
   return (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} onBlur={onBlur} onFocus={onFocus} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 }
-function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef }) {
+function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef, navFocus, onFocusHandled }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
+  const scheduleSectionRef = React.useRef(null);
   const [localPatient, setLocalPatient] = useState(null);
   // ★ 直近に読み込んだ「リモート利用者」の内容シグネチャ (他端末の更新を検知して即反映するため)
   const lastLoadedPatientSigRef = React.useRef(null);
@@ -26242,6 +26248,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [mobileRosterOpen, setMobileRosterOpen] = useState(false); // ★ スマホは名簿をスライドオーバー表示
   const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
   const [activeDetailTab, setActiveDetailTab] = useState('basic');
+  // ★ 提供記録入力の「振替/休止」からジャンプしてきたら、サービス提供内容タブ→月間スケジュールへスクロール。
+  React.useEffect(() => {
+    if (navFocus !== 'schedule') return;
+    if (!editingPatientId) return; // 利用者詳細が開いてから
+    setActiveDetailTab('service');
+    const t = setTimeout(() => {
+      try { scheduleSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      onFocusHandled && onFocusHandled();
+    }, 250);
+    return () => clearTimeout(t);
+  }, [navFocus, editingPatientId]);
   const [isEditingResigned, setIsEditingResigned] = useState(false);
   const [furikaeModal, setFurikaeModal] = useState({ isOpen: false, day: null, ampm: null, fromDate: "", reason: "", mode: 'forward' });
   // 月間スケジュールセルクリック時の状態選択ポップアップ
@@ -26960,12 +26977,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       } else {
         // 状態を空にする (基本利用日なら '〇' に戻す = isBase ? '〇' : 空欄)
         const ns2 = saveSh(localPatient.id, day, ap, isBase ? '〇' : '空欄', isBase, null);
-        setPendingShifts(ns2);
-        // ticketRecords 側の該当日記録 (欠席/休業など) も削除して整合
+        // ticketRecords 側の該当日記録 (欠席/休業/振替の残骸など) も削除して整合。
         const dateStr = `${currentMonth.getMonth()+1}月${day}日`;
+        const removed = effTickets.filter(t => t.patientId === localPatient.id && t.date === dateStr);
         const filteredTickets = effTickets.filter(t => !(t.patientId === localPatient.id && t.date === dateStr));
+        // ★ 削除した記録を墓石(deletedIds)へ → クラウドマージで復活させない。 その場で即保存し確実に反映。
+        const _tomb = { ...(appData.deletedIds || {}) };
+        _tomb.ticketRecords = { ...(_tomb.ticketRecords || {}) };
+        removed.forEach(t => { if (t && t.id != null) _tomb.ticketRecords[String(t.id)] = Date.now(); });
+        setPendingShifts(ns2);
         setPendingTickets(filteredTickets);
-        markDirty();
+        onSave({ ...appData, monthlyShifts: ns2, ticketRecords: filteredTickets, ...(removed.length ? { deletedIds: _tomb } : {}) }, { manual: true, message: '✓ 取り消しました' });
+        if (dirtyRef) dirtyRef.current = false;
       }
       return;
     }
@@ -27683,7 +27706,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div><label className="block text-sm font-bold text-slate-600 mb-1.5">留意点（スタッフへの申し送り）</label><textarea disabled={isOff} value={localPatient.ryui || ""} onChange={e => updateLP('ryui', e.target.value)} rows={2} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none resize-none text-base disabled:opacity-60 leading-relaxed" /></div>
               <div><label className="block text-sm font-bold text-slate-600 mb-3">基本利用曜日</label><div className="grid grid-cols-7 gap-2">{['日', '月', '火', '水', '木', '金', '土'].map((d, i) => { const v = localPatient.scheduleAmPm?.[i] || ""; const isClosed = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(i); const colorCls = isClosed ? 'bg-slate-100 border-slate-200 text-slate-400' : v === 'AM' ? 'bg-red-50 border-red-300 text-red-700' : v === 'PM' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-slate-50 border-slate-200 text-slate-400'; return (<div key={d} className="flex flex-col"><span className={`text-center text-[13px] font-bold mb-1 ${i===0?'text-red-400':i===6?'text-blue-400':'text-slate-500'}`}>{d}</span>{isClosed ? (<div className={`w-full h-[42px] flex items-center justify-center text-[14px] font-bold text-center border rounded-xl box-border bg-slate-100 border-slate-200 text-slate-400`}>定休</div>) : (<select disabled={isOff} value={v} onChange={e => updateSched(i, e.target.value)} className={`w-full h-[42px] text-[14px] font-bold text-center border rounded-xl box-border outline-none cursor-pointer disabled:opacity-60 ${colorCls}`}><option value="">無</option><option value="AM">AM</option><option value="PM">PM</option></select>)}</div>); })}</div></div>
               {/* 月間スケジュール */}
-              <div><div className="flex items-center justify-between mb-2"><label className="text-sm font-bold text-slate-600 flex items-center gap-1.5"><CalendarCheck size={16} />月間スケジュール</label><div className="flex items-center gap-2"><button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-1 hover:bg-slate-200 rounded text-slate-500"><ChevronLeft size={16} /></button><span className="text-base font-bold text-slate-700 tabular-nums w-28 text-center">{currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月</span><button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-1 hover:bg-slate-200 rounded text-slate-500"><ChevronRight size={16} /></button></div></div>
+              <div ref={scheduleSectionRef} className="scroll-mt-20"><div className="flex items-center justify-between mb-2"><label className="text-sm font-bold text-slate-600 flex items-center gap-1.5"><CalendarCheck size={16} />月間スケジュール</label><div className="flex items-center gap-2"><button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-1 hover:bg-slate-200 rounded text-slate-500"><ChevronLeft size={16} /></button><span className="text-base font-bold text-slate-700 tabular-nums w-28 text-center">{currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月</span><button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-1 hover:bg-slate-200 rounded text-slate-500"><ChevronRight size={16} /></button></div></div>
                 <div className="flex border border-slate-200 rounded-xl bg-slate-50 p-1 gap-0.5">{allD.map(d => { const dO = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d); const dow = dO.getDay(); const ds = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`; const cl = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dow); const hl = appData.holidays?.some(h => (h.date || h) === ds); const base = getScheduleOnDate(localPatient, ds)?.[dow] || ""; const bAM = base === "AM" || base === "1日"; const bPM = base === "PM" || base === "1日"; const sh = effShifts?.[mKey]?.[localPatient.id] || {}; const pi = getPauseReasonOnDate(localPatient, ds); /* 休止中: 基本利用日 (bAM/bPM=true) の枠だけ「休止」表示。それ以外は通常空欄 */ const _shAM = sh[`${d}_AM`] !== undefined ? sh[`${d}_AM`] : (bAM && _mSchedRecStatus[d] ? _mSchedRecStatus[d] : undefined); const _shPM = sh[`${d}_PM`] !== undefined ? sh[`${d}_PM`] : (bPM && _mSchedRecStatus[d] ? _mSchedRecStatus[d] : undefined); const cA = pi ? (bAM ? sSt("休止", cl, hl) : sSt("空欄", cl, hl)) : sSt(curSt(_shAM, bAM), cl, hl); const cP = pi ? (bPM ? sSt("休止", cl, hl) : sSt("空欄", cl, hl)) : sSt(curSt(_shPM, bPM), cl, hl); const ok = !cl && !hl && !pi && !isOff; return (<div key={d} className="flex-1 min-w-0 flex flex-col items-stretch bg-white border border-slate-200 rounded overflow-hidden"><div className={`w-full text-center text-[11px] font-bold py-1 bg-slate-100 border-b border-slate-200 leading-tight ${dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-slate-600'}`}>{d}<br/><span className="text-[9px] font-normal">{dN[dow]}</span></div><button disabled={!ok} title={cA.sub ? `${cA.sub} 分の振替` : undefined} onClick={() => ok && shiftTog(d, "AM")} className={`h-9 flex items-center justify-center border-b border-slate-100 text-[10px] leading-none whitespace-pre-wrap ${cA.c} ${ok ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>{cA.t}</button><button disabled={!ok} title={cP.sub ? `${cP.sub} 分の振替` : undefined} onClick={() => ok && shiftTog(d, "PM")} className={`h-9 flex items-center justify-center text-[10px] leading-none whitespace-pre-wrap ${cP.c} ${ok ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>{cP.t}</button></div>); })}</div>
                 <div className="flex gap-2 mt-2 text-[11px] text-slate-400 font-bold flex-wrap items-center"><span>上段:AM/下段:PM</span><span className="text-blue-600 bg-blue-50 px-1 rounded">出席</span><span className="text-red-500 bg-red-50 px-1 rounded">欠席</span><span className="text-emerald-600 bg-emerald-50 px-1 rounded">振替</span><span className="text-cyan-700 bg-cyan-50 px-1 rounded">臨時</span><span className="text-white bg-slate-600 px-1 rounded">休業</span><span>空欄=非利用日</span></div></div>
               {/* お迎え時間: 基本利用曜日に設定がある日のみ表示 */}
@@ -29382,8 +29405,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         const ALL = ['出席', '欠席', '振替', '休止', '休業'];
         // 振替セルは「取り消し」確認のみ
         const isOnFurikae = normCu === '振替';
-        // ★ 状態が変更されている場合 (欠席/休業/振替/休止) は「取り消し」ボタンも表示
-        const hasNonDefault = normCu === '欠席' || normCu === '休業' || isOnFurikae;
+        // ★ 基本利用日でないのに「出席」で残っているセル(振替の残骸・臨時など)も取り消せるように。
+        const isNonBaseAttend = normCu === '出席' && !shiftStatusModal.isBase;
+        // ★ 状態が変更されている場合 (欠席/休業/振替/休止) + 非利用日の出席 は「取り消し」ボタンも表示
+        const hasNonDefault = normCu === '欠席' || normCu === '休業' || isOnFurikae || isNonBaseAttend;
         const baseOptions = isOnFurikae ? [] : ALL.filter(s => s !== normCu);
         const options = isOnFurikae ? ['取り消し'] : (hasNonDefault ? [...baseOptions, '取り消し'] : baseOptions);
         const colorMap = {
@@ -29632,9 +29657,20 @@ function AdminSettingsSection({ appData, onSave }) {
   );
 }
 
-function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin }) {
+function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin, navFocus, onFocusHandled }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const [activeTab, setActiveTab] = useState('facility');
+  const holidaySectionRef = React.useRef(null);
+  // ★ 提供記録入力の「休業」からジャンプしてきたら、事業所情報タブ→施設休業日へスクロール。
+  React.useEffect(() => {
+    if (navFocus !== 'holidays') return;
+    setActiveTab('facility');
+    const t = setTimeout(() => {
+      try { holidaySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      onFocusHandled && onFocusHandled();
+    }, 250);
+    return () => clearTimeout(t);
+  }, [navFocus]);
   // ★ systemSettings の参照 & 部分更新ヘルパー (テンキー表示ON/OFF 等の即時保存に使用)
   const ss = appData.systemSettings || {};
   const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch } }, { manual:true, message: msg || '✓ 保存しました' });
@@ -30199,6 +30235,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             </SectionCard>
 
             {/* 施設休業日 */}
+            <div ref={holidaySectionRef} className="scroll-mt-20">
             <SectionCard title="施設休業日の設定">
               <p className="text-xs text-slate-500 mb-4">年末年始や夏季休暇等を登録すると、カレンダー上で全員一括「休業」扱いになります。西暦(年)ごとに登録・確認できます。</p>
               {/* 西暦(年)の切替 + 前年コピー */}
@@ -30237,6 +30274,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 );
               })()}
             </SectionCard>
+            </div>
             {holidayEditModal && (
               <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4" onClick={()=>setHolidayEditModal(null)}>
                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
