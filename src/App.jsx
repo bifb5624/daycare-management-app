@@ -26594,7 +26594,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     //   ★ 以前は下書き(pendingShifts)＋dirtyのみで、保存を押す前に利用者切替/ログアウトすると
     //     基本利用日の変更が消えていた。 適用＝確定なので即 onSave(manual) で永続化する。
     const changeLog=[...(localPatient.changeLog||[]),changeLogEntry];
-    const newPat = {...localPatient, scheduleAmPm:newSched, scheduleChangeHistory:hist, changeLog};
+    // ★ withLatestFiles で status/pauseHistory(=休止)を最新appData優先に = 古いスナップショットで休止が利用中に戻るのを防ぐ
+    const newPat = withLatestFiles({...localPatient, scheduleAmPm:newSched, scheduleChangeHistory:hist, changeLog});
     setLocalPatient(newPat);
     setPendingShifts(null);
     const nextData = {
@@ -26692,6 +26693,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (typeof cu !== 'string' || !cu.startsWith('振')) return;
     const mSrc = cu.match(/^振\((\d+)\/(\d+)\)$/);
     const destDateStr = `${currentMonth.getMonth()+1}月${day}日`;
+    const _now = Date.now();
+    const _removedIds = []; // ★ 削除した記録は墓石(deletedIds)に登録 → クラウドマージで復活させない
+    (effTickets||[]).forEach(r => { if (r && r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替' && r.id != null) _removedIds.push(String(r.id)); });
     let updated = effTickets.filter(r => !(r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替'));
     const newShifts = JSON.parse(JSON.stringify(effShifts));
     // ★ 振替先のシフト削除
@@ -26708,7 +26712,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       const srcMKey = mKey; // 表示中の月の shift store を扱う
       if (srcAction === 'restore') {
         // ★ 元の欠席を出席に戻す:
-        // 1. ticketRecord の '欠席' 記録を削除
+        // 1. ticketRecord の '欠席' 記録を削除 (墓石に登録)
+        (updated||[]).forEach(r => { if (r && r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席' && r.id != null) _removedIds.push(String(r.id)); });
         updated = updated.filter(r => !(r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席'));
         // 2. shifts の '欠席' override も削除 (これが残っているとセルに「欠席」が表示され続ける)
         if (srcSameMonth && newShifts[srcMKey]?.[localPatient.id]) {
@@ -26721,21 +26726,25 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           });
         }
       } else {
-        // 元の欠席は維持、tokki から振替先情報だけ削除
+        // 元の欠席は維持、tokki から振替先情報だけ削除 (_savedAt 更新でマージ上書き防止)
         updated = updated.map(r => {
           if (r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席') {
             const t = r.tokki || '';
             const subM = t.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:(.+))?$/);
             const cleaned = subM ? (subM[1] || '') : t;
-            return { ...r, tokki: cleaned };
+            return { ...r, tokki: cleaned, _savedAt: _now };
           }
           return r;
         });
       }
     }
-    setPendingShifts(newShifts);
-    setPendingTickets(updated);
-    markDirty();
+    // ★ 墓石(deletedIds)を付けて即クラウド保存 = 保存後 数秒でプルされても振替が復活しない
+    const _delTomb = { ...(appData.deletedIds||{}) };
+    _delTomb.ticketRecords = { ...(_delTomb.ticketRecords||{}) };
+    _removedIds.forEach(id => { _delTomb.ticketRecords[id] = _now; });
+    setPendingShifts(null); setPendingTickets(null);
+    if (dirtyRef) dirtyRef.current = false;
+    onSave({ ...appData, monthlyShifts: newShifts, ticketRecords: updated, deletedIds: _delTomb }, { manual: true, message: '✓ 振替を取り消しました' });
   };
 
   // セルクリック: 状態選択ポップアップを開く（振替セルは取り消し確認）
@@ -26897,14 +26906,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const srcTokki = `${destLabel}${ampmSuffix}へ振替${_reason ? '（' + _reason + '）' : ''}`;
     const srcYear = srcDateObj.getFullYear(); // ★ 年対応
     const destYear = destDateObj.getFullYear();
+    // ★ _savedAt を必ず更新 = クラウドマージで「古い出席記録が新しい欠席/振替を上書き」して戻る不具合を防ぐ
+    const _furiNow = Date.now();
     const srcIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, srcLabel, srcYear));
-    if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear };
-    else ur.push({ id: Date.now() + Math.random(), patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki });
+    if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear, _savedAt: _furiNow };
+    else ur.push({ id: Date.now() + Math.random(), patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki, _savedAt: _furiNow });
     // 振替先 ticketRecord（振替）の新規作成 / 更新
     const destTokki = `${srcLabel}${ampmSuffix}分振替`;
     const destIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, destLabel, destYear));
-    if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear };
-    else ur.push({ id: Date.now() + Math.random() + 1, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {} });
+    if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear, _savedAt: _furiNow };
+    else ur.push({ id: Date.now() + Math.random() + 1, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, _savedAt: _furiNow });
     // ★ 振替は下書きに留めず即クラウド保存(欠席記録/振替記録をすぐ反映 → 提供記録入力にも欠席者が出る)
     setPendingShifts(null); setPendingTickets(null);
     if (dirtyRef) dirtyRef.current = false;
@@ -29096,12 +29107,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 if (!localPatient) { setPauseFromCellModal({isOpen:false,reason:'',fromDate:'',toDate:''}); return; }
                 const entry = { reason: pauseFromCellModal.reason.trim(), fromDate: pauseFromCellModal.fromDate };
                 if (pauseFromCellModal.toDate) entry.toDate = pauseFromCellModal.toDate;
-                const newHist = [...(localPatient.pauseHistory||[]), entry];
-                const newPat = { ...localPatient, pauseHistory: newHist };
-                setLocalPatient(newPat);
-                const newPats = appData.patients.map(p => p.id === newPat.id ? newPat : p);
-                onSave({ ...appData, patients: newPats });
-                markDirty();
+                // ★ status='休止' も必ずセット (これが無いと pauseHistory だけ入って表示は利用中のままになる)。
+                //   最新の pauseHistory に追記し、commitLP で即クラウド保存(submitPause と同じ扱い)。
+                const _curHist = ((appData.patients||[]).find(p=>p.id===localPatient.id)?.pauseHistory) || localPatient.pauseHistory || [];
+                commitLP({ status: '休止', pauseHistory: [...(_curHist||[]), entry] }, '✓ 休止にしました（保存済み）');
                 setPauseFromCellModal({isOpen:false,reason:'',fromDate:'',toDate:''});
               }} className="px-6 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-bold shadow-lg active:scale-95 text-sm disabled:opacity-40">登録</button>
             </div>
