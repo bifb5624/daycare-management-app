@@ -18638,8 +18638,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         const _baseSel = getScheduleOnDate(p, selectedDate)?.[_dowSel] || '';
                         const _isBaseSel = _baseSel==='AM'||_baseSel==='PM'||_baseSel==='1日';
                         const _isFuriSrc = p.status==='欠席' && /へ振替/.test(p.tokki||'');
+                        const _cur = p.status||'出席';
                         return (<>
-                          {appSettings.statusOptions.filter(o=>o.label!=='振替').map(o=><option key={o.label} value={o.label}>{o.label}</option>)}
+                          {appSettings.statusOptions.filter(o=>o.label==='出席'||o.label==='欠席'||o.label===_cur).map(o=><option key={o.label} value={o.label}>{o.label}</option>)}
                           {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
                         </>);
                       })()}</select>}
@@ -18741,7 +18742,6 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               ))}
               <th className="px-1 py-3 font-bold text-center border border-slate-700 text-white whitespace-nowrap sticky top-0 z-40 bg-slate-800 text-xs">介護整体</th>
               <th className="px-2 py-3 font-bold border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800">特記</th>
-              <th className="px-1 py-3 font-bold text-center border border-slate-700 bg-slate-900 whitespace-nowrap sticky top-0 z-40">連携</th>
             </tr>
           </thead>
           <tbody>
@@ -18821,8 +18821,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           const _baseSel = getScheduleOnDate(p, selectedDate)?.[_dowSel] || '';
                           const _isBaseSel = _baseSel==='AM'||_baseSel==='PM'||_baseSel==='1日';
                           const _isFuriSrc = p.status==='欠席' && /へ振替/.test(p.tokki||'');
+                          const _cur = p.status||'出席';
                           return (<>
-                            {appSettings.statusOptions.filter(o=>o.label!=='振替').map(opt => <option key={opt.label} value={opt.label}>{opt.label}</option>)}
+                            {appSettings.statusOptions.filter(o=>o.label==='出席'||o.label==='欠席'||o.label===_cur).map(opt => <option key={opt.label} value={opt.label}>{opt.label}</option>)}
                             {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
                           </>);
                         })()}
@@ -19105,19 +19106,6 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       );
                     })()}
                   </td>
-                  <td className={`px-1 py-2 border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-slate-50'}`} style={{verticalAlign:'middle'}}>
-                     {(()=>{ const _targets=appData.systemSettings?.fitnessTargets; const _cl=masterData.careLevel||'';
-                       // ★ 未定義のときだけ全表示。配列 (空 or 値あり) は明示設定としてフィルタ
-                       const _show = !_targets ? true : (_targets.length > 0 && _targets.includes(_cl));
-                       return (<div style={{display:'flex',flexDirection:'row',gap:2,alignItems:'center',justifyContent:'center'}}>
-                         <button onClick={()=>{navigateTo('master',p.patientId||p.id);}} title="利用者マスタ" onPointerEnter={(e)=>showTip&&showTip("利用者マスタ",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><Users size={13}/></button>
-                         <button onClick={()=>navigateTo('ticket',p.patientId||p.id)} title="サービス提供記録" onPointerEnter={(e)=>showTip&&showTip("サービス提供記録",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><FileText size={13}/></button>
-                         <button onClick={()=>navigateTo('dash_personal',p.patientId||p.id)} title="分析" onPointerEnter={(e)=>showTip&&showTip("分析",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><BarChart3 size={13}/></button>
-                         <button onClick={()=>navigateTo('monitoring',p.patientId||p.id)} title="モニタリング" onPointerEnter={(e)=>showTip&&showTip("モニタリング",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-blue-100 hover:text-blue-600 rounded text-slate-500"><ClipboardList size={13}/></button>
-                         {_show&&<button onClick={()=>navigateTo('fitness')} title="体力測定" onPointerEnter={(e)=>showTip&&showTip("体力測定",e)} onPointerLeave={()=>hideTip&&hideTip()} style={{padding:3,display:'flex',alignItems:'center',justifyContent:'center'}} className="hover:bg-amber-100 hover:text-amber-600 rounded text-amber-500"><Activity size={13}/></button>}
-                       </div>);
-                     })()}
-                  </td>
                 </tr>
               );
             })}
@@ -19372,6 +19360,28 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               </div>
               <button onClick={()=>setPatientInfoModal(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full"><X size={18}/></button>
             </div>
+            {/* ★ この利用者の各画面へ移動 (旧「連携」列の代わり。 名前タップからワンタップで各個人ページへ) */}
+            {(() => {
+              const _pid = patientInfoModal.id;
+              const _go = (view) => { setPatientInfoModal(null); navigateTo && navigateTo(view, _pid); };
+              const _navs = [
+                { view:'master',        label:'利用者マスタ',     icon:<Users size={16}/> },
+                { view:'ticket',        label:'サービス提供記録', icon:<FileText size={16}/> },
+                { view:'print',         label:'連絡帳',           icon:<Printer size={16}/> },
+                { view:'dash_personal', label:'分析（個人）',     icon:<BarChart3 size={16}/> },
+                { view:'monitoring',    label:'モニタリング',     icon:<ClipboardList size={16}/> },
+              ];
+              return (
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  {_navs.map(n => (
+                    <button key={n.view} onClick={()=>_go(n.view)}
+                      className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-600 active:scale-95 transition-all">
+                      {n.icon}<span className="text-[11px] font-bold">{n.label}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
             <div className="space-y-3">
               <div className="bg-slate-50 rounded-xl p-3">
                 <div className="text-[10px] font-bold text-slate-400 mb-1">既往歴</div>
