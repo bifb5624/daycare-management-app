@@ -17856,7 +17856,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const [pendingCancellations, setPendingCancellations] = useState([]);
   // 振替の新規設定（保留）: monthlyShifts への反映を保存ボタン押下まで遅延
   const [pendingFurikaeShifts, setPendingFurikaeShifts] = useState([]);
-  React.useEffect(() => { setPendingCancellations([]); setPendingFurikaeShifts([]); }, [selectedDate]);
+  // ★ 提供記録入力から振替した時の「振替先(別日)の記録」を保存ボタン押下時にまとめて反映するための保留。
+  //   (振替先は表示中の日と別日のため、handleSaveClick の当日分書き込みだけでは保存されず消えていた)
+  const [pendingFurikaeRecords, setPendingFurikaeRecords] = useState([]);
+  React.useEffect(() => { setPendingCancellations([]); setPendingFurikaeShifts([]); setPendingFurikaeRecords([]); }, [selectedDate]);
 
   const handleStatusChange = (id, newStatus) => {
     if (newStatus === '取り消し') {
@@ -17981,14 +17984,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const destRecord = {
         id: existIdx>=0 ? updatedRecords[existIdx].id : Date.now()+Math.random(),
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
-        date:destDateStr, dayOfWeek:destDowStr,
+        date:destDateStr, year: destD.getFullYear(), dayOfWeek:destDowStr,
         status:'振替', furikaeAmpm: furikaeAmpm,
         tokki:`${srcLabel}${furikaeAmpm!=='1日'?furikaeAmpm:''}分振替`,
         temp:'',bpUpSt:'',bpDnSt:'',plSt:'',bpUpEn:'',bpDnEn:'',plEn:'',
         massage:'',exercises:{},actualTime:'',
-        kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false
+        kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false,
+        _savedAt: Date.now()
       };
       if (existIdx>=0) updatedRecords[existIdx]=destRecord; else updatedRecords.push(destRecord);
+      // ★ 振替先(別日)の記録を保留に積む → 保存時に確実に反映(別日なので当日分の書き込みでは保存されないため)
+      setPendingFurikaeRecords(prev => [...prev, destRecord]);
       // 振替元チケットレコード(today)も欠席で保存
       const srcDateStr = `${srcD.getMonth()+1}月${srcD.getDate()}日`;
       const srcDowStr = dayNames[srcD.getDay()];
@@ -18277,6 +18283,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           }
         }
       });
+      // ★ 提供記録入力から振替した「振替先(別日)の記録」を反映(patient+日付+年 で upsert)。
+      //   別日のため上の当日分書き込みでは保存されない。 これが無いと振替先が振替にならず消えていた。
+      (pendingFurikaeRecords||[]).forEach(fr => {
+        if (!fr || fr.patientId == null || !fr.date) return;
+        const idx = updatedTicketRecords.findIndex(r => r.patientId === fr.patientId && recMatchesDateYear(r, fr.date, fr.year));
+        if (idx >= 0) updatedTicketRecords[idx] = { ...updatedTicketRecords[idx], ...fr };
+        else updatedTicketRecords.push(fr);
+      });
       // ★ 念のため最後に selectedDate の record にアクティブ記録者を強制セット
       //   (途中のロジックで recorder が落ちる場合があっても、 ここで確実に上書きされる)
       //   他の日付の record には触らない
@@ -18296,6 +18310,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts }, { manual: true, message: '✓ 保存しました' });
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
+      setPendingFurikaeRecords([]);
       if (dirtyRef) dirtyRef.current = false;
   };
 
