@@ -29514,6 +29514,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const [holidayStart, setHolidayStart] = useState("");
   const [holidayEnd, setHolidayEnd] = useState("");
   const [holidayName, setHolidayName] = useState("");
+  const [holidayYear, setHolidayYear] = useState(() => new Date().getFullYear()); // 施設休業日: 表示中の西暦
+  const [holidayEditModal, setHolidayEditModal] = useState(null); // {origDates:[], name, start, end}
   const [massageInput, setMassageInput] = useState((appData.systemSettings?.massageTypes || []).join('、'));
   const [anthropicApiKey, setAnthropicApiKey] = useState(appData.systemSettings?.anthropicApiKey || '');
   const [kibunReasonInputs, setKibunReasonInputs] = useState({}); // 気分の理由 追加用入力 (timing_mood → 文字列)
@@ -29719,9 +29721,55 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const nh = [...(appData.holidays || [])];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) { const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; const idx = nh.findIndex(h => (h.date||h) === ds); if (idx >= 0) nh.splice(idx, 1); nh.push({ date: ds, name: holidayName || "休業日" }); }
     nh.sort((a, b) => (a.date||a).localeCompare(b.date||b));
-    onSave({ ...appData, holidays: nh }); setHolidayStart(""); setHolidayEnd(""); setHolidayName("");
+    onSave({ ...appData, holidays: nh }, { manual: true, message: '✓ 休業日を登録しました' }); setHolidayStart(""); setHolidayEnd(""); setHolidayName("");
   };
-  const removeHoliday = (ds) => onSave({ ...appData, holidays: (appData.holidays || []).filter(h => (h.date||h) !== ds) });
+  const removeHoliday = (ds) => onSave({ ...appData, holidays: (appData.holidays || []).filter(h => (h.date||h) !== ds) }, { manual: true, message: '✓ 削除しました' });
+  // ★ 施設休業日を「名称が同じ連続した日付」で範囲にまとめる (夏季休暇 8/12〜8/14 のように表示)
+  const _groupHolidays = (holidays) => {
+    const list = (holidays||[]).map(h => ({ date: String(h.date||h), name: h.name||'休業日' })).filter(h => /^\d{4}-\d{2}-\d{2}$/.test(h.date)).sort((a,b)=>a.date.localeCompare(b.date));
+    const groups = [];
+    for (const h of list) {
+      const last = groups[groups.length-1];
+      if (last && last.name === h.name) {
+        const pd = new Date(last.end); pd.setDate(pd.getDate()+1);
+        const next = `${pd.getFullYear()}-${String(pd.getMonth()+1).padStart(2,'0')}-${String(pd.getDate()).padStart(2,'0')}`;
+        if (next === h.date) { last.end = h.date; last.dates.push(h.date); continue; }
+      }
+      groups.push({ name: h.name, start: h.date, end: h.date, dates: [h.date] });
+    }
+    return groups;
+  };
+  const removeHolidayRange = (dates) => onSave({ ...appData, holidays: (appData.holidays||[]).filter(h => !dates.includes(String(h.date||h))) }, { manual: true, message: '✓ 休業を削除しました' });
+  // ★ 前年の休業実績を選択中の年にコピー (日付を +1年)。 既存は上書きしない。
+  const copyPrevYearHolidays = () => {
+    const prevYear = holidayYear - 1;
+    const src = (appData.holidays||[]).filter(h => String(h.date||h).startsWith(`${prevYear}-`));
+    if (!src.length) { alert(`${prevYear}年の休業がありません。`); return; }
+    const nh = [...(appData.holidays||[])]; let added = 0;
+    src.forEach(h => {
+      const d = new Date(String(h.date||h)); d.setFullYear(d.getFullYear()+1);
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (!nh.some(x => String(x.date||x)===ds)) { nh.push({ date: ds, name: h.name||'休業日' }); added++; }
+    });
+    if (!added) { alert('すでに登録済みです。'); return; }
+    nh.sort((a,b)=>String(a.date||a).localeCompare(String(b.date||b)));
+    onSave({ ...appData, holidays: nh }, { manual: true, message: `✓ ${prevYear}年から ${added}日 コピーしました` });
+  };
+  const saveHolidayEdit = () => {
+    if (!holidayEditModal) return;
+    const { origDates, name, start, end } = holidayEditModal;
+    if (!start || !end) { alert('開始日と終了日を入力してください'); return; }
+    const s = new Date(start), e = new Date(end);
+    if (e < s) { alert('終了日は開始日以降にしてください'); return; }
+    let nh = (appData.holidays||[]).filter(h => !origDates.includes(String(h.date||h)));
+    for (let d = new Date(s); d <= e; d.setDate(d.getDate()+1)) {
+      const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (!nh.some(x => String(x.date||x)===ds)) nh.push({ date: ds, name: name||'休業日' });
+    }
+    nh.sort((a,b)=>String(a.date||a).localeCompare(String(b.date||b)));
+    onSave({ ...appData, holidays: nh }, { manual: true, message: '✓ 休業を更新しました' });
+    setHolidayEditModal(null);
+  };
 
   const tabs = [
     { id: 'facility', label: '事業所情報' },
@@ -30015,7 +30063,16 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
 
             {/* 施設休業日 */}
             <SectionCard title="施設休業日の設定">
-              <p className="text-xs text-slate-500 mb-4">年末年始や夏季休暇等を登録すると、カレンダー上で全員一括「休業」扱いになります。</p>
+              <p className="text-xs text-slate-500 mb-4">年末年始や夏季休暇等を登録すると、カレンダー上で全員一括「休業」扱いになります。西暦(年)ごとに登録・確認できます。</p>
+              {/* 西暦(年)の切替 + 前年コピー */}
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={()=>setHolidayYear(y=>y-1)} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-600">‹</button>
+                  <span className="text-lg font-bold text-slate-800 w-24 text-center">{holidayYear}年</span>
+                  <button type="button" onClick={()=>setHolidayYear(y=>y+1)} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-600">›</button>
+                </div>
+                <button type="button" onClick={copyPrevYearHolidays} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg font-bold text-xs hover:bg-indigo-100">前年（{holidayYear-1}年）の休業をコピー</button>
+              </div>
               <div className="flex flex-wrap items-end gap-3 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">開始日</label><input type="date" value={holidayStart} onChange={e => setHolidayStart(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 <div className="pb-2 font-bold text-slate-400">〜</div>
@@ -30023,17 +30080,45 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 <div className="flex-1 min-w-[160px]"><label className="block text-sm font-bold text-slate-600 mb-1.5">名称</label><input type="text" value={holidayName} onChange={e => setHolidayName(e.target.value)} placeholder="例: 夏季休暇" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 <button type="button" onClick={addHolidayRange} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><CalendarRange size={16} className="mr-1.5"/>登録</button>
               </div>
-              {(!appData.holidays || appData.holidays.length === 0) ? (
-                <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div>
-              ) : (
-                <div className="grid grid-cols-3 gap-2 max-h-[250px] overflow-y-auto">{appData.holidays.map(h => (
-                  <div key={h.date||h} className="flex items-center justify-between bg-white border shadow-sm p-2.5 rounded-xl">
-                    <div><span className="text-xs font-bold">{h.name||"休業日"}</span><br/><span className="text-[10px] text-slate-400">{(h.date||h).replace(/-/g,'/')}</span></div>
-                    <button type="button" onClick={() => removeHoliday(h.date||h)} className="text-slate-300 hover:text-red-500 p-1 rounded"><Trash2 size={14}/></button>
-                  </div>
-                ))}</div>
-              )}
+              {(() => {
+                const groups = _groupHolidays(appData.holidays).filter(g => g.start.startsWith(`${holidayYear}-`));
+                if (!groups.length) return <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">{holidayYear}年の休業はまだありません</div>;
+                const _fmtJ = (ds) => { const [y,m,d]=ds.split('-'); return `${y}年${+m}月${+d}日`; };
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-[320px] overflow-y-auto">{groups.map(g => (
+                    <div key={g.dates.join(',')} className="flex items-center justify-between bg-white border shadow-sm p-3 rounded-xl">
+                      <div className="min-w-0">
+                        <span className="text-sm font-bold text-slate-800">{g.name}</span><br/>
+                        <span className="text-xs text-slate-500">{_fmtJ(g.start)}{g.end!==g.start?` 〜 ${_fmtJ(g.end)}`:''}<span className="text-slate-400 ml-1">（{g.dates.length}日）</span></span>
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <button type="button" onClick={()=>setHolidayEditModal({origDates:g.dates, name:g.name, start:g.start, end:g.end})} className="text-blue-400 hover:text-blue-600 p-1" title="編集"><Edit3 size={15}/></button>
+                        <button type="button" onClick={()=>{ if(window.confirm(`「${g.name}」（${_fmtJ(g.start)}${g.end!==g.start?`〜${_fmtJ(g.end)}`:''}）を削除しますか？`)) removeHolidayRange(g.dates); }} className="text-slate-300 hover:text-red-500 p-1" title="削除"><Trash2 size={15}/></button>
+                      </div>
+                    </div>
+                  ))}</div>
+                );
+              })()}
             </SectionCard>
+            {holidayEditModal && (
+              <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4" onClick={()=>setHolidayEditModal(null)}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
+                  <h3 className="text-base font-bold text-slate-800 mb-4">休業の編集</h3>
+                  <div className="space-y-3">
+                    <div><label className="block text-sm font-bold text-slate-600 mb-1">名称</label><input type="text" value={holidayEditModal.name} onChange={e=>setHolidayEditModal(m=>({...m,name:e.target.value}))} placeholder="例: 夏季休暇" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none"/></div>
+                    <div className="flex items-end gap-2 flex-wrap">
+                      <div><label className="block text-sm font-bold text-slate-600 mb-1">開始日</label><input type="date" value={holidayEditModal.start} onChange={e=>setHolidayEditModal(m=>({...m,start:e.target.value}))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none"/></div>
+                      <span className="pb-2 text-slate-400 font-bold">〜</span>
+                      <div><label className="block text-sm font-bold text-slate-600 mb-1">終了日</label><input type="date" value={holidayEditModal.end} onChange={e=>setHolidayEditModal(m=>({...m,end:e.target.value}))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none"/></div>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-6">
+                    <button type="button" onClick={()=>setHolidayEditModal(null)} className="flex-1 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">キャンセル</button>
+                    <button type="button" onClick={saveHolidayEdit} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700">保存</button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>)}
 
           {/* サービス提供内容 */}
