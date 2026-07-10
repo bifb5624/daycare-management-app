@@ -18244,14 +18244,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     setKeypad({ isOpen: true, recordId: nextId, field: nextField, value: val || "", isFirstInput: true, mode: 'record' });
   };
 
-  const handleSaveClick = () => {
-      // ★ 保存時の担当者を事前確認 (空ならユーザーに通知)
+  const handleSaveClick = (auto = false) => {
+      // ★ 保存時の担当者を事前確認 (空ならユーザーに通知)。 自動保存(auto)では確認は出さずそのまま保存。
       const _checkRecName = getRecorderName();
-      if (!_checkRecName) {
+      if (!auto && !_checkRecName) {
         if (!window.confirm('⚠ 担当者 (スタッフ切替で選んだ人) が設定されていません。\n\nサイドバーの「スタッフ切替」から担当者を選んでから保存することをおすすめします。\n\nこのまま保存を続行しますか？')) return;
       }
-      // ★ 個別機能訓練加算 取得時: 担当者が機能訓練指導員でなければ警告
-      if (appData.systemSettings?.facilityInfo?.kobetsuKinouAddon) {
+      // ★ 個別機能訓練加算 取得時: 担当者が機能訓練指導員でなければ警告 (自動保存では出さない)
+      if (!auto && appData.systemSettings?.facilityInfo?.kobetsuKinouAddon) {
         const _activeRecName = getRecorderName();
         // 機能訓練指導員リスト + 同名重複排除
         const _kinouNamesAll = (appData.diarySettings?.staff || [])
@@ -18402,8 +18402,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _saveDelTomb = { ...(appData.deletedIds||{}) };
       _saveDelTomb.ticketRecords = { ...(_saveDelTomb.ticketRecords||{}) };
       _cancelTomb.forEach(rid => { _saveDelTomb.ticketRecords[rid] = Date.now(); });
-      // ★ manual:true でトースト「✓ 保存しました」表示
-      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts, ...(_cancelTomb.length ? { deletedIds: _saveDelTomb } : {}) }, { manual: true, message: '✓ 保存しました' });
+      // ★ 手動は manual(トースト表示)、自動保存は silent(即時push・トーストなし)
+      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts, ...(_cancelTomb.length ? { deletedIds: _saveDelTomb } : {}) }, auto ? { silent: true } : { manual: true, message: '✓ 保存しました' });
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
       setPendingFurikaeRecords([]);
@@ -18413,6 +18413,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 
   const isEditMode = filterMode === 'single' || isMonthEditMode;
   if (saveFnRef) saveFnRef.current = handleSaveClick;
+  // ★ 提供記録入力の自動保存: 入力が止まって約1.2秒後に自動でクラウド保存(silent即時push)。
+  //   保存ボタンの押し忘れ防止。 dirty のときだけ発火、保存で dirty=false になるのでループしない。
+  const _recSaveRef = React.useRef(handleSaveClick);
+  _recSaveRef.current = handleSaveClick;
+  const autoSaveRecTimerRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!dirtyRef?.current) return;
+    if (autoSaveRecTimerRef.current) clearTimeout(autoSaveRecTimerRef.current);
+    autoSaveRecTimerRef.current = setTimeout(() => { try { _recSaveRef.current && _recSaveRef.current(true); } catch (e) { console.warn('[autosave] record failed', e); } }, 1200);
+    return () => { if (autoSaveRecTimerRef.current) clearTimeout(autoSaveRecTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPatients, localTicketRecords, pendingCancellations, pendingFurikaeShifts, pendingFurikaeRecords]);
   let displayRecords = filterMode === 'single' ? localPatients : localTicketRecords;
 
   // 月全体モード：選択患者1人・選択月のみ（全患者×全日は重すぎる）
