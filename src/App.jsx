@@ -17883,6 +17883,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   React.useEffect(() => { setPendingCancellations([]); setPendingFurikaeShifts([]); setPendingFurikaeRecords([]); }, [selectedDate]);
 
   const handleStatusChange = (id, newStatus) => {
+    // ★ 休止/振替/休業 は設定場所を1か所に集約したため、ここでは設定せず該当画面へジャンプする。
+    //   休止=利用者マスタ管理、振替=月間スケジュール(マスタ内)、休業=各種設定(施設休業日)。
+    if (newStatus === '__jump_pause' || newStatus === '__jump_furikae' || newStatus === '__jump_kyugyo') {
+      const _pid = (localPatients.find(x => x.id === id)?.patientId) || id;
+      if (newStatus === '__jump_kyugyo') { navigateTo && navigateTo('settings'); }
+      else { navigateTo && navigateTo('master', _pid); }
+      return;
+    }
     if (newStatus === '取り消し') {
       cancelFurikae(id);
       return;
@@ -18641,6 +18649,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         const _cur = p.status||'出席';
                         return (<>
                           {appSettings.statusOptions.filter(o=>o.label==='出席'||o.label==='欠席'||o.label===_cur).map(o=><option key={o.label} value={o.label}>{o.label}</option>)}
+                          <option value="__jump_pause">休止（マスタで設定）</option>
+                          <option value="__jump_furikae">振替（月間表で設定）</option>
+                          <option value="__jump_kyugyo">休業（設定で登録）</option>
                           {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
                         </>);
                       })()}</select>}
@@ -18824,6 +18835,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           const _cur = p.status||'出席';
                           return (<>
                             {appSettings.statusOptions.filter(o=>o.label==='出席'||o.label==='欠席'||o.label===_cur).map(opt => <option key={opt.label} value={opt.label}>{opt.label}</option>)}
+                            <option value="__jump_pause">休止（マスタで設定）</option>
+                            <option value="__jump_furikae">振替（月間表で設定）</option>
+                            <option value="__jump_kyugyo">休業（設定で登録）</option>
                             {(_isFuriSrc || !_isBaseSel) && <option value="取り消し">{_isFuriSrc?'振替を取り消し':'この日を取り消し'}</option>}
                           </>);
                         })()}
