@@ -547,7 +547,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       }
     }
     // ★ 月別シフト(monthlyShifts)は { 月キー: { 利用者ID: シフト } } の入れ子。 端末間で別々の月/利用者を
-    //   編集しても消えないよう、月→利用者 単位で統合する。 同じ月+利用者の衝突は「項目数が多い方(同点はローカル)」を採用。
+    //   編集しても消えないよう、月→利用者 単位で統合する。 クラウドを土台に、ローカル(=編集端末)の利用者は
+    //   ローカルを採用する。 appData は常にクラウド同期されておりローカルが最新のため、シフトの「削除」
+    //   (振替の取り消し等)も正しく反映される(以前は「項目数が多い方」優先で、削除したシフトがクラウドから復活していた)。
     {
       const lMs = (localData.monthlyShifts && typeof localData.monthlyShifts === 'object') ? localData.monthlyShifts : null;
       const cMs = (cloud.monthlyShifts && typeof cloud.monthlyShifts === 'object') ? cloud.monthlyShifts : null;
@@ -558,13 +560,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
           const lm = (lMs && lMs[mk] && typeof lMs[mk] === 'object') ? lMs[mk] : {};
           const cm = (cMs && cMs[mk] && typeof cMs[mk] === 'object') ? cMs[mk] : {};
           const om = { ...cm };
-          Object.keys(lm).forEach(pid => {
-            const lv = lm[pid], cv = cm[pid];
-            if (cv == null) { om[pid] = lv; return; }
-            const ln = (lv && typeof lv === 'object') ? Object.keys(lv).length : 0;
-            const cn = (cv && typeof cv === 'object') ? Object.keys(cv).length : 0;
-            om[pid] = (ln >= cn) ? lv : cv;
-          });
+          // ローカルに存在する利用者は、その月のシフトをローカルで上書き(削除も反映)。 ローカルに無い利用者はクラウドを維持。
+          Object.keys(lm).forEach(pid => { om[pid] = lm[pid]; });
           outMs[mk] = om;
         });
         merged.monthlyShifts = outMs;

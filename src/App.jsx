@@ -29551,8 +29551,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   //   これが無いと、古い(空の)スナップショットのまま各種設定を保存 → careManagers が空で上書きされ消える不具合になる。
   React.useEffect(() => {
     if (dirtyRef?.current) return; // 編集中は上書きしない
-    setCmOffices(appData.systemSettings?.cmOffices || []);
-    setCmPersons(appData.systemSettings?.careManagers || []);
+    // ★ 内容が本当に変わった時だけ更新する(参照が変わっただけの4秒ポーリングで state を作り直すと、
+    //   「未保存の変更あり」と誤検知してポップアップが出るため)。 同一内容なら prev をそのまま返して無変化に。
+    const _no = appData.systemSettings?.cmOffices || [];
+    const _np = appData.systemSettings?.careManagers || [];
+    setCmOffices(prev => JSON.stringify(prev) === JSON.stringify(_no) ? prev : _no);
+    setCmPersons(prev => JSON.stringify(prev) === JSON.stringify(_np) ? prev : _np);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appData.systemSettings?.cmOffices, appData.systemSettings?.careManagers]);
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
