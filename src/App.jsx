@@ -17902,7 +17902,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         if (pt.id !== targetPatientId) return pt;
         const newEntry = { reason: reason || '休止', fromDate: pauseFromDate || selectedDate, ...(pauseToDate?{toDate: pauseToDate}:{}) };
         const newHistory = [...(pt.pauseHistory||[]), newEntry];
-        return { ...pt, status: '休止', pauseHistory: newHistory };
+        return { ...pt, status: '休止', pauseHistory: newHistory, statusUpdatedAt: Date.now() };
       });
       // ★ その日の提供記録(ticketRecord)も「休止」にする → 分析で出席扱いにならず欠席と同等に集計される
       const _sd = new Date(selectedDate);
@@ -18673,14 +18673,23 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   )}
                   <td className={`font-bold sticky z-30 ${filterMode === 'month' ? 'left-[80px]' : 'left-0'} ${(isAbsent || isPause) ? 'bg-slate-100' : isActiveRow ? 'bg-blue-100' : 'bg-white group-hover:bg-blue-50'}`} style={{padding:'3px 6px',height:54,verticalAlign:'middle',borderTop:'1px solid #cbd5e1',borderBottom:'1px solid #cbd5e1',borderRight:'1px solid #cbd5e1',borderLeft:isActiveRow?'3px solid #2563eb':(filterMode==='month'?'none':'1px solid #cbd5e1')}}>
                     {(()=>{
-                      const _fr = (appData.fitnessRecords||[]).filter(r=>r.patientId===masterData.id).sort((a,b)=>b.date.localeCompare(a.date));
                       const _cycle = appData.systemSettings?.fitnessCycle;
+                      // ★ 「体力測定を実施しない」設定なら常に非表示
+                      const _fitDisabled = !!(_cycle?.disabled) || _cycle?.unit === '実施しない';
+                      // ★ 値が入った記録だけを対象(空の記録=削除後は「記録なし」扱い)。 記録が無ければ初回として必ず表示。
+                      const _hasFitVals = (r) => !!(r && r.values && Object.values(r.values).some(v => v !== '' && v != null && !isNaN(Number(v))));
+                      const _fr = (appData.fitnessRecords||[]).filter(r=>r.patientId===masterData.id && _hasFitVals(r)).sort((a,b)=>b.date.localeCompare(a.date));
                       const _cn = parseInt(_cycle?.jigyo||'3');
                       const _u = _cycle?.unit||'ヶ月';
-                      const _base = _fr.length ? new Date(_fr[0].date) : (masterData.startDate ? new Date(masterData.startDate) : null);
-                      const _due = _base ? (()=>{ const d=new Date(_base); if(_u==='ヶ月') d.setMonth(d.getMonth()+_cn); else if(_u==='週') d.setDate(d.getDate()+_cn*7); else if(_u==='年') d.setFullYear(d.getFullYear()+_cn); return d; })() : null;
-                      const _now = new Date(); _now.setHours(0,0,0,0);
-                      const _showBadge = !_due || _due <= _now;
+                      let _showBadge = false;
+                      if (!_fitDisabled) {
+                        if (!_fr.length) _showBadge = true; // 新規登録/削除後(記録なし)は初回として表示
+                        else {
+                          const _due = (()=>{ const d=new Date(_fr[0].date); if(_u==='ヶ月') d.setMonth(d.getMonth()+_cn); else if(_u==='週') d.setDate(d.getDate()+_cn*7); else if(_u==='年') d.setFullYear(d.getFullYear()+_cn); return d; })();
+                          const _now = new Date(); _now.setHours(0,0,0,0);
+                          _showBadge = _due <= _now;
+                        }
+                      }
                       return (
                         <div style={{position:'relative',width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3}}>
                           {_showBadge && (
@@ -26174,7 +26183,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     let lp = JSON.parse(JSON.stringify(p));
     // ★ ケアマネは緊急連絡先に含めない。 古いデータで混入していれば編集スナップショット時点で除去し、
     //   保存すると恒久的に消える(「削除しても復活」不具合の後始末)。
-    if (Array.isArray(lp.emergencyContacts)) lp.emergencyContacts = lp.emergencyContacts.filter(ec => !isCmContact(ec));
+    // ★ ケアマネ由来 と 完全に空の連絡先 は除外(空の「1件目」が出続けたり、削除済みが復活するのを防ぐ)。 保存時に恒久的に消える。
+    if (Array.isArray(lp.emergencyContacts)) {
+      const _blankEc = ec => !((ec.name||'').trim() || (ec.phone||'').trim() || (ec.phoneMobile||'').trim() || (ec.email||'').trim() || (ec.relation||'').trim());
+      lp.emergencyContacts = lp.emergencyContacts.filter(ec => !isCmContact(ec) && !_blankEc(ec));
+    }
     const _sp = (s)=>{const a=String(s||'').trim().split(/[\s　]+/).filter(Boolean);return{last:a[0]||'',first:a.slice(1).join(' ')||''};};
     // ★ 主要連絡先(familyName)が未設定なら、登録済み家族アカウント / 緊急連絡先から自動反映。
     if (!lp.familyName) {
@@ -26238,7 +26251,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const commitLP = (patch, message) => {
     if (!localPatient) return;
     // 最新appData(ファイル・状態)を土台にし、意図した変更(patch)を最後に上書き = 状態変更は確実に反映しつつ古い値で他項目を巻き戻さない
-    const updated = { ...withLatestFiles(localPatient), ...patch };
+    // ★ status/pauseHistory を変える時は statusUpdatedAt を更新 = クラウドマージで「古い利用中」が「新しい休止」を上書きするのを防ぐ
+    const _touchesStatus = ('status' in patch) || ('pauseHistory' in patch);
+    const updated = { ...withLatestFiles(localPatient), ...patch, ...(_touchesStatus ? { statusUpdatedAt: Date.now() } : {}) };
     setLocalPatient(updated);
     if (dirtyRef) dirtyRef.current = false;
     onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id === updated.id ? updated : p) }, { manual: true, message: message || '✓ 保存しました' });
@@ -26256,7 +26271,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   // status/pauseHistory は常に即時保存フロー(commitLP)経由でのみ変更する = フォーム編集(updateLP)では触らない。
   // よって最新appData優先にしても編集を失わず、古いスナップショットでの巻き戻しだけを防げる。
   // (開始日/終了日はフォームで直接編集するため sticky にしない=編集が消えてしまうため)
-  const STICKY_FIELDS = ['status','pauseHistory'];
+  const STICKY_FIELDS = ['status','pauseHistory','statusUpdatedAt'];
   const withLatestFiles = (lp) => {
     if (!lp) return lp;
     const cur = (appData.patients||[]).find(p => p.id === lp.id);
@@ -29522,6 +29537,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const isComposingRef = React.useRef(false);
   const [cmOffices, setCmOffices] = useState(appData.systemSettings?.cmOffices || []);
   const [cmPersons, setCmPersons] = useState(appData.systemSettings?.careManagers || []);
+  // ★ CSV取込やクラウド同期で最新のケアマネ事業所/担当者が来たら、編集中でなければ画面の状態を最新に追従。
+  //   これが無いと、古い(空の)スナップショットのまま各種設定を保存 → careManagers が空で上書きされ消える不具合になる。
+  React.useEffect(() => {
+    if (dirtyRef?.current) return; // 編集中は上書きしない
+    setCmOffices(appData.systemSettings?.cmOffices || []);
+    setCmPersons(appData.systemSettings?.careManagers || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appData.systemSettings?.cmOffices, appData.systemSettings?.careManagers]);
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
@@ -29654,7 +29677,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
       }
     }
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices, careManagers: cmPersons, facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;

@@ -421,9 +421,22 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   const mergePatientBackfill = (lp, cp) => {
     if (!cp) return lp; if (!lp) return cp;
     const out = { ...lp };
+    // ★ 利用状態(status/pauseHistory)は statusUpdatedAt が新しい方を「まとめて」採用する。
+    //   利用者フィールドには _savedAt が無く先勝ち/後勝ちが曖昧なため、古い端末の保存で
+    //   「休止」が「利用中」に巻き戻る不具合が起きていた。 時刻の新しい状態を必ず優先する。
+    const _lStatT = Number(lp.statusUpdatedAt) || 0, _cStatT = Number(cp.statusUpdatedAt) || 0;
+    const _statusTimed = !!(_lStatT || _cStatT);
+    if (_statusTimed) {
+      const src = (_cStatT > _lStatT) ? cp : lp; // 同点/未設定はローカル優先
+      out.status = src.status;
+      out.pauseHistory = src.pauseHistory;
+      out.statusUpdatedAt = Math.max(_lStatT, _cStatT);
+    }
     const keys = new Set([...Object.keys(lp), ...Object.keys(cp)]);
     keys.forEach(k => {
       if (k === '_savedAt') return;
+      // 状態は上で時刻優先で確定済みなら、下の汎用処理はスキップ
+      if (_statusTimed && (k === 'status' || k === 'pauseHistory' || k === 'statusUpdatedAt')) return;
       const lv = lp[k], cv = cp[k];
       // ★ 書類(介護保険証/負担割合証)と更新ログ: 両端末の追加を失わないよう id 単位で和集合マージ。
       //   docUpdates は既読フラグ(readOffice/readCm)を両者で OR (どちらかが既読なら既読)。
