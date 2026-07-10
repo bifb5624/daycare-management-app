@@ -11900,7 +11900,6 @@ function FamilyView() {
   // 別端末で登録された場合に備え、招待に紐づく店舗のクラウド状態を確認して usedBy を判定
   const [_inviteUsedRemote, setInviteUsedRemote] = useState(false);
   React.useEffect(() => {
-    if (!_urlInvite || _inviteUsedLocal) return;
     if (!isSupabaseEnabled) return;
     const tok = decodeInviteToken(_urlToken);
     const sid = (tok && tok.s) || familyStoreId || null;
@@ -11909,12 +11908,23 @@ function FamilyView() {
     (async () => {
       try {
         const st = await supabaseLoadStateForStore(sid);
-        const inv = (st?.familyInvites || []).find(i => i.code === _urlInvite);
-        if (!cancelled && inv && inv.usedBy) setInviteUsedRemote(true);
+        if (cancelled || !st) return;
+        // ★ ケアマネ登録の「事業所」プルダウンに、この店舗の実際のケアマネ事業所/担当者(各種設定で登録・CSV取込したもの)を表示する。
+        //   これが無いと data(=localStorage/見本)の cmOffices が使われ、見本の「あおぞら/さくら」しか出ない。
+        //   ログイン後は別経路で店舗データを読み込むため、登録画面(未ログイン)のときだけ反映する。
+        if (st.systemSettings && !authPid) {
+          const ss = st.systemSettings;
+          setData(prev => ({ ...prev, systemSettings: { ...(prev.systemSettings||{}), cmOffices: ss.cmOffices||[], careManagers: ss.careManagers||[], facilityInfo: ss.facilityInfo || prev.systemSettings?.facilityInfo, policies: ss.policies || prev.systemSettings?.policies } }));
+        }
+        // 招待の使用済み判定
+        if (_urlInvite && !_inviteUsedLocal) {
+          const inv = (st.familyInvites || []).find(i => i.code === _urlInvite);
+          if (inv && inv.usedBy) setInviteUsedRemote(true);
+        }
       } catch { /* 取得失敗時は従来どおり登録画面 (submit時に二重登録は弾かれる) */ }
     })();
     return () => { cancelled = true; };
-  }, [_urlInvite, _inviteUsedLocal]); // eslint-disable-line
+  }, [_urlInvite, _inviteUsedLocal, _urlToken, familyStoreId, authPid]); // eslint-disable-line
   const _inviteAlreadyUsed = _inviteUsedLocal || _inviteUsedRemote;
   const _stripInviteUrl = React.useCallback(() => {
     try { const u = new URL(window.location.href); u.searchParams.delete('invite'); u.searchParams.delete('t'); window.history.replaceState(null, '', u.pathname + u.search + u.hash); } catch {}
