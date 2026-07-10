@@ -17892,27 +17892,49 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   //    - 振替先 ticketRecord（status=振替）を削除
   //    - 振替元 ticketRecord(status=欠席)の tokki から「○月○日へ振替」表記を取り除き、理由のみ残す
   //    - monthlyShifts: 振替先の 振(M/D) を削除（元の欠席はそのまま）
+  //  ★ 月間スケジュールと同じ挙動に統一: 振替先(振替) / 振替元(欠席) のどちらから取り消しても、
+  //    「振替元は出席に戻す」「振替先は記録・シフトを削除」する。 削除した記録は墓石(deletedIds)で復活防止。
   const cancelFurikae = (id) => {
     const dObj = new Date(selectedDate);
-    const destDateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`;
-    const destRec = (appData.ticketRecords||[]).find(r => r.patientId === id && r.date === destDateStr && r.status === '振替');
-    if (!destRec) return;
-    // 振替先の tokki "M月D日{AM|PM|1日|""}分振替" から元日付を逆引き
-    let srcDateStr = '';
-    const tokki = destRec.tokki || '';
-    const m = tokki.match(/^(\d+月\d+日)(?:AM|PM|1日)?分振替$/);
-    if (m) srcDateStr = m[1];
+    const yr = dObj.getFullYear();
+    const thisDateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`;
+    const recs = appData.ticketRecords || [];
+    const rec = recs.find(r => r.patientId === id && r.date === thisDateStr && (r.status === '振替' || r.status === '欠席'));
+    if (!rec) return;
+    let destDateStr = '', srcDateStr = '', destAmpm = 'AM';
+    if (rec.status === '振替') {
+      // この日が振替先。 振替元は tokki「M月D日…分振替」から逆引き
+      destDateStr = thisDateStr;
+      destAmpm = rec.furikaeAmpm || 'AM';
+      const m = (rec.tokki||'').match(/^(\d+月\d+日)(?:AM|PM|1日)?分振替$/);
+      srcDateStr = m ? m[1] : '';
+    } else {
+      // この日が振替元(欠席)。 振替先は tokki「M月D日…へ振替」から逆引き。 ただの欠席は対象外
+      srcDateStr = thisDateStr;
+      const m = (rec.tokki||'').match(/^(\d+月\d+日)(AM|PM|1日)?へ振替/);
+      if (!m) return;
+      destDateStr = m[1];
+      destAmpm = m[2] || 'AM';
+    }
+    const _mk = (mdStr) => { const mm = String(mdStr).match(/(\d+)月(\d+)日/); return mm ? { mk: `${yr}-${String(+mm[1]).padStart(2,'0')}`, day: +mm[2] } : null; };
+    const dMK = _mk(destDateStr), sMK = _mk(srcDateStr);
+    // 墓石にする記録id(振替先の振替 + 振替元の欠席)を収集
+    const _removedIds = [];
+    recs.forEach(r => {
+      if (r.patientId !== id) return;
+      if (destDateStr && r.date === destDateStr && r.status === '振替' && r.id != null) _removedIds.push(String(r.id));
+      if (srcDateStr && r.date === srcDateStr && r.status === '欠席' && r.id != null) _removedIds.push(String(r.id));
+    });
     setPendingCancellations(prev => [...prev, {
       patientId: id,
-      destDateStr,
-      destDay: dObj.getDate(),
-      destMK: `${dObj.getFullYear()}-${String(dObj.getMonth()+1).padStart(2,'0')}`,
-      destAmpm: destRec.furikaeAmpm || 'AM',
-      srcDateStr
+      destDateStr, destMK: dMK?.mk, destDay: dMK?.day, destAmpm,
+      srcDateStr, srcMK: sMK?.mk, srcDay: sMK?.day,
+      removedIds: _removedIds,
+      restore: true, // 振替元を出席に戻す
     }]);
-    // localPatients からも該当患者を取り除き（振替先のスケジュールがなくなったので枠から消す）
+    // localPatients から該当患者を外す(振替の枠が無くなる/この日は出席に戻る)
     setLocalPatients(prev => prev.filter(p => p.id !== id));
-    if (dirtyRef) dirtyRef.current = true; // 保存ボタンで反映してもらう
+    if (dirtyRef) dirtyRef.current = true; // 保存ボタンで反映
   };
 
   const applyStatusChange = (id, newStatus, reason, furikaeDate, substituteReason, furikaeAmpm='AM', pauseFromDate='', pauseToDate='') => {
@@ -18194,26 +18216,34 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       }
       let updatedTicketRecords = [...(appData.ticketRecords || [])];
       let newShifts = JSON.parse(JSON.stringify(appData.monthlyShifts || {}));
-      // 振替の取り消し（保留分）を先に反映
-      pendingCancellations.forEach(({patientId, destDateStr, destDay, destMK, destAmpm, srcDateStr}) => {
+      // ★ 振替の取り消し(保留分): 振替先=記録/シフト削除、振替元=出席に戻す(欠席の記録/シフトも削除)。 削除idは墓石へ。
+      const _cancelTomb = [];
+      pendingCancellations.forEach(({patientId, destDateStr, destDay, destMK, destAmpm, srcDateStr, srcMK, srcDay, restore, removedIds}) => {
+          (removedIds||[]).forEach(rid => _cancelTomb.push(String(rid)));
+          // 振替先の 振替 記録を削除
           updatedTicketRecords = updatedTicketRecords.filter(r => !(r.patientId === patientId && r.date === destDateStr && r.status === '振替'));
-          if (srcDateStr) {
-              updatedTicketRecords = updatedTicketRecords.map(r => {
-                  if (r.patientId === patientId && r.date === srcDateStr && r.status === '欠席') {
-                      const t = r.tokki || '';
-                      const subM = t.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:（(.+)）)?$/);
-                      const cleaned = subM ? (subM[1] || '') : t;
-                      return { ...r, tokki: cleaned };
-                  }
-                  return r;
-              });
+          // 振替先の 振 シフトを削除
+          if (destMK && newShifts[destMK]?.[patientId]) {
+              if (destAmpm === '1日') { delete newShifts[destMK][patientId][`${destDay}_AM`]; delete newShifts[destMK][patientId][`${destDay}_PM`]; }
+              else delete newShifts[destMK][patientId][`${destDay}_${destAmpm}`];
           }
-          if (newShifts[destMK]?.[patientId]) {
-              if (destAmpm === '1日') {
-                  delete newShifts[destMK][patientId][`${destDay}_AM`];
-                  delete newShifts[destMK][patientId][`${destDay}_PM`];
+          if (srcDateStr) {
+              if (restore) {
+                  // ★ 振替元を出席に戻す: 欠席の記録を削除(=記録なし=基本の出席) + 欠席シフトを削除
+                  updatedTicketRecords = updatedTicketRecords.filter(r => !(r.patientId === patientId && r.date === srcDateStr && r.status === '欠席'));
+                  if (srcMK && srcDay && newShifts[srcMK]?.[patientId]) {
+                      ['AM','PM'].forEach(ap => { const k=`${srcDay}_${ap}`; if (newShifts[srcMK][patientId][k] === '欠席') delete newShifts[srcMK][patientId][k]; });
+                  }
               } else {
-                  delete newShifts[destMK][patientId][`${destDay}_${destAmpm}`];
+                  // 従来: 欠席は維持、tokki から振替先情報だけ除去
+                  updatedTicketRecords = updatedTicketRecords.map(r => {
+                      if (r.patientId === patientId && r.date === srcDateStr && r.status === '欠席') {
+                          const t = r.tokki || '';
+                          const subM = t.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:（(.+)）)?$/);
+                          return { ...r, tokki: subM ? (subM[1] || '') : t };
+                      }
+                      return r;
+                  });
               }
           }
       });
@@ -18295,6 +18325,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       //   別日のため上の当日分書き込みでは保存されない。 これが無いと振替先が振替にならず消えていた。
       (pendingFurikaeRecords||[]).forEach(fr => {
         if (!fr || fr.patientId == null || !fr.date) return;
+        if (_cancelTomb.includes(String(fr.id))) return; // 同一セッションで取り消した振替は再追加しない
         const idx = updatedTicketRecords.findIndex(r => r.patientId === fr.patientId && recMatchesDateYear(r, fr.date, fr.year));
         if (idx >= 0) updatedTicketRecords[idx] = { ...updatedTicketRecords[idx], ...fr };
         else updatedTicketRecords.push(fr);
@@ -18314,8 +18345,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           return r;
         });
       }
+      // ★ 取り消しで削除した振替/欠席の記録を墓石(deletedIds)に登録 → クラウドマージで復活しない
+      const _saveDelTomb = { ...(appData.deletedIds||{}) };
+      _saveDelTomb.ticketRecords = { ...(_saveDelTomb.ticketRecords||{}) };
+      _cancelTomb.forEach(rid => { _saveDelTomb.ticketRecords[rid] = Date.now(); });
       // ★ manual:true でトースト「✓ 保存しました」表示
-      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts }, { manual: true, message: '✓ 保存しました' });
+      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts, ...(_cancelTomb.length ? { deletedIds: _saveDelTomb } : {}) }, { manual: true, message: '✓ 保存しました' });
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
       setPendingFurikaeRecords([]);
@@ -18575,7 +18610,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <button onClick={()=>setPatientInfoModal(masterData)} className="font-bold text-base text-slate-800 flex items-center gap-1 min-w-0"><span className="truncate">{p.name}</span><span className="text-[10px] text-blue-500 shrink-0">ⓘ</span></button>
                   {isReadOnly||isPause ? <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${config.lightColor} ${config.textColor}`}>{p.status||'出席'}</span>
-                    : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{p.status==='振替'?(<><option value="振替">振替</option><option value="取り消し">取り消し</option></>):appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}</select>}
+                    : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{p.status==='振替'?(<><option value="振替">振替</option><option value="取り消し">取り消し</option></>):(p.status==='欠席' && /へ振替/.test(p.tokki||''))?(<>{appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}<option value="取り消し">振替を取り消し</option></>):appSettings.statusOptions.map(o=><option key={o.label} value={o.label}>{o.label}</option>)}</select>}
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   {['arrival','departure'].map(t=>{ const mo=KIBUN_MOODS.find(m=>m.key===p[t==='arrival'?'kibunArrival':'kibunDeparture']); return (
