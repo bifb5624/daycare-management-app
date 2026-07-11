@@ -26141,8 +26141,8 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
 
 // ★ 日付などの入力。 モジュールレベルで定義(コンポーネント内に置くと毎レンダリングで作り直され、
 //   入力中に再マウントされて日付ピッカーが開けない/クリックできない原因になる)
-function LabelInput({ label, disabled, value, onChange, onBlur, onFocus, type = "text", placeholder = "" }) {
-  return (<div><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} onBlur={onBlur} onFocus={onFocus} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
+function LabelInput({ label, disabled, value, onChange, onBlur, onFocus, type = "text", placeholder = "", width }) {
+  return (<div style={width ? { width } : undefined}><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} onBlur={onBlur} onFocus={onFocus} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 }
 function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef, navFocus, onFocusHandled }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
@@ -27315,8 +27315,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             {isResigned && (()=>{ const _ay = localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0); const _del = (()=>{ if(!_ay||!localPatient.endDate) return null; const d=new Date(localPatient.endDate); d.setFullYear(d.getFullYear()+_ay); return d; })(); return (<div className={`rounded-xl border-2 p-4 flex items-center justify-between flex-wrap gap-3 ${isEditingResigned ? 'border-blue-300 bg-blue-50' : 'border-slate-300 bg-slate-100'}`}><div className="flex items-center gap-3"><CalendarOff size={20} className="text-slate-500" /><div><div className="text-sm font-bold text-slate-700">退所日: {fD(localPatient.endDate)}</div><div className="text-xs text-slate-500">{dTxt(dBtw(localPatient.endDate, new Date()))}経過{_del && `／自動削除予定: ${fD(_del.toISOString().slice(0,10))}`}</div></div></div><div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">退所後の自動削除</span><select value={_ay} disabled={isOff} onChange={e=>{ const v=Number(e.target.value); updateLPFields({ autoDeleteYears: v, autoDeleteAfter5Years: v===5 }); }} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60"><option value={0}>削除しない</option><option value={2}>2年後に自動削除</option><option value={5}>5年後に自動削除</option></select></div></div>); })()}
 
             {activeDetailTab === 'basic' && (<>
-              {/* ① 状態・利用開始日・利用終了日 (小さいiPadで日付が詰まって重なるため2列に) */}
-              <div className="grid grid-cols-2 gap-4 [&>*]:min-w-0"><div><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600">終了（退所済み）</div>) : localPatient.status === '休止' ? (<div className="w-full px-3 py-2.5 bg-orange-50 border border-orange-200 rounded-xl font-bold text-sm text-orange-700">休止中</div>) : (<><div className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm text-slate-700">利用中</div><div className="text-[10px] text-slate-400 mt-1">休止は月間スケジュールで設定します</div></>)}</div><LabelInput label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onFocus={() => { endDateFocusRef.current = localPatient.endDate || ''; }} onChange={e => updateLP('endDate', e.target.value)} onBlur={e => { const v = e.target.value; if (v && v !== endDateFocusRef.current) setAutoDeleteModal({ endDate: v, years: (localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0)) }); }} /></div>
+              {/* ① 状態・利用開始日・利用終了日 (文字数に合わせた幅で横並び・折り返し) */}
+              <div className="flex flex-wrap gap-4 items-start"><div style={{width:150}}><label className="block text-sm font-bold text-slate-600 mb-1.5">状態</label>{isResigned ? (<div className="w-full px-3 py-2.5 bg-slate-200 border border-slate-300 rounded-xl font-bold text-base text-slate-600 text-center">終了</div>) : localPatient.status === '休止' ? (<div className="w-full px-3 py-2.5 bg-orange-50 border border-orange-200 rounded-xl font-bold text-sm text-orange-700 text-center">休止中</div>) : (<><div className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm text-slate-700 text-center">利用中</div><div className="text-[10px] text-slate-400 mt-1">休止は月間スケジュールで設定</div></>)}</div><LabelInput width={172} label="利用開始日" type="date" disabled={isOff} value={localPatient.startDate} onChange={e => updateLP('startDate', e.target.value)} /><LabelInput width={172} label="利用終了日" type="date" disabled={isOff && !isEditingResigned} value={localPatient.endDate} onFocus={() => { endDateFocusRef.current = localPatient.endDate || ''; }} onChange={e => updateLP('endDate', e.target.value)} onBlur={e => { const v = e.target.value; if (v && v !== endDateFocusRef.current) setAutoDeleteModal({ endDate: v, years: (localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0)) }); }} /></div>
 
               {/* 休止情報・休止履歴は「サービス提供内容」タブ(月間スケジュールの上)へ移動しました */}
               {/* ② 氏名・フリガナ・性別・生年月日 — 縦並びレイアウト (見やすく入力しやすく) */}
@@ -27330,40 +27330,40 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   {/* 氏名 行 */}
                   <div>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">氏名 (姓 / 名)</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input disabled={isOff} value={ns.sn}
+                    <div className="flex flex-wrap gap-2">
+                      <input disabled={isOff} value={ns.sn} style={{width:150}}
                         onChange={e=>updateLP('name',_joinSG(e.target.value.replace(/[\s　]/g,''),ns.gn))}
                         placeholder="姓 (例: 山田)"
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                      <input disabled={isOff} value={ns.gn}
+                        className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                      <input disabled={isOff} value={ns.gn} style={{width:150}}
                         onChange={e=>updateLP('name',_joinSG(ns.sn,e.target.value.replace(/[\s　]/g,'')))}
                         placeholder="名 (例: 太郎)"
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                        className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                   </div>
                   {/* フリガナ 行 */}
                   <div>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (姓 / 名)</label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <KanaInput disabled={isOff} value={ks.sn}
                         onChangeText={v=>updateLP('kana',_joinSG(v.replace(/[\s　]/g,''),ks.gn))}
                         placeholder="ヤマダ"
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                        className="w-[150px] px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                       <KanaInput disabled={isOff} value={ks.gn}
                         onChangeText={v=>updateLP('kana',_joinSG(ks.sn,v.replace(/[\s　]/g,'')))}
                         placeholder="タロウ"
-                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
+                        className="w-[150px] px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                     </div>
                   </div>
-                  {/* 性別 + 生年月日 行 (関連項目なので横並び) */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
+                  {/* 性別 + 生年月日 行 (文字数に合わせた幅で横並び) */}
+                  <div className="flex flex-wrap gap-4 items-start">
+                    <div style={{width:120}}>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">性別</label>
                       <select disabled={isOff} value={localPatient.gender||""} onChange={e=>updateLP('gender',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                         <option value="">未選択</option><option value="男性">男性</option><option value="女性">女性</option>
                       </select>
                     </div>
-                    <div>
+                    <div style={{width:260}}>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
                       <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
                       {/* ★ 和暦でも入力可能 (西暦と自動連動) */}
@@ -27390,9 +27390,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">被保険者番号</label>
                   <input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" style={{maxWidth:240}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/>
                 </div>
-                {/* 介護度 + 負担割合 (関連するので横並び) */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
+                {/* 介護度 + 負担割合 (文字数に合わせた幅で横並び) */}
+                <div className="flex flex-wrap gap-4 items-start">
+                  <div style={{width:160}}>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度</label>
                     <select disabled={isOff} value={localPatient.careLevel||""} onChange={e=>{
                       const newVal = e.target.value;
@@ -27403,7 +27403,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                       <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v=><option key={v} value={v}>{v}</option>)}
                     </select>
                   </div>
-                  <div>
+                  <div style={{width:170}}>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">負担割合</label>
                     <select disabled={isOff} value={localPatient.costBurden||''} onChange={e=>updateLP('costBurden',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                       <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
