@@ -27402,17 +27402,17 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         <option value="">未選択</option><option value="男性">男性</option><option value="女性">女性</option>
                       </select>
                     </div>
-                    <div style={{width:260}}>
+                    <div style={{width:340}}>
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
-                      <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
-                      {/* ★ 和暦でも入力可能 (西暦と自動連動) */}
-                      {(() => { const wp = warekiParts(localPatient.birthDate); const setW = (patch) => { const nw = {...wp, ...patch}; const iso = warekiToIso(nw.era||'昭和', nw.ey, nw.m, nw.day); if(iso) updateLP('birthDate', iso); }; const inC="px-1.5 py-1 bg-white border border-slate-300 rounded text-sm font-bold outline-none disabled:opacity-60 text-center"; return (
-                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                      <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} style={{maxWidth:190}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
+                      {/* ★ 和暦でも入力可能 (西暦と自動連動)。 1行に収める(改行させない) */}
+                      {(() => { const wp = warekiParts(localPatient.birthDate); const setW = (patch) => { const nw = {...wp, ...patch}; const iso = warekiToIso(nw.era||'昭和', nw.ey, nw.m, nw.day); if(iso) updateLP('birthDate', iso); }; const inC="px-1 py-1 bg-white border border-slate-300 rounded text-sm font-bold outline-none disabled:opacity-60 text-center"; return (
+                        <div className="flex items-center gap-1 mt-1.5 whitespace-nowrap">
                           <span className="text-[11px] font-bold text-slate-400">和暦</span>
                           <select disabled={isOff} value={wp.era||''} onChange={e=>setW({era:e.target.value})} className={inC}><option value="">元号</option>{WAREKI_ERAS.map(([n])=><option key={n} value={n}>{n}</option>)}</select>
-                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.ey||''} onChange={e=>setW({ey:e.target.value})} placeholder="年" className={`${inC} w-14`}/><span className="text-[12px] text-slate-500">年</span>
-                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.m||''} onChange={e=>setW({m:e.target.value})} placeholder="月" className={`${inC} w-12`}/><span className="text-[12px] text-slate-500">月</span>
-                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.day||''} onChange={e=>setW({day:e.target.value})} placeholder="日" className={`${inC} w-12`}/><span className="text-[12px] text-slate-500">日</span>
+                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.ey||''} onChange={e=>setW({ey:e.target.value})} placeholder="年" className={`${inC} w-11`}/><span className="text-[12px] text-slate-500">年</span>
+                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.m||''} onChange={e=>setW({m:e.target.value})} placeholder="月" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">月</span>
+                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.day||''} onChange={e=>setW({day:e.target.value})} placeholder="日" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">日</span>
                         </div>
                       ); })()}
                       {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}{warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
@@ -27427,7 +27427,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {/* 被保険者番号 (単独行) */}
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">被保険者番号</label>
-                  <input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" style={{maxWidth:240}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/>
+                  <input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" style={{width:190}} className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/>
                 </div>
                 {/* 介護度 + 負担割合 (文字数に合わせた幅で横並び) */}
                 <div className="flex flex-wrap gap-4 items-start">
@@ -27453,7 +27453,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {/* 介護度 適用期間 (横幅広めなので独立行) */}
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度 適用期間</label>
-                  <DateRangePicker fromValue={localPatient.careLevelFrom||''} toValue={localPatient.careLevelTo||''} onFromChange={v=>updateLP('careLevelFrom',v)} onToChange={v=>updateLP('careLevelTo',v)} disabled={isOff}/>
+                  <div style={{maxWidth:380}}><DateRangePicker fromValue={localPatient.careLevelFrom||''} toValue={localPatient.careLevelTo||''} onFromChange={v=>updateLP('careLevelFrom',v)} onToChange={v=>updateLP('careLevelTo',v)} disabled={isOff}/></div>
                 </div>
               </div>
 
