@@ -12043,6 +12043,8 @@ function FamilyView() {
       }));
       sessionStorage.setItem('familyAuthPid', String(la.patientId || la.patient_id));
       sessionStorage.setItem('familyAuthAccId', String(la.id));
+      // ★ アカウント種別(kind)を保存 → 再読込直後(データ未ロード)でも家族/ケアマネを正しく判定(家族画面へ転落防止)
+      try { sessionStorage.setItem('familyAuthKind', String(la.kind || (la.relation==='ケアマネージャー'?'caremanager':'family'))); } catch {}
       // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
       const _sid = la.storeId || la.store_id;
       if (_sid) sessionStorage.setItem('familyAuthStoreId', String(_sid));
@@ -12121,6 +12123,7 @@ function FamilyView() {
           //   複数利用者を担当 (同一メール+パスワード) の場合は、入った後に「利用者切替」ボタンで切り替える。
           sessionStorage.setItem('familyAuthPid', String(sbAcc.patient_id));
           sessionStorage.setItem('familyAuthAccId', String(sbAcc.id));
+          try { sessionStorage.setItem('familyAuthKind', String(sbAcc.kind || (sbAcc.relation==='ケアマネージャー'?'caremanager':'family'))); } catch {}
           // ★ store_id も sessionStorage に保存 → familyStoreId 取得の最優先ソース
           if (sbAcc.store_id) sessionStorage.setItem('familyAuthStoreId', String(sbAcc.store_id));
           // ★ 期待利用者名 (フォールバック走査時の氏名一致ガード用)
@@ -12193,6 +12196,7 @@ function FamilyView() {
       } catch {}
       sessionStorage.setItem('familyAuthPid', String(acc.patientId));
       sessionStorage.setItem('familyAuthAccId', String(acc.id));
+      try { sessionStorage.setItem('familyAuthKind', String(acc.kind || (acc.relation==='ケアマネージャー'?'caremanager':'family'))); } catch {}
       setAuthPid(String(acc.patientId));
       setAuthAccId(String(acc.id));
     };
@@ -13065,8 +13069,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const _isPreview = String(accountId||'').startsWith('preview_');
   const _previewKind = _isPreview ? String(accountId).split('_')[1] : null;
   const loggedAcc = (data.familyAccounts||[]).find(a => String(a.id) === String(accountId));
+  // ★ ログイン時に保存した種別。 再読込直後(familyAccounts 未ロード)でも家族/ケアマネを正しく判定し、
+  //   ケアマネがクラッシュ後の再読込で家族画面に転落する(書類が消える)のを防ぐ。
+  const _persistedKind = (() => { try { return sessionStorage.getItem('familyAuthKind'); } catch { return null; } })();
   const isCmAccount = _isPreview ? (_previewKind === 'caremanager')
-    : (loggedAcc && (loggedAcc.kind === 'caremanager' || loggedAcc.relation === 'ケアマネージャー'));
+    : (loggedAcc ? (loggedAcc.kind === 'caremanager' || loggedAcc.relation === 'ケアマネージャー')
+                 : (_persistedKind === 'caremanager'));
   // ★ 親判定 (実行時計算): 同じ利用者 + 同じ kind の中で createdAt 最古の 1 人だけが「親」
   //   (= 招待可能。 過去データで全員 role='parent' になっていても、 ここで正しく 1 人に絞る)
   //   家族系 = kind='family' (デフォルト), 関係者系 = kind='caremanager' を独立に扱う
