@@ -11751,6 +11751,29 @@ function buildDemoPreviewData() {
   };
 }
 
+// === エラーバウンダリ (家族/ケアマネ画面の例外でWebViewごと落ちる/家族画面へ転落するのを防ぐ) ===
+class ViewErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err){ return { err }; }
+  componentDidCatch(err, info){ try { console.error('[ViewErrorBoundary]', err, info); } catch {} }
+  render(){
+    if (this.state.err) {
+      return (
+        <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f4f8ed',padding:24,fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif'}}>
+          <div style={{background:'white',padding:'32px 28px',borderRadius:20,boxShadow:'0 10px 40px rgba(0,0,0,0.08)',textAlign:'center',maxWidth:440,width:'100%'}}>
+            <div style={{fontSize:44,marginBottom:12}}>😢</div>
+            <h1 style={{fontSize:17,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>表示中に問題が発生しました</h1>
+            <p style={{fontSize:13,color:'#64748b',lineHeight:1.8,marginBottom:16}}>お手数ですが再読み込みしてください。<br/>繰り返す場合は事業所へお知らせください。</p>
+            <div style={{fontSize:10,color:'#cbd5e1',marginBottom:14,wordBreak:'break-all'}}>{String(this.state.err?.message||this.state.err||'')}</div>
+            <button onClick={()=>{ try { this.setState({err:null}); } catch {}; window.location.reload(); }} style={{padding:'10px 22px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>再読み込み</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // === 家族用閲覧 - ログイン → 利用者ごとの画面 ===
 function FamilyView() {
   // データを localStorage から読み出し (写真は別キーに分離保存される場合があるのでマージ)
@@ -16498,7 +16521,7 @@ export default function App() {
     return <SignupCompleteView context={signupContext} appData={appData} onSave={handleSaveToCloud} />;
   }
   if (isFamilyMode) {
-    return <FamilyView />;
+    return <ViewErrorBoundary><FamilyView /></ViewErrorBoundary>;
   }
   // ★ Supabase 経由のスタッフログイン (本番経路)
   if (isSupabaseEnabled && !staffSession) {
