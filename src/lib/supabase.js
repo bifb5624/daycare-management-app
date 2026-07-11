@@ -526,6 +526,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     const cloudTomb = (cloud && cloud.deletedIds) || {};
     const mergedTomb = {};
     ARRAY_KEYS.forEach(k => { mergedTomb[k] = { ...(cloudTomb[k] || {}), ...(localTomb[k] || {}) }; });
+    // ★ 利用者本体の墓石も local+cloud で統合 (削除した利用者を別端末の push で復活させない)。
+    mergedTomb.patients = { ...(cloudTomb.patients || {}), ...(localTomb.patients || {}) };
     const merged = { ...localData, deletedIds: mergedTomb };
     // ★ 提供記録・日誌はフィールド単位でマージ (別端末で違う項目を入力しても消えない)。 他はid単位。
     const FIELD_MERGE_KEYS = new Set(['ticketRecords','dailyLogs']);
@@ -538,7 +540,10 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     //   ローカル基準で「空欄の項目だけ」クラウドの値で補完する (削除は保持: ローカルに無い利用者は復活させない)。
     if (Array.isArray(localData.patients)) {
       const cloudPatMap = new Map((Array.isArray(cloud.patients) ? cloud.patients : []).map(p => [String(p.id), p]));
-      merged.patients = localData.patients.map(lp => { if (!lp || lp.id == null) return lp; const cp = cloudPatMap.get(String(lp.id)); return cp ? mergePatientBackfill(lp, cp) : lp; });
+      const _patTomb = mergedTomb.patients || {};
+      merged.patients = localData.patients
+        .filter(lp => !(lp && lp.id != null && _patTomb[String(lp.id)])) // ★ 墓石にある利用者は除外(復活防止)
+        .map(lp => { if (!lp || lp.id == null) return lp; const cp = cloudPatMap.get(String(lp.id)); return cp ? mergePatientBackfill(lp, cp) : lp; });
     }
     // ★ 日誌(diaryLogs)は「日付_AMPM」キーのオブジェクト。 端末間で別々の日を編集しても消えないよう、
     //   キー単位で統合し、同じキーは _savedAt が新しい方(無ければ内容が多い方)を採用する。

@@ -1523,6 +1523,10 @@ function stripPatientData(appData, idSet) {
       tomb[k] = m;
     }
   });
+  // ★ 利用者本体の墓石。 これが無いと、削除しても別端末が自分のローカルの利用者を push で復活させてしまう。
+  const pm = { ...(tomb.patients || {}) };
+  idSet.forEach(id => { if (id != null) pm[String(id)] = now; });
+  tomb.patients = pm;
   out.deletedIds = tomb;
   return out;
 }
