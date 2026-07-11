@@ -9552,6 +9552,12 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
       const existing = ticketRecords.find(r => r.patientId === patient.id && recMatchesDateYear(r, displayDate, year));
 
+      // ★ 未来日は表示しない(その日を過ぎてから表示)。 ただし記録やシフトが明示的にある日(事前の欠席/振替登録等)は表示する。
+      //   これが無いと、未来の基本利用日が全部「出席」扱いで先まで表示されてしまう。
+      const _todayEnd = new Date(); _todayEnd.setHours(23, 59, 59, 999);
+      const _hasExplicit = (shiftAM !== undefined) || (shiftPM !== undefined) || !!existing;
+      if (dateObj > _todayEnd && !_hasExplicit) continue;
+
       let status = "出席";
       if (isHoliday || isClosedDay) status = "休業";
       else if (stateAM === "欠席" || statePM === "欠席") status = "欠席";
