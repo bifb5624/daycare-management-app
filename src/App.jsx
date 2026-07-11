@@ -22000,8 +22000,12 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           </div>
           {(appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId).length > 0 ? (
             <div style={{padding:'8px 0'}}>
-              {(appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId)
-                .sort((a,b)=>b.createdAt-a.createdAt)
+              {(() => {
+                // ★ 同じ月(period)は1件だけ(最新)に絞る。 同月が何個も並ぶのを防ぐ。
+                const _rows = (appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+                const _seen = new Set();
+                return _rows.filter(r => { const k = String(r.period||r.createdDate||r.id); if(_seen.has(k)) return false; _seen.add(k); return true; });
+              })()
                 .map((r,i)=>(
                   <div key={r.id} style={{padding:'14px 20px',borderBottom:'1px solid #f0fdf4',backgroundColor:i%2===0?'white':'#f8fffe'}}>
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
@@ -22009,12 +22013,6 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <span style={{fontSize:14,color:'#334155'}}>{r.createdDate||''}</span>
                     </div>
                     <div style={{fontSize:14,color:'#475569',lineHeight:1.8,whiteSpace:'pre-wrap'}}>{r.summary}</div>
-                    {(() => { const s3 = r.sheet?.s3; const sel = (s3&&typeof s3==='object')?s3.sel:''; const txt = (s3&&typeof s3==='object')?s3.text:(typeof s3==='string'?s3:''); if(!sel && !txt) return null; return (
-                      <div style={{marginTop:8,padding:'8px 12px',background:'#f0fdf4',borderRadius:8,border:'1px solid #d1fae5'}}>
-                        <div style={{fontSize:12,fontWeight:'bold',color:'#065f46',marginBottom:txt?3:0}}>④ 生活状況及び心身の状況の変化{sel?`：${sel}`:''}</div>
-                        {txt && <div style={{fontSize:13,color:'#475569',lineHeight:1.7,whiteSpace:'pre-wrap'}}>{txt}</div>}
-                      </div>
-                    ); })()}
                   </div>
               ))}
             </div>
