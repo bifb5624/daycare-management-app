@@ -9552,11 +9552,9 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
       const existing = ticketRecords.find(r => r.patientId === patient.id && recMatchesDateYear(r, displayDate, year));
 
-      // ★ 未来日は表示しない(その日を過ぎてから表示)。 ただし記録やシフトが明示的にある日(事前の欠席/振替登録等)は表示する。
-      //   これが無いと、未来の基本利用日が全部「出席」扱いで先まで表示されてしまう。
+      // ★ 未来日は表示しない(その日を過ぎてから表示)。 空の自動作成記録が未来日に出席で並ぶのを防ぐため無条件で除外。
       const _todayEnd = new Date(); _todayEnd.setHours(23, 59, 59, 999);
-      const _hasExplicit = (shiftAM !== undefined) || (shiftPM !== undefined) || !!existing;
-      if (dateObj > _todayEnd && !_hasExplicit) continue;
+      if (dateObj > _todayEnd) continue;
 
       let status = "出席";
       if (isHoliday || isClosedDay) status = "休業";
@@ -22032,9 +22030,21 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>
         {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:170}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
         {!familyMode && !isCol('sec-detail') && (()=>{
-          // ★ 詳細記録は上の「期間」選択 (records) をそのまま表示する。
-          //   全月/月別のサブ選択は廃止 (期間=1ヶ月なら自動的にその月だけになる)。
-          const detailRecs = records;
+          // ★ 詳細記録は上の「期間」選択 (records) を表示。 ただし
+          //   ①未来日は除外(その日を過ぎてから表示) ②非利用日に残った「空の出席」記録は除外
+          //   (例: 火曜が基本利用日の人の月曜に、空の出席記録が残っていて表示されてしまう不具合)。
+          const _detTodayEnd = new Date(); _detTodayEnd.setHours(23,59,59,999);
+          const _detRecDate = (r) => { const m=(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return null; const y = r.year || new Date().getFullYear(); return new Date(y, parseInt(m[1],10)-1, parseInt(m[2],10)); };
+          const _detHasData = (r) => !!(r.temp||r.bpUpSt||r.bpDnSt||r.plSt||r.bpUpEn||r.bpDnEn||r.plEn||r.massage||r.tokki||r.kibunArrival||r.kibunDeparture||r.actualTime||(r.exercises&&Object.keys(r.exercises).length));
+          const detailRecs = records.filter(r => {
+            const d = _detRecDate(r);
+            if (d && d > _detTodayEnd) return false;                 // 未来日は除外
+            if (r.status && r.status !== '出席') return true;         // 欠席/振替/休業/休止 は表示
+            if (_detHasData(r)) return true;                          // データのある出席は表示
+            // 空の出席: 基本利用日のときだけ表示(非利用日の空出席=残骸は除外)
+            if (d) { const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; const sc=getScheduleOnDate(selectedPatient, iso)?.[d.getDay()]||''; if(!sc) return false; }
+            return true;
+          });
           // 期間ラベル (例: 2026年6月 / 全期間) を見出しに添える
           const _periodLabel = (() => {
             if (period === 'all') return '全期間';
