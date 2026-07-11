@@ -27305,6 +27305,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               .master-detail-content [style*="grid-template-columns"],
               .master-detail-content [style*="gridTemplateColumns"] { grid-template-columns: minmax(0,1fr) !important; }
             }
+            /* ★ 入力欄が画面いっぱいに間延びしないよう、必要な幅に制限（タブレット/PC）。
+               スマホ(640px未満)は従来どおり全幅でタップしやすく。 チェック/ラジオ/テキストエリアは対象外。 */
+            @media (min-width: 640px) {
+              .master-detail-content input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+              .master-detail-content select { max-width: 360px; }
+            }
           `}</style>
             {isResigned && (()=>{ const _ay = localPatient.autoDeleteYears != null ? localPatient.autoDeleteYears : (localPatient.autoDeleteAfter5Years ? 5 : 0); const _del = (()=>{ if(!_ay||!localPatient.endDate) return null; const d=new Date(localPatient.endDate); d.setFullYear(d.getFullYear()+_ay); return d; })(); return (<div className={`rounded-xl border-2 p-4 flex items-center justify-between flex-wrap gap-3 ${isEditingResigned ? 'border-blue-300 bg-blue-50' : 'border-slate-300 bg-slate-100'}`}><div className="flex items-center gap-3"><CalendarOff size={20} className="text-slate-500" /><div><div className="text-sm font-bold text-slate-700">退所日: {fD(localPatient.endDate)}</div><div className="text-xs text-slate-500">{dTxt(dBtw(localPatient.endDate, new Date()))}経過{_del && `／自動削除予定: ${fD(_del.toISOString().slice(0,10))}`}</div></div></div><div className="flex items-center gap-2"><span className="text-xs font-bold text-slate-600">退所後の自動削除</span><select value={_ay} disabled={isOff} onChange={e=>{ const v=Number(e.target.value); updateLPFields({ autoDeleteYears: v, autoDeleteAfter5Years: v===5 }); }} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60"><option value={0}>削除しない</option><option value={2}>2年後に自動削除</option><option value={5}>5年後に自動削除</option></select></div></div>); })()}
 
