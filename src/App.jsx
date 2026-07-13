@@ -13667,6 +13667,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           patient={patient}
           appData={data}
           initial={patient?.personalFile?.faceSheet || {}}
+          isCmAccount={true}
           onSave={async (fsData) => {
             if (cmFaceSheetSaving) return;
             setCmFaceSheetSaving(true);
@@ -13679,7 +13680,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, faceSheetFiles, labeledFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy:_by, source:'caremanager', snapshot }].slice(-20);
-            const newPatient = { ...patient, docUpdates: appendDocUpdate(patient, 'caremanager', _by, ['フェイスシートの編集']), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+            const newPatient = { ...patient, kiou: (fsData.kiou ?? patient.kiou ?? ''), docUpdates: appendDocUpdate(patient, 'caremanager', _by, ['フェイスシートの編集']), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
             try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
             setData(updated);
@@ -27694,7 +27695,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">メールアドレス</label><input type="email" disabled={isOff} value={localPatient.email||''} onChange={e=>updateLP('email',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９＠．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} placeholder="taro@example.com" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
               </div>
 
-              <div><label className="block text-sm font-bold text-slate-600 mb-1.5">既往歴</label><textarea disabled={isOff} value={localPatient.kiou||""} onChange={e=>updateLP('kiou',e.target.value)} rows={2} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl outline-none resize-none text-base disabled:opacity-60 leading-relaxed"/></div>
+              {/* ★ F1: 既往歴の編集はフェイスシートへ移設。 ここでは表示のみ(個人ファイル→フェイスシートで編集)。 */}
+              <div><label className="block text-sm font-bold text-slate-600 mb-1.5">既往歴 <span className="text-[11px] font-normal text-slate-400">（編集はフェイスシートで）</span></label><div className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-base leading-relaxed whitespace-pre-wrap text-slate-700 min-h-[2.5rem]">{localPatient.kiou||<span className="text-slate-400">未入力（個人ファイル → フェイスシートで記入できます）</span>}</div></div>
 
               {/* ⑥ 担当ケアマネジャー */}
               <div className="border-t border-slate-200 pt-4"><h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>担当ケアマネジャー</h3>
@@ -37444,6 +37446,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   };
   const [pdfPreviewMonthly, setPdfPreviewMonthly] = useState(null);
   const [showFaceSheetForm, setShowFaceSheetForm] = useState(false);
+  // ★ F2: フェイスシートを開くとき「手入力」か「写真/PDF」かを選ぶ。 attachFocus=true で添付欄へスクロール。
+  const [faceSheetChoice, setFaceSheetChoice] = useState(false);
+  const [faceSheetAttachFocus, setFaceSheetAttachFocus] = useState(false);
   const [pdfPreviewFaceSheet, setPdfPreviewFaceSheet] = useState(false);
   // ★ 任意の月を指定して提供記録を作成/ダウンロードするための選択月 (既定: 先月)
   const [snapMonth, setSnapMonth] = useState(() => {
@@ -37582,7 +37587,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-bold text-amber-900">フェイスシート</div>
                 <div className="flex gap-2">
-                  <button onClick={()=>setShowFaceSheetForm(true)}
+                  <button onClick={()=>setFaceSheetChoice(true)}
                     className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold">
                     {Object.keys(faceSheet).length === 0 ? '+ 新規作成' : '編集'}
                   </button>
@@ -38215,6 +38220,28 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           onClose={()=>setPdfPreviewMonthly(null)}
         />
       )}
+      {/* ★ F2: フェイスシートの入力方法を選ぶ (手入力 / 写真・PDF) */}
+      {faceSheetChoice && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={()=>setFaceSheetChoice(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-800 mb-1 text-center">フェイスシートの登録方法</h3>
+            <p className="text-xs text-slate-500 text-center mb-5">入力方法を選んでください（あとで切り替えできます）</p>
+            <div className="grid grid-cols-1 gap-3">
+              <button onClick={()=>{ setFaceSheetAttachFocus(false); setFaceSheetChoice(false); setShowFaceSheetForm(true); }}
+                className="w-full p-4 rounded-2xl border-2 border-blue-200 bg-blue-50 hover:bg-blue-100 text-left active:scale-[0.99]">
+                <div className="text-base font-bold text-blue-800">✎ 手入力で作成</div>
+                <div className="text-xs text-slate-500 mt-0.5">各項目をフォームに入力します</div>
+              </button>
+              <button onClick={()=>{ setFaceSheetAttachFocus(true); setFaceSheetChoice(false); setShowFaceSheetForm(true); }}
+                className="w-full p-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-left active:scale-[0.99]">
+                <div className="text-base font-bold text-emerald-800">📎 写真・PDFで登録</div>
+                <div className="text-xs text-slate-500 mt-0.5">紙のフェイスシートを撮影/スキャンして添付します</div>
+              </button>
+            </div>
+            <button onClick={()=>setFaceSheetChoice(false)} className="w-full mt-4 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 text-sm">キャンセル</button>
+          </div>
+        </div>
+      )}
       {/* フェイスシート 入力フォーム */}
       {showFaceSheetForm && (
         <FaceSheetForm
@@ -38222,6 +38249,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           appData={appData}
           initial={faceSheet}
           canEditContacts={true}
+          attachFocus={faceSheetAttachFocus}
           onSave={(fsData, removedAtts, contactPatch)=>{
             // ★ 削除された添付は personalFile.trash へ (7日間復元可)
             const now = new Date().toISOString();
@@ -38235,7 +38263,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
             // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
-            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
+            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), kiou: (newFs.kiou||''), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
@@ -38610,8 +38638,11 @@ const _FSField = ({ label, children, required }) => (
     {children}
   </div>
 );
-function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditContacts }) {
+function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditContacts, isCmAccount, attachFocus }) {
   const today = new Date().toISOString().slice(0,10);
+  // ★ F2: 「写真・PDFで登録」で開いたら添付エリアへスクロール
+  const attachRef = React.useRef(null);
+  React.useEffect(() => { if (attachFocus) { const t = setTimeout(()=>{ try { attachRef.current?.scrollIntoView({ behavior:'smooth', block:'start' }); } catch {} }, 250); return ()=>clearTimeout(t); } }, [attachFocus]);
   // ★ 開いている間はクラウドポーリングを止める(再描画で入力欄のフォーカスが外れる/添付が中断するのを防ぐ)
   React.useEffect(() => { officeEditingActive.current = true; return () => { officeEditingActive.current = false; }; }, []);
   const staffList = (appData?.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
@@ -38622,9 +38653,12 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     receptionMethodOther: initial?.receptionMethodOther || '',
     receptionStaff: initial?.receptionStaff || '',
     receptionStaffOther: initial?.receptionStaffOther || '',
-    creator: initial?.creator || '',
+    // ★ F3: ケアマネ閲覧時は作成者の初期値を「ケアマネ」に(後から編集可)
+    creator: initial?.creator || (isCmAccount ? 'ケアマネ' : ''),
     creatorOther: initial?.creatorOther || '',
     createdDate: initial?.createdDate || today,
+    // ★ F1: 既往歴(基本情報から移設)。 患者の kiou を初期値にし、保存時に patient.kiou へ書き戻す。
+    kiou: (initial?.kiou ?? patient?.kiou ?? ''),
     // ② 利用者の基本情報 (基本情報から自動取得)
     fax: initial?.fax || '',
     householdType: initial?.householdType || '',
@@ -38786,33 +38820,44 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
                 )}
               </Field>
               <Field label="受付者">
-                <select value={fs.receptionStaff} onChange={e=>update('receptionStaff', e.target.value)} className={inputCls}>
-                  <option value="">— 選択 —</option>
-                  {staffList.map((s,i) => (
-                    <option key={s.id||i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
-                  ))}
-                  <option value="その他">その他 (自由入力)</option>
-                </select>
-                {fs.receptionStaff === 'その他' && (
-                  <input value={fs.receptionStaffOther} onChange={e=>update('receptionStaffOther', e.target.value)}
-                    placeholder="氏名を入力" className={inputCls + ' mt-2'}/>
-                )}
-                {staffList.length === 0 && (
-                  <div className="text-[10px] text-slate-400 mt-1">※ 各種設定で従業員を登録するとリストに表示されます</div>
-                )}
+                {/* ★ F3: ケアマネ(関係者)閲覧時は手入力(自由記述)。 事業所側はプルダウン＋その他。 */}
+                {isCmAccount ? (
+                  <input value={fs.receptionStaff} onChange={e=>update('receptionStaff', e.target.value)}
+                    placeholder="受付者名を入力" className={inputCls}/>
+                ) : (<>
+                  <select value={fs.receptionStaff} onChange={e=>update('receptionStaff', e.target.value)} className={inputCls}>
+                    <option value="">— 選択 —</option>
+                    {staffList.map((s,i) => (
+                      <option key={s.id||i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
+                    ))}
+                    <option value="その他">その他 (自由入力)</option>
+                  </select>
+                  {fs.receptionStaff === 'その他' && (
+                    <input value={fs.receptionStaffOther} onChange={e=>update('receptionStaffOther', e.target.value)}
+                      placeholder="氏名を入力" className={inputCls + ' mt-2'}/>
+                  )}
+                  {staffList.length === 0 && (
+                    <div className="text-[10px] text-slate-400 mt-1">※ 各種設定で従業員を登録するとリストに表示されます</div>
+                  )}
+                </>)}
               </Field>
               <Field label="作成者">
-                <select value={fs.creator} onChange={e=>update('creator', e.target.value)} className={inputCls}>
-                  <option value="">— 選択 —</option>
-                  {staffList.map((s,i) => (
-                    <option key={s.id||i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
-                  ))}
-                  <option value="その他">その他 (自由入力)</option>
-                </select>
-                {fs.creator === 'その他' && (
-                  <input value={fs.creatorOther} onChange={e=>update('creatorOther', e.target.value)}
-                    placeholder="氏名を入力" className={inputCls + ' mt-2'}/>
-                )}
+                {isCmAccount ? (
+                  <input value={fs.creator} onChange={e=>update('creator', e.target.value)}
+                    placeholder="作成者名を入力（既定: ケアマネ）" className={inputCls}/>
+                ) : (<>
+                  <select value={fs.creator} onChange={e=>update('creator', e.target.value)} className={inputCls}>
+                    <option value="">— 選択 —</option>
+                    {staffList.map((s,i) => (
+                      <option key={s.id||i} value={s.name}>{s.name}{s.role ? `（${s.role}）` : ''}</option>
+                    ))}
+                    <option value="その他">その他 (自由入力)</option>
+                  </select>
+                  {fs.creator === 'その他' && (
+                    <input value={fs.creatorOther} onChange={e=>update('creatorOther', e.target.value)}
+                      placeholder="氏名を入力" className={inputCls + ' mt-2'}/>
+                  )}
+                </>)}
               </Field>
               <Field label="作成日"><input type="date" value={fs.createdDate} onChange={e=>update('createdDate', e.target.value)} className={inputCls}/></Field>
             </div>
@@ -38934,9 +38979,10 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
                 placeholder="例: 03-1234-5678" className={inputCls}/>
             </Field>
             <Field label="既往歴・現病歴">
-              <textarea rows={3} value={patient.kiou || ''} disabled
-                placeholder="基本情報の「既往歴」を表示 (編集不可、基本情報側で編集してください)"
-                className={textareaCls + ' bg-slate-100'}/>
+              {/* ★ F1: 既往歴はフェイスシートで記入・編集(基本情報からは移設)。 patient.kiou へミラーされ計画書等でも参照される。 */}
+              <textarea rows={3} value={fs.kiou} onChange={e=>update('kiou', e.target.value)}
+                placeholder="既往歴・現病歴を入力"
+                className={textareaCls}/>
             </Field>
             <Field label="服薬状況"><textarea rows={3} value={fs.medication} onChange={e=>update('medication', e.target.value)} placeholder="服薬中の薬名・用法・用量" className={textareaCls}/></Field>
             <Field label="アレルギー・感染症の有無"><textarea rows={2} value={fs.allergies} onChange={e=>update('allergies', e.target.value)} placeholder="食物アレルギー / 薬物アレルギー / 感染症 など" className={textareaCls}/></Field>
@@ -39010,7 +39056,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
             </Field>
           </div>
           {/* ★ 添付ファイル: フェイスシート原本(1枚) + 項目を選んで添付 */}
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
+          <div ref={attachRef} className="border border-slate-200 rounded-xl p-4 bg-slate-50" style={{scrollMarginTop:12}}>
             <div className="text-sm font-bold text-amber-800 mb-3">📎 添付ファイル</div>
             <Field label="フェイスシート（原本）を添付">
               {renderAttach('faceSheetFiles')}

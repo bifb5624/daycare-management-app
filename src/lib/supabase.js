@@ -906,7 +906,8 @@ export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet
       // 共有の更新ログにも記録 (事業所側バナーに「フェイスシート」更新を表示)
       const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
       const docUpdates = [...log, { id: `du_${now}_${Math.round(Math.random() * 1e6)}`, at: now, by: 'caremanager', byName: newFs.updatedBy, items: ['フェイスシート'], readOffice: false, readCm: true }].slice(-50);
-      return { ...p, docUpdates, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+      // ★ F1: フェイスシートの既往歴(kiou)を患者トップにもミラー(計画書/CSV/帳票が参照する source of truth)
+      return { ...p, kiou: (newFs.kiou ?? p.kiou ?? ''), docUpdates, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
     });
     await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
     return true;
