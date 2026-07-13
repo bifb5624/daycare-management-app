@@ -36173,7 +36173,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           }
         `}</style>
         <div style={{flex:1,overflow:'auto',display:'flex',justifyContent:'center',alignItems:'flex-start',padding:'20px',background:'#f0f4f9'}}>
-          <div id="print-content-fax" style={{width:'190mm',height:'280mm',maxHeight:'280mm',overflow:'hidden',background:'white',boxShadow:'0 4px 24px rgba(0,0,0,0.12)',padding:'12mm 14mm',boxSizing:'border-box',fontFamily:'serif',position:'relative',display:'flex',flexDirection:'column',margin:'0 auto'}}>
+          <div id="print-content-fax" style={{width:'190mm',height:'280mm',maxHeight:'280mm',overflow:'hidden',background:'white',boxShadow:'0 4px 24px rgba(0,0,0,0.12)',padding:'12mm 14mm',boxSizing:'border-box',fontFamily:'serif',position:'relative',display:'flex',flexDirection:'column',margin:'0 auto',zoom:(typeof window!=='undefined' && window.innerWidth<760)?Math.max(0.45,(window.innerWidth-24)/720):1}}>
 
             {/* タイトル */}
             <div style={{textAlign:'center',fontSize:28,fontWeight:'bold',border:'3px solid black',padding:'10px 0',marginBottom:28,letterSpacing:6}}>送付状</div>
@@ -36726,7 +36726,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       <div style={{flex:1,overflow:'auto',padding:'20px',display:'flex',alignItems:'flex-start',justifyContent:'center'}}>
         {/* A4 送付状プレビュー（件名・連絡事項は中で直接編集可能） */}
         <div id="print-content-general-fax"
-             style={{width:'190mm',height:'280mm',maxHeight:'280mm',overflow:'hidden',background:'white',boxShadow:'0 4px 24px rgba(0,0,0,0.12)',padding:'12mm 14mm',boxSizing:'border-box',fontFamily:'serif',display:'flex',flexDirection:'column',margin:'0 auto'}}>
+             style={{width:'190mm',height:'280mm',maxHeight:'280mm',overflow:'hidden',background:'white',boxShadow:'0 4px 24px rgba(0,0,0,0.12)',padding:'12mm 14mm',boxSizing:'border-box',fontFamily:'serif',display:'flex',flexDirection:'column',margin:'0 auto',zoom:(typeof window!=='undefined' && window.innerWidth<760)?Math.max(0.45,(window.innerWidth-24)/720):1}}>
 
           {/* タイトル */}
           <div style={{textAlign:'center',fontSize:28,fontWeight:'bold',border:'3px solid black',padding:'10px 0',marginBottom:28,letterSpacing:6}}>送付状</div>
