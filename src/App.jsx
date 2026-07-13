@@ -19217,12 +19217,23 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       </div>
       {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
       {massageHist && ReactDOM.createPortal((()=>{
-        const recs=(appData.ticketRecords||[]).filter(r=>r.patientId===massageHist.pid && r.massage).sort((a,b)=>(Number(b.id)||0)-(Number(a.id)||0)).slice(0,3);
+        // ★ id は文字列(tr_...)で Number 化すると NaN になり並ばないため、実日付で判定する。
+        //   直近の過去3件を取得し、昇順(古い→新しい)で表示する。 未来日は除外。
+        const _mhToday = new Date(); _mhToday.setHours(23,59,59,999);
+        const _mhDate = (r) => { const m=(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return null; const y=r.year||new Date().getFullYear(); return new Date(y, +m[1]-1, +m[2]); };
+        const recs=(appData.ticketRecords||[])
+          .filter(r=>r.patientId===massageHist.pid && r.massage)
+          .map(r=>({r,d:_mhDate(r)}))
+          .filter(x=>x.d && x.d<=_mhToday)
+          .sort((a,b)=>b.d-a.d)
+          .slice(0,3)
+          .sort((a,b)=>a.d-b.d)
+          .map(x=>x.r);
         return (
           <div onClick={(e)=>{e.stopPropagation(); setMassageHist(null);}}
             style={{position:'fixed',left:massageHist.cx,top:massageHist.cy-8,transform:'translate(-50%,-100%)',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 6px 20px rgba(0,0,0,0.45)',zIndex:99999,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}>
             {recs.length===0 ? <div style={{padding:'4px 12px',fontSize:12}}>履歴なし</div> :
-              [...recs].reverse().map((r,ri)=>(
+              recs.map((r,ri)=>(
                 <div key={ri} style={{padding:'4px 14px',fontSize:12}}>
                   <span style={{color:'#94a3b8'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
                   <b style={{color:'white',marginLeft:8}}>{r.massage||''}</b>
