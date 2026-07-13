@@ -29198,7 +29198,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             _extra.seikatsuKinouRecords = [...(appData.seikatsuKinouRecords||[]), { id:`sk_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:'', bikou:'', _auto:true }];
             _extra.kyomiKanshinRecords = [...(appData.kyomiKanshinRecords||[]), { id:`ki_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', items:{}, custom:[], bikou:'', _auto:true }];
           }
-          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra});
+          // ★ B1: 新規追加は保存ボタン不要で即時クラウド保存(自動保存)。 debounce待ちで消えるのを防ぐ。
+          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message:'✓ 利用者を追加しました' });
           setEditingPatientId(newId);
           setPatientStatusFilter('利用中');
           setNewPatientModal(false);
@@ -31736,8 +31737,8 @@ function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
                   const a=[...dsRef.current.staff]; a[i]={...a[i], firstName: first, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
                 }}
                 placeholder="名"
-                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
-              <button onClick={()=>mutate({...dsRef.current,staff:dsRef.current.staff.filter((_,j)=>j!==i)})} className="text-red-400 hover:text-red-600"><X size={16}/></button>
+                className="w-[110px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+              <button onClick={()=>mutate({...dsRef.current,staff:dsRef.current.staff.filter((_,j)=>j!==i)})} className="text-red-400 hover:text-red-600 shrink-0"><X size={16}/></button>
             </div>
           ))}
           <button onClick={()=>{
