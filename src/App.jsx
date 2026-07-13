@@ -23274,9 +23274,9 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     <div style={{height:'100%',overflowY:'auto',background:'#f0f4f9'}}>
       <div style={{position:'sticky',top:0,zIndex:20,boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
         {/* ★ 分析稼働ヘッダ: 淡いオレンジグラデーション、 文字は黒で読みやすく */}
-        <div style={{background:'linear-gradient(135deg,#fed7aa,#fdba74)',color:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}><TrendingUp size={20}/><span style={{fontSize:17,fontWeight:'bold'}}>分析（稼働）</span></div>
-        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',justifyContent:'flex-end'}}>
+        <div style={{background:'linear-gradient(135deg,#fed7aa,#fdba74)',color:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',rowGap:8,columnGap:8}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,flexShrink:0,whiteSpace:'nowrap'}}><TrendingUp size={20}/><span style={{fontSize:17,fontWeight:'bold'}}>分析（稼働）</span></div>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',justifyContent:(typeof window!=='undefined'&&window.innerWidth<768)?'flex-start':'flex-end',order:(typeof window!=='undefined'&&window.innerWidth<768)?3:0,flexBasis:(typeof window!=='undefined'&&window.innerWidth<768)?'100%':'auto',flexGrow:1}}>
           <div style={{display:'flex',background:'rgba(255,255,255,0.5)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.7)'}}>
             {[['1','1ヶ月'],['3','3ヶ月'],['6','半年'],['12','1年'],['custom','期間指定']].map(([v,l])=>(
               <button key={v} onClick={()=>{setPeriod(v);setOpenDow(null);}}
@@ -23680,7 +23680,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         {/* 2. 曜日別稼働率 — 曜日カード形式 (3日ずつ 2ページに分割) */}
         <div id="ops-dow" data-sec="ops-dow" style={{scrollMarginTop:170}}/>
         <Card title="曜日別稼働率（前半）" accent='#8b5cf6'>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10}}>
+          <div style={{display:'grid',gridTemplateColumns:`repeat(${(typeof window!=='undefined'&&window.innerWidth<768)?1:3},minmax(0,1fr))`,gap:10}}>
             {dowStats.slice(0,3).map(d => {
               const dayLabel = `${d.dow}曜日`;
               const renderPats = (label, list, col) => {
@@ -23740,7 +23740,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         {dowStats.length > 3 && (<>
           <div id="ops-dow-2" data-sec="ops-dow-2" style={{scrollMarginTop:170}}/>
           <Card title="曜日別稼働率（後半）" accent='#8b5cf6'>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:10}}>
+            <div style={{display:'grid',gridTemplateColumns:`repeat(${(typeof window!=='undefined'&&window.innerWidth<768)?1:3},minmax(0,1fr))`,gap:10}}>
               {dowStats.slice(3,6).map(d => {
                 const dayLabel = `${d.dow}曜日`;
                 const renderPats = (label, list, col) => {
@@ -23817,16 +23817,16 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                       <div key={m.key} style={{flex:m.count,background:m.color,transition:'flex 0.3s'}}/>
                     ))}
                   </div>
-                  <div data-print-id="mood-cards" style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:4}}>
+                  <div data-print-id="mood-cards" style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:4}}>
                     {moods.map(m=>(
-                      <div key={m.key} style={{background:m.bg,border:`1.5px solid ${m.color}`,borderRadius:8,padding:'5px 6px',textAlign:'center'}}>
-                        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:4,marginBottom:2}}>
+                      <div key={m.key} style={{background:m.bg,border:`1.5px solid ${m.color}`,borderRadius:8,padding:'5px 4px',textAlign:'center',minWidth:0}}>
+                        <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',justifyContent:'center',gap:2,marginBottom:2}}>
                           <span style={{fontSize:16,lineHeight:1}}>{m.emoji}</span>
-                          <span style={{fontSize:11,fontWeight:'bold',color:'#334155',whiteSpace:'nowrap'}}>{m.label}</span>
+                          <span style={{fontSize:11,fontWeight:'bold',color:'#334155',lineHeight:1.15}}>{m.label}</span>
                         </div>
                         <div style={{fontSize:13,fontWeight:'bold',color:'#0f172a',lineHeight:1.2}}>
                           {m.pct}<span style={{fontSize:11}}>%</span>
-                          <span style={{fontSize:10,color:'#64748b',marginLeft:4,fontWeight:'normal'}}>({m.count}回)</span>
+                          <span style={{fontSize:10,color:'#64748b',marginLeft:2,fontWeight:'normal',whiteSpace:'nowrap'}}>({m.count}回)</span>
                         </div>
                       </div>
                     ))}
@@ -31756,9 +31756,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const measure = () => {
       const w = diaryScrollRef.current?.clientWidth || window.innerWidth;
       const SHEET_W = 756; // 200mm @96dpi
-      // ★ スマホ等 幅が狭い時は縮小(下限0.7=読みやすさ優先)。 1未満のときは左寄せ+横スクロールで
-      //   左の氏名列から見え、右の送迎までスクロールで確認できる。
-      const s = Math.max(0.7, Math.min(1.5, (w - 12) / SHEET_W));
+      // ★ スマホ等 幅が狭い時は縮小して1枚を画面内にすべて収める(PCと同じ全体表示・見切れない)。 下限0.35。
+      const s = Math.max(0.35, Math.min(1.5, (w - 12) / SHEET_W));
       setDiaryViewScale(Number(s.toFixed(3)));
     };
     measure();
@@ -32990,7 +32989,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         </div>
       )}
       <div id="diary-print-content" style={isReadOnly ? {pointerEvents:'none', userSelect:'none', opacity:0.95} : undefined}>
-        <div className="flex flex-col py-3 px-2" style={{gap: `${Math.round(24*diaryViewScale)}px`, alignItems: diaryViewScale < 1 ? 'flex-start' : 'center'}}>
+        <div className="flex flex-col items-center py-3 px-2" style={{gap: `${Math.round(24*diaryViewScale)}px`}}>
           {(() => {
             // 編集ビューでもページング: 利用者数が多ければ見切れず2ページ目に分割表示
             const carCount = ds.cars.length;
@@ -36366,7 +36365,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       <div style={{padding:'0 20px 20px'}}>
         <div style={{background:'white',borderLeft:'1px solid #e2e8f0',borderRight:'1px solid #e2e8f0',borderBottom:'1px solid #e2e8f0',borderBottomLeftRadius:14,borderBottomRightRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.08)'}}>
           {/* 曜日ヘッダー（メインヘッダー(約56px)の下に固定） */}
-          <div style={{position:'sticky',top:56,zIndex:25,display:'grid',gridTemplateColumns:'repeat(7,1fr)',background:'#334155',borderTop:'1px solid #e2e8f0'}}>
+          <div style={{position:'sticky',top:56,zIndex:25,display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',background:'#334155',borderTop:'1px solid #e2e8f0'}}>
             {['日','月','火','水','木','金','土'].map((d,i)=>{
               const isClosed=(appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(i);
               return (
@@ -36378,16 +36377,16 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           </div>
           {/* 日付セル */}
           {weeks.map((week,wi)=>(
-            <div key={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',borderTop:'1px solid #f1f5f9'}}>
+            <div key={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',borderTop:'1px solid #f1f5f9'}}>
               {week.map((day,di)=>{
-                if (!day) return <div key={di} style={{minHeight:90,background:'#f8fafc',borderRight:'1px solid #f1f5f9'}}/>;
+                if (!day) return <div key={di} style={{minHeight:90,minWidth:0,background:'#f8fafc',borderRight:'1px solid #f1f5f9'}}/>;
                 const dateStr = `${cY}-${String(cM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
                 const absences = absencesByDate[dateStr] || [];
                 const today = new Date(); today.setHours(0,0,0,0);
                 const isToday = new Date(dateStr).getTime()===today.getTime();
                 const isClosed = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(di);
                 return (
-                  <div key={di} style={{minHeight:90,borderRight:'1px solid #f1f5f9',padding:'6px 6px 4px',background:isClosed?'#f1f5f9':isToday?'#fffbeb':'white',position:'relative'}}>
+                  <div key={di} style={{minHeight:90,minWidth:0,borderRight:'1px solid #f1f5f9',padding:'6px 4px 4px',background:isClosed?'#f1f5f9':isToday?'#fffbeb':'white',position:'relative'}}>
                     <div style={{fontSize:13,fontWeight:'bold',color:isClosed?'#cbd5e1':di===0?'#dc2626':di===6?'#2563eb':'#334155',marginBottom:4,display:'flex',alignItems:'center',gap:4}}>
                       {day}
                       {isToday&&!isClosed&&<span style={{fontSize:9,background:'#f59e0b',color:'white',borderRadius:4,padding:'1px 4px',fontWeight:'bold'}}>今日</span>}
@@ -36403,12 +36402,12 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                       return (
                         <button key={ai} type="button" onClick={()=>{if(!isClosed) openFax(dateStr, pat, tokki);}}
                           style={{
-                            width:'100%',marginBottom:3,padding:'3px 5px',borderRadius:6,border:'none',
+                            width:'100%',minWidth:0,marginBottom:3,padding:'3px 4px',borderRadius:6,border:'none',
                             background:st!=='none'?statusColors[st]:'#fef2f2',
                             color:'#1e293b',fontSize:11,fontWeight:'bold',cursor:'pointer',
-                            textAlign:'left',display:'flex',alignItems:'center',gap:4
+                            textAlign:'left',display:'flex',alignItems:'center',gap:2
                           }}>
-                          <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{maskedN}</span>
+                          <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{maskedN}</span>
                           {st!=='none'&&<span style={{fontSize:9,flexShrink:0,color:'#475569',background:'rgba(255,255,255,0.7)',padding:'1px 4px',borderRadius:3}}>{statusLabels[st]}</span>}
                         </button>
                       );
