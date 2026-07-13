@@ -545,6 +545,30 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         .filter(lp => !(lp && lp.id != null && _patTomb[String(lp.id)])) // ★ 墓石にある利用者は除外(復活防止)
         .map(lp => { if (!lp || lp.id == null) return lp; const cp = cloudPatMap.get(String(lp.id)); return cp ? mergePatientBackfill(lp, cp) : lp; });
     }
+    // ★ systemSettings: 端末間で「新しい方(_updatedAt)」を丸ごと採用する。
+    //   これが無いと、運動メニュー等の設定を別端末で追加しても、古い systemSettings を持つ端末が
+    //   別の保存(日誌等)をした拍子に push で上書きし、数時間〜1日後に設定が消えてしまう。
+    //   _updatedAt が無い(旧データ)場合は、消失防止のため主要な配列を id/名前 で union して両端末の追加を保持。
+    {
+      const ls = localData.systemSettings, cs = cloud.systemSettings;
+      if (ls || cs) {
+        const lt = Number(ls && ls._updatedAt) || 0, ct = Number(cs && cs._updatedAt) || 0;
+        if (lt || ct) {
+          merged.systemSettings = (lt >= ct) ? ls : cs;
+        } else if (ls && cs) {
+          // timestamp 無し: フィールドはローカル優先。 ただし主要な設定配列は「多い方」を採用して追加消失を防ぐ。
+          const out = { ...cs, ...ls };
+          ['exerciseItems','individualExerciseItems','serviceItems','cmOffices','careManagers','massageTypes','fitnessItems','fitnessTargets'].forEach(k => {
+            const la = Array.isArray(ls[k]) ? ls[k] : null, ca = Array.isArray(cs[k]) ? cs[k] : null;
+            if (la && ca) out[k] = (ca.length > la.length) ? ca : la;
+            else out[k] = la || ca || out[k];
+          });
+          merged.systemSettings = out;
+        } else {
+          merged.systemSettings = ls || cs;
+        }
+      }
+    }
     // ★ 日誌(diaryLogs)は「日付_AMPM」キーのオブジェクト。 端末間で別々の日を編集しても消えないよう、
     //   キー単位で統合し、同じキーは _savedAt が新しい方(無ければ内容が多い方)を採用する。
     {

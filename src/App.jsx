@@ -29690,7 +29690,7 @@ function AdminSettingsSection({ appData, onSave }) {
   const [outRole, setOutRole] = React.useState('介護職員'); // 完全譲渡後、現管理者の職種
   const ROLE_OPTIONS = ['管理者','生活相談員','機能訓練指導員','看護師','介護職員'];
   const [del, setDel] = React.useState({memberId:'',from:'',until:''});
-  const saveSS = (patch, msg) => onSave({...appData, systemSettings:{...ss, ...patch}}, {manual:true, message: msg||'✓ 保存しました'});
+  const saveSS = (patch, msg) => onSave({...appData, systemSettings:{...ss, ...patch, _updatedAt:Date.now()}}, {manual:true, message: msg||'✓ 保存しました'});
   const changePw = async () => {
     setPw(p=>({...p,err:'',ok:''}));
     if(!pw.n1 || pw.n1.length<4){ setPw(p=>({...p,err:'新しいパスワードは4文字以上にしてください'})); return; }
@@ -29800,7 +29800,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   }, [navFocus]);
   // ★ systemSettings の参照 & 部分更新ヘルパー (テンキー表示ON/OFF 等の即時保存に使用)
   const ss = appData.systemSettings || {};
-  const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch } }, { manual:true, message: msg || '✓ 保存しました' });
+  const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch, _updatedAt: Date.now() } }, { manual:true, message: msg || '✓ 保存しました' });
   // ★ 一括削除(管理者用): 選択中の利用者ID / ケアマネ事業所名
   const [bulkDelPatients, setBulkDelPatients] = useState(() => new Set());
   const [bulkDelStatus, setBulkDelStatus] = useState('all'); // 一括削除の状態絞り込み: all/利用中/休止/退所
@@ -29809,7 +29809,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const toggleAddon = (key) => {
     const cur = appData.systemSettings?.addons || {};
     const next = { ...cur, [key]: !cur[key] };
-    onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), addons: next } }, { manual:true, message: next[key] ? '✓ アドオンを有効にしました' : 'アドオンを無効にしました' });
+    onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), addons: next, _updatedAt: Date.now() } }, { manual:true, message: next[key] ? '✓ アドオンを有効にしました' : 'アドオンを無効にしました' });
   };
   const [holidayStart, setHolidayStart] = useState("");
   const [holidayEnd, setHolidayEnd] = useState("");
@@ -30009,7 +30009,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
       }
     }
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
