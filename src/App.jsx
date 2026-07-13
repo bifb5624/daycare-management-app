@@ -17985,6 +17985,43 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const [pendingFurikaeRecords, setPendingFurikaeRecords] = useState([]);
   React.useEffect(() => { setPendingCancellations([]); setPendingFurikaeShifts([]); setPendingFurikaeRecords([]); }, [selectedDate]);
 
+  // ★ 元に戻す(スナップショット): 保存のたびにその日の記録を localStorage に丸ごと記録。
+  //   万一データが消えても、時刻を選んで丸ごと復元できる(セル単位でなく全利用者ぶん)。 再読み込みしても残る。
+  const [restoreModal, setRestoreModal] = useState(false);
+  const _RECSNAP_KEY = 'tsumugiRecSnap_v1';
+  const _recSnapSKey = () => `${appData._sbStoreId||'x'}|${selectedDate}`;
+  const _readRecSnaps = () => { try { const all = JSON.parse(localStorage.getItem(_RECSNAP_KEY)||'{}'); return all[_recSnapSKey()] || []; } catch { return []; } };
+  const _pushRecSnap = (records) => {
+    try {
+      const dObj = new Date(selectedDate);
+      const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
+      // その日の記録だけ抜き出す(容量節約)
+      const day = (records||[]).filter(r => r && recMatchesDateYear(r, _dateStr, _yr));
+      if (!day.length) return;
+      const all = JSON.parse(localStorage.getItem(_RECSNAP_KEY)||'{}');
+      const sk = _recSnapSKey();
+      const list = all[sk] || [];
+      const sig = JSON.stringify(day.map(r=>({...r,_savedAt:undefined,recorder:undefined})));
+      const last = list[list.length-1];
+      if (last && last.sig === sig) return; // 内容が同じならスキップ
+      const snap = { t: Date.now(), sig, recs: day };
+      if (last && (Date.now()-last.t) < 20000) list[list.length-1] = snap; // 20秒以内は直近を上書き(スナップ乱立防止)
+      else list.push(snap);
+      all[sk] = list.slice(-25); // 最新25件保持
+      localStorage.setItem(_RECSNAP_KEY, JSON.stringify(all));
+    } catch (e) { console.warn('[recsnap] push failed', e); }
+  };
+  const _restoreRecSnap = (snap) => {
+    if (!snap || !Array.isArray(snap.recs)) return;
+    const dObj = new Date(selectedDate);
+    const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
+    // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
+    const others = (appData.ticketRecords||[]).filter(r => !(r && recMatchesDateYear(r, _dateStr, _yr)));
+    const restored = snap.recs.map(r => ({ ...r, _savedAt: Date.now() })); // 復元＝最新として保存(他端末にも反映)
+    onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
+    setRestoreModal(false);
+  };
+
   const handleStatusChange = (id, newStatus) => {
     // ★ 休止/振替/休業 は設定場所を1か所に集約したため、ここでは設定せず該当画面へジャンプする。
     //   休止=利用者マスタ管理、振替=月間スケジュール(マスタ内)、休業=各種設定(施設休業日)。
@@ -18484,6 +18521,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       _cancelTomb.forEach(rid => { _saveDelTomb.ticketRecords[rid] = Date.now(); });
       // ★ 手動は manual(トースト表示)、自動保存は silent(即時push・トーストなし)
       onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts, ...(_cancelTomb.length ? { deletedIds: _saveDelTomb } : {}) }, auto ? { silent: true } : { manual: true, message: '✓ 保存しました' });
+      try { _pushRecSnap(updatedTicketRecords); } catch {}
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
       setPendingFurikaeRecords([]);
@@ -18668,6 +18706,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <button onClick={()=>setIsFullscreen(v=>!v)} className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center transition-all active:scale-95 whitespace-nowrap" title={isFullscreen?'通常表示':'全画面表示'}>
                 {isFullscreen ? '⛶ 通常' : '⛶ 全画面'}
               </button>
+              <button onClick={()=>setRestoreModal(true)} className="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-xl text-sm font-bold flex items-center transition-all active:scale-95 whitespace-nowrap" title="保存した記録を丸ごと復元(元に戻す)">⟲ 元に戻す</button>
               <button onClick={handleSaveClick} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center shadow-lg transition-all active:scale-95 whitespace-nowrap">
                 <CloudUpload size={15} className="mr-1" /> 保存
               </button>
@@ -18683,6 +18722,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           {attCountChips && <div className="ml-2">{attCountChips}</div>}
           <div className="flex-1"/>
           <button onClick={()=>setIsFullscreen(false)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">⛶ 通常表示に戻る</button>
+          <button onClick={()=>setRestoreModal(true)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap" title="保存した記録を丸ごと復元">⟲ 元に戻す</button>
           <button onClick={handleSaveClick} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap"><CloudUpload size={13} className="mr-1"/>保存</button>
         </div>
       )}
@@ -19260,6 +19300,32 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         </table>
       </div>
       {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
+      {restoreModal && ReactDOM.createPortal((()=>{
+        const snaps = _readRecSnaps().slice().reverse(); // 新しい順
+        const _fmtT = (t)=>{ const d=new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+        const _cntData = (recs)=> (recs||[]).filter(r=>r && (r.temp_AM||r.temp_PM||r.temp||r.bpUpSt_AM||r.bpUpSt||r.plSt_AM||r.plSt||r.massage||r.tokki||r.kibunArrival||r.kibunDeparture||(r.exercises&&Object.keys(r.exercises).length))).length;
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" style={{zIndex:100000}} onClick={()=>setRestoreModal(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
+              <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+                <div><div className="font-bold text-slate-800">記録を復元（元に戻す）</div><div className="text-[11px] text-slate-500 mt-0.5">{new Date(selectedDate).toLocaleDateString('ja-JP')} の保存履歴から、その時点の記録に丸ごと戻します</div></div>
+                <button onClick={()=>setRestoreModal(false)} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={18}/></button>
+              </div>
+              <div className="p-3 overflow-y-auto">
+                {snaps.length===0 ? <div className="text-center text-slate-400 font-bold py-8 text-sm">この日の保存履歴はまだありません</div> :
+                  snaps.map((s,i)=>(
+                    <button key={s.t} onClick={()=>{ if(window.confirm(`${_fmtT(s.t)} 時点の記録（入力あり${_cntData(s.recs)}名）に戻します。よろしいですか？`)) _restoreRecSnap(s); }}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-center justify-between active:scale-[0.99]">
+                      <div><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div><div className="text-[11px] text-slate-500">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
+                      <span className="text-xs font-bold text-blue-600">この状態に戻す →</span>
+                    </button>
+                  ))}
+              </div>
+              <div className="px-5 py-3 bg-slate-50 border-t text-[11px] text-slate-500">※ 戻すとその日の記録が選んだ時点のものに置き換わり、クラウド・他端末にも反映されます。 保存のたびに自動で履歴が残ります（最新25件）。</div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
       {massageHist && ReactDOM.createPortal((()=>{
         // ★ id は文字列(tr_...)で Number 化すると NaN になり並ばないため、実日付で判定する。
         //   直近の過去3件を取得し、降順(新しい→古い)で表示する。 未来日は除外。
