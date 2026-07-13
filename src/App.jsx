@@ -18698,10 +18698,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     }}>
       {!isFullscreen ? (
       <div className="bg-white px-4 py-3 rounded-2xl shadow-sm border border-slate-200 flex flex-row items-center gap-3 flex-wrap flex-shrink-0 sticky top-0 z-30 mb-4">
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center">
-              <button onClick={() => setFilterMode('single')} className={`px-3.5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'single' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>本日</button>
-              <button onClick={() => setFilterMode('month')} className={`px-3.5 py-2 rounded-lg text-sm font-bold transition-all ${filterMode === 'month' ? 'bg-white shadow text-blue-600' : 'text-slate-500 hover:text-slate-700'}`}>月全体</button>
-          </div>
+            {/* ★ 「本日/月全体」トグルは廃止。 月全体は「提供記録(月次)」で確認できるため、当日のみ表示。 */}
             {filterMode === 'single' && (
               <div className="flex items-center gap-2">
                   <input type="date" value={selectedDate} onChange={(e) => {
@@ -25021,7 +25018,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         recs.push({ id: `tr_${pid}_${targetYear}_${d.getMonth()+1}_${d.getDate()}`, patientId: pid, date: targetDateStr, year: targetYear, status: '出席', ...patch, _savedAt: now });
       } else { return; }
       markClean();
-      onSave({ ...appData, ticketRecords: recs });
+      onSave({ ...appData, ticketRecords: recs }, { silent: true }); // ★ 即時クラウド保存(次回時間の他端末反映を早める)
   };
   const handleOverrideBlur = (recordId, field, value) => {
       let finalValue = value;
@@ -25046,7 +25043,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         }
       });
       markClean();
-      onSave({ ...appData, ticketRecords: recs });
+      onSave({ ...appData, ticketRecords: recs }, { silent: true }); // ★ 即時クラウド保存
   };
 
   const handleKeypadInput = (newValue, isFirst) => {
