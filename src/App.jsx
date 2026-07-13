@@ -12444,7 +12444,8 @@ function FamilyView() {
                     }
                     const cmFullName = `${cmManagerLast} ${cmManagerFirst}`.trim();
                     if (!nextCareManagers.some(c => c.office === cmOfficeName && c.name === cmFullName)) {
-                      nextCareManagers = [...nextCareManagers, { office: cmOfficeName, name: cmFullName, phone: cmOfficePhone, phoneDirect: cmManagerDirect, lastName: cmManagerLast, firstName: cmManagerFirst }];
+                      // ★ ふりがな(登録者本人=担当ケアマネ)も保存し、一覧のふりがな順ソート/表示に反映する。
+                      nextCareManagers = [...nextCareManagers, { office: cmOfficeName, name: cmFullName, phone: cmOfficePhone, phoneDirect: cmManagerDirect, lastName: cmManagerLast, firstName: cmManagerFirst, kana: `${ecKanaLast} ${ecKanaFirst}`.trim(), kanaLast: ecKanaLast, kanaFirst: ecKanaFirst }];
                     }
                   }
                   const updated = {
@@ -27704,7 +27705,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     <div className="flex flex-wrap gap-4 items-start">
                       <div style={{width:240}}>{_lbl('担当者名')}
                         <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                          <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
+                          <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).slice().sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja')).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
                           {localPatient.cmName && !(appData.systemSettings?.careManagers||[]).some(c=>c.office===localPatient.cmOffice&&c.name===localPatient.cmName) && <option value={localPatient.cmName}>{localPatient.cmName}（未登録）</option>}
                         </select>
                       </div>
@@ -29425,7 +29426,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 <label className="block text-sm font-bold text-slate-600 mb-1.5">担当者</label>
                 <select value={cmChangeModal.name} onChange={e=>setCmChangeModal({...cmChangeModal,name:e.target.value})}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none">
-                  <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===cmChangeModal.office).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
+                  <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===cmChangeModal.office).slice().sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja')).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
                 </select>
               </div>
               <div>
@@ -29459,7 +29460,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 hist.push({office:cmChangeModal.office,name:cmChangeModal.name,from:cmChangeModal.from,to:null,note:cmChangeModal.note||''});
                 const updates = isFuture ? {cmHistory:hist}
                   : {cmOffice:cmChangeModal.office,cmName:cmChangeModal.name,cmHistory:hist,
-                     cmPhone:(appData.systemSettings?.careManagers||[]).find(c=>c.name===cmChangeModal.name)?.phone||localPatient.cmPhone||'',
+                     cmPhone:(appData.systemSettings?.careManagers||[]).find(c=>c.office===cmChangeModal.office&&c.name===cmChangeModal.name)?.phone||localPatient.cmPhone||'',
                      cmFax:(appData.systemSettings?.cmOffices||[]).find(o=>o.name===cmChangeModal.office)?.fax||localPatient.cmFax||''};
                 const upd={...localPatient,...updates};
                 setLocalPatient(upd);
@@ -30031,7 +30032,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
-  const [newPerson, setNewPerson] = useState({ office: "", name: "", phone: "" });
+  const [newPerson, setNewPerson] = useState({ office: "", name: "", phone: "", kana: "" });
   // ★ ケアマネ事業所/担当者の編集モーダル。 編集確定で各利用者マスタの担当ケアマネも自動更新する。
   const [cmEditModal, setCmEditModal] = useState(null); // {kind:'office'|'person', orig:{...}, form:{...}}
   const saveCmEdit = () => {
@@ -30053,7 +30054,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       const dir = formatJpPhone(form.phone);
       const offFax = cmOffices.find(o=>o.name===form.office)?.fax || orig.fax || '';
       const offPhone = cmOffices.find(o=>o.name===form.office)?.phone || '';
-      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, phone:dir, phoneDirect:dir, fax:offFax } : c);
+      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kana:(form.kana||'').trim(), phone:dir, phoneDirect:dir, fax:offFax } : c);
       // 各利用者マスタの担当ケアマネ(旧 office+name 一致)を更新
       const newPatients = (appData.patients||[]).map(p => (p.cmOffice===orig.office && p.cmName===orig.name) ? { ...p, cmOffice:form.office, cmName:newName, cmPhone:offPhone||p.cmPhone, cmFax:offFax } : p);
       setCmPersons(newPersons);
@@ -30261,6 +30262,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   </select></div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">担当者名</label>
                   <input value={cmEditModal.form.name} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,name:e.target.value}}))} placeholder="例: 鈴木 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">ふりがな</label>
+                  <input value={cmEditModal.form.kana||''} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,kana:e.target.value}}))} placeholder="例: すずき いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号（直通）</label>
                   <input value={cmEditModal.form.phone} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,phone:e.target.value}}))} onBlur={()=>setCmEditModal(m=>({...m,form:{...m.form,phone:formatJpPhone(m.form.phone)}}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
               </div>
@@ -30911,7 +30914,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
               if (!selOffice && officeNameSet && !officeNameSet.has(p.office)) return false;
               return true;
             });
-            const sortedPersons = [...officeFilteredPersons].sort((a,b)=>(a.name||'').localeCompare(b.name||'', 'ja'));
+            // ★ ふりがな(kana)があればそれ優先で五十音順。 無ければ氏名で。
+            const sortedPersons = [...officeFilteredPersons].sort((a,b)=>((a.kana||a.name||'').localeCompare(b.kana||b.name||'', 'ja')));
             return (
               <div className="grid grid-cols-[40%_1fr] gap-4">
                 <SectionCard title="ケアマネ事業所">
@@ -31012,8 +31016,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         <input type="text" value={sp.gn} onChange={e=>setNewPerson({...newPerson,name:_jn(sp.sn,e.target.value.replace(/[\s　]/g,''))})} placeholder="名 例: 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                       </div>);
                     })()}
+                    <input type="text" value={newPerson.kana||''} onChange={e=>setNewPerson({...newPerson,kana:e.target.value})} placeholder="ふりがな（例: すずき いちろう）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,kana:(newPerson.kana||'').trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kana:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -31028,6 +31033,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         <div key={i} className="bg-white border border-slate-200 shadow-sm p-2.5 rounded-lg">
                           <div className="flex items-center justify-between">
                             <div className="flex-1 min-w-0">
+                              {p.kana && <div className="text-[10px] text-slate-400 truncate leading-tight">{p.kana}</div>}
                               <div className="font-bold text-sm text-slate-800 truncate">{p.name}</div>
                               <div className="text-[11px] text-slate-500 truncate">{p.office} / {p.phone||'-'}</div>
                             </div>
@@ -31055,7 +31061,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                                 e.target.value='';
                               }}/>
                             </label>
-                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
+                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kana:p.kana||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
                             <button type="button" onClick={()=>setCmPersons(cmPersons.filter((_,j)=>j!==origIdx))} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                           </div>
                           {cards.length > 0 && (
