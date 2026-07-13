@@ -31760,7 +31760,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const measure = () => {
       const w = diaryScrollRef.current?.clientWidth || window.innerWidth;
       const SHEET_W = 756; // 200mm @96dpi
-      const s = Math.min(1.5, Math.max(1, (w - 12) / SHEET_W));
+      // ★ スマホ等 幅が狭い時は1未満に縮小して1枚が画面に収まるように(左の氏名列も見える)。 下限0.4。
+      const s = Math.max(0.4, Math.min(1.5, (w - 12) / SHEET_W));
       setDiaryViewScale(Number(s.toFixed(3)));
     };
     measure();
@@ -33018,7 +33019,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               pageList.push({rowStart:0, rowEnd:0, showStaff:false, showPatients:false, showExtras:true});
             }
             return pageList.map((p, i) => (
-              <div key={i} style={{ transform:`scale(${diaryViewScale})`, transformOrigin:'top center', marginBottom: diaryViewScale>1 ? `${Math.round((diaryViewScale-1)*1085)}px` : 0 }}>
+              <div key={i} style={{ zoom: diaryViewScale }}>
                 <div className="shadow-xl rounded-lg overflow-hidden border border-slate-300">
                   <DiarySheet pageInfo={{pageIndex:i, totalPages:pageList.length, ...p}} />
                 </div>
