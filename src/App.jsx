@@ -16094,9 +16094,13 @@ export default function App() {
   }, [isSidebarOpen]);
   const DESIGN_WIDTH = 1100;
   const contentRef = useRef(null);
-  const [contentScale, setContentScale] = useState(1);
+  // ★ スマホ幅(<768px)では「1100px基準の縮小表示」をやめ、実物大でモバイルレイアウトを使う。
+  //   (縮小するとPC画面が小さく表示され、下切れ・文字が小さい・重い等になっていた)
+  const [isMobileLayout, setIsMobileLayout] = useState(()=>{ try { return window.innerWidth < 768; } catch { return false; } });
+  const [contentScale, setContentScale] = useState(()=>{ try { return Math.min(1, window.innerWidth / 1100); } catch { return 1; } });
   useEffect(()=>{
     const calc = ()=>{
+      try { setIsMobileLayout(window.innerWidth < 768); } catch {}
       if(!contentRef.current) return;
       const avail = contentRef.current.parentElement?.clientWidth || window.innerWidth;
       setContentScale(Math.min(1, avail / DESIGN_WIDTH));
@@ -17387,7 +17391,7 @@ export default function App() {
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
-            <div style={{minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
+            <div style={isMobileLayout ? {width:'100%',minWidth:0} : {minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
             {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
