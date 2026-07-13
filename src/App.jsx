@@ -10896,11 +10896,11 @@ function ScheduleView({ appData, onSave }) {
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>日付</label>
             <input type="date" value={modal.date} onChange={e=>setModal(m=>({...m,date:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
             <div style={{display:'flex',gap:10,marginBottom:12}}>
-              <div style={{flex:1}}>
+              <div style={{flex:1,minWidth:0}}>
                 <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>開始</label>
                 <input type="time" value={modal.start||''} onChange={e=>setModal(m=>({...m,start:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
               </div>
-              <div style={{flex:1}}>
+              <div style={{flex:1,minWidth:0}}>
                 <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>終了</label>
                 <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
               </div>
