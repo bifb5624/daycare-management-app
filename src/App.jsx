@@ -22086,10 +22086,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         <span style={{fontSize:14,fontWeight:'bold',padding:'2px 6px',borderRadius:5,whiteSpace:'nowrap',display:'inline-block',backgroundColor:r.status==='出席'?'#dbeafe':r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='出席'?'#1d4ed8':r.status==='欠席'?'#dc2626':'#64748b'}}>{r.status}</span>
                       </td>
                       <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,maxWidth:170,verticalAlign:'middle'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunArrival]||'-';})()} {r.kibunArrivalReason&&<span title={r.kibunArrivalReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:140,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunArrivalReason})</span>}
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunArrival]||'-';})()} {r.kibunArrivalReason&&<span title={r.kibunArrivalReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:230,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunArrivalReason})</span>}
                       </td>
                       <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,maxWidth:170,verticalAlign:'middle'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunDeparture]||'-';})()} {r.kibunDepartureReason&&<span title={r.kibunDepartureReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:140,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunDepartureReason})</span>}
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunDeparture]||'-';})()} {r.kibunDepartureReason&&<span title={r.kibunDepartureReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:230,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunDepartureReason})</span>}
                       </td>
                       <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:tempW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
                         {r.temp?`${r.temp}℃`:'-'}{tempW&&'⚠'}
@@ -22118,7 +22118,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         );
                       })}
                       <td style={{padding:'8px 10px',textAlign:'center',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
-                      <td style={{padding:'8px 10px',textAlign:'center',color:'#1e293b',fontSize:14,minWidth:120}}>{r.tokki||'-'}</td>
+                      <td style={{padding:'8px 10px',textAlign:'left',color:'#1e293b',fontSize:14,minWidth:220,whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.4}}>{r.tokki||'-'}</td>
                     </tr>
                   );
                 })}
@@ -27508,32 +27508,36 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
               {/* ⑥ 担当ケアマネジャー */}
               <div className="border-t border-slate-200 pt-4"><h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>担当ケアマネジャー</h3>
-                <div className="grid grid-cols-2 gap-4 mb-3">
-                  <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label>
-                    <select disabled={isOff} value={localPatient.cmOffice||''} onChange={e=>{const office=e.target.value;const offices=appData.systemSettings?.cmOffices||[];const officeData=offices.find(o=>o.name===office);const u={...localPatient,cmOffice:office,cmName:'',cmPhone:'',cmFax:officeData?.fax||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                      <option value="">未選択</option>{(appData.systemSettings?.cmOffices||[]).map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
-                      {localPatient.cmOffice && !(appData.systemSettings?.cmOffices||[]).some(o=>o.name===localPatient.cmOffice) && <option value={localPatient.cmOffice}>{localPatient.cmOffice}（未登録）</option>}
-                    </select>
-                  </div>
-                  <div><label className="block text-sm font-bold text-slate-600 mb-1.5">担当者名</label>
-                    <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                      <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
-                      {localPatient.cmName && !(appData.systemSettings?.careManagers||[]).some(c=>c.office===localPatient.cmOffice&&c.name===localPatient.cmName) && <option value={localPatient.cmName}>{localPatient.cmName}（未登録）</option>}
-                    </select>
-                  </div>
-                </div>
                 {(() => {
                   const _off = (appData.systemSettings?.cmOffices||[]).find(o=>o.name===localPatient.cmOffice);
                   const _cm = (appData.systemSettings?.careManagers||[]).find(c=>c.office===localPatient.cmOffice && c.name===localPatient.cmName);
                   const officePhone = _off?.phone || localPatient.cmPhone || '';
                   const directPhone = _cm?.phoneDirect || '';
-                  return (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所電話</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{officePhone||'ー'}</div></div>
-                      <div><label className="block text-sm font-bold text-slate-600 mb-1.5">担当者 直通電話</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{directPhone||'ー'}</div></div>
-                      <div><label className="block text-sm font-bold text-slate-600 mb-1.5">FAX</label><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{localPatient.cmFax||'ー'}</div></div>
+                  const _lbl = (t)=><label className="block text-sm font-bold text-slate-600 mb-1.5">{t}</label>;
+                  const _ro = (v)=><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{v||'ー'}</div>;
+                  return (<div className="space-y-3">
+                    {/* 事業所: 名 → 電話 → FAX */}
+                    <div className="flex flex-wrap gap-4 items-start">
+                      <div style={{width:240}}>{_lbl('事業所名')}
+                        <select disabled={isOff} value={localPatient.cmOffice||''} onChange={e=>{const office=e.target.value;const offices=appData.systemSettings?.cmOffices||[];const officeData=offices.find(o=>o.name===office);const u={...localPatient,cmOffice:office,cmName:'',cmPhone:'',cmFax:officeData?.fax||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                          <option value="">未選択</option>{(appData.systemSettings?.cmOffices||[]).map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
+                          {localPatient.cmOffice && !(appData.systemSettings?.cmOffices||[]).some(o=>o.name===localPatient.cmOffice) && <option value={localPatient.cmOffice}>{localPatient.cmOffice}（未登録）</option>}
+                        </select>
+                      </div>
+                      <div style={{width:170}}>{_lbl('事業所電話')}{_ro(officePhone)}</div>
+                      <div style={{width:170}}>{_lbl('FAX')}{_ro(localPatient.cmFax)}</div>
                     </div>
-                  );
+                    {/* 担当者: 名 → 直通電話 */}
+                    <div className="flex flex-wrap gap-4 items-start">
+                      <div style={{width:240}}>{_lbl('担当者名')}
+                        <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                          <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
+                          {localPatient.cmName && !(appData.systemSettings?.careManagers||[]).some(c=>c.office===localPatient.cmOffice&&c.name===localPatient.cmName) && <option value={localPatient.cmName}>{localPatient.cmName}（未登録）</option>}
+                        </select>
+                      </div>
+                      <div style={{width:170}}>{_lbl('担当者 直通電話')}{_ro(directPhone)}</div>
+                    </div>
+                  </div>);
                 })()}
 
                 {/* ケアマネ担当者の名刺 (各種設定で登録した内容を参照表示) */}
