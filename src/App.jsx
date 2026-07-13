@@ -18800,7 +18800,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     </button>
                     );})}
                 </div>}
-                <input type="text" disabled={isReadOnly} value={p.tokki||''} onChange={e=>updateRow(p.id,'tokki',e.target.value)} placeholder={isReadOnly?'':(isAbsent?'欠席理由...':(isPause?'休止中の特記...':'特記...'))} className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-50"/>
+                <input type="text" disabled={isReadOnly} value={p.tokki||''} onChange={e=>updateRecord(p.id,'tokki',e.target.value)} placeholder={isReadOnly?'':(isAbsent?'欠席理由...':(isPause?'休止中の特記...':'特記...'))} className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none disabled:opacity-50"/>
               </div>
             );
           })}
