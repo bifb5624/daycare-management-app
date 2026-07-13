@@ -15924,7 +15924,12 @@ export default function App() {
       // 自分の保存直後(編集中)は checkAndPull 内の「5秒スキップ」で上書きを防止
       checkAndPull();
     });
-    return () => { clearInterval(timer); try { stopRealtime && stopRealtime(); } catch {} };
+    // ★ スリープ端末を開いた/タブに戻った瞬間に即クラウド受信 (「開いたら古いまま」を解消)。
+    //   タイマーはスリープ中に止まるため、復帰時に必ず最新化してから操作できるようにする。
+    const onWakePull = () => { if (document.visibilityState !== 'hidden') { try { checkAndPull(); } catch {} } };
+    document.addEventListener('visibilitychange', onWakePull);
+    window.addEventListener('focus', onWakePull);
+    return () => { clearInterval(timer); try { stopRealtime && stopRealtime(); } catch {} document.removeEventListener('visibilitychange', onWakePull); window.removeEventListener('focus', onWakePull); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId]);
 
