@@ -30051,7 +30051,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
-  const [newPerson, setNewPerson] = useState({ office: "", name: "", phone: "", kana: "" });
+  const [newPerson, setNewPerson] = useState({ office: "", name: "", phone: "", kanaLast: "", kanaFirst: "" });
   // ★ ケアマネ事業所/担当者の編集モーダル。 編集確定で各利用者マスタの担当ケアマネも自動更新する。
   const [cmEditModal, setCmEditModal] = useState(null); // {kind:'office'|'person', orig:{...}, form:{...}}
   const saveCmEdit = () => {
@@ -30073,7 +30073,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       const dir = formatJpPhone(form.phone);
       const offFax = cmOffices.find(o=>o.name===form.office)?.fax || orig.fax || '';
       const offPhone = cmOffices.find(o=>o.name===form.office)?.phone || '';
-      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kana:(form.kana||'').trim(), phone:dir, phoneDirect:dir, fax:offFax } : c);
+      const _kl=(form.kanaLast||'').trim(), _kf=(form.kanaFirst||'').trim();
+      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kanaLast:_kl, kanaFirst:_kf, kana:`${_kl} ${_kf}`.trim(), phone:dir, phoneDirect:dir, fax:offFax } : c);
       // 各利用者マスタの担当ケアマネ(旧 office+name 一致)を更新
       const newPatients = (appData.patients||[]).map(p => (p.cmOffice===orig.office && p.cmName===orig.name) ? { ...p, cmOffice:form.office, cmName:newName, cmPhone:offPhone||p.cmPhone, cmFax:offFax } : p);
       setCmPersons(newPersons);
@@ -30281,8 +30282,11 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   </select></div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">担当者名</label>
                   <input value={cmEditModal.form.name} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,name:e.target.value}}))} placeholder="例: 鈴木 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
-                <div><label className="block text-xs font-bold text-slate-500 mb-1">ふりがな</label>
-                  <input value={cmEditModal.form.kana||''} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,kana:e.target.value}}))} placeholder="例: すずき いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">ふりがな（姓 / 名）</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={cmEditModal.form.kanaLast||''} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,kanaLast:e.target.value}}))} placeholder="すずき" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                    <input value={cmEditModal.form.kanaFirst||''} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,kanaFirst:e.target.value}}))} placeholder="いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                  </div></div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号（直通）</label>
                   <input value={cmEditModal.form.phone} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,phone:e.target.value}}))} onBlur={()=>setCmEditModal(m=>({...m,form:{...m.form,phone:formatJpPhone(m.form.phone)}}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
               </div>
@@ -31035,9 +31039,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         <input type="text" value={sp.gn} onChange={e=>setNewPerson({...newPerson,name:_jn(sp.sn,e.target.value.replace(/[\s　]/g,''))})} placeholder="名 例: 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                       </div>);
                     })()}
-                    <input type="text" value={newPerson.kana||''} onChange={e=>setNewPerson({...newPerson,kana:e.target.value})} placeholder="ふりがな（例: すずき いちろう）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" value={newPerson.kanaLast||''} onChange={e=>setNewPerson({...newPerson,kanaLast:e.target.value})} placeholder="ふりがな 姓 例: すずき" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                      <input type="text" value={newPerson.kanaFirst||''} onChange={e=>setNewPerson({...newPerson,kanaFirst:e.target.value})} placeholder="ふりがな 名 例: いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                    </div>
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,kana:(newPerson.kana||'').trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kana:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); setCmPersons([...cmPersons,{...newPerson,kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -31080,7 +31087,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                                 e.target.value='';
                               }}/>
                             </label>
-                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kana:p.kana||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
+                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kanaLast:p.kanaLast||'', kanaFirst:p.kanaFirst||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
                             <button type="button" onClick={()=>setCmPersons(cmPersons.filter((_,j)=>j!==origIdx))} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                           </div>
                           {cards.length > 0 && (
