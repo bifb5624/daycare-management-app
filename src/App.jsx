@@ -18700,17 +18700,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       <div className="bg-white px-4 py-3 rounded-2xl shadow-sm border border-slate-200 flex flex-row items-center gap-3 flex-wrap flex-shrink-0 sticky top-0 z-30 mb-4">
             {/* ★ 「本日/月全体」トグルは廃止。 月全体は「提供記録(月次)」で確認できるため、当日のみ表示。 */}
             {filterMode === 'single' && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                   <input type="date" value={selectedDate} onChange={(e) => {
                   if(!e.target.value) return;
                   // ★ 定休日/休業日なら近い営業日にずらして選択 (選択不可で止めない)
                   const closed=(appData.systemSettings?.facilityInfo?.closedDays||[0]);
                   setSelectedDate(nearestOpenDate(e.target.value, closed, appData.holidays));
-                }} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700" />
-                  <div className="flex rounded-xl overflow-hidden border border-slate-300">
+                }} className="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-bold outline-none cursor-pointer text-slate-700 shrink-0" />
+                  <div className="flex rounded-xl overflow-hidden border border-slate-300 shrink-0">
                     {['AM','PM'].map(v=>(
                       <button key={v} type="button" onClick={()=>setTimeFilter(v)}
-                        className={`px-4 py-2 text-sm font-bold transition-all ${timeFilter===v?'bg-blue-600 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>{v}</button>
+                        className={`px-4 py-2 text-sm font-bold transition-all shrink-0 ${timeFilter===v?'bg-blue-600 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>{v}</button>
                     ))}
                   </div>
                   {attCountChips}
@@ -18884,7 +18884,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           <input type="text" inputMode={isBp?'text':'decimal'} placeholder={isBp?'上/下':'—'} disabled={dis}
                             key={`mk-${p.id}-${field}-${cur}`} defaultValue={cur||''}
                             onBlur={(e)=>{ const val=e.target.value; if(isBp){ const c=(val||'').replace(/[^0-9/]/g,''); const parts=c.split('/'); const isStart=field.startsWith('bpSt'); const fBu=`${isStart?'bpUpSt':'bpUpEn'}_${tf}`, fBd=`${isStart?'bpDnSt':'bpDnEn'}_${tf}`; updateRecord(p.id,fBu,(parts[0]||'').trim()); updateRecord(p.id,fBd,(parts[1]||'').trim()); } else { updateRecord(p.id, field, (val||'').trim()); } }}
-                            className="w-full text-center text-base font-bold outline-none border border-slate-200 rounded mt-0.5 disabled:opacity-40" style={{height:32}} />
+                            className="w-full text-center text-base font-bold outline-none border border-slate-200 rounded mt-0.5 disabled:opacity-40 placeholder:text-slate-500 placeholder:font-bold" style={{height:32}} />
                         </div>
                       );
                     }
@@ -18904,14 +18904,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
                           <input type="text" inputMode="text" disabled={dis} placeholder={ph||'—'} key={`mke-${p.id}-${item.id}-${vs}`} defaultValue={vs}
                             onBlur={(e)=>{ updateExercise(p.id,item.id, applyExUnits(e.target.value, item)); }}
-                            className="w-full text-center text-sm font-bold text-blue-700 outline-none border border-slate-200 rounded mt-0.5 bg-white disabled:opacity-40" style={{height:30}} />
+                            className="w-full text-center text-sm font-bold text-blue-700 outline-none border border-slate-200 rounded mt-0.5 bg-white disabled:opacity-40 placeholder:text-slate-500 placeholder:font-bold" style={{height:30}} />
                         </div>
                       );
                     }
                     return (
                     <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0">
                       <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
-                      <span className="text-sm font-bold text-blue-700">{disp||<span className="text-slate-300">{ph||'＋'}</span>}</span>
+                      <span className="text-sm font-bold text-blue-700">{disp||<span className="text-slate-500">{ph||'＋'}</span>}</span>
                     </button>
                     );})}
                 </div>}
