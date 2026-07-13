@@ -15850,7 +15850,12 @@ export default function App() {
           const since = Date.now() - (lastLocalEditRef.current || 0);
           // ★ 意図的な全削除直後(20秒間)は pull を止める。 push が完了する前に古いクラウドで復活させないため。
           const intentionalWindow = (Date.now() - (intentionalEmptyRef.current || 0)) < 20000;
-          if (since < 5000 || intentionalWindow) {
+          // ★ 受信が長時間止まる端末対策: 連続して編集/自動保存し続ける端末は lastLocalEdit が
+          //   常に新しく、pull を永久にスキップして「他端末の更新を受信できない」状態になる。
+          //   最後の反映から15秒以上経っていたら、編集中でも強制的に受信する(自動保存済みの編集は
+          //   RecordView側のバッファ保護で消えない)。 意図的な全削除の20秒ガードは維持。
+          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 15000;
+          if (intentionalWindow || (since < 5000 && !_tooLongSinceApply)) {
             // 編集中 → pull せず再試行を次の interval に任せる
             return;
           }
