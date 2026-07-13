@@ -18716,16 +18716,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><X size={16} /></button>}
             </div>
             <div className="ml-auto flex items-center gap-2 shrink-0">
-              <button onClick={()=>setIsFullscreen(v=>!v)} className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-sm font-bold flex items-center transition-all active:scale-95 whitespace-nowrap" title={isFullscreen?'通常表示':'全画面表示'}>
-                {isFullscreen ? '⛶ 通常' : '⛶ 全画面'}
+              <button onClick={()=>setIsFullscreen(v=>!v)} className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 whitespace-nowrap" title={isFullscreen?'通常表示':'全画面表示'}>
+                {isFullscreen ? '通常表示' : '全画面'}
               </button>
-              <button onClick={()=>setRestoreModal(true)} className="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-xl text-sm font-bold flex items-center transition-all active:scale-95 whitespace-nowrap" title="保存した記録を丸ごと復元(元に戻す)">⟲ 元に戻す</button>
-              <button onClick={handleSaveClick} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center shadow-lg transition-all active:scale-95 whitespace-nowrap">
-                <CloudUpload size={15} className="mr-1" /> 保存
-              </button>
-              <button onClick={() => { handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center shadow-lg transition-all active:scale-95 whitespace-nowrap">
-                <Printer size={15} className="mr-1" /> 連絡帳
-              </button>
+              <button onClick={()=>setRestoreModal(true)} className="bg-white border border-slate-300 text-slate-600 hover:bg-slate-50 px-3 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 whitespace-nowrap" title="保存した記録を丸ごと復元(元に戻す)">元に戻す</button>
+              <button onClick={handleSaveClick} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 whitespace-nowrap">保存</button>
+              <button onClick={() => { handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 whitespace-nowrap">連絡帳</button>
             </div>
       </div>
       ) : (
@@ -31760,8 +31756,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const measure = () => {
       const w = diaryScrollRef.current?.clientWidth || window.innerWidth;
       const SHEET_W = 756; // 200mm @96dpi
-      // ★ スマホ等 幅が狭い時は1未満に縮小して1枚が画面に収まるように(左の氏名列も見える)。 下限0.4。
-      const s = Math.max(0.4, Math.min(1.5, (w - 12) / SHEET_W));
+      // ★ スマホ等 幅が狭い時は縮小(下限0.7=読みやすさ優先)。 1未満のときは左寄せ+横スクロールで
+      //   左の氏名列から見え、右の送迎までスクロールで確認できる。
+      const s = Math.max(0.7, Math.min(1.5, (w - 12) / SHEET_W));
       setDiaryViewScale(Number(s.toFixed(3)));
     };
     measure();
@@ -32960,8 +32957,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const isFirst = (ds.staff||[]).length === 0;
           setNewStaff({role: isFirst ? '管理者' : '介護職員', name:''});
           setAddStaffModal(true);
-        }} className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
-          <UserPlus size={15}/> 担当者追加
+        }} className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">
+          担当者追加
         </button>
         <div className="flex-1"/>
         <div className="flex gap-2 shrink-0">
@@ -32973,16 +32970,16 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           // AM + PM の 2 ページを含む隠しコンテナをグローバル印刷モーダルに渡す
           if (onShowPrintPreview) onShowPrintPreview(title, 'A4 portrait', 'diary-print-content-both');
           else setIsPrintPreview('both');
-        }} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm hover:bg-black transition-all">
-          <Printer size={16} className="mr-1.5"/> プレビュー
+        }} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold text-sm hover:bg-black transition-all whitespace-nowrap">
+          プレビュー
         </button>
         {isReadOnly ? (
-          <button onClick={()=>setForceEdit(true)} title="過去日です。クリックで編集モードへ" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95">
-            <Edit2 size={16} className="mr-1.5"/> 編集
+          <button onClick={()=>setForceEdit(true)} title="過去日です。クリックで編集モードへ" className="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 whitespace-nowrap">
+            編集
           </button>
         ) : (
-          <button onClick={saveLog} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95">
-            <Save size={16} className="mr-1.5"/> 保存
+          <button onClick={saveLog} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 whitespace-nowrap">
+            保存
           </button>
         )}
         </div>
@@ -32993,7 +32990,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         </div>
       )}
       <div id="diary-print-content" style={isReadOnly ? {pointerEvents:'none', userSelect:'none', opacity:0.95} : undefined}>
-        <div className="flex flex-col items-center py-3 px-2" style={{gap: `${Math.round(24*diaryViewScale)}px`}}>
+        <div className="flex flex-col py-3 px-2" style={{gap: `${Math.round(24*diaryViewScale)}px`, alignItems: diaryViewScale < 1 ? 'flex-start' : 'center'}}>
           {(() => {
             // 編集ビューでもページング: 利用者数が多ければ見切れず2ページ目に分割表示
             const carCount = ds.cars.length;
