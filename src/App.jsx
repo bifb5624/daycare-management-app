@@ -13468,15 +13468,21 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               })();
               // ★ 利用開始日より前のお知らせは表示しない (利用者がまだ通っていない期間の全体連絡などを隠す)
               const _startIso = patient?.startDate ? `${patient.startDate}T00:00:00.000Z` : '';
+              // ★ I1: このアカウントを登録した「月」より前のお知らせは表示しない (登録した月のものはOK)。
+              //   後から登録した家族/ケアマネに、登録前の古い全体連絡が大量に見えるのを防ぐ。
+              const _regIso = loggedAcc?.createdAt || '';
+              const _regMonthStart = _regIso ? `${_regIso.slice(0,7)}-01T00:00:00.000Z` : '';
               const merged = [
                 ...personalAnnouncements.map(a=>({...a,_kind:'個別'})),
                 ...announcements.map(a=>({...a,_kind:'全体'})),
                 ...virtualOldAnnouncements,
               ]
               .filter(a => {
-                if (!_startIso) return true;
                 const d = a.postedAt || (a.date ? `${a.date}T00:00:00.000Z` : '');
-                return !d || d >= _startIso; // 日付不明のものは念のため表示
+                if (!d) return true; // 日付不明のものは念のため表示
+                if (_startIso && d < _startIso) return false;           // 利用開始日より前は非表示
+                if (_regMonthStart && d < _regMonthStart) return false; // 登録した月より前は非表示
+                return true;
               })
               .sort((a,b) => (b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||''));
               // 1ヶ月以内 (recent) と 1ヶ月以上前 (archived) に分割
@@ -13484,13 +13490,14 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               const dateOf = (a) => a.postedAt || (a.date ? `${a.date}T00:00:00.000Z` : '');
               const recent = merged.filter(a => dateOf(a) >= oneMonthAgo.toISOString());
               const archived = merged.filter(a => dateOf(a) < oneMonthAgo.toISOString());
-              const archivedByMonth = {};
+              // ★ I2: 1ヶ月より前は「年ごと」にまとめて折り畳む。
+              const archivedByYear = {};
               archived.forEach(a => {
-                const d = dateOf(a).slice(0, 7) || '不明';
-                if (!archivedByMonth[d]) archivedByMonth[d] = [];
-                archivedByMonth[d].push(a);
+                const y = dateOf(a).slice(0, 4) || '不明';
+                if (!archivedByYear[y]) archivedByYear[y] = [];
+                archivedByYear[y].push(a);
               });
-              const archivedMonths = Object.keys(archivedByMonth).sort((a,b)=>b.localeCompare(a));
+              const archivedYears = Object.keys(archivedByYear).sort((a,b)=>b.localeCompare(a));
               const renderCard = (a) => {
                 const isNew = (a.postedAt || (a.date ? `${a.date}T00:00:00.000Z` : '')) > lastReadAt && a._kind !== '過去';
                 const annPhotos = a.photos || [];
@@ -13535,14 +13542,23 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   ) : (
                     <>
                       {recent.map(renderCard)}
-                      {archivedMonths.map(m => (
-                        <details key={m} style={{background:'white',borderRadius:16,padding:'12px 18px',marginBottom:12,boxShadow:'0 2px 8px rgba(0,0,0,0.04)'}}>
+                      {archivedYears.map(y => (
+                        <details key={y} style={{background:'white',borderRadius:16,padding:'12px 18px',marginBottom:12,boxShadow:'0 2px 8px rgba(0,0,0,0.04)'}}>
                           <summary style={{cursor:'pointer',fontSize:13,fontWeight:'bold',color:'#475569',listStyle:'none',display:'flex',alignItems:'center',justifyContent:'space-between',userSelect:'none'}}>
-                            <span>{m.slice(0,4)}年 {parseInt(m.slice(5,7),10)}月のお知らせ</span>
-                            <span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8'}}>{archivedByMonth[m].length}件 ▼</span>
+                            <span>{y}年のお知らせ</span>
+                            <span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8'}}>{archivedByYear[y].length}件 ▼</span>
                           </summary>
-                          <div style={{marginTop:10}}>
-                            {archivedByMonth[m].map(renderCard)}
+                          {/* ★ I2: 年内の各お知らせは「件名のみ」表示 → タップで展開して本文・写真を表示 */}
+                          <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:8}}>
+                            {archivedByYear[y].map(a => (
+                              <details key={a.id} style={{background:'#f8fafc',borderRadius:10,border:'1px solid #e2e8f0',overflow:'hidden'}}>
+                                <summary style={{cursor:'pointer',listStyle:'none',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'9px 12px',userSelect:'none'}}>
+                                  <span style={{fontSize:13,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{a.title || '(無題のお知らせ)'}</span>
+                                  <span style={{fontSize:11,color:'#94a3b8',whiteSpace:'nowrap',flexShrink:0}}>{a.date} ▼</span>
+                                </summary>
+                                <div style={{padding:'0 4px 4px'}}>{renderCard(a)}</div>
+                              </details>
+                            ))}
                           </div>
                         </details>
                       ))}
