@@ -32987,7 +32987,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         }} className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">
           担当者追加
         </button>
-        <div className="flex-1"/>
+        <div className="hidden sm:block flex-1"/>
         <div className="flex gap-2 shrink-0">
         <button onClick={()=>{
           const _d=new Date(selectedDate);
