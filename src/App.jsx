@@ -32113,11 +32113,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       });
     })();
     return (
-      <div style={{display:'flex',flexWrap:'wrap',gap:'2px 12px',alignItems:'flex-start',justifyContent:'flex-start',lineHeight:'13px'}}>
+      // ★ 固定4列グリッド: 入力画面もプレビュー(印刷)も幅に関係なく「4名ごとに改行」で必ず一致させる。
+      //   以前は flexWrap で、端末やスケールによって折り返し位置が変わり入力とプレビューでズレていた。
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:'2px 8px',alignItems:'center',lineHeight:'13px'}}>
         {list.map((s)=>(
-          <span key={s.id} style={{display:'inline-flex',alignItems:'center',gap:1}}>
+          <span key={s.id} style={{display:'inline-flex',alignItems:'center',gap:1,minWidth:0}}>
             <CB checked={!!(log.driver||{})[prefix+s.id]} onChange={()=>toggle('driver',prefix+s.id)} sz={10}/>
-            <span style={{fontSize:11}}>{s.name}</span>
+            <span style={{fontSize:11,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.name}</span>
           </span>
         ))}
       </div>
