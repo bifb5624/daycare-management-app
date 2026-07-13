@@ -31709,7 +31709,14 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             else loaded[f] = JSON.parse(JSON.stringify(prevLog[f]));
           });
           _didAutoCopy = true;
-          loaded._sougeiAutoCopied = true; // ★ 1週間前からの自動コピー(未確認)。 送迎を編集したら解除し、確認済みとする。
+          // ★ 1週間前からの自動コピー(未確認)。 迎え/送り/運転者/時間 を項目別に保持し、
+          //   その項目を編集したらバッジが1つずつ消える(確認済み扱い)。
+          const _pend = {};
+          if (prevLog.pick || prevLog.pick_walk) _pend['迎え'] = true;
+          if (prevLog.drop || prevLog.drop_walk) _pend['送り'] = true;
+          if (prevLog.driver) _pend['運転者'] = true;
+          if (prevLog.carTimes) _pend['時間'] = true;
+          loaded._sougeiPending = _pend;
         }
       }
     }
@@ -31765,8 +31772,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const updateLog = (patch) => {
     setLocalLog(prev => {
       const next = {...prev, ...patch};
-      // ★ 送迎を編集したら「自動コピー未確認」を解除(=確認済み扱い)
-      if (next._sougeiAutoCopied && ['pick','drop','pick_walk','drop_walk','driver','carTimes'].some(f => f in patch)) next._sougeiAutoCopied = false;
+      // ★ 送迎を編集したら、その項目の「自動コピー未確認」バッジを外す(迎え/送り/運転者/時間 個別)
+      if (next._sougeiPending && Object.keys(next._sougeiPending).length) {
+        const _lbl = { pick:'迎え', pick_walk:'迎え', drop:'送り', drop_walk:'送り', driver:'運転者', carTimes:'時間' };
+        const np = { ...next._sougeiPending }; let changed = false;
+        Object.keys(patch).forEach(k => { const l = _lbl[k]; if (l && np[l]) { delete np[l]; changed = true; } });
+        if (changed) next._sougeiPending = np;
+      }
       return next;
     });
     markDirty();
@@ -32768,11 +32780,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           ))}
         </div>
 
-        {/* ★ 1週間前から自動コピーした送迎(未確認)の注意表示。 迎え/送り等を編集すると消える */}
-        {log._sougeiAutoCopied && (
-          <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2">
+        {/* ★ 1週間前から自動コピーした送迎(未確認)の注意表示。 迎え/送り/運転者/時間 を項目別に表示し、編集すると1つずつ消える */}
+        {log._sougeiPending && Object.keys(log._sougeiPending).length > 0 && (
+          <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2 flex-wrap">
             <span className="text-lg">⚠</span>
-            <span>送迎は<b>1週間前から自動コピー</b>されています（<b>未確認</b>）。内容を確認し、問題なければ「迎え」か「送り」を開いて確定、変更があればそのまま編集してください。</span>
+            <span><b>1週間前から自動コピー</b>（未確認）:</span>
+            {['迎え','送り','運転者','時間'].filter(l=>log._sougeiPending[l]).map(l=>(
+              <span key={l} className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold">{l}</span>
+            ))}
+            <span className="text-xs font-normal text-amber-700">…各項目を確認・編集すると消えます</span>
           </div>
         )}
         {/* 送迎車割り当て */}
