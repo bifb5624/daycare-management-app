@@ -429,9 +429,17 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   //   ローカル(編集端末)を基準にしつつ、ローカルで「空欄」の項目だけクラウドの値で補完する。
   //   → 別端末で運動メニュー(規定数値)・送迎時間を入力しても、古いスナップショットの端末が
   //     保存した際に上書き消去されるのを防ぐ。 ローカルに無い利用者は復活させない(=削除は保持)。
-  const mergePatientBackfill = (lp, cp) => {
-    if (!cp) return lp; if (!lp) return cp;
+  const mergePatientBackfill = (lpArg, cpArg) => {
+    if (!cpArg) return lpArg; if (!lpArg) return cpArg;
+    // ★ 新しい方(_savedAt)を基準(lp)にし、古い方(cp)で空欄のみ補完する。
+    //   これが無いと、古いスナップショットの端末が保存した際に、新しい端末で編集した
+    //   「サービス提供内容」等が古い値へ巻き戻ってしまう。 _savedAt が無い旧データは
+    //   従来どおりローカル(編集端末)基準 (後方互換)。
+    const _lT = Number(lpArg._savedAt) || 0, _cT = Number(cpArg._savedAt) || 0;
+    const lp = (_cT > _lT) ? cpArg : lpArg;   // 新しい方
+    const cp = (_cT > _lT) ? lpArg : cpArg;   // 古い方(補完元)
     const out = { ...lp };
+    out._savedAt = Math.max(_lT, _cT);
     // ★ 利用状態(status/pauseHistory)は statusUpdatedAt が新しい方を「まとめて」採用する。
     //   利用者フィールドには _savedAt が無く先勝ち/後勝ちが曖昧なため、古い端末の保存で
     //   「休止」が「利用中」に巻き戻る不具合が起きていた。 時刻の新しい状態を必ず優先する。
@@ -594,17 +602,30 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const lMs = (localData.monthlyShifts && typeof localData.monthlyShifts === 'object') ? localData.monthlyShifts : null;
       const cMs = (cloud.monthlyShifts && typeof cloud.monthlyShifts === 'object') ? cloud.monthlyShifts : null;
       if (lMs || cMs) {
+        // ★ 月間シフトも「新しい方(_msSavedAt)」を優先する。 これが無いと、古い端末が別の保存
+        //   (提供記録等)をした拍子に、古い monthlyShifts で新しい端末の「振替」設定を消してしまう。
+        //   端末単位ではなく「利用者×月」単位で判定: 双方にある利用者は新しい側を採用(削除も反映)、
+        //   片方にしか無い利用者はその側を保持(別々の月/利用者の編集は両方残す)。
+        const lMsT = Number(localData._msSavedAt) || 0, cMsT = Number(cloud._msSavedAt) || 0;
+        const localNewer = lMsT >= cMsT; // 同点/未設定はローカル(編集端末)優先=従来動作
         const outMs = {};
         const monthKeys = new Set([...Object.keys(lMs || {}), ...Object.keys(cMs || {})]);
         monthKeys.forEach(mk => {
           const lm = (lMs && lMs[mk] && typeof lMs[mk] === 'object') ? lMs[mk] : {};
           const cm = (cMs && cMs[mk] && typeof cMs[mk] === 'object') ? cMs[mk] : {};
-          const om = { ...cm };
-          // ローカルに存在する利用者は、その月のシフトをローカルで上書き(削除も反映)。 ローカルに無い利用者はクラウドを維持。
-          Object.keys(lm).forEach(pid => { om[pid] = lm[pid]; });
+          const om = {};
+          const pids = new Set([...Object.keys(lm), ...Object.keys(cm)]);
+          pids.forEach(pid => {
+            const hasL = Object.prototype.hasOwnProperty.call(lm, pid);
+            const hasC = Object.prototype.hasOwnProperty.call(cm, pid);
+            if (hasL && hasC) om[pid] = localNewer ? lm[pid] : cm[pid];
+            else if (hasL) om[pid] = lm[pid];
+            else om[pid] = cm[pid];
+          });
           outMs[mk] = om;
         });
         merged.monthlyShifts = outMs;
+        merged._msSavedAt = Math.max(lMsT, cMsT);
       }
     }
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、

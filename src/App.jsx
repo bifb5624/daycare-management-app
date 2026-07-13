@@ -16353,6 +16353,30 @@ export default function App() {
   }, [staffSession, currentView]);
 
   const handleSaveToCloud = (newData, options = {}) => {
+    // ★ 古い端末のpushで新しいデータが巻き戻る問題への対策:
+    //   「変更された利用者マスタ」「編集された月間シフト」にだけ更新時刻を刻む。
+    //   マージ側(mergePatientBackfill / monthlyShifts)は _savedAt/_msSavedAt の新しい方を採用するため、
+    //   これにより古い端末が保存しても最新の値が勝つ。 参照が同一の(未変更の)利用者には刻まないので、
+    //   古い端末が「1人だけ編集」しても他の全員を最新扱いにしてしまうことはない。
+    try {
+      const prev = appData || {};
+      if (Array.isArray(newData.patients) && Array.isArray(prev.patients)) {
+        const prevMap = new Map(prev.patients.map(p => [String(p && p.id), p]));
+        let changed = false;
+        const stamped = newData.patients.map(p => {
+          if (!p || p.id == null) return p;
+          const old = prevMap.get(String(p.id));
+          if (old && old === p) return p; // 参照同一 = 未変更 → 時刻据え置き
+          changed = true;
+          return { ...p, _savedAt: Date.now() }; // 新規/変更 → 最新時刻
+        });
+        if (changed) newData = { ...newData, patients: stamped };
+      }
+      // 月間シフト: オブジェクト参照が変わった(=編集された)ときだけ時刻を刻む
+      if (newData.monthlyShifts && newData.monthlyShifts !== prev.monthlyShifts) {
+        newData = { ...newData, _msSavedAt: Date.now() };
+      }
+    } catch (e) { /* 失敗しても保存自体は続行 */ }
     setAppData(newData);
     // ★ 手動保存ボタン (options.manual) / 自動保存 (options.silent) は即時クラウド保存する。
     //   silent は成功トーストを出さない (自動保存の連続表示を避ける)。 失敗時のみ通知する。
