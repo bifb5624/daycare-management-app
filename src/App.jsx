@@ -10418,7 +10418,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
     </button>
   );
   return (
-    <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
+    // ★ iPad(縮小 transform)配下で「入れ子スクロール」にするとタップ座標がずれてジャンプしない不具合が出るため、
+    //   自前の overflow:auto をやめ、外側(contentRef)のスクロールに任せる(minHeightで背景は全面維持)。
+    <div style={{minHeight:'100%',background:'#f0f4f9'}}>
       <div style={{maxWidth:1040,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
         {/* 挨拶 */}
         <div style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',borderRadius:16,color:'white',padding:'18px 22px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
