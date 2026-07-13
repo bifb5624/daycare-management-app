@@ -12334,7 +12334,8 @@ function FamilyView() {
                   if (!ecName) { setSignupForm(f=>({...f, error:'お名前 (姓・名) を入力してください'})); return; }
                   if (!signupForm.ecKanaLast?.trim() || !signupForm.ecKanaFirst?.trim()) { setSignupForm(f=>({...f, error:'フリガナ (姓・名) を入力してください'})); return; }
                   if (!ecRelation) { setSignupForm(f=>({...f, error:'続柄を選択してください'})); return; }
-                  if (!ecPhone && !ecMobile) { setSignupForm(f=>({...f, error:'電話番号（固定または携帯）を1つ以上入力してください'})); return; }
+                  // ★ ケアマネは直通電話が無い場合があるため電話は任意。 ご家族は固定/携帯のいずれか必須。
+                  if (ecRelation !== 'ケアマネージャー' && !ecPhone && !ecMobile) { setSignupForm(f=>({...f, error:'電話番号（固定または携帯）を1つ以上入力してください'})); return; }
                   const isCaremanager = ecRelation === 'ケアマネージャー';
                   const isRelatedParty = ecRelation === 'その他関係者'; // 訪問看護 等
                   const isCmKind = isCaremanager || isRelatedParty;      // = 関係者 (kind:'caremanager')
@@ -12714,9 +12715,19 @@ function FamilyView() {
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white'}}/>
                       </div>
                     )}
+                    {signupForm.ecRelation==='ケアマネージャー' ? (
+                      // ★ ケアマネは「直通・個人」の1欄のみ(携帯欄なし)。 直通が無い場合もあるので任意。
+                      <div style={{marginBottom:8}}>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号（直通・個人） <span style={{color:'#94a3b8',fontWeight:'normal'}}>(任意・ハイフン不要)</span></label>
+                        <input type="tel" inputMode="numeric" value={signupForm.ecPhone} onChange={e=>{const v=toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,11); setSignupForm(f=>({...f,ecPhone:v,error:''}));}}
+                          placeholder="09012345678"
+                          style={{width:'100%',maxWidth:240,padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',letterSpacing:1}}/>
+                        <div style={{fontSize:10,color:'#78350f',marginTop:4,lineHeight:1.4}}>※ メールアドレスは上で入力したものが自動で登録されます</div>
+                      </div>
+                    ) : (<>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                       <div>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>{signupForm.ecRelation==='ケアマネージャー'?'電話番号（直通・個人）':'固定電話番号'} <span style={{color:'#94a3b8',fontWeight:'normal'}}>(ハイフン不要)</span></label>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>固定電話番号 <span style={{color:'#94a3b8',fontWeight:'normal'}}>(ハイフン不要)</span></label>
                         <input type="tel" inputMode="numeric" value={signupForm.ecPhone} onChange={e=>{const v=toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,11); setSignupForm(f=>({...f,ecPhone:v,error:''}));}}
                           placeholder="0312345678"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',letterSpacing:1}}/>
@@ -12732,6 +12743,7 @@ function FamilyView() {
                       ※ 家・携帯のいずれかは必須<br/>
                       ※ メールアドレスは上で入力したものが自動で登録されます
                     </div>
+                    </>)}
                   </div>
                   {/* ケアマネージャー専用: 事業所 + 担当者 */}
                   {signupForm.ecRelation === 'ケアマネージャー' && (() => {
