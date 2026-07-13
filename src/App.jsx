@@ -18741,7 +18741,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <input type="text" value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)} placeholder="氏名で検索" className="bg-transparent outline-none text-sm w-24 font-bold text-slate-700" />
               {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><X size={16} /></button>}
             </div>
-            <div className="ml-auto flex items-center gap-2 shrink-0">
+            <div className="sm:ml-auto flex items-center gap-2 flex-wrap">
               <button onClick={()=>setIsFullscreen(v=>!v)} className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 whitespace-nowrap" title={isFullscreen?'通常表示':'全画面表示'}>
                 {isFullscreen ? '通常表示' : '全画面'}
               </button>
