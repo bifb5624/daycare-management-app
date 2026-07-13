@@ -23256,7 +23256,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
   const renderKaikin = (k, getSD) => {
     // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ (行が増える)
-    const N_COLS = 6;
+    const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
     return (
       <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
         {k.map(({patient,days},idx) => (
@@ -23850,8 +23850,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div id="ops-rank-att" data-sec="ops-rank-att" style={{scrollMarginTop:170}}/>
         <Card title={`出席率ランキング　${periodLabel}（${attRank.length}名）`} accent='#3b82f6'>
             {attRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
-              // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ
-              const N_COLS = 6;
+              // ★ 横列数は画面幅で可変(スマホは2列＝氏名がつぶれない)。 左→右順、はみ出たら次の行へ
+              const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
               const list = showAllAtt ? attRank : attRank.slice(0,120);
               return (
                 <React.Fragment>
@@ -23878,7 +23878,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div id="ops-rank-abs" data-sec="ops-rank-abs" style={{scrollMarginTop:170,marginTop:12}}/>
         <Card title={`欠席率ランキング　${periodLabel}（${absRank.length}名）`} accent='#ef4444'>
             {absRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
-              const N_COLS = 6;
+              const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
               const list = showAllAbs ? absRank : absRank.slice(0,120);
               return (
                 <React.Fragment>
@@ -23908,7 +23908,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
             <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>欠席理由の記録なし</div>
           ) : (() => {
             // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ
-            const N_COLS = 6;
+            const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
             const list = showAllReason ? reasonRank : reasonRank.slice(0,120);
             return (
               <React.Fragment>
