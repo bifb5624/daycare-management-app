@@ -30702,7 +30702,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
           </>)}
 
           {/* 日誌 */}
-          {activeTab === 'diary' && <DiarySettingsPanel appData={appData} dsRef={diarySettingsRef} markDirty={markDirty}/>}
+          {activeTab === 'diary' && <DiarySettingsPanel appData={appData} dsRef={diarySettingsRef} markDirty={markDirty} onSave={onSave}/>}
 
           {/* 施設休業日（事業所情報タブに移動済み） */}
 
@@ -31480,7 +31480,7 @@ const _DSPSection = ({title, children}) => (
     {children}
   </div>
 );
-function DiarySettingsPanel({ appData, dsRef, markDirty }) {
+function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
   const initDs = appData.diarySettings || { staff:[], cars:[], scheduleAM:[], schedulePM:[] };
   // 初回のみrefを初期化
   React.useEffect(() => { dsRef.current = JSON.parse(JSON.stringify(initDs)); }, []);
@@ -31569,7 +31569,7 @@ function DiarySettingsPanel({ appData, dsRef, markDirty }) {
         </div>
         {/* ★ 送迎の1週間前自動コピー */}
         <label className="flex items-start gap-2 mt-4 pt-3 border-t border-slate-200 cursor-pointer">
-          <input type="checkbox" checked={!!ds.autoCopySougei} onChange={e=>mutate({...dsRef.current, autoCopySougei: e.target.checked})} className="mt-0.5 accent-blue-600"/>
+          <input type="checkbox" checked={!!ds.autoCopySougei} onChange={e=>{ const nd={...dsRef.current, autoCopySougei: e.target.checked}; dsRef.current=nd; setRenderKey(k=>k+1); if(onSave) onSave({...appData, diarySettings: nd}, { manual:true, message: e.target.checked?'✓ 1週間前の送迎の自動コピーをONにしました':'自動コピーをOFFにしました' }); }} className="mt-0.5 accent-blue-600"/>
           <span className="text-sm text-slate-700"><b>1週間前の送迎を自動コピー</b><br/><span className="text-xs text-slate-500">日誌を開いたとき、その日の送迎（迎え・送り・運転者・時間）が未入力なら、<b>7日前の同じ時間帯</b>の内容を自動で読み込みます。毎週同じ送迎体制の店舗向け（変わる場合はそのまま上書きできます）。</span></span>
         </label>
       </SC>
@@ -31709,6 +31709,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             else loaded[f] = JSON.parse(JSON.stringify(prevLog[f]));
           });
           _didAutoCopy = true;
+          loaded._sougeiAutoCopied = true; // ★ 1週間前からの自動コピー(未確認)。 送迎を編集したら解除し、確認済みとする。
         }
       }
     }
@@ -31762,7 +31763,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
   const log = localLog;
   const updateLog = (patch) => {
-    setLocalLog(prev => ({...prev, ...patch}));
+    setLocalLog(prev => {
+      const next = {...prev, ...patch};
+      // ★ 送迎を編集したら「自動コピー未確認」を解除(=確認済み扱い)
+      if (next._sougeiAutoCopied && ['pick','drop','pick_walk','drop_walk','driver','carTimes'].some(f => f in patch)) next._sougeiAutoCopied = false;
+      return next;
+    });
     markDirty();
   };
   const saveLog = () => {
@@ -32762,6 +32768,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           ))}
         </div>
 
+        {/* ★ 1週間前から自動コピーした送迎(未確認)の注意表示。 迎え/送り等を編集すると消える */}
+        {log._sougeiAutoCopied && (
+          <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2">
+            <span className="text-lg">⚠</span>
+            <span>送迎は<b>1週間前から自動コピー</b>されています（<b>未確認</b>）。内容を確認し、問題なければ「迎え」か「送り」を開いて確定、変更があればそのまま編集してください。</span>
+          </div>
+        )}
         {/* 送迎車割り当て */}
         <button disabled={isReadOnly} onClick={()=>{setCarAssignModal({prefix:'pick'});setCarAssignSelections({});}}
           className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
