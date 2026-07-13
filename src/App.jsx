@@ -19218,7 +19218,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
       {massageHist && ReactDOM.createPortal((()=>{
         // ★ id は文字列(tr_...)で Number 化すると NaN になり並ばないため、実日付で判定する。
-        //   直近の過去3件を取得し、昇順(古い→新しい)で表示する。 未来日は除外。
+        //   直近の過去3件を取得し、降順(新しい→古い)で表示する。 未来日は除外。
         const _mhToday = new Date(); _mhToday.setHours(23,59,59,999);
         const _mhDate = (r) => { const m=(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return null; const y=r.year||new Date().getFullYear(); return new Date(y, +m[1]-1, +m[2]); };
         const recs=(appData.ticketRecords||[])
@@ -19227,7 +19227,6 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           .filter(x=>x.d && x.d<=_mhToday)
           .sort((a,b)=>b.d-a.d)
           .slice(0,3)
-          .sort((a,b)=>a.d-b.d)
           .map(x=>x.r);
         return (
           <div onClick={(e)=>{e.stopPropagation(); setMassageHist(null);}}
