@@ -15854,7 +15854,7 @@ export default function App() {
           //   常に新しく、pull を永久にスキップして「他端末の更新を受信できない」状態になる。
           //   最後の反映から15秒以上経っていたら、編集中でも強制的に受信する(自動保存済みの編集は
           //   RecordView側のバッファ保護で消えない)。 意図的な全削除の20秒ガードは維持。
-          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 15000;
+          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 8000;
           if (intentionalWindow || (since < 5000 && !_tooLongSinceApply)) {
             // 編集中 → pull せず再試行を次の interval に任せる
             return;
@@ -15865,7 +15865,7 @@ export default function App() {
         //   ただし updated_at 判定の取りこぼし対策として、一定時間(10秒)反映が無ければ強制的に反映する
         //   (これが無いと「他端末の更新が自動で反映されず、再読み込みしないと出ない」不具合が起きる)。
         const _sig = row.updated_at || null;
-        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 10000;
+        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 8000;
         if (!forcePull && !_stale && _sig && lastAppliedSigRef.current === _sig) {
           dataLoadedForStoreRef.current = newStoreId;
           storeTransitionRef.current = false;
@@ -18026,6 +18026,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
     setRestoreModal(false);
   };
+  // ★ 直前スナップショットとの差分で「どの利用者を編集したか」を返す
+  const _snapChanges = (newerRecs, olderRecs) => {
+    const om = {}; (olderRecs||[]).forEach(r=>{ if(r) om[r.patientId]=r; });
+    const _cmp = (x)=> x ? JSON.stringify({ ...x, _savedAt:undefined, recorder:undefined, id:undefined }) : '';
+    const names = [];
+    (newerRecs||[]).forEach(r=>{ if(!r) return; const o=om[r.patientId]; if(_cmp(o)!==_cmp(r)) names.push(r.name || `ID:${r.patientId}`); });
+    return names;
+  };
 
   const handleStatusChange = (id, newStatus) => {
     // ★ 休止/振替/休業 は設定場所を1か所に集約したため、ここでは設定せず該当画面へジャンプする。
@@ -19318,13 +19326,19 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               </div>
               <div className="p-3 overflow-y-auto">
                 {snaps.length===0 ? <div className="text-center text-slate-400 font-bold py-8 text-sm">この日の保存履歴はまだありません</div> :
-                  snaps.map((s,i)=>(
+                  snaps.map((s,i)=>{
+                    const chg = _snapChanges(s.recs, snaps[i+1]?.recs || []); // 直前(古い)との差分
+                    const chgLabel = chg.length ? (chg.slice(0,3).join('・') + (chg.length>3?` 他${chg.length-3}名`:'')) : (i===snaps.length-1?'最初の保存':'変更なし');
+                    return (
                     <button key={s.t} onClick={()=>{ if(window.confirm(`${_fmtT(s.t)} 時点の記録（入力あり${_cntData(s.recs)}名）に戻します。よろしいですか？`)) _restoreRecSnap(s); }}
-                      className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-center justify-between active:scale-[0.99]">
-                      <div><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div><div className="text-[11px] text-slate-500">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
-                      <span className="text-xs font-bold text-blue-600">この状態に戻す →</span>
+                      className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-center justify-between gap-2 active:scale-[0.99]">
+                      <div className="min-w-0"><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div>
+                        <div className="text-[12px] text-slate-700 font-bold truncate">✎ {chgLabel}</div>
+                        <div className="text-[11px] text-slate-400">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
+                      <span className="text-xs font-bold text-blue-600 shrink-0">戻す →</span>
                     </button>
-                  ))}
+                    );
+                  })}
               </div>
               <div className="px-5 py-3 bg-slate-50 border-t text-[11px] text-slate-500">※ 戻すとその日の記録が選んだ時点のものに置き換わり、クラウド・他端末にも反映されます。 保存のたびに自動で履歴が残ります（最新25件）。</div>
             </div>
