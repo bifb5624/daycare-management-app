@@ -15870,10 +15870,35 @@ export default function App() {
         lastAppliedAtRef.current = Date.now();
         // 通常: 既存データをロード。 pull 由来なので push しない (他端末の入力を上書きしない)。
         applyingRemoteRef.current = true;
+        const _isFirstLoad = dataLoadedForStoreRef.current !== newStoreId;
+        let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
+          // ★ 初回ロード時: 端末内(localStorage)の「未送信の新しい提供記録」をクラウドに統合し、再読み込みで消さない。
+          //   patient+日付+年 で突き合わせ、_savedAt が新しい方を採用。 墓石(削除済み)は復活させない。
+          if (_isFirstLoad && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+            try {
+              const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
+              const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
+              const map = new Map();
+              (Array.isArray(merged.ticketRecords) ? merged.ticketRecords : []).forEach(r => { if (r) map.set(keyOf(r), r); });
+              let _preserved = 0;
+              prev.ticketRecords.forEach(r => {
+                if (!r) return;
+                if (r.id != null && tomb[String(r.id)]) return; // 削除済みは復活させない
+                const k = keyOf(r), ex = map.get(k);
+                if (!ex) { map.set(k, r); _preserved++; return; }
+                if ((Number(r._savedAt)||0) > (Number(ex._savedAt)||0)) { map.set(k, r); _preserved++; } // 端末内が新しければ保持
+              });
+              if (_preserved > 0) { merged.ticketRecords = [...map.values()]; _mergedForPush = merged; }
+            } catch (e) { console.warn('[firstload merge] ticketRecords failed', e); }
+          }
           return merged;
         });
+        // ★ 端末内の未送信記録を保持した場合は、クラウドにも反映(次回pullで消えないように)。
+        if (_isFirstLoad && _mergedForPush) {
+          Promise.resolve().then(() => supabaseMergeAndSyncStateForStore(newStoreId, _mergedForPush)).catch(e => console.warn('[firstload merge] push failed', e));
+        }
         // ★ load 完了 → push 解禁
         dataLoadedForStoreRef.current = newStoreId;
         storeTransitionRef.current = false;
