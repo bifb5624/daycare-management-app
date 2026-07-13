@@ -18480,6 +18480,21 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     return () => { if (autoSaveRecTimerRef.current) clearTimeout(autoSaveRecTimerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localPatients, localTicketRecords, pendingCancellations, pendingFurikaeShifts, pendingFurikaeRecords]);
+  // ★ 再読み込み/離脱/バックグラウンド化する直前に、入力中の欄を確定(blur)してから即保存。
+  //   デバウンス待ちや onBlur 未確定で、再読み込み時にデータが消えるのを防ぐ。
+  React.useEffect(() => {
+    const flush = () => {
+      try { const ae = document.activeElement; if (ae && typeof ae.blur === 'function') ae.blur(); } catch {}
+      // blur による onBlur→setState は非同期のため、確定を挟んでから保存
+      try { if (dirtyRef?.current && _recSaveRef.current) _recSaveRef.current(true); } catch {}
+    };
+    const onVis = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    document.addEventListener('visibilitychange', onVis);
+    return () => { window.removeEventListener('pagehide', flush); window.removeEventListener('beforeunload', flush); document.removeEventListener('visibilitychange', onVis); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   let displayRecords = filterMode === 'single' ? localPatients : localTicketRecords;
 
   // 月全体モード：選択患者1人・選択月のみ（全患者×全日は重すぎる）
