@@ -77,6 +77,7 @@
       <a href="#s7"><span class="n">07</span> 従量課金：AI と 自動FAX</a>
       <a href="#s8"><span class="n">08</span> 複数店舗・FCの課金の割り振り</a>
       <a href="#s9"><span class="n">09</span> 収益シミュレーション（70名）</a>
+      <a href="#s9b"><span class="n">09＋</span> 総まとめ：コスト＆料金表</a>
       <a href="#s10"><span class="n">10</span> 料金戦略（定価・無料トライアル）</a>
       <a href="#s11"><span class="n">11</span> 新構想：運営書類 管理アプリ</a>
       <a href="#s12"><span class="n">12</span> ロードマップ</a>
@@ -233,6 +234,38 @@
     <h2>収益シミュレーション（70名規模・1店舗／月）</h2>
     <p class="lead">「AI・FAXの実費」と「店舗からもらう金額」を並べ、<b>当社の取り分（粗利）</b>を可視化。数字はすべて税別の目安。</p>
 
+    <h3>⓪ 当社が負担する「運営インフラ費用」（固定費・全店舗で共有）</h3>
+    <p class="muted" style="margin-top:0;">つむぎは<b>1つのシステムを全店舗で共有</b>する構成（マルチテナント）。下記は<b>店舗数に関わらずかかる当社の固定費</b>で、店舗が増えるほど1店舗あたりは薄まります。為替は $1≈¥150 で換算。</p>
+    <table>
+      <tr><th>サービス</th><th>役割</th><th class="num">プラン</th><th class="num">月額 目安</th></tr>
+      <tr><td><b>Vercel</b></td><td>アプリ配信・サーバーレス処理（画面表示・FAX/AI中継）</td><td class="num">Pro</td><td class="num">約 ¥3,000（$20）</td></tr>
+      <tr><td><b>Supabase</b></td><td>データベース・認証・ファイル保管・端末間同期</td><td class="num">Pro</td><td class="num">約 ¥3,800（$25）</td></tr>
+      <tr><td><b>Brevo</b></td><td>メール送信（家族/ケアマネ招待・各種通知）</td><td class="num">無料〜Lite</td><td class="num">¥0〜1,400</td></tr>
+      <tr><td>独自ドメイン</td><td>tsumugi.ones-style.co.jp</td><td class="num">年契約</td><td class="num">約 ¥130（¥1,500/年）</td></tr>
+      <tr style="background:#f8fafc;"><td><b>固定費 合計</b>（AI・FAXの従量は含まない）</td><td>—</td><td class="num">—</td><td class="num"><b>約 ¥8,300／月</b></td></tr>
+    </table>
+    <p class="muted">※ <b>Anthropic API</b>（モニタリングAI）と <b>InterFAX</b>（自動FAX）は「使った分だけ」の<b>従量</b>で、上記固定費とは別（①②で計上）。立ち上げ期は各サービスの<b>無料枠</b>で月¥0〜2,000程度に収まることも多い（実額は各社の請求で確認）。</p>
+    <table>
+      <tr><th>店舗数（当社運営＋加盟店の合計）</th><th class="num">1店舗あたりの固定費／月</th></tr>
+      <tr><td>1店舗</td><td class="num">約 ¥8,300</td></tr>
+      <tr><td>5店舗</td><td class="num">約 ¥1,660</td></tr>
+      <tr><td>10店舗</td><td class="num">約 ¥830</td></tr>
+      <tr style="background:#f0fdf4;"><td><b>20店舗</b></td><td class="num"><b>約 ¥420</b></td></tr>
+    </table>
+    <div class="infobox" style="margin-top:2px;"><b>ポイント：インフラは「全店舗で割り勘」。</b> 店舗が増えるほど1店舗あたりの固定費は下がり、粗利率はさらに改善します。以下③④の「インフラ ¥1,500／店舗」は<b>約5〜6店舗運営時の目安</b>で、店舗が増えれば実質はさらに小さくなります。</div>
+
+    <h3>⓪-2 店舗が増えたときの「インフラ費用の変動」</h3>
+    <p class="muted" style="margin-top:0;">Vercel・Supabase は<b>定額プランで広い範囲をカバー</b>し、超えた分だけ従量が乗る仕組み。記録アプリはデータが軽く通信も少ないため、<b>数十店舗までは固定費がほぼ横ばい</b>。増えるのは主に写真/PDFの<b>保管容量</b>と<b>AI/FAXの従量</b>（＝使った分・売上に連動）。</p>
+    <table>
+      <tr><th>規模</th><th class="num">店舗数</th><th class="num">Vercel</th><th class="num">Supabase</th><th class="num">Brevo(メール)</th><th class="num">固定費 合計/月</th><th class="num">1店舗あたり</th></tr>
+      <tr><td>立ち上げ</td><td class="num">1〜2</td><td class="num">無料〜Pro</td><td class="num">無料〜Pro</td><td class="num">無料</td><td class="num">¥0〜7,000</td><td class="num">—</td></tr>
+      <tr style="background:#f0fdf4;"><td><b>小規模</b></td><td class="num">3〜5</td><td class="num">Pro ¥3,000</td><td class="num">Pro ¥3,800</td><td class="num">無料〜¥1,400</td><td class="num"><b>約 ¥8,300</b></td><td class="num"><b>¥1,700〜2,800</b></td></tr>
+      <tr><td>中規模</td><td class="num">6〜20</td><td class="num">Pro ¥3,000</td><td class="num">Pro ¥3,800<br>＋保管超過 ¥数百</td><td class="num">Lite ¥1,400</td><td class="num">約 ¥8,500〜9,500</td><td class="num">¥430〜1,600</td></tr>
+      <tr><td>大規模</td><td class="num">21〜50</td><td class="num">Pro ¥3,000</td><td class="num">Pro ¥3,800<br>＋保管超過 ¥1,000〜3,000</td><td class="num">Lite ¥1,400〜</td><td class="num">約 ¥9,000〜12,000</td><td class="num">¥180〜570</td></tr>
+      <tr><td>特大</td><td class="num">50〜</td><td class="num">Pro〜Enterprise<br>（要見積）</td><td class="num">Pro＋超過 または<br>Team $599（約¥90,000）</td><td class="num">上位プラン</td><td class="num">¥12,000〜<br>（Team採用時は要見積）</td><td class="num">〜¥1,000</td></tr>
+    </table>
+    <div class="infobox" style="margin-top:2px;"><b>結論：数十店舗までは固定費 約¥8,000〜12,000／月でほぼ据え置き。</b> 1店舗あたりは店舗が増えるほど下がります。<b>Supabaseの上位「Team」（約¥90,000/月）は50店舗超や高いコンプライアンス要件が出てから</b>で十分。その規模では売上（例：50店舗×¥28,000＝月¥140万）に対し固定費は<b>1割未満</b>です。<span class="muted">※ 為替・各社の料金改定・実際の使用量で変動。実額は各社ダッシュボードの請求で確認します。</span></div>
+
     <h3>① FAX送信サービスの比較（送信専用・1店舗の目安）</h3>
     <table>
       <tr><th>サービス</th><th class="num">月額基本</th><th class="num">送信 1ページ</th><th>特徴</th></tr>
@@ -285,6 +318,38 @@
       <tr><td>80名</td><td class="num">¥374,400</td><td class="num">¥60,720</td><td class="num">¥313,680</td><td class="c">約84%</td></tr>
     </table>
     <div class="okbox"><b>ポイント：人数が増えるほど「粗利率」も上がります（20名 約77% → 80名 約84%）。</b> 少人数の店舗でも粗利率75%以上を確保できる価格設計です。<b>計画書アドオン（＋¥6,000/月）を付ければ、各行の粗利は月あたり さらに約¥5,000上乗せ</b>されます（フル装備の70名例＝月 約¥28,900・③参照）。<br><span class="muted">※ 粗利＝外部実費（AI・FAX・インフラ）差引後。開発・サポートの人件費は別。数字は税別の目安。</span></div>
+  </section>
+
+  <section class="slide" id="s9b">
+    <div class="num-tag">09＋ COST &amp; PRICE SUMMARY</div>
+    <h2>総まとめ：サービス別コスト ＋ つむぎ料金表</h2>
+    <p class="lead">「当社が外部に払うコスト（Vercel・Supabase・各API）」と「店舗からいただく料金設定」を1枚に。数字はすべて税別の目安、$1≈¥150 換算。</p>
+
+    <h3>Ⓐ 当社が外部に払うコスト一覧</h3>
+    <table>
+      <tr><th>サービス</th><th>役割</th><th class="num">料金体系</th><th class="num">目安</th></tr>
+      <tr><td><b>Vercel</b></td><td>アプリ配信・サーバーレス</td><td class="num">固定（Pro定額）</td><td class="num">$20 ≈ ¥3,000／月</td></tr>
+      <tr><td><b>Supabase</b></td><td>DB・認証・保管・同期</td><td class="num">固定（Pro定額＋保管超過）</td><td class="num">$25 ≈ ¥3,800／月〜</td></tr>
+      <tr><td><b>Brevo</b></td><td>メール送信</td><td class="num">半固定（無料〜Lite）</td><td class="num">¥0〜1,400／月</td></tr>
+      <tr><td>独自ドメイン</td><td>tsumugi.ones-style.co.jp</td><td class="num">固定（年契約）</td><td class="num">約 ¥130／月</td></tr>
+      <tr style="background:#eef2ff;"><td colspan="3"><b>固定費 小計（店舗数に関わらず・全店で共有）</b></td><td class="num"><b>約 ¥8,300／月</b></td></tr>
+      <tr><td><b>Anthropic API（Claude）</b></td><td>モニタリングAI下書き</td><td class="num">従量（トークン量）</td><td class="num">1回 約 ¥3〜10（代表¥5）</td></tr>
+      <tr><td><b>InterFAX</b></td><td>自動FAX送信</td><td class="num">従量（基本¥1,000＋頁）</td><td class="num">1ページ 約 ¥22</td></tr>
+    </table>
+    <p class="muted">※ 固定費（上段）は<b>全店舗で割り勘</b>＝店舗が増えるほど1店舗あたりは下がる。従量（下段）は<b>使った分だけ</b>＝店舗の売上（サブスク＋従量請求）に連動。</p>
+
+    <h3>Ⓑ 当社の料金設定に基づく「料金表」（1店舗・月・税別）</h3>
+    <table>
+      <tr><th>利用者数</th><th class="num">パートナー<br>価格</th><th class="num">定価<br>（標準）</th><th class="num">従量目安<br>(AI＋FAX)</th><th class="num">店舗支払い<br>合計/月*</th><th class="num">当社の<br>外部実費/月</th><th class="num">粗利/月*</th></tr>
+      <tr><td>20名</td><td class="num">¥12,000</td><td class="num">¥15,000</td><td class="num">¥1,400</td><td class="num">¥13,400</td><td class="num">約 ¥3,100</td><td class="num">約 ¥10,300</td></tr>
+      <tr><td>40名</td><td class="num">¥16,000</td><td class="num">¥20,000</td><td class="num">¥2,800</td><td class="num">¥18,800</td><td class="num">約 ¥3,800</td><td class="num">約 ¥15,000</td></tr>
+      <tr><td>60名</td><td class="num">¥20,000</td><td class="num">¥25,000</td><td class="num">¥4,200</td><td class="num">¥24,200</td><td class="num">約 ¥4,400</td><td class="num">約 ¥19,800</td></tr>
+      <tr style="background:#f0fdf4;"><td><b>70名<br>（＋計画書）</b></td><td class="num"><b>¥28,000</b></td><td class="num"><b>¥35,000</b></td><td class="num">¥6,540</td><td class="num">¥34,540</td><td class="num">約 ¥5,640</td><td class="num"><b>約 ¥28,900</b></td></tr>
+      <tr><td>80名</td><td class="num">¥25,600</td><td class="num">¥32,000</td><td class="num">¥5,600</td><td class="num">¥31,200</td><td class="num">約 ¥5,060</td><td class="num">約 ¥26,100</td></tr>
+    </table>
+    <p class="muted">* 「店舗支払い」「粗利」は<b>パートナー価格</b>ベース（従量込み・70名行のみ計画書アドオン込み）。定価採用時は粗利がさらに約1.25倍。当社の外部実費＝AI＋FAX＋インフラ（¥1,500/店舗を内包）。</p>
+    <div class="okbox"><b>要点：外部に払うコストは「固定費 約¥8,300／月（全店で割り勘）＋ 使った分だけの従量」だけ。</b> 店舗からいただくサブスクの<b>約8割前後が当社の取り分</b>で、店舗・人数が増えるほど固定費が薄まり<b>粗利率はさらに上がります</b>（20名 約77% → 80名 約84%）。</div>
+    <div class="disc" style="margin-top:8px;">数字は検討用の目安。為替・各社の料金改定・実際の使用量で変動します。実額は各社（Vercel／Supabase／Anthropic／InterFAX）のダッシュボードの請求で確認してください。</div>
   </section>
 
   <section class="slide" id="s10">
