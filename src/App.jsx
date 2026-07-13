@@ -10442,14 +10442,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {all.map(a=>{ const _r=isRead(a.id); return (
                   <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a.m.emoji} ${a.m.label}`,badgeColor:a.m.color,date:a.date,title:a.title,body:a.body})}
-                    style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'44'}`,background:_r?'#f8fafc':a.m.bg,borderRadius:10,padding:'8px 12px',opacity:_r?0.72:1}}>
+                    style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'66'}`,background:_r?'white':a.m.bg,borderRadius:10,padding:'8px 12px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
                       <span style={{fontSize:10,fontWeight:'bold',color:'white',background:_r?'#94a3b8':a.m.color,borderRadius:5,padding:'2px 7px'}}>{a.m.emoji} {a.m.label}</span>
                       {a.date && <span style={{fontSize:10,color:'#94a3b8'}}>{a.date}</span>}
                       {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
                     </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>{a.title}</div>
-                    {a.body && <div style={{fontSize:12,color:_r?'#94a3b8':'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6,maxHeight:40,overflow:'hidden'}}>{a.body}</div>}
+                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#1e293b':a.m.color}}>{a.title}</div>
+                    {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6,maxHeight:40,overflow:'hidden'}}>{a.body}</div>}
                   </button>
                 ); })}
               </div>
@@ -10522,14 +10522,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
             {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {news.map(a=>{ const _r=isRead(a.id); const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
-                  <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:_r?'#f1f5f9':'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'7px 10px',opacity:_r?0.72:1}}>
+                  <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:_r?'white':(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_r?'#e2e8f0':_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                       <span style={{fontSize:9,fontWeight:'bold',color:_r?'#94a3b8':_c,background:_r?'#eef2f6':(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
                       <span style={{fontSize:10,color:'#94a3b8'}}>{a.date||''}</span>
                       {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
                     </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>{a.title||'(写真)'}</div>
-                    {a.body && <div style={{fontSize:11,color:_r?'#94a3b8':'#64748b',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
+                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#1e293b':_c}}>{a.title||'(写真)'}</div>
+                    {a.body && <div style={{fontSize:11,color:'#475569',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
                   </button>
                 ); })}
               </div>
