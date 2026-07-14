@@ -16452,6 +16452,43 @@ export default function App() {
       if (newData.contactBookConfig && newData.contactBookConfig !== prev.contactBookConfig) {
         newData = { ...newData, contactBookConfig: { ...newData.contactBookConfig, _updatedAt: Date.now() } };
       }
+      // ★ その他の記録配列も「変更されたレコードだけ」に _savedAt を刻む(参照が変わった=編集された物だけ)。
+      //   マージ(mergeById)は _savedAt の新しい方を採用するので、体力測定・モニタリング・スケジュール・計画書・
+      //   お知らせ 等も、古い端末の保存で新しい入力が巻き戻らなくなる(全データに時刻を付ける一括対応)。
+      const _now2 = Date.now();
+      ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(_key => {
+        if (!Array.isArray(newData[_key]) || !Array.isArray(prev[_key])) return;
+        const _pm = new Map(prev[_key].map(r => [String(r && r.id), r]));
+        let _ch = false;
+        const _st = newData[_key].map(r => {
+          if (!r || r.id == null) return r;
+          const _old = _pm.get(String(r.id));
+          if (_old && _old === r) return r; // 参照同一 = 未変更 → 据え置き
+          _ch = true; return { ...r, _savedAt: Date.now() }; // 新規/変更 → 最新時刻
+        });
+        if (_ch) newData = { ...newData, [_key]: _st };
+      });
+      // ★ 各種設定・日誌設定も編集された時だけ更新時刻を刻む(新しい方優先マージ用)。
+      if (newData.systemSettings && newData.systemSettings !== prev.systemSettings) {
+        newData = { ...newData, systemSettings: { ...newData.systemSettings, _updatedAt: _now2 } };
+      }
+      if (newData.diarySettings && newData.diarySettings !== prev.diarySettings) {
+        newData = { ...newData, diarySettings: { ...newData.diarySettings, _updatedAt: _now2 } };
+      }
+      // ★ 休み連絡(faxDataStore): 変更された「日付|利用者」キーだけに _updatedAt を刻む。
+      if (newData.faxDataStore && newData.faxDataStore !== prev.faxDataStore) {
+        const _pf = prev.faxDataStore || {}, _nf = newData.faxDataStore || {};
+        const _out = { ..._nf }; let _fch = false;
+        Object.keys(_nf).forEach(k => {
+          try { if (JSON.stringify({ ..._nf[k], _updatedAt: 0 }) !== JSON.stringify({ ...(_pf[k] || {}), _updatedAt: 0 })) { _out[k] = { ..._nf[k], _updatedAt: _now2 }; _fch = true; } }
+          catch { _out[k] = { ..._nf[k], _updatedAt: _now2 }; _fch = true; }
+        });
+        if (_fch) newData = { ...newData, faxDataStore: _out };
+      }
+      // ★ 各種連絡の下書き(generalFaxDraft)も編集時に更新時刻を刻む。
+      if (newData.generalFaxDraft && newData.generalFaxDraft !== prev.generalFaxDraft) {
+        newData = { ...newData, generalFaxDraft: { ...newData.generalFaxDraft, _updatedAt: _now2 } };
+      }
     } catch (e) { /* 失敗しても保存自体は続行 */ }
     setAppData(newData);
     // ★ 手動保存ボタン (options.manual) / 自動保存 (options.silent) は即時クラウド保存する。

@@ -544,7 +544,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
     //   上書きする恐れがあるためマージ対象に含めない (= 従来どおり編集端末の値を採用)。
-    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents'];
+    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory'];
     // ★ 削除した記録の墓石(tombstone)を local+cloud で統合。 これが無いと「id単位の和集合マージ」で
     //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
     const localTomb = (localData && localData.deletedIds) || {};
@@ -618,6 +618,40 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         const lt = Number(lc && lc._updatedAt) || 0, ct = Number(cc && cc._updatedAt) || 0;
         if (lt || ct) merged.contactBookConfig = (lt >= ct) ? lc : cc;
         else merged.contactBookConfig = lc || cc; // 旧データ(時刻なし)は従来どおりローカル優先
+      }
+    }
+    // ★ 日誌設定(diarySettings=担当職員/送迎車/タイムスケジュール)も「新しい方(_updatedAt)」を採用。
+    {
+      const lc = localData.diarySettings, cc = cloud.diarySettings;
+      if (lc || cc) {
+        const lt = Number(lc && lc._updatedAt) || 0, ct = Number(cc && cc._updatedAt) || 0;
+        if (lt || ct) merged.diarySettings = (lt >= ct) ? lc : cc;
+        else merged.diarySettings = lc || cc;
+      }
+    }
+    // ★ 休み連絡(faxDataStore=日付×利用者の連絡状態)は「日付|利用者」キー単位でマージし、同キーは新しい方(_updatedAt)。
+    //   端末間で別々の人を編集しても消えないように。
+    {
+      const ls = (localData.faxDataStore && typeof localData.faxDataStore === 'object') ? localData.faxDataStore : null;
+      const cs = (cloud.faxDataStore && typeof cloud.faxDataStore === 'object') ? cloud.faxDataStore : null;
+      if (ls || cs) {
+        const out = { ...(cs || {}) };
+        Object.keys(ls || {}).forEach(k => {
+          const lv = ls[k], cv = (cs || {})[k];
+          if (!cv) { out[k] = lv; return; }
+          const lt = Number(lv && lv._updatedAt) || 0, ct = Number(cv && cv._updatedAt) || 0;
+          out[k] = (lt >= ct) ? lv : cv;
+        });
+        merged.faxDataStore = out;
+      }
+    }
+    // ★ 各種連絡の下書き(generalFaxDraft)も「新しい方(_updatedAt)」を採用。
+    {
+      const lc = localData.generalFaxDraft, cc = cloud.generalFaxDraft;
+      if (lc || cc) {
+        const lt = Number(lc && lc._updatedAt) || 0, ct = Number(cc && cc._updatedAt) || 0;
+        if (lt || ct) merged.generalFaxDraft = (lt >= ct) ? lc : cc;
+        else merged.generalFaxDraft = lc || cc;
       }
     }
     // ★ 日誌(diaryLogs)は「日付_AMPM」キーのオブジェクト。 端末間で別々の日を編集しても消えないよう、
