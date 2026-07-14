@@ -44,6 +44,8 @@ import {
   supabaseListAllSystemNotices,
   supabaseCreateSystemNotice,
   supabaseDeleteSystemNotice,
+  supabaseLoadGlobalPolicies,
+  supabaseSaveGlobalPolicies,
   supabaseCreateStaff,
   supabaseListStaff,
   supabaseUploadFile,
@@ -1349,8 +1351,15 @@ const POLICY_DEFAULT_OFFICE_TEXT = `つむぎ ご利用にあたっての重要�
 
 【改定】
 12. 本重要事項は、運営(つむぎ管理局)が改定する場合があります。改定後にログインした際、最新版への同意をお願いすることがあります。`;
-// 有効ポリシー: 事業所の上書き(systemSettings.policies[kind]) があればそれ、無ければ既定
+// ★ 全店共通ポリシー(つむぎ管理局が管理局コンソールで編集)のキャッシュ。 起動時に予約レコードから読み込む。
+//   各店はこれを「読む」だけで自店データには書き込まない。 存在すれば店舗上書き/既定より優先(=全店共通)。
+let _globalPolicyCache = null;
+function setGlobalPolicyCache(p) { _globalPolicyCache = (p && typeof p === 'object') ? p : null; }
+function getGlobalPolicyCache() { return _globalPolicyCache; }
+// 有効ポリシー: ①全店共通(管理局) → ②事業所の上書き(systemSettings.policies[kind]) → ③既定
 function getEffectivePolicy(kind, systemSettings) {
+  const gv = _globalPolicyCache && _globalPolicyCache[kind];
+  if (gv && gv.version && String(gv.text||'').trim()) return { version: String(gv.version), date: gv.date || '', text: String(gv.text) };
   const ov = systemSettings?.policies?.[kind];
   if (ov && ov.version && String(ov.text||'').trim()) return { version: String(ov.version), date: ov.date || '', text: String(ov.text) };
   if (kind === 'office') return { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT };
@@ -14838,6 +14847,86 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdm
 // 本部管理者用 店舗選択 + 店舗追加 + スタッフ追加画面
 // ===========================================
 // ★ 本部 → 店舗お知らせ管理パネル (メンテナンス通知等)
+// ★ J: 全店共通の同意ポリシー編集(つむぎ管理局専用)。 予約レコードに1つだけ保存し、各店が読む。
+//   版(バージョン)を上げると、全店の管理局お知らせ(system_notices)に改定通知を自動掲載(I5)。
+function GlobalPolicyPanel({ staffSession }) {
+  const _defFam = { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT };
+  const _defOff = { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT };
+  const [fam, setFam] = React.useState(_defFam);
+  const [off, setOff] = React.useState(_defOff);
+  const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+  const origRef = React.useRef({ fam: '', off: '' }); // 読込時の版(改定検知用)
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const gp = await supabaseLoadGlobalPolicies();
+        if (!alive) return;
+        if (gp?.family?.version) setFam({ version:String(gp.family.version), date:gp.family.date||'', text:String(gp.family.text||_defFam.text) });
+        if (gp?.office?.version) setOff({ version:String(gp.office.version), date:gp.office.date||'', text:String(gp.office.text||_defOff.text) });
+        origRef.current = { fam:String(gp?.family?.version||''), off:String(gp?.office?.version||'') };
+      } catch {}
+      if (alive) setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
+  const save = async () => {
+    if (!String(fam.version).trim() || !String(off.version).trim()) { alert('版(バージョン)を入力してください'); return; }
+    setBusy(true); setMsg('');
+    try {
+      const policies = { family:{ version:String(fam.version).trim(), date:fam.date||'', text:fam.text }, office:{ version:String(off.version).trim(), date:off.date||'', text:off.text } };
+      const ok = await supabaseSaveGlobalPolicies(policies);
+      if (!ok) { alert('保存に失敗しました(通信エラー)'); setBusy(false); return; }
+      setGlobalPolicyCache(policies); // 自画面のキャッシュも即時更新
+      // ★ I5: 版が上がったポリシーは、全店の管理局お知らせ(system_notices, 全店対象)に改定通知を自動掲載
+      const _today = new Date().toISOString().slice(0,10);
+      const _mk = async (label, ver, date) => { try { await supabaseCreateSystemNotice({ title:`【重要】${label}を改定しました（版 ${ver}）`, body:`${label}を改定しました。\n改定日: ${date||_today}\n版: ${ver}\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。`, targetStoreIds:[], severity:'info', endsAt:null, createdBy: staffSession?.username||'honbu' }); } catch(e){ console.warn('policy notice failed', e); } };
+      let posted = 0;
+      if (String(fam.version).trim() !== origRef.current.fam) { await _mk('利用規約・プライバシーポリシー', String(fam.version).trim(), fam.date); posted++; }
+      if (String(off.version).trim() !== origRef.current.off) { await _mk('ご利用にあたっての重要事項', String(off.version).trim(), off.date); posted++; }
+      origRef.current = { fam:String(fam.version).trim(), off:String(off.version).trim() };
+      setMsg(posted ? '✓ 保存し、改定のお知らせを全店に掲載しました' : '✓ 保存しました（版の変更なし＝お知らせは掲載していません）');
+    } catch (e) { alert('保存に失敗: ' + (e?.message||'')); }
+    setBusy(false);
+  };
+  const inp = { width:'100%', padding:'8px 10px', border:'1px solid #cbd5e1', borderRadius:8, fontSize:13, fontWeight:'bold', outline:'none', boxSizing:'border-box' };
+  const renderKind = (label, st, setSt, def) => (
+    <div style={{border:'1px solid #e2e8f0',borderRadius:12,padding:14,marginBottom:12}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8,flexWrap:'wrap'}}>
+        <div style={{fontSize:14,fontWeight:'bold',color:'#3d5021'}}>{label}</div>
+        <button type="button" onClick={()=>{ if(window.confirm('この項目を既定文に戻します。よろしいですか?')) setSt({ version:def.version, date:def.date, text:def.text }); }} style={{padding:'5px 10px',background:'#f1f5f9',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>既定文に戻す</button>
+      </div>
+      <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+        <div style={{width:120}}><label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>版(バージョン)</label><input value={st.version} onChange={e=>setSt(s=>({...s,version:e.target.value}))} placeholder="例: 2.1" style={inp}/></div>
+        <div style={{width:160}}><label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>改定日</label><input type="date" value={st.date} onChange={e=>setSt(s=>({...s,date:e.target.value}))} style={inp}/></div>
+      </div>
+      <label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>本文</label>
+      <textarea value={st.text} onChange={e=>setSt(s=>({...s,text:e.target.value}))} rows={8} style={{...inp,fontWeight:'normal',lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}/>
+    </div>
+  );
+  return (
+    <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,gap:8,flexWrap:'wrap'}}>
+        <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📜 同意ポリシー編集（全店共通）</div>
+        {msg && <div style={{fontSize:12,fontWeight:'bold',color:'#16a34a'}}>{msg}</div>}
+      </div>
+      <div style={{fontSize:11,color:'#64748b',lineHeight:1.6,marginBottom:12,background:'#f0f7e0',border:'1px solid #d4e7a5',borderRadius:8,padding:'8px 10px'}}>
+        ここで編集した内容は<b>全店舗に共通で適用</b>されます。<b>版(バージョン)を上げて保存</b>すると、各店の家族・ケアマネ・スタッフに<b>次回ログイン時の再同意</b>を求め、全店の管理局お知らせに改定通知を自動掲載します。<br/>本文中の <code>{'{facility}'}</code> は各店舗名、<code>{'{tel}'}</code> は電話番号に自動置換されます。
+      </div>
+      {loading ? (
+        <div style={{textAlign:'center',padding:24,color:'#94a3b8'}}>読込中...</div>
+      ) : (
+        <>
+          {renderKind('利用規約・プライバシーポリシー（家族・ケアマネ向け）', fam, setFam, _defFam)}
+          {renderKind('ご利用にあたっての重要事項（事業所向け）', off, setOff, _defOff)}
+          <button type="button" onClick={save} disabled={busy} style={{padding:'10px 20px',background:busy?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:busy?'not-allowed':'pointer'}}>{busy?'保存中…':'全店共通ポリシーを保存'}</button>
+        </>
+      )}
+    </div>
+  );
+}
 function SystemNoticesPanel({ stores, staffSession }) {
   const [notices, setNotices] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -15176,6 +15265,8 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         </div>
         {/* システムお知らせ管理 */}
         <SystemNoticesPanel stores={stores} staffSession={staffSession}/>
+        {/* ★ J: 全店共通ポリシー編集 (各種設定から移設) */}
+        <GlobalPolicyPanel staffSession={staffSession}/>
         {/* 店舗一覧 */}
         <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -15626,6 +15717,20 @@ export default function App() {
     setStaffSession(null);
     setActiveRecorder(null);
   };
+  // ★ J: 全店共通ポリシー(管理局が編集)を起動時に読み込み、getEffectivePolicy が参照するキャッシュへ。
+  //   各店・家族閲覧はこれを「読む」だけ(自店データには書き込まない)。 読めたら再描画して同意ゲートに反映。
+  const [, _setGpTick] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (!isSupabaseEnabled) return;
+        const gp = await supabaseLoadGlobalPolicies();
+        if (alive && gp) { setGlobalPolicyCache(gp); _setGpTick(t => t + 1); }
+      } catch {}
+    })();
+    return () => { alive = false; };
+  }, []);
   // 新規登録モード: ?signup=family-xxx または ?signup=staff-xxx
   const signupContext = React.useMemo(()=>{
     try {
@@ -30386,23 +30491,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
       }
     }
-    // ★ I5: つむぎ管理局が同意ポリシーの「版」を上げて保存したとき、改定のお知らせを自動作成し、
-    //   家族・ケアマネの閲覧画面とスタッフのホームお知らせに掲載する。 版が実際に変わった時だけ発火。
-    let _polAnns = appData.familyAnnouncements || [];
-    let _polPosted = false;
-    if (isSuperAdmin) {
-      const _newPolAnns = [];
-      const _nowIso = new Date().toISOString(); const _today = _nowIso.slice(0,10);
-      const _mkPolAnn = (label, ver, date) => ({ id:`news_pol_${Date.now()}_${String(ver).replace(/\W/g,'')}_${label.length}`, title:`【重要】${label}を改定しました（版 ${ver}）`, body:`${label}を改定しました。\n改定日: ${date||_today}\n版: ${ver}\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。詳しい内容は各画面の規約・重要事項をご確認ください。`, date:_today, postedAt:_nowIso, audience:['family','caremanager','related'], photos:[], _policyNotice:true });
-      try {
-        const _oldFamVer = getEffectivePolicy('family', appData.systemSettings).version;
-        const _oldOffVer = getEffectivePolicy('office', appData.systemSettings).version;
-        if (policyFamily?.version && String(policyFamily.version) !== String(_oldFamVer)) _newPolAnns.push(_mkPolAnn('利用規約・プライバシーポリシー', policyFamily.version, policyFamily.date));
-        if (policyOffice?.version && String(policyOffice.version) !== String(_oldOffVer)) _newPolAnns.push(_mkPolAnn('ご利用にあたっての重要事項', policyOffice.version, policyOffice.date));
-      } catch {}
-      if (_newPolAnns.length) { _polAnns = [..._newPolAnns, ..._polAnns]; _polPosted = true; }
-    }
-    onSave({ ...appData, familyAnnouncements: _polAnns, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: _polPosted ? '✓ 各種設定を保存し、改定のお知らせを掲載しました' : '✓ 各種設定を保存しました' });
+    // ★ 同意ポリシーは全店共通(管理局コンソールで編集)へ移設したため、ここでは保存しない。
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -31020,31 +31110,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
               </div>
             </SectionCard>
             {isSuperAdmin && (
-            <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集 ｜ 管理局専用">
-              <p className="text-xs text-slate-500 mb-3 leading-relaxed">
-                <b className="text-indigo-700">つむぎ管理局のみが編集できます</b>（事業所ごとの誤編集を防ぐため）。事業所名・電話は自動ではめ込まれます。<br/>
-                家族・ケアマネの登録画面と、事業所の入場時に表示する同意文を編集できます。<b>社労士等の確認後に文面を修正</b>してご利用ください。<br/>
-                文中の <b>{'{facility}'}</b>=事業所名、<b>{'{tel}'}</b>=電話番号 に自動で置き換わります。<br/>
-                <b className="text-amber-700">「版」を上げて保存すると</b>、次回ログイン/入場時に<b>再同意</b>を求めます（同意状況は担当者・利用者ごとに記録）。<br/>
-                <span className="text-slate-400">※ ここは各事業所ごとの設定です。空欄や版を下げた場合は、つむぎ標準の既定文が使われます。</span>
-              </p>
-              {[
-                { key:'family', label:'家族・ケアマネ向け（利用規約・プライバシーポリシー）', st:policyFamily, set:setPolicyFamily, def:{version:FAMILY_CONSENT_VERSION,date:FAMILY_CONSENT_DATE,text:POLICY_DEFAULT_FAMILY_TEXT} },
-                { key:'office', label:'事業所向け（ご利用にあたっての重要事項）', st:policyOffice, set:setPolicyOffice, def:{version:OFFICE_CONSENT_VERSION,date:OFFICE_CONSENT_DATE,text:POLICY_DEFAULT_OFFICE_TEXT} },
-              ].map(({key,label,st,set,def})=>(
-                <div key={key} className="mb-5 border border-slate-200 rounded-xl p-3 bg-slate-50">
-                  <div className="text-sm font-bold text-slate-700 mb-2">{label}</div>
-                  <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <label className="text-xs font-bold text-slate-500">版</label>
-                    <input value={st.version||''} onChange={e=>set(s=>({...s,version:e.target.value}))} placeholder="例: 2.1" className="w-24 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"/>
-                    <label className="text-xs font-bold text-slate-500 ml-2">改定日</label>
-                    <input type="date" value={st.date||''} onChange={e=>set(s=>({...s,date:e.target.value}))} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
-                    <button type="button" onClick={()=>{ if(window.confirm('つむぎ標準の既定文に戻しますか？（未保存の編集は失われます）')) set({...def}); }} className="ml-auto text-xs font-bold text-slate-500 bg-white border border-slate-300 rounded-lg px-3 py-1.5 hover:bg-slate-100">既定文に戻す</button>
-                  </div>
-                  <textarea value={st.text||''} onChange={e=>set(s=>({...s,text:e.target.value}))} rows={10} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs outline-none resize-y leading-relaxed" style={{whiteSpace:'pre-wrap'}}/>
-                </div>
-              ))}
-              <p className="text-[11px] text-slate-400">編集後は画面右上（またはこのページ）の<b>保存</b>で反映されます。</p>
+            <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集">
+              <div className="text-sm text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-4 leading-relaxed">
+                同意ポリシーの編集は<b className="text-indigo-700">「つむぎ管理局」の店舗選択画面</b>に移設し、<b>全店共通</b>で管理するようになりました。<br/>
+                一度ログアウトして<b>管理局アカウント</b>でログイン → 店舗一覧の上にある<b>「📜 同意ポリシー編集（全店共通）」</b>から編集してください。<br/>
+                版を上げて保存すると、全店の家族・ケアマネ・スタッフに再同意を求め、全店の管理局お知らせに改定通知を自動掲載します。
+              </div>
             </SectionCard>
             )}
             <SectionCard title="テンキー補完ボタンの管理">

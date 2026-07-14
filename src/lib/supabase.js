@@ -761,6 +761,36 @@ export async function supabaseLoadStateForStore(storeId) {
 }
 
 // =========================================================
+// 全店共通ポリシー (つむぎ管理局が編集 → 予約キー __tsumugi_global__ の app_state に保存し、各店が読む)
+//   ※ stores テーブルとは別なので「偽店舗」は一覧に出ない。
+// =========================================================
+export const GLOBAL_STATE_KEY = '__tsumugi_global__';
+export async function supabaseLoadGlobalPolicies() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('app_state')
+      .select('data')
+      .eq('key', GLOBAL_STATE_KEY)
+      .maybeSingle();
+    if (error) { console.warn('[supabase] loadGlobalPolicies error', error); return null; }
+    return (data && data.data && data.data.policies) ? data.data.policies : null;
+  } catch (e) { console.warn('[supabase] loadGlobalPolicies exception', e); return null; }
+}
+export async function supabaseSaveGlobalPolicies(policies) {
+  if (!supabase) return false;
+  try {
+    // 既存の共通レコードを読み、policies だけ差し替えて保存 (将来の共通データがあれば保持)
+    const { data: row } = await supabase.from('app_state').select('data').eq('key', GLOBAL_STATE_KEY).maybeSingle();
+    const cur = (row && row.data) ? row.data : {};
+    const next = { ...cur, policies, _updatedAt: Date.now() };
+    const { error } = await supabase.from('app_state').upsert({ key: GLOBAL_STATE_KEY, data: next });
+    if (error) { console.warn('[supabase] saveGlobalPolicies error', error); return false; }
+    return true;
+  } catch (e) { console.warn('[supabase] saveGlobalPolicies exception', e); return false; }
+}
+
+// =========================================================
 // システムお知らせ (本部 → 全店舗 / 個別店舗)
 // =========================================================
 export async function supabaseListSystemNotices(storeId) {
