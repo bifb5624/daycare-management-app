@@ -645,29 +645,42 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const lMs = (localData.monthlyShifts && typeof localData.monthlyShifts === 'object') ? localData.monthlyShifts : null;
       const cMs = (cloud.monthlyShifts && typeof cloud.monthlyShifts === 'object') ? cloud.monthlyShifts : null;
       if (lMs || cMs) {
-        // ★ 月間シフトも「新しい方(_msSavedAt)」を優先する。 これが無いと、古い端末が別の保存
-        //   (提供記録等)をした拍子に、古い monthlyShifts で新しい端末の「振替」設定を消してしまう。
-        //   端末単位ではなく「利用者×月」単位で判定: 双方にある利用者は新しい側を採用(削除も反映)、
-        //   片方にしか無い利用者はその側を保持(別々の月/利用者の編集は両方残す)。
+        // ★ 月間シフトは「利用者×月ごとの時刻(_msTs)」で新しい方を採用する。
+        //   全体で1つの時刻(_msSavedAt)だと、別の利用者/月を1つ触っただけの古い端末が、
+        //   他端末の振替まで「新しい」と誤判定して古い内容で上書きし戻してしまうため。
+        //   時刻が無い(旧データ)ときのみ、全体の _msSavedAt で従来判定にフォールバック。
+        const lTs = (localData._msTs && typeof localData._msTs === 'object') ? localData._msTs : {};
+        const cTs = (cloud._msTs && typeof cloud._msTs === 'object') ? cloud._msTs : {};
         const lMsT = Number(localData._msSavedAt) || 0, cMsT = Number(cloud._msSavedAt) || 0;
-        const localNewer = lMsT >= cMsT; // 同点/未設定はローカル(編集端末)優先=従来動作
-        const outMs = {};
+        const localNewerGlobal = lMsT >= cMsT;
+        const outMs = {}; const outTs = {};
         const monthKeys = new Set([...Object.keys(lMs || {}), ...Object.keys(cMs || {})]);
         monthKeys.forEach(mk => {
           const lm = (lMs && lMs[mk] && typeof lMs[mk] === 'object') ? lMs[mk] : {};
           const cm = (cMs && cMs[mk] && typeof cMs[mk] === 'object') ? cMs[mk] : {};
-          const om = {};
+          const lmTs = (lTs[mk] && typeof lTs[mk] === 'object') ? lTs[mk] : {};
+          const cmTs = (cTs[mk] && typeof cTs[mk] === 'object') ? cTs[mk] : {};
+          const om = {}; const omTs = {};
           const pids = new Set([...Object.keys(lm), ...Object.keys(cm)]);
           pids.forEach(pid => {
             const hasL = Object.prototype.hasOwnProperty.call(lm, pid);
             const hasC = Object.prototype.hasOwnProperty.call(cm, pid);
-            if (hasL && hasC) om[pid] = localNewer ? lm[pid] : cm[pid];
-            else if (hasL) om[pid] = lm[pid];
-            else om[pid] = cm[pid];
+            if (hasL && hasC) {
+              const lt = Number(lmTs[pid]) || 0, ct = Number(cmTs[pid]) || 0;
+              // 患者×月の時刻があればそれで判定。 無ければ全体時刻でフォールバック。
+              const useLocal = (lt || ct) ? (lt >= ct) : localNewerGlobal;
+              om[pid] = useLocal ? lm[pid] : cm[pid];
+            } else if (hasL) { om[pid] = lm[pid]; }
+            else { om[pid] = cm[pid]; }
+            // 時刻は「新しい方」を保持(両端末で存在すれば max)
+            const _t = Math.max(Number(lmTs[pid]) || 0, Number(cmTs[pid]) || 0);
+            if (_t) omTs[pid] = _t;
           });
           outMs[mk] = om;
+          if (Object.keys(omTs).length) outTs[mk] = omTs;
         });
         merged.monthlyShifts = outMs;
+        merged._msTs = outTs;
         merged._msSavedAt = Math.max(lMsT, cMsT);
       }
     }

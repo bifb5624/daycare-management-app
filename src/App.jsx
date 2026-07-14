@@ -16427,9 +16427,25 @@ export default function App() {
         });
         if (changed) newData = { ...newData, patients: stamped };
       }
-      // 月間シフト: オブジェクト参照が変わった(=編集された)ときだけ時刻を刻む
+      // ★ 月間シフト: 変更された「患者×月」だけに時刻(_msTs)を刻む。
+      //   以前は monthlyShifts 全体で1つの時刻(_msSavedAt)だったため、別の患者/月のシフトを1つ触っただけで
+      //   その端末が全ての患者×月で「新しい」と判定され、他端末の振替を古い内容で上書きして戻していた。
       if (newData.monthlyShifts && newData.monthlyShifts !== prev.monthlyShifts) {
-        newData = { ...newData, _msSavedAt: Date.now() };
+        const _prevMs = prev.monthlyShifts || {}, _newMs = newData.monthlyShifts || {};
+        const _ts = { ...(newData._msTs || {}) };
+        const _now = Date.now();
+        const _mks = new Set([...Object.keys(_prevMs), ...Object.keys(_newMs)]);
+        _mks.forEach(mk => {
+          const pm = _prevMs[mk] || {}, nm = _newMs[mk] || {};
+          const _pids = new Set([...Object.keys(pm), ...Object.keys(nm)]);
+          let _touched = false;
+          const _mkTs = { ...(_ts[mk] || {}) };
+          _pids.forEach(pid => {
+            try { if (JSON.stringify(pm[pid]) !== JSON.stringify(nm[pid])) { _mkTs[pid] = _now; _touched = true; } } catch { _mkTs[pid] = _now; _touched = true; }
+          });
+          if (_touched) _ts[mk] = _mkTs;
+        });
+        newData = { ...newData, _msTs: _ts, _msSavedAt: _now };
       }
       // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文 等)も、編集された時だけ時刻を刻む。
       //   これが無いと古い端末の push で連絡事項・掲載期間が丸ごと巻き戻る。
