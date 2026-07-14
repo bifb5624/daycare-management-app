@@ -20242,7 +20242,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                             let raw = r.exercises?.[exItem.id];
                             if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
                               const _val = String(raw.value ?? '').trim();
-                              if (_val === '○' || _val === '◯') { const ind = (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
+                              if (_val === '○' || _val === '◯') { const ind = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
                               else raw = _val;
                             }
                             if (raw==null||raw===''||raw==='×'||raw==='✕'||raw==='x'||raw==='ー'||raw==='-') return null;
@@ -20874,7 +20874,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         if (v && typeof v === 'object') {
                           // 個別運動スロット {itemId,value}: ○ は基準値(個別運動メニューのdefaultValue)に変換、数値はそのまま
                           const val = String(v.value ?? '').trim();
-                          if (val === '○' || val === '◯') { const ind = (selectedPatient.individualExercises||[]).find(x=>x.itemId===v.itemId); const dv = String(ind?.defaultValue||'').trim(); return dv || null; }
+                          if (val === '○' || val === '◯') { const ind = allIndItems.find(x=>x.id===v.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===v.itemId); const dv = String(ind?.defaultValue||'').trim(); return dv || null; }
                           return val || null;
                         }
                         if (v==null||v===''||v==='×'||v==='✕'||v==='x'||v==='ー'||v==='-') return null;
@@ -21796,7 +21796,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               let raw = r.exercises?.[selEx.id];
               if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
                 const _val = String(raw.value ?? '').trim();
-                if (_val === '○' || _val === '◯') { const ind = (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
+                if (_val === '○' || _val === '◯') { const ind = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
                 else raw = _val;
               }
               if (raw == null || raw === '' || raw === '×' || raw === '✕' || raw === 'x' || raw === 'ー' || raw === '-') return '';
@@ -22365,6 +22365,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </td>
                       {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
                         let rawV = r.exercises?.[ex.id];
+                        // ★ 個別運動スロット {itemId,value}: value を取り出す(そのまま String すると [object Object] になる)。
+                        //   value が ○ のときは選んだ個別運動メニューの基準値(defaultValue)に置換。
+                        if (rawV && typeof rawV === 'object') {
+                          const _iv = String(rawV.value ?? '').trim();
+                          if (_iv === '○' || _iv === '◯') { const _ind = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===rawV.itemId); rawV = (String(_ind?.defaultValue||'').trim()) || '○'; }
+                          else rawV = _iv;
+                        }
                         // ★ ○ はその月の設定数値(例:10分)に置き換えて表示。 設定が無ければ○のまま。 ×/ー/数値はそのまま。
                         if (rawV === '○' || rawV === '◯') {
                           const _mm = (r.date||'').match(/(\d+)月/); const _ry = r.year || new Date().getFullYear();
