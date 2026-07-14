@@ -20709,6 +20709,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           _withDates.sort((a, b) => b.d.getTime() - a.d.getTime());
           const _latest = _withDates[0]?.r;
           if (!_latest) return null;
+          // ★ 欠席・休止・休業など通所していない時は「今回の様子」は出さない(欠席理由は下の「今回の記録」に出るため)
+          if (_latest.status === '欠席' || _latest.status === '休業' || _latest.status === '休止') return null;
           // 特記取得 (override 優先)
           const _ftoPid = (appData.familyTokkiOverrides||{})[selectedPatientId] || {};
           const _ov = _ftoPid[_latest.date] || _ftoPid[_latest.id] || {};
