@@ -950,9 +950,10 @@ function WarekiBirthInput({ iso, disabled, onChange }) {
     <div className="flex items-center gap-1 mt-1.5 whitespace-nowrap">
       <span className="text-[11px] font-bold text-slate-400">和暦</span>
       <select disabled={disabled} value={p.era||''} onChange={e=>upd({era:e.target.value})} className={inC}><option value="">元号</option>{WAREKI_ERAS.map(([n])=><option key={n} value={n}>{n}</option>)}</select>
-      <input disabled={disabled} type="number" inputMode="numeric" value={p.ey||''} onChange={e=>upd({ey:e.target.value})} placeholder="年" className={`${inC} w-11`}/><span className="text-[12px] text-slate-500">年</span>
-      <input disabled={disabled} type="number" inputMode="numeric" value={p.m||''} onChange={e=>upd({m:e.target.value})} placeholder="月" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">月</span>
-      <input disabled={disabled} type="number" inputMode="numeric" value={p.day||''} onChange={e=>upd({day:e.target.value})} placeholder="日" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">日</span>
+      {/* ★ type="text"+inputMode=numeric で数字キーは出しつつ、スピナー矢印(数字が隠れる)を消す。 数字のみに整形。 */}
+      <input disabled={disabled} type="text" inputMode="numeric" value={p.ey||''} onChange={e=>upd({ey:e.target.value.replace(/[^0-9]/g,'')})} placeholder="年" className={`${inC} w-11`}/><span className="text-[12px] text-slate-500">年</span>
+      <input disabled={disabled} type="text" inputMode="numeric" value={p.m||''} onChange={e=>upd({m:e.target.value.replace(/[^0-9]/g,'')})} placeholder="月" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">月</span>
+      <input disabled={disabled} type="text" inputMode="numeric" value={p.day||''} onChange={e=>upd({day:e.target.value.replace(/[^0-9]/g,'')})} placeholder="日" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">日</span>
     </div>
   );
 }
@@ -31664,6 +31665,30 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         ・全端末 (PC / iPad / スマホ) で同じデータが見える<br/>
                         ・データ復元に関する詳細は利用規約をご覧ください
                       </div>
+                    </div>
+                    {/* ★ この端末のデータを「最新」として確定 (移行期に、正しいデータを持つ端末で1回押す) */}
+                    <div className="border-t border-slate-200 pt-3">
+                      <div className="text-sm font-bold text-slate-700 mb-1.5">この端末のデータを「最新」として全体に反映</div>
+                      <div className="text-[11px] text-slate-500 leading-relaxed mb-2">
+                        すべての記録・設定に<b>今の時刻の印</b>を付けて保存します。これにより、<b>他の端末が持っている古いデータでは上書きされなくなります</b>。<br/>
+                        <b>正しい/最新のデータが表示されている端末で1回だけ</b>押してください（複数端末で押すと、最後に押した端末が優先されます）。実行後、他の端末はハードリロードしてください。
+                      </div>
+                      <button type="button" onClick={()=>{
+                        if (!window.confirm('この端末に表示されている全データを「最新」として確定し、クラウドと全端末に反映します。\n\n（正しいデータが出ている端末で押してください）実行しますか?')) return;
+                        try {
+                          const now = Date.now();
+                          const d = { ...appData };
+                          ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => (r && r.id!=null) ? { ...r, _savedAt: now } : r); });
+                          if (Array.isArray(d.patients)) d.patients = d.patients.map(p => (p && p.id!=null) ? { ...p, _savedAt: now } : p);
+                          const _ts = {}; Object.keys(d.monthlyShifts||{}).forEach(mk => { const pm = d.monthlyShifts[mk]||{}; _ts[mk] = {}; Object.keys(pm).forEach(pid => { _ts[mk][pid] = now; }); }); d._msTs = _ts; d._msSavedAt = now;
+                          if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ dl[k]={ ...(d.diaryLogs[k]||{}), _savedAt: now }; }); d.diaryLogs = dl; }
+                          if (d.faxDataStore && typeof d.faxDataStore==='object') { const fx={}; Object.keys(d.faxDataStore).forEach(k=>{ fx[k]={ ...(d.faxDataStore[k]||{}), _updatedAt: now }; }); d.faxDataStore = fx; }
+                          ['systemSettings','contactBookConfig','diarySettings','generalFaxDraft'].forEach(k => { if (d[k] && typeof d[k]==='object') d[k] = { ...d[k], _updatedAt: now }; });
+                          onSave(d, { manual:true, message:'✓ この端末のデータを最新として確定しました（他端末はリロードしてください）' });
+                        } catch(e) { alert('確定に失敗しました: ' + (e?.message||'')); }
+                      }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm active:scale-95">
+                        この端末のデータを最新として確定
+                      </button>
                     </div>
                     {/* 全データ一括リセット (試験運用準備用) — 削除時にコメントアウトで非表示にできる */}
                     <div className="border-t border-slate-200 pt-3" style={{display:'none'}}>
