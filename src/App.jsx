@@ -27170,7 +27170,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (dirtyRef) dirtyRef.current = false;
     onSave(nextData, { manual: true, message: '✓ 基本利用日を保存しました' });
   };
-  const handleKpInput = (nv) => { setKeypad(p => ({ ...p, value: nv, isFirstInput: false })); if (keypad.field === 'plannedExercise' && localPatient) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: nv }); };
+  const handleKpInput = (nv) => { setKeypad(p => ({ ...p, value: nv, isFirstInput: false }));
+    if (keypad.field === 'plannedExercise' && localPatient) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: nv });
+    // ★ 個別運動メニューの基準値をテンキーで入力
+    if (keypad.field === 'individualDefault' && localPatient) updateLP('individualExercises', (localPatient.individualExercises||[]).map(x => x.itemId===keypad.exerciseId ? {...x, defaultValue: nv} : x));
+  };
   // ★ テンキー(点キー)の表示ON/OFF。 OFFなら運動メニュー欄も通常キーボードで直接入力
   const _mKeypadOn = (appData.systemSettings?.keypadDisabled !== true);
   const isResigned = localPatient ? isPatientResigned(localPatient) : false;
@@ -28127,7 +28131,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const fkey=si.id==='massage'?'massageNeed':si.id==='onyoku'?'onyokuDenryo':`svc_${si.id}`;
                 return(<div key={si.id} className="flex-1 min-w-[120px]"><label className="block text-sm font-bold text-slate-600 mb-1">{si.label}</label><select disabled={isOff} value={localPatient[fkey]||''} onChange={e=>updateLP(fkey,e.target.value)} className="w-full px-3 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-base outline-none cursor-pointer disabled:opacity-60">{opts.map(o=><option key={o} value={o}>{o}</option>)}</select></div>);
               })}</div>
-              <div><h3 className="text-sm font-bold text-slate-600 mb-3">運動メニュー</h3><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">{(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => { const isActive = keypad.isOpen && keypad.exerciseId === item.id; return (<div key={item.id} className={`p-2.5 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' : 'bg-slate-50 border-slate-200'}`}><label className="block text-[12px] font-bold text-slate-500 mb-1 text-center truncate">{item.name}{item.defaultUnit && item.type !== 'individual' && <span className="text-[9px] text-slate-400 font-normal ml-1">({item.defaultUnit})</span>}</label><input type="text" inputMode="text" readOnly={_mKeypadOn} disabled={isOff} value={(localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || ""}
+              <div><h3 className="text-sm font-bold text-slate-600 mb-3">運動メニュー</h3><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">{(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => { const isActive = keypad.isOpen && keypad.exerciseId === item.id; return (<div key={item.id} className={`p-2.5 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' : 'bg-slate-50 border-slate-200'}`}><label className="block text-[12px] font-bold text-slate-500 mb-1 text-center truncate">{item.name}{(item.defaultUnit || item.defaultUnit2) && item.type !== 'individual' && <span className="text-[9px] text-slate-400 font-normal ml-1">({[item.defaultUnit, item.defaultUnit2].filter(Boolean).join('/')})</span>}</label><input type="text" inputMode="text" readOnly={_mKeypadOn} disabled={isOff} value={(localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || ""}
                 onClick={() => { if (!isOff && _mKeypadOn) setKeypad({ isOpen: true, field: 'plannedExercise', exerciseId: item.id, value: (localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || "", isFirstInput: true, mode: 'exercise' }); }}
                 onChange={_mKeypadOn ? undefined : (e)=>updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [item.id]: e.target.value })}
                 onBlur={_mKeypadOn ? undefined : (e)=>{ let v=(e.target.value||'').trim(); if(v && item.defaultUnit && /[0-9０-９]/.test(v) && !v.endsWith(item.defaultUnit)) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [item.id]: `${v}${item.defaultUnit}` }); }}
@@ -28160,13 +28164,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                             <label className="flex items-center gap-1.5 cursor-pointer mb-1">
                               <input type="checkbox" checked={!!selected} disabled={isOff} onChange={()=>!isOff&&toggleInd(item.id)} className="accent-emerald-600"/>
                               <span className="text-xs font-bold text-slate-700">{item.name}</span>
-                              <span className="text-[9px] text-slate-400 ml-auto">{item.defaultUnit||''}</span>
+                              <span className="text-[9px] text-slate-400 ml-auto">{[item.defaultUnit, item.defaultUnit2].filter(Boolean).join('/')}</span>
                             </label>
-                            {selected && (
-                              <input type="text" disabled={isOff} value={selected.defaultValue||''} onChange={e=>updateIndDefault(item.id, e.target.value)}
+                            {selected && (() => {
+                              const _indActive = keypad.isOpen && keypad.field==='individualDefault' && keypad.exerciseId===item.id;
+                              return (
+                              <input type="text" inputMode="text" readOnly={_mKeypadOn} disabled={isOff} value={selected.defaultValue||''}
+                                onClick={()=>{ if(!isOff && _mKeypadOn) setKeypad({ isOpen:true, field:'individualDefault', exerciseId:item.id, value:selected.defaultValue||'', isFirstInput:true, mode:'exercise' }); }}
+                                onChange={_mKeypadOn ? undefined : e=>updateIndDefault(item.id, e.target.value)}
+                                onBlur={_mKeypadOn ? undefined : e=>{ const _fin=applyExUnits((e.target.value||'').trim(), item); if(_fin!==(e.target.value||'').trim()) updateIndDefault(item.id, _fin); }}
                                 placeholder={`例: 15${item.defaultUnit||''}`}
-                                className="w-full px-2 py-1 bg-white border border-emerald-300 rounded text-xs font-bold outline-none focus:border-emerald-500 disabled:opacity-60"/>
-                            )}
+                                className={`keypad-trigger w-full px-2 py-1 border rounded text-xs font-bold outline-none disabled:opacity-60 ${_mKeypadOn?'cursor-pointer':''} ${_indActive?'bg-blue-50 border-blue-500 ring-2 ring-blue-300':'bg-white border-emerald-300 focus:border-emerald-500'}`}/>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -28284,7 +28294,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         </>) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">左から利用者を選択してください</div>)}
       </div>
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode}
-        unitSep={(()=>{ const _it=(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(e => e.id === keypad.exerciseId); return (_it&&_it.unitSep)||''; })()}
+        unitSep={(()=>{ const _src = keypad.field==='individualDefault' ? (appData.systemSettings?.individualExerciseItems||[]) : (appData.systemSettings?.exerciseItems || appSettings.exerciseItems); const _it=_src.find(e => e.id === keypad.exerciseId); return (_it&&_it.unitSep)||''; })()}
         onClose={() => {
         // ★ 運動メニューの入力を閉じる時、単位(1〜2単位)を自動付与 (例: 10 → 10分 / 5×10 → 5kg×10回)
         if (keypad.field === 'plannedExercise' && localPatient) {
@@ -28292,6 +28302,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           const _raw = String(keypad.value ?? '').trim();
           const _fin = applyExUnits(_raw, _it);
           if (_fin !== _raw) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: _fin });
+        }
+        // ★ 個別運動メニューの基準値: 閉じる時に単位(1〜2単位・×//区切り)を自動付与
+        if (keypad.field === 'individualDefault' && localPatient) {
+          const _it = (appData.systemSettings?.individualExerciseItems || []).find(e => e.id === keypad.exerciseId);
+          const _raw = String(keypad.value ?? '').trim();
+          const _fin = applyExUnits(_raw, _it);
+          if (_fin !== _raw) updateLP('individualExercises', (localPatient.individualExercises||[]).map(x => x.itemId===keypad.exerciseId ? {...x, defaultValue: _fin} : x));
         }
         setKeypad({ ...keypad, isOpen: false });
       }} onInput={handleKpInput} quickButtons={appData.systemSettings?.exerciseQuickButtons}/>
