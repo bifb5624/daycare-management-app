@@ -384,6 +384,16 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     keys.forEach(k => {
       if (k === '_savedAt') return;
       const av = a[k], bv = b[k];
+      // ★ 次回予定(nextDateOverride/nextTimeOverride)は「空欄=未設定(自動計算に任せる)」であり、
+      //   「明示的な削除」と区別できない(1項目の保存でも記録全体の _savedAt が新しくなり、空欄も新しく見える)。
+      //   別端末で入力済みの時間が、当端末の空欄保存で消える事故を防ぐため、非空を無条件優先する。
+      if (k === 'nextDateOverride' || k === 'nextTimeOverride') {
+        const ae = _isEmptyVal(av), be = _isEmptyVal(bv);
+        if (ae && be) { out[k] = av; return; }
+        if (ae !== be) { out[k] = ae ? bv : av; return; } // 非空を優先(空欄では消さない)
+        out[k] = aNewer ? av : bv; // 両方入力あり → 新しい方
+        return;
+      }
       const aObj = av && typeof av === 'object' && !Array.isArray(av);
       const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
       if (aObj || bObj) {
