@@ -28137,7 +28137,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div className="border-t border-slate-200 pt-4">
                 <h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>緊急連絡先 (主要)</h3>
                 {/* ★ 紫サマリーは廃止。 家族・関係者が登録した情報は下の各欄に自動反映される */}
-                <div className="space-y-3">
+                {/* ★ C4: 広い編集パネルで各欄が横に伸びすぎないよう最大幅を制限 */}
+                <div className="space-y-3 max-w-2xl">
                   {/* ★ 氏名は姓/名に分割。 1人目に登録した家族・関係者の情報がここに入る */}
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -28181,7 +28182,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     <input type="email" disabled={isOff} value={localPatient.familyEmail||''} onChange={e=>updateLP('familyEmail',e.target.value)} placeholder="hanako@example.com" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
                   </div>
                 </div>
-                <div className="mt-4">
+                <div className="mt-4 max-w-2xl">
                   <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-500">追加の緊急連絡先</span>{!isOff&&<button type="button" onClick={()=>updateLP('emergencyContacts',[...(localPatient.emergencyContacts||[]),{name:'',relation:'',phone:'',phoneMobile:'',email:''}])} className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-100">＋ 追加</button>}</div>
                   {(localPatient.emergencyContacts||[]).filter(c=>!isCmContact(c)).length===0&&<div className="text-xs text-slate-400 py-2">追加の緊急連絡先なし</div>}
                   {(localPatient.emergencyContacts||[]).map((ec,ei)=>({ec,ei})).filter(({ec})=>!isCmContact(ec)).map(({ec,ei})=>(
