@@ -17832,6 +17832,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           if (a === 'AM' ? cur !== sv : cur !== (saved?.[`${f}_PM`] ?? '')) return true;
         }
       }
+      // ★ 運動メニュー(exercises)の未保存判定 (打鍵が pull で消えるのを防ぐガードに使う)
+      const curEx = p.exercises || {}, savedEx = saved?.exercises || {};
+      const _exKeys = new Set([...Object.keys(curEx), ...Object.keys(savedEx)]);
+      for (const k of _exKeys) {
+        const cv = (curEx[k] && typeof curEx[k] === 'object') ? (curEx[k].value || '') : (curEx[k] || '');
+        const sv = (savedEx[k] && typeof savedEx[k] === 'object') ? (savedEx[k].value || '') : (savedEx[k] || '');
+        if (cv !== sv) return true;
+      }
       return false;
     });
   }, [localPatients, appData.ticketRecords, selectedDate, filterMode]);
@@ -17877,10 +17885,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (!appData || !appData.patients) return;
     const _dateChanged = _rvPrevDateRef.current !== selectedDate;
     _rvPrevDateRef.current = selectedDate;
-    // ★ 同じ日で編集中(dirty)の間は、クラウド同期等の appData 変化で入力途中を上書きしない。
-    //   ただし日付が変わった時は必ず作り直す(前の日の編集中フラグが残っていて、別の日のリストが
-    //   古いまま=表示人数がおかしくなるのを防ぐ)。
-    if (!_dateChanged && dirtyRef?.current) return;
+    // ★ 同じ日で編集中(dirty)、または「ローカルに未保存の入力が残っている(hasUnsaved)」間は、
+    //   クラウド同期等の appData 変化で入力途中を上書きしない。
+    //   hasUnsaved も見るのは、保存直後に dirty=false になった瞬間、まだクラウドに届いていない古いデータを
+    //   pull で受信すると、ローカルの入力(=appDataと不一致)が消えてしまうレースを塞ぐため。
+    //   ただし日付が変わった時は必ず作り直す(前の日の編集中フラグが残っていて表示人数がおかしくなるのを防ぐ)。
+    if (!_dateChanged && (dirtyRef?.current || hasUnsaved)) return;
     const dayOfWeek = new Date(selectedDate).getDay();
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
@@ -18076,12 +18086,30 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     setRestoreModal(false);
   };
   // ★ 直前スナップショットとの差分で「どの利用者を編集したか」を返す
+  // ★ 直前スナップショットとの差分を「氏名＋変更した項目名」で返す。
   const _snapChanges = (newerRecs, olderRecs) => {
     const om = {}; (olderRecs||[]).forEach(r=>{ if(r) om[r.patientId]=r; });
-    const _cmp = (x)=> x ? JSON.stringify({ ...x, _savedAt:undefined, recorder:undefined, id:undefined }) : '';
-    const names = [];
-    (newerRecs||[]).forEach(r=>{ if(!r) return; const o=om[r.patientId]; if(_cmp(o)!==_cmp(r)) names.push(r.name || `ID:${r.patientId}`); });
-    return names;
+    const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems || []);
+    const _exName = (id) => (_exItems.find(x=>x.id===id)?.name) || String(id);
+    const LBL = { status:'状態', massage:'介護整体', tokki:'特記', kibunArrival:'通所時の気分', kibunDeparture:'帰宅時の気分',
+      temp_AM:'体温', temp_PM:'体温', bpUpSt_AM:'開始血圧', bpDnSt_AM:'開始血圧', bpUpSt_PM:'開始血圧', bpDnSt_PM:'開始血圧',
+      bpUpEn_AM:'終了血圧', bpDnEn_AM:'終了血圧', bpUpEn_PM:'終了血圧', bpDnEn_PM:'終了血圧',
+      plSt_AM:'開始脈', plSt_PM:'開始脈', plEn_AM:'終了脈', plEn_PM:'終了脈',
+      nextDateOverride:'次回利用日', nextTimeOverride:'次回お迎え時間', actualTime:'提供時間' };
+    const results = [];
+    (newerRecs||[]).forEach(r=>{
+      if(!r) return; const o=om[r.patientId]||{};
+      const changed = [];
+      Object.keys(LBL).forEach(k=>{ if((r[k]||'')!==(o[k]||'') && !changed.includes(LBL[k])) changed.push(LBL[k]); });
+      const ce=r.exercises||{}, oe=o.exercises||{};
+      new Set([...Object.keys(ce),...Object.keys(oe)]).forEach(k=>{
+        const cv=(ce[k]&&typeof ce[k]==='object')?(ce[k].value||''):(ce[k]||'');
+        const sv=(oe[k]&&typeof oe[k]==='object')?(oe[k].value||''):(oe[k]||'');
+        if(cv!==sv){ const nm=_exName(k); if(!changed.includes(nm)) changed.push(nm); }
+      });
+      if(changed.length) results.push({ name: r.name || `ID:${r.patientId}`, fields: changed });
+    });
+    return results;
   };
 
   const handleStatusChange = (id, newStatus) => {
@@ -19370,13 +19398,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 {snaps.length===0 ? <div className="text-center text-slate-400 font-bold py-8 text-sm">この日の保存履歴はまだありません</div> :
                   snaps.map((s,i)=>{
                     const chg = _snapChanges(s.recs, snaps[i+1]?.recs || []); // 直前(古い)との差分
-                    const chgLabel = chg.length ? (chg.slice(0,3).join('・') + (chg.length>3?` 他${chg.length-3}名`:'')) : (i===snaps.length-1?'最初の保存':'変更なし');
+                    // ★ 「氏名（項目・項目）」で最大3名分。 それ以上は「他◯名」。
+                    const chgLabel = chg.length
+                      ? (chg.slice(0,3).map(c=>`${c.name}（${c.fields.slice(0,4).join('・')}${c.fields.length>4?' 他':''}）`).join(' / ') + (chg.length>3?` 他${chg.length-3}名`:''))
+                      : (i===snaps.length-1?'最初の保存':'変更なし');
                     return (
                     <button key={s.t} onClick={()=>{ if(window.confirm(`${_fmtT(s.t)} 時点の記録（入力あり${_cntData(s.recs)}名）に戻します。よろしいですか？`)) _restoreRecSnap(s); }}
-                      className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-center justify-between gap-2 active:scale-[0.99]">
+                      className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-start justify-between gap-2 active:scale-[0.99]">
                       <div className="min-w-0"><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div>
-                        <div className="text-[12px] text-slate-700 font-bold truncate">✎ {chgLabel}</div>
-                        <div className="text-[11px] text-slate-400">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
+                        <div className="text-[12px] text-slate-700 font-bold leading-snug" style={{display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>✎ {chgLabel}</div>
+                        <div className="text-[11px] text-slate-400 mt-0.5">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
                       <span className="text-xs font-bold text-blue-600 shrink-0">戻す →</span>
                     </button>
                     );
