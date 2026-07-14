@@ -17893,12 +17893,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (!appData || !appData.patients) return;
     const _dateChanged = _rvPrevDateRef.current !== selectedDate;
     _rvPrevDateRef.current = selectedDate;
-    // ★ 同じ日で編集中(dirty)、または「ローカルに未保存の入力が残っている(hasUnsaved)」間は、
-    //   クラウド同期等の appData 変化で入力途中を上書きしない。
-    //   hasUnsaved も見るのは、保存直後に dirty=false になった瞬間、まだクラウドに届いていない古いデータを
-    //   pull で受信すると、ローカルの入力(=appDataと不一致)が消えてしまうレースを塞ぐため。
-    //   ただし日付が変わった時は必ず作り直す(前の日の編集中フラグが残っていて表示人数がおかしくなるのを防ぐ)。
-    if (!_dateChanged && (dirtyRef?.current || hasUnsaved)) return;
+    // ★ 同じ日で「編集中(dirty)」の間だけ、クラウド同期等の appData 変化で入力途中を上書きしない。
+    //   ※ 以前ここに hasUnsaved も足したが、下書き(localPatients)は appData から状態(出席/振替/休止)を
+    //     計算し直して作るため、未編集でも saved と一致せず hasUnsaved が常に真になり得た。 その結果
+    //     「他端末の更新が下書きに反映されない＝再読込しないと同期しない」「古い下書きが自動保存で新しい時刻付きで
+    //     push され他端末の入力を上書き」という重大な同期不具合になったため、dirty のみに戻す。
+    //   日付が変わった時は必ず作り直す(前の日の編集中フラグが残って表示人数がおかしくなるのを防ぐ)。
+    if (!_dateChanged && dirtyRef?.current) return;
     const dayOfWeek = new Date(selectedDate).getDay();
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
