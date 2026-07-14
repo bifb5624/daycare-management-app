@@ -15899,9 +15899,10 @@ export default function App() {
         let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
-          // ★ 初回ロード時: 端末内(localStorage)の「未送信の新しい提供記録」をクラウドに統合し、再読み込みで消さない。
+          // ★ 毎回のpullで: 端末内の「クラウドより新しい提供記録」を保持する(pull は丸ごと置換なので、
+          //   push が一時的に失敗している間に空のクラウドを受信すると入力が消える=空白バグを防ぐ)。
           //   patient+日付+年 で突き合わせ、_savedAt が新しい方を採用。 墓石(削除済み)は復活させない。
-          if (_isFirstLoad && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
               const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
@@ -15920,9 +15921,9 @@ export default function App() {
           }
           return merged;
         });
-        // ★ 端末内の未送信記録を保持した場合は、クラウドにも反映(次回pullで消えないように)。
-        if (_isFirstLoad && _mergedForPush) {
-          Promise.resolve().then(() => supabaseMergeAndSyncStateForStore(newStoreId, _mergedForPush)).catch(e => console.warn('[firstload merge] push failed', e));
+        // ★ 端末内の新しい記録を保持した場合は、クラウドにも反映(失敗していた保存を再送し、次回pullで消えないように)。
+        if (_mergedForPush) {
+          Promise.resolve().then(() => supabaseMergeAndSyncStateForStore(newStoreId, _mergedForPush)).catch(e => console.warn('[pull preserve] push failed', e));
         }
         // ★ load 完了 → push 解禁
         dataLoadedForStoreRef.current = newStoreId;
@@ -28692,7 +28693,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const nm = (p.cmName||'').trim();
                 if (on && nm && !mgrKeys.has(`${on}|${nm}`)) { mgrKeys.add(`${on}|${nm}`); mgrs.push({ office:on, name:nm, phone:p.cmPhone||'', phoneDirect:p.cmPhone||'', fax:p.cmFax||'' }); }
               });
-              _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs };
+              // ★ 取込で追加したケアマネ事業所/担当者が別端末の設定保存で消えないよう、更新時刻を刻む(新しい方優先マージ用)。
+              _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs, _updatedAt: Date.now() };
             }
             onSave({...appData, patients: existing, systemSettings: _nextSettings, patientIdSeq: Math.max(maxId, Number(appData.patientIdSeq)||0)});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});

@@ -572,7 +572,23 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       if (ls || cs) {
         const lt = Number(ls && ls._updatedAt) || 0, ct = Number(cs && cs._updatedAt) || 0;
         if (lt || ct) {
-          merged.systemSettings = (lt >= ct) ? ls : cs;
+          const base = (lt >= ct) ? ls : cs;   // 新しい方をベースに丸ごと採用
+          const other = (lt >= ct) ? cs : ls;  // 古い方
+          const out = { ...base };
+          // ★ ケアマネ事業所/担当者は「追加を失わない」よう新旧をユニオン(ベース優先)。
+          //   CSV取込で追加したケアマネが、別端末の設定保存(より新しい_updatedAt・CSV分を持たない)で
+          //   丸ごと上書きされて消える不具合を防ぐ。
+          const unionBy = (keyFn, k) => {
+            const a = Array.isArray(base && base[k]) ? base[k] : [], b = Array.isArray(other && other[k]) ? other[k] : [];
+            if (!a.length && !b.length) return;
+            const m = new Map();
+            b.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); });
+            a.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); }); // ベース優先で上書き
+            out[k] = [...m.values()];
+          };
+          unionBy(o => (o && o.name != null) ? `off|${String(o.name).trim()}` : null, 'cmOffices');
+          unionBy(o => (o && (o.office != null || o.name != null)) ? `cm|${String(o.office||'').trim()}|${String(o.name||'').trim()}` : null, 'careManagers');
+          merged.systemSettings = out;
         } else if (ls && cs) {
           // timestamp 無し: フィールドはローカル優先。 ただし主要な設定配列は「多い方」を採用して追加消失を防ぐ。
           const out = { ...cs, ...ls };
