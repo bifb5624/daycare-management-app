@@ -30240,6 +30240,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const [cmOffices, setCmOffices] = useState(appData.systemSettings?.cmOffices || []);
   const [cmPersons, setCmPersons] = useState(appData.systemSettings?.careManagers || []);
   const [stampingAll, setStampingAll] = useState(false); // 「最新として確定」処理中フラグ
+  const [strayScan, setStrayScan] = useState(null); // 残骸(日付が基本利用日と不一致)記録の検査結果 null=未実行 / 配列=検出結果
   // ★ CSV取込やクラウド同期で最新のケアマネ事業所/担当者が来たら、編集中でなければ画面の状態を最新に追従。
   //   これが無いと、古い(空の)スナップショットのまま各種設定を保存 → careManagers が空で上書きされ消える不具合になる。
   React.useEffect(() => {
@@ -31740,6 +31741,71 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm active:scale-95 disabled:opacity-60">
                         {stampingAll ? '確定処理中…' : 'この端末のデータを最新として確定'}
                       </button>
+                    </div>
+                    {/* ★ 残骸データ(日付が基本利用日と一致しない提供記録)の検査・削除 */}
+                    <div className="border-t border-slate-200 pt-3">
+                      <div className="text-sm font-bold text-slate-700 mb-1.5">日付がおかしい記録（残骸）の検査・削除</div>
+                      <div className="text-[11px] text-slate-500 leading-relaxed mb-2">
+                        利用者の<b>基本利用日と一致しない曜日</b>に残ってしまった提供記録（他曜日の複製・過去の誤登録など）を検出します。<br/>
+                        <b>振替・臨時は除外</b>して安全な候補だけを一覧表示します。内容を確認してから削除でき、削除は<b>全端末に同期</b>されます（墓石付きで復活しません）。
+                      </div>
+                      <div className="flex gap-2 flex-wrap">
+                        <button type="button" onClick={()=>{
+                          const _todayEnd = new Date(); _todayEnd.setHours(23,59,59,999);
+                          const patMap = new Map((appData.patients||[]).map(p=>[String(p.id), p]));
+                          const _recDate = (r) => { const m=(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return null; const y=r.year||new Date().getFullYear(); return new Date(y, +m[1]-1, +m[2]); };
+                          const _dowJp = ['日','月','火','水','木','金','土'];
+                          const _hasData = (r) => !!(r.temp||r.bpUpSt||r.bpDnSt||r.plSt||r.bpUpEn||r.bpDnEn||r.plEn||r.massage||(r.tokki&&String(r.tokki).trim())||r.kibunArrival||r.kibunDeparture||r.actualTime||(r.exercises&&Object.keys(r.exercises).length));
+                          const stray = [];
+                          (appData.ticketRecords||[]).forEach(r => {
+                            if (r.id==null) return;
+                            const p = patMap.get(String(r.patientId));
+                            const d = _recDate(r);
+                            if (!p) { stray.push({ id:r.id, name:'（削除済み利用者）', date:r.date||'', year:r.year||'', dow:d?_dowJp[d.getDay()]:'', status:r.status||'', data:_hasData(r), reason:'利用者が存在しない' }); return; }
+                            if (r.status==='振替' || r.status==='臨時') return; // 正当なので対象外
+                            if (!d) return;
+                            const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                            const sc=getScheduleOnDate(p, iso)?.[d.getDay()]||'';
+                            if (!sc) stray.push({ id:r.id, name:p.name, date:r.date||'', year:r.year||d.getFullYear(), dow:_dowJp[d.getDay()], status:r.status||'出席', data:_hasData(r), reason:'基本利用日でない曜日' });
+                          });
+                          stray.sort((a,b)=>String(a.name).localeCompare(String(b.name),'ja') || String(a.year+a.date).localeCompare(String(b.year+b.date)));
+                          setStrayScan(stray);
+                        }} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-sm active:scale-95">残骸を検査する</button>
+                        {strayScan && strayScan.length>0 && (
+                          <button type="button" onClick={()=>{
+                            if (!window.confirm(`検出した ${strayScan.length} 件の記録を削除し、クラウド・全端末に反映します。\n\nこの操作は取り消せません。実行しますか?`)) return;
+                            const ids = strayScan.map(s=>s.id);
+                            const idSet = new Set(ids.map(String));
+                            const now = Date.now();
+                            const tomb = { ...(appData.deletedIds||{}) };
+                            const m = { ...(tomb.ticketRecords||{}) };
+                            ids.forEach(id=>{ if(id!=null) m[String(id)] = now; });
+                            tomb.ticketRecords = m;
+                            const nextRecs = (appData.ticketRecords||[]).filter(r => !(r && r.id!=null && idSet.has(String(r.id))));
+                            onSave({ ...appData, ticketRecords: nextRecs, deletedIds: tomb }, { manual:true, message:`✓ ${ids.length}件の残骸記録を削除しました（他端末はリロードしてください）`, allowEmpty:true });
+                            setStrayScan([]);
+                          }} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm active:scale-95">この{strayScan.length}件を削除</button>
+                        )}
+                      </div>
+                      {strayScan && (
+                        <div className="mt-3">
+                          {strayScan.length===0 ? (
+                            <div className="text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">✓ 日付がおかしい記録は見つかりませんでした。</div>
+                          ) : (
+                            <div className="bg-white border border-slate-200 rounded-lg max-h-80 overflow-y-auto">
+                              <div className="text-[11px] font-bold text-slate-500 px-3 py-2 border-b border-slate-100 sticky top-0 bg-white">検出 {strayScan.length} 件（利用者 / 日付 / 状態 / 内容）</div>
+                              {strayScan.map((s,i)=>(
+                                <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-slate-50 text-sm">
+                                  <span className="font-bold text-slate-800 truncate flex-1 min-w-0">{s.name}</span>
+                                  <span className="text-slate-500 w-40 shrink-0">{s.year}年{s.date}（{s.dow}）</span>
+                                  <span className="text-slate-500 w-16 shrink-0">{s.status}</span>
+                                  <span className={`w-24 shrink-0 text-right ${s.data?'text-orange-600 font-bold':'text-slate-400'}`}>{s.data?'記録あり':'空'}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     {/* 全データ一括リセット (試験運用準備用) — 削除時にコメントアウトで非表示にできる */}
                     <div className="border-t border-slate-200 pt-3" style={{display:'none'}}>
