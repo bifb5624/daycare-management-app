@@ -24745,7 +24745,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
     const el = measureRef.current; if (!el) return;
     const ph = pat?.html || '';
     el.innerHTML = (all.html||'') + ((all.html&&ph)?'<div style="height:6px"></div>':'') + ph;
-    setWarn(el.scrollHeight > 150 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
+    setWarn(el.scrollHeight > 205 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
   }, [all.html, pat?.html]);
   const save = () => {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
@@ -24791,7 +24791,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-[80] flex items-center justify-center p-0 sm:p-4">
       <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-lg max-h-full sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5">
-        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:420,padding:'8px 10px',lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:15,visibility:'hidden',pointerEvents:'none'}}/>
+        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:420,padding:'8px 10px',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,visibility:'hidden',pointerEvents:'none'}}/>
         <style>{`.renraku-editor:empty:before{content:'連絡事項を入力（文字を選んで色・太字・大きさ）';color:#94a3b8;}`}</style>
         <div className="flex items-center justify-between mb-3">
           <div className="text-lg font-bold text-slate-800">連絡事項の編集</div>
@@ -25452,6 +25452,16 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
 function ContactBookCard({ record, patient, selectedDate, config, appData, onOpenConfig, onEditPatientValue, onEditRenraku }) {
   // ★ defensive: config が undefined / items が undefined の場合のフォールバック
   config = config || { facilityName:'', facilityPhone:'', items: [] };
+  // ★ 運動テーブルの実際の高さを計測し、○/項目名のフォントを行高に合わせてスケールする。
+  //   (連絡事項を大きくして運動テーブルが縮んだら、それに合わせて文字も自動で小さく/大きくなる)
+  const exBoxRef = React.useRef(null);
+  const [exBoxH, setExBoxH] = React.useState(0);
+  React.useEffect(() => {
+    const el = exBoxRef.current; if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setExBoxH(el.clientHeight));
+    ro.observe(el); setExBoxH(el.clientHeight);
+    return () => ro.disconnect();
+  }, []);
   if (!patient || !record) return null;
   const d = new Date(selectedDate);
   const warekiYear = d.getFullYear() - 2018;
@@ -25654,14 +25664,16 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
           {/* 運動テーブル — ★ セル高さ統一 + 行高に上限あり
               項目少ない時に巨大化しないよう max-height、 増減で揺れないよう全行均等 */}
-          <div className="mb-2 border-2 border-black overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" style={{flex:'1 1 0', minHeight:0, maxHeight:480}} onClick={onOpenConfig}>
+          <div ref={exBoxRef} className="mb-2 border-2 border-black overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" style={{flex:'1 1 0', minHeight:0, maxHeight:360}} onClick={onOpenConfig}>
             <table className="w-full border-collapse text-center table-fixed" style={{height:'100%'}}>
               <tbody>
                 {rows.map((row, idx) => {
                   const cellCls = (item) => `text-black ${item && item.perPatient && item.type !== 'linked' && onEditPatientValue ? 'cursor-pointer hover:bg-violet-50 transition-colors' : ''}`;
-                  // 行が多いほどフォント縮小: 行数 6 までは大、それ以降は段階的に縮小
-                  const labelFs = rows.length <= 6 ? 16 : rows.length <= 9 ? 14 : rows.length <= 12 ? 12 : 10;
-                  // ★ 値は項目名と同じフォントサイズ・太さで表示
+                  // ★ 実際の行高(テーブル高さ/行数)に合わせてフォントをスケール。 行高の約48%、8〜18pxに収める。
+                  //   連絡事項を大きくして運動テーブルが縮むと、○/項目名も自動で小さくなる(はみ出さない)。
+                  const _rowH = exBoxH > 0 ? (exBoxH / rows.length) : 40;
+                  const labelFs = Math.max(8, Math.min(18, Math.round(_rowH * 0.48)));
+                  // ★ 値(○/実施値)は項目名と同じフォントサイズ・太さで表示
                   const valueFs = labelFs;
                   // ★ 各行の高さを均等に分割 (空セル/値ありセルで揺れない)
                   const rowHeightPct = `${100/rows.length}%`;
@@ -25679,7 +25691,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
             </table>
           </div>
 
-          <div style={{height:"18px",flexShrink:0}} />
+          <div style={{height:"12px",flexShrink:0}} />
           {/* 連絡事項 — 全員共通＋個別。 クリックで編集 */}
           {(() => {
             const _all = config?.renrakuAll; const _pat = patient?.contactBookRenraku;
@@ -25689,8 +25701,9 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
             const _showPat = renrakuHasText(_pat) && _inRange(_pat);
             return (
             <div className="shrink-0 mb-2">
-              <div className="font-bold text-slate-800" style={{fontSize:15,marginBottom:3}}>連絡事項</div>
-              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'10rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:15,lineHeight:1.5,boxSizing:'border-box'}}>
+              <div className="font-bold text-slate-800" style={{fontSize:16,marginBottom:3}}>連絡事項</div>
+              {/* ★ 連絡事項は 8〜9 行分を固定確保(運動テーブルはその分自動で縮む)。 文字も少し大きく。 */}
+              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'14rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,lineHeight:1.55,boxSizing:'border-box'}}>
                 {_showAll && <div style={{marginBottom:6}} dangerouslySetInnerHTML={{__html: renrakuToHtml(_all)}}/>}
                 {_showPat && <div dangerouslySetInnerHTML={{__html: renrakuToHtml(_pat)}}/>}
               </div>
