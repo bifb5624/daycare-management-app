@@ -587,6 +587,16 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         }
       }
     }
+    // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文)は「新しい方(_updatedAt)」を丸ごと採用。
+    //   これが無いと、古い端末が別の保存をした拍子に連絡事項・掲載期間を巻き戻してしまう。
+    {
+      const lc = localData.contactBookConfig, cc = cloud.contactBookConfig;
+      if (lc || cc) {
+        const lt = Number(lc && lc._updatedAt) || 0, ct = Number(cc && cc._updatedAt) || 0;
+        if (lt || ct) merged.contactBookConfig = (lt >= ct) ? lc : cc;
+        else merged.contactBookConfig = lc || cc; // 旧データ(時刻なし)は従来どおりローカル優先
+      }
+    }
     // ★ 日誌(diaryLogs)は「日付_AMPM」キーのオブジェクト。 端末間で別々の日を編集しても消えないよう、
     //   キー単位で統合し、同じキーは _savedAt が新しい方(無ければ内容が多い方)を採用する。
     {

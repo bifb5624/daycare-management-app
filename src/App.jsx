@@ -16401,6 +16401,11 @@ export default function App() {
       if (newData.monthlyShifts && newData.monthlyShifts !== prev.monthlyShifts) {
         newData = { ...newData, _msSavedAt: Date.now() };
       }
+      // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文 等)も、編集された時だけ時刻を刻む。
+      //   これが無いと古い端末の push で連絡事項・掲載期間が丸ごと巻き戻る。
+      if (newData.contactBookConfig && newData.contactBookConfig !== prev.contactBookConfig) {
+        newData = { ...newData, contactBookConfig: { ...newData.contactBookConfig, _updatedAt: Date.now() } };
+      }
     } catch (e) { /* 失敗しても保存自体は続行 */ }
     setAppData(newData);
     // ★ 手動保存ボタン (options.manual) / 自動保存 (options.silent) は即時クラウド保存する。
@@ -24714,7 +24719,8 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
     const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t && ((t.title||'').trim() || (t.content||'').trim())) };
     const nextPatients = (appData.patients||[]).map(p => patMap[p.id] ? { ...p, contactBookRenraku: clean(patMap[p.id]) } : p);
-    onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients });
+    // ★ 即時クラウド保存(編集ウィンドウを立て、保存直後に古いpullで戻る隙を無くす)
+    onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients }, { manual:true, message:'✓ 連絡事項を保存しました' });
     onClose();
   };
   // 1セクション分の編集UI。 ★ <Section/>で描画すると再マウントしカーソルが飛ぶため関数として呼び出す
