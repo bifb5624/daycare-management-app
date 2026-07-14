@@ -928,6 +928,33 @@ const warekiParts = (iso) => { if(!iso) return {era:'',ey:'',m:'',day:''}; const
 const warekiToIso = (era, ey, m, day) => { const e=WAREKI_ERAS.find(([n])=>n===era); if(!e||!ey||!m||!day) return ''; const y=e[1]+Number(ey)-1; if(!(y>=1868 && Number(m)>=1 && Number(m)<=12 && Number(day)>=1 && Number(day)<=31)) return ''; return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`; };
 const warekiStr = (iso) => { const w=warekiParts(iso); return w.era ? `${w.era}${w.ey}年${w.m}月${w.day}日` : ''; };
 
+// ★ 和暦での生年月日入力。 元号/年/月/日を「ローカル状態」で自由に編集でき、途中の空欄・部分入力でも戻らない。
+//   有効な日付が揃ったときだけ ISO(YYYY-MM-DD) を親へ通知する。 これで「消せない/元号が戻る/1が残って125年」等を解消。
+function WarekiBirthInput({ iso, disabled, onChange }) {
+  const [p, setP] = React.useState(() => warekiParts(iso));
+  const lastIsoRef = React.useRef(iso);
+  React.useEffect(() => {
+    // 外部(他端末同期・別利用者へ切替)で birthDate が変わった時だけ追従。 自分の入力で変えた分は無視(戻さない)。
+    if (iso !== lastIsoRef.current) { setP(warekiParts(iso)); lastIsoRef.current = iso; }
+  }, [iso]);
+  const upd = (patch) => {
+    const nw = { ...p, ...patch };
+    setP(nw); // 入力はローカルで自由に(途中の空・無効でも保持=消せる/差し替えできる)
+    const newIso = warekiToIso(nw.era || '', nw.ey, nw.m, nw.day);
+    if (newIso && newIso !== iso) { lastIsoRef.current = newIso; onChange(newIso); }
+  };
+  const inC = "px-1 py-1 bg-white border border-slate-300 rounded text-sm font-bold outline-none disabled:opacity-60 text-center";
+  return (
+    <div className="flex items-center gap-1 mt-1.5 whitespace-nowrap">
+      <span className="text-[11px] font-bold text-slate-400">和暦</span>
+      <select disabled={disabled} value={p.era||''} onChange={e=>upd({era:e.target.value})} className={inC}><option value="">元号</option>{WAREKI_ERAS.map(([n])=><option key={n} value={n}>{n}</option>)}</select>
+      <input disabled={disabled} type="number" inputMode="numeric" value={p.ey||''} onChange={e=>upd({ey:e.target.value})} placeholder="年" className={`${inC} w-11`}/><span className="text-[12px] text-slate-500">年</span>
+      <input disabled={disabled} type="number" inputMode="numeric" value={p.m||''} onChange={e=>upd({m:e.target.value})} placeholder="月" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">月</span>
+      <input disabled={disabled} type="number" inputMode="numeric" value={p.day||''} onChange={e=>upd({day:e.target.value})} placeholder="日" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">日</span>
+    </div>
+  );
+}
+
 // === 名前の正規化ヘルパー (NFKC で半角/全角カナを統一) ===
 //    例: 「①ﾊﾞｲｸ」 = 「①バイク」 として比較できるよう
 //    運動メニューや項目名の同一性判定に使用
@@ -27651,15 +27678,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                       <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
                       <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} style={{maxWidth:190}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
                       {/* ★ 和暦でも入力可能 (西暦と自動連動)。 1行に収める(改行させない) */}
-                      {(() => { const wp = warekiParts(localPatient.birthDate); const setW = (patch) => { const nw = {...wp, ...patch}; const iso = warekiToIso(nw.era||'昭和', nw.ey, nw.m, nw.day); if(iso) updateLP('birthDate', iso); }; const inC="px-1 py-1 bg-white border border-slate-300 rounded text-sm font-bold outline-none disabled:opacity-60 text-center"; return (
-                        <div className="flex items-center gap-1 mt-1.5 whitespace-nowrap">
-                          <span className="text-[11px] font-bold text-slate-400">和暦</span>
-                          <select disabled={isOff} value={wp.era||''} onChange={e=>setW({era:e.target.value})} className={inC}><option value="">元号</option>{WAREKI_ERAS.map(([n])=><option key={n} value={n}>{n}</option>)}</select>
-                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.ey||''} onChange={e=>setW({ey:e.target.value})} placeholder="年" className={`${inC} w-11`}/><span className="text-[12px] text-slate-500">年</span>
-                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.m||''} onChange={e=>setW({m:e.target.value})} placeholder="月" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">月</span>
-                          <input disabled={isOff} type="number" inputMode="numeric" value={wp.day||''} onChange={e=>setW({day:e.target.value})} placeholder="日" className={`${inC} w-10`}/><span className="text-[12px] text-slate-500">日</span>
-                        </div>
-                      ); })()}
+                      <WarekiBirthInput iso={localPatient.birthDate||''} disabled={isOff} onChange={(v)=>updateLP('birthDate', v)} />
                       {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}{warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
                     </div>
                   </div>
