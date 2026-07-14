@@ -14880,32 +14880,39 @@ function GlobalPolicyPanel({ staffSession }) {
     })();
     return () => { alive = false; };
   }, []);
-  // ★ 家族・ケアマネ向け / 事業所向け を「それぞれ個別に」保存。 もう一方は最新の共通レコードを保持。
+  // ★ 保存: 家族・ケアマネ向け / 事業所向け を「それぞれ個別に」保存(お知らせ掲載はしない)。 もう一方は最新の共通レコードを保持。
   const saveKind = async (kind) => {
     const st = kind==='family' ? fam : off;
     const hist = kind==='family' ? famHist : offHist;
-    const label = kind==='family' ? '利用規約・プライバシーポリシー' : 'ご利用にあたっての重要事項';
     if (!String(st.version).trim()) { alert('版(バージョン)を入力してください'); return; }
-    setBusy(kind); setMsg(m=>({ ...m, [kind]:'' }));
+    setBusy(`${kind}:save`); setMsg(m=>({ ...m, [kind]:'' }));
     try {
       const cur = (await supabaseLoadGlobalPolicies()) || {};
       const verChanged = String(st.version).trim() !== String(origRef.current[kind]||'');
       let newHist = Array.isArray(hist) ? hist.slice() : [];
       if (verChanged) newHist = [{ version:String(st.version).trim(), date:st.date||'', text:st.text, savedAt:new Date().toISOString(), savedBy: staffSession?.username||'honbu' }, ...newHist].slice(0, 50);
-      const kindPolicy = { version:String(st.version).trim(), date:st.date||'', text:st.text, notify:{ announce: st.notify?.announce!==false, login: st.notify?.login!==false }, history:newHist };
+      const kindPolicy = { version:String(st.version).trim(), date:st.date||'', text:st.text, notify:{ login: st.notify?.login!==false }, history:newHist };
       const policies = { ...cur, [kind]: kindPolicy };
       const ok = await supabaseSaveGlobalPolicies(policies);
       if (!ok) { alert('保存に失敗しました(通信エラー)'); setBusy(''); return; }
       setGlobalPolicyCache(policies); // 自画面のキャッシュも即時更新
       if (kind==='family') setFamHist(newHist); else setOffHist(newHist);
       origRef.current = { ...origRef.current, [kind]: String(st.version).trim() };
-      // ★ I5: 版が上がり かつ「お知らせに公開」ONのときだけ、全店の管理局お知らせ(system_notices)に掲載
-      let announced = false;
-      if (verChanged && kindPolicy.notify.announce) {
-        try { await supabaseCreateSystemNotice({ title:`【重要】${label}を改定しました（版 ${kindPolicy.version}）`, body:`${label}を改定しました。\n改定日: ${kindPolicy.date||new Date().toISOString().slice(0,10)}\n版: ${kindPolicy.version}${kindPolicy.notify.login ? '\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。' : ''}`, targetStoreIds:[], severity:'info', endsAt:null, createdBy: staffSession?.username||'honbu' }); announced = true; } catch(e){ console.warn('policy notice failed', e); }
-      }
-      setMsg(m=>({ ...m, [kind]: !verChanged ? '✓ 保存しました（版の変更なし）' : (announced ? '✓ 保存し、改定お知らせを全店に掲載しました' : '✓ 保存しました（お知らせ公開はOFF）') }));
+      setMsg(m=>({ ...m, [kind]: verChanged ? '✓ 保存しました（版を更新）' : '✓ 保存しました' }));
     } catch (e) { alert('保存に失敗: ' + (e?.message||'')); }
+    setBusy('');
+  };
+  // ★ 掲載: 現在の版の「改定お知らせ」を全店の管理局お知らせ(system_notices)に掲載(保存とは独立した操作)。
+  const publishKind = async (kind) => {
+    const st = kind==='family' ? fam : off;
+    const label = kind==='family' ? '利用規約・プライバシーポリシー' : 'ご利用にあたっての重要事項';
+    if (!String(st.version).trim()) { alert('版(バージョン)を入力してください'); return; }
+    if (!window.confirm(`「${label}」の改定お知らせ（版 ${String(st.version).trim()}）を全店のホームに掲載します。\n先に「保存」で最新内容を確定してから掲載することをおすすめします。\n\n掲載しますか?`)) return;
+    setBusy(`${kind}:pub`); setMsg(m=>({ ...m, [kind]:'' }));
+    try {
+      await supabaseCreateSystemNotice({ title:`【重要】${label}を改定しました（版 ${String(st.version).trim()}）`, body:`${label}を改定しました。\n改定日: ${st.date||new Date().toISOString().slice(0,10)}\n版: ${String(st.version).trim()}${st.notify?.login!==false ? '\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。' : ''}`, targetStoreIds:[], severity:'info', endsAt:null, createdBy: staffSession?.username||'honbu' });
+      setMsg(m=>({ ...m, [kind]: '✓ 全店のお知らせに掲載しました' }));
+    } catch (e) { alert('掲載に失敗: ' + (e?.message||'')); }
     setBusy('');
   };
   const inp = { width:'100%', padding:'8px 10px', border:'1px solid #cbd5e1', borderRadius:8, fontSize:13, fontWeight:'bold', outline:'none', boxSizing:'border-box' };
@@ -14919,20 +14926,18 @@ function GlobalPolicyPanel({ staffSession }) {
         <div style={{width:120}}><label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>版(バージョン)</label><input value={st.version} onChange={e=>setSt(s=>({...s,version:e.target.value}))} placeholder="例: 2.1" style={inp}/></div>
         <div style={{width:160}}><label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>改定日</label><input type="date" value={st.date} onChange={e=>setSt(s=>({...s,date:e.target.value}))} style={inp}/></div>
       </div>
-      {/* 改定時の通知方法 (それぞれ選択可) */}
+      {/* ログイン時の再同意設定 (保存項目) */}
       <div style={{display:'flex',gap:16,flexWrap:'wrap',margin:'4px 0 8px',padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8}}>
-        <div style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:'100%'}}>改定時の通知方法（版を上げて保存したとき）</div>
         <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>
-          <input type="checkbox" checked={st.notify?.announce!==false} onChange={e=>setSt(s=>({...s,notify:{...(s.notify||{}),announce:e.target.checked}}))} style={{accentColor:'#7daa3d'}}/>お知らせに公開（全店ホーム）
+          <input type="checkbox" checked={st.notify?.login!==false} onChange={e=>setSt(s=>({...s,notify:{...(s.notify||{}),login:e.target.checked}}))} style={{accentColor:'#7daa3d'}}/>版を上げたら<b>ログイン時に再同意</b>を求める
         </label>
-        <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>
-          <input type="checkbox" checked={st.notify?.login!==false} onChange={e=>setSt(s=>({...s,notify:{...(s.notify||{}),login:e.target.checked}}))} style={{accentColor:'#7daa3d'}}/>ログイン時に再同意を求める
-        </label>
+        <span style={{fontSize:10,color:'#94a3b8'}}>※ お知らせへの掲載は下の「お知らせに掲載」ボタンで別途行います</span>
       </div>
       <label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>本文（{'{facility}'}=事業所名 / {'{tel}'}=電話番号 に自動置換）</label>
       <textarea value={st.text} onChange={e=>setSt(s=>({...s,text:e.target.value}))} rows={8} style={{...inp,fontWeight:'normal',lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}/>
       <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
-        <button type="button" onClick={()=>saveKind(kind)} disabled={busy===kind} style={{padding:'9px 18px',background:busy===kind?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:busy===kind?'not-allowed':'pointer'}}>{busy===kind?'保存中…':'この項目を保存'}</button>
+        <button type="button" onClick={()=>saveKind(kind)} disabled={busy===`${kind}:save`} style={{padding:'9px 18px',background:busy===`${kind}:save`?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:busy===`${kind}:save`?'not-allowed':'pointer'}}>{busy===`${kind}:save`?'保存中…':'保存'}</button>
+        <button type="button" onClick={()=>publishKind(kind)} disabled={busy===`${kind}:pub`} style={{padding:'9px 18px',background:busy===`${kind}:pub`?'#94a3b8':'white',color:busy===`${kind}:pub`?'white':'#4338ca',border:'1px solid #c7d2fe',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:busy===`${kind}:pub`?'not-allowed':'pointer'}}>{busy===`${kind}:pub`?'掲載中…':'お知らせに掲載'}</button>
         {msg[kind] && <span style={{fontSize:12,fontWeight:'bold',color:'#16a34a'}}>{msg[kind]}</span>}
         {(hist&&hist.length>0) && <button type="button" onClick={()=>setShowHist(h=>({...h,[kind]:!h[kind]}))} style={{marginLeft:'auto',padding:'6px 12px',background:'#eef2ff',color:'#4338ca',border:'1px solid #c7d2fe',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>版の履歴 {hist.length}件 {showHist[kind]?'▲':'▼'}</button>}
       </div>
@@ -14965,7 +14970,7 @@ function GlobalPolicyPanel({ staffSession }) {
       ) : (
         <div style={{marginTop:12}}>
           <div style={{fontSize:11,color:'#64748b',lineHeight:1.6,marginBottom:12,background:'#f0f7e0',border:'1px solid #d4e7a5',borderRadius:8,padding:'8px 10px'}}>
-            編集内容は<b>全店舗に共通で適用</b>されます。<b>家族・ケアマネ向け</b>と<b>事業所向け</b>は<b>それぞれ個別に保存</b>できます。各項目で<b>通知方法</b>（お知らせ公開／ログイン時再同意）を選べ、<b>版を上げて保存</b>すると履歴に残ります。
+            編集内容は<b>全店舗に共通で適用</b>されます。<b>家族・ケアマネ向け</b>と<b>事業所向け</b>は<b>それぞれ個別</b>に、<b>「保存」（内容の確定）</b>と<b>「お知らせに掲載」（全店ホームへの改定通知）</b>を<b>別々のボタン</b>で行えます。版を上げて保存すると履歴に残ります。
           </div>
           {renderKind('family', fam, setFam, _defFam, famHist)}
           {renderKind('office', off, setOff, _defOff, offHist)}
