@@ -30196,6 +30196,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const isComposingRef = React.useRef(false);
   const [cmOffices, setCmOffices] = useState(appData.systemSettings?.cmOffices || []);
   const [cmPersons, setCmPersons] = useState(appData.systemSettings?.careManagers || []);
+  const [stampingAll, setStampingAll] = useState(false); // 「最新として確定」処理中フラグ
   // ★ CSV取込やクラウド同期で最新のケアマネ事業所/担当者が来たら、編集中でなければ画面の状態を最新に追従。
   //   これが無いと、古い(空の)スナップショットのまま各種設定を保存 → careManagers が空で上書きされ消える不具合になる。
   React.useEffect(() => {
@@ -31673,21 +31674,28 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         すべての記録・設定に<b>今の時刻の印</b>を付けて保存します。これにより、<b>他の端末が持っている古いデータでは上書きされなくなります</b>。<br/>
                         <b>正しい/最新のデータが表示されている端末で1回だけ</b>押してください（複数端末で押すと、最後に押した端末が優先されます）。実行後、他の端末はハードリロードしてください。
                       </div>
-                      <button type="button" onClick={()=>{
+                      <button type="button" disabled={stampingAll} onClick={()=>{
+                        if (stampingAll) return;
                         if (!window.confirm('この端末に表示されている全データを「最新」として確定し、クラウドと全端末に反映します。\n\n（正しいデータが出ている端末で押してください）実行しますか?')) return;
-                        try {
-                          const now = Date.now();
-                          const d = { ...appData };
-                          ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => (r && r.id!=null) ? { ...r, _savedAt: now } : r); });
-                          if (Array.isArray(d.patients)) d.patients = d.patients.map(p => (p && p.id!=null) ? { ...p, _savedAt: now } : p);
-                          const _ts = {}; Object.keys(d.monthlyShifts||{}).forEach(mk => { const pm = d.monthlyShifts[mk]||{}; _ts[mk] = {}; Object.keys(pm).forEach(pid => { _ts[mk][pid] = now; }); }); d._msTs = _ts; d._msSavedAt = now;
-                          if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ dl[k]={ ...(d.diaryLogs[k]||{}), _savedAt: now }; }); d.diaryLogs = dl; }
-                          if (d.faxDataStore && typeof d.faxDataStore==='object') { const fx={}; Object.keys(d.faxDataStore).forEach(k=>{ fx[k]={ ...(d.faxDataStore[k]||{}), _updatedAt: now }; }); d.faxDataStore = fx; }
-                          ['systemSettings','contactBookConfig','diarySettings','generalFaxDraft'].forEach(k => { if (d[k] && typeof d[k]==='object') d[k] = { ...d[k], _updatedAt: now }; });
-                          onSave(d, { manual:true, message:'✓ この端末のデータを最新として確定しました（他端末はリロードしてください）' });
-                        } catch(e) { alert('確定に失敗しました: ' + (e?.message||'')); }
-                      }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm active:scale-95">
-                        この端末のデータを最新として確定
+                        setStampingAll(true);
+                        // ★ 確定処理は写真(familyPhotos)を除く記録・設定のみに限定(写真は重く固まる原因＋追記型で競合しにくい)。
+                        //   確認ダイアログを閉じてUIを更新してから実行するため setTimeout で1tick遅延。
+                        setTimeout(() => {
+                          try {
+                            const now = Date.now();
+                            const d = { ...appData };
+                            ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => (r && r.id!=null) ? { ...r, _savedAt: now } : r); });
+                            if (Array.isArray(d.patients)) d.patients = d.patients.map(p => (p && p.id!=null) ? { ...p, _savedAt: now } : p);
+                            const _ts = {}; Object.keys(d.monthlyShifts||{}).forEach(mk => { const pm = d.monthlyShifts[mk]||{}; _ts[mk] = {}; Object.keys(pm).forEach(pid => { _ts[mk][pid] = now; }); }); d._msTs = _ts; d._msSavedAt = now;
+                            if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ dl[k]={ ...(d.diaryLogs[k]||{}), _savedAt: now }; }); d.diaryLogs = dl; }
+                            if (d.faxDataStore && typeof d.faxDataStore==='object') { const fx={}; Object.keys(d.faxDataStore).forEach(k=>{ fx[k]={ ...(d.faxDataStore[k]||{}), _updatedAt: now }; }); d.faxDataStore = fx; }
+                            ['systemSettings','contactBookConfig','diarySettings','generalFaxDraft'].forEach(k => { if (d[k] && typeof d[k]==='object') d[k] = { ...d[k], _updatedAt: now }; });
+                            onSave(d, { manual:true, message:'✓ この端末のデータを最新として確定しました（他端末はリロードしてください）' });
+                          } catch(e) { alert('確定に失敗しました: ' + (e?.message||'')); }
+                          finally { setStampingAll(false); }
+                        }, 50);
+                      }} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm active:scale-95 disabled:opacity-60">
+                        {stampingAll ? '確定処理中…' : 'この端末のデータを最新として確定'}
                       </button>
                     </div>
                     {/* 全データ一括リセット (試験運用準備用) — 削除時にコメントアウトで非表示にできる */}
