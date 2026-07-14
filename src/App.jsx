@@ -927,6 +927,8 @@ const WAREKI_ERAS = [['明治',1868],['大正',1912],['昭和',1926],['平成',1
 const warekiParts = (iso) => { if(!iso) return {era:'',ey:'',m:'',day:''}; const d=new Date(iso); if(isNaN(d.getTime())) return {era:'',ey:'',m:'',day:''}; const y=d.getFullYear(); const e=[...WAREKI_ERAS].reverse().find(([,s])=>y>=s)||WAREKI_ERAS[0]; return {era:e[0], ey:y-e[1]+1, m:d.getMonth()+1, day:d.getDate()}; };
 const warekiToIso = (era, ey, m, day) => { const e=WAREKI_ERAS.find(([n])=>n===era); if(!e||!ey||!m||!day) return ''; const y=e[1]+Number(ey)-1; if(!(y>=1868 && Number(m)>=1 && Number(m)<=12 && Number(day)>=1 && Number(day)<=31)) return ''; return `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`; };
 const warekiStr = (iso) => { const w=warekiParts(iso); return w.era ? `${w.era}${w.ey}年${w.m}月${w.day}日` : ''; };
+// ★ 日誌の送迎割り当てキー: 患者ID基準(並び順のindexだと振替で状態が変わり並びがズレて別人に付く)。
+const _diaryPtKey = (pt) => (pt && (pt.patientId != null ? pt.patientId : (pt.id != null ? pt.id : null)));
 
 // ★ 和暦での生年月日入力。 元号/年/月/日を「ローカル状態」で自由に編集でき、途中の空欄・部分入力でも戻らない。
 //   有効な日付が揃ったときだけ ISO(YYYY-MM-DD) を親へ通知する。 これで「消せない/元号が戻る/1が残って125年」等を解消。
@@ -32459,9 +32461,14 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             // ★ 選択された車両を「N号車 / 車種名」の配列で返す
             //   c.name = '1号車' (登録順、号車番号)、c.type = 'シエンタ' (車種名)
             const getSelectedCar = (prefix) => {
-              if((_log[prefix+'_walk']||{})[String(i)]) return [{label:'徒歩', name:''}];
-              const checked = ds.cars
-                .filter(c=>(_log[prefix]||{})[i+'_'+c.id]);
+              // ★ 患者IDキーがあればID優先、無ければ旧index方式にフォールバック(振替で並びが変わってもズレない)
+              const _pid = _diaryPtKey(pt);
+              const _wm = _log[prefix+'_walk']||{}, _sm = _log[prefix]||{};
+              const _idHas = _pid != null && (_wm[String(_pid)] !== undefined || ds.cars.some(c=>_sm[_pid+'_'+c.id] !== undefined));
+              const _wKey = _idHas ? String(_pid) : String(i);
+              const _cPre = _idHas ? _pid : i;
+              if(_wm[_wKey]) return [{label:'徒歩', name:''}];
+              const checked = ds.cars.filter(c=>_sm[_cPre+'_'+c.id]);
               return checked.map(c => ({label: c.name || '', name: c.type || ''}));
             };
             const CarCell = ({prefix}) => {
@@ -32658,25 +32665,33 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         const targetAmpm = schedAp === '1日' ? 'AM' : schedAp; // default to AM for 1日 patients
         const targetKey = `${selectedDate}_${targetAmpm}`;
         if (!logUpdates[targetKey]) logUpdates[targetKey] = { ...(appData.diaryLogs||{})[targetKey] || {} };
+        // ★ キーは患者ID基準(振替で並びが変わっても別人にズレない)
+        const _pid = _diaryPtKey(pt);
+        const _key = _pid != null ? String(_pid) : String(i);
+        const _cPre = _pid != null ? _pid : i;
         const cleared = {};
-        ds.cars.forEach(c => { cleared[i+'_'+c.id] = false; });
+        ds.cars.forEach(c => { cleared[_cPre+'_'+c.id] = false; });
         logUpdates[targetKey][prefix] = { ...(logUpdates[targetKey][prefix]||{}), ...cleared };
-        logUpdates[targetKey][prefix+'_walk'] = { ...(logUpdates[targetKey][prefix+'_walk']||{}), [String(i)]: false };
-        if (val === 'walk') logUpdates[targetKey][prefix+'_walk'][String(i)] = true;
-        else if (val) logUpdates[targetKey][prefix][i+'_'+val] = true;
+        logUpdates[targetKey][prefix+'_walk'] = { ...(logUpdates[targetKey][prefix+'_walk']||{}), [_key]: false };
+        if (val === 'walk') logUpdates[targetKey][prefix+'_walk'][_key] = true;
+        else if (val) logUpdates[targetKey][prefix][_cPre+'_'+val] = true;
       });
       onSave({ ...appData, diaryLogs: { ...(appData.diaryLogs||{}), ...logUpdates }});
     } else {
       // ★ 変更した項目(prefix=迎え or 送り)のキーだけを patch する。 log 全体を渡すと、
       //   バッジ解除ロジックが「送り/運転者/時間も編集した」と誤判定して全バッジが消えるため。
+      // ★ キーは患者ID基準(振替で並びが変わっても別人にズレない)。
       const _slot = { ...(log[prefix]||{}) };
       const _walk = { ...(log[prefix+'_walk']||{}) };
       Object.entries(carAssignSelections).forEach(([idx, val]) => {
         const i = parseInt(idx);
-        ds.cars.forEach(c => { _slot[i+'_'+c.id] = false; });
-        _walk[String(i)] = false;
-        if(val === 'walk') _walk[String(i)] = true;
-        else if(val) _slot[i+'_'+val] = true;
+        const _pid = _diaryPtKey(patients[i]);
+        const _key = _pid != null ? String(_pid) : String(i);
+        const _cPre = _pid != null ? _pid : i;
+        ds.cars.forEach(c => { _slot[_cPre+'_'+c.id] = false; });
+        _walk[_key] = false;
+        if(val === 'walk') _walk[_key] = true;
+        else if(val) _slot[_cPre+'_'+val] = true;
       });
       updateLog({ [prefix]: _slot, [prefix+'_walk']: _walk });
     }
@@ -32704,8 +32719,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               // ★ 欠席・休止・休業の利用者は送迎車の割り当て対象外 (この選択に表示しない)
               if(pt && (pt.status==='欠席'||pt.status==='休業'||pt.status==='休止')) return null;
               const val = carAssignSelections[String(i)] ?? (() => {
-                if((log[carAssignModal.prefix+'_walk']||{})[String(i)]) return 'walk';
-                const found = ds.cars.find(c=>(log[carAssignModal.prefix]||{})[i+'_'+c.id]);
+                const _pid = _diaryPtKey(pt);
+                const _wm = log[carAssignModal.prefix+'_walk']||{}, _sm = log[carAssignModal.prefix]||{};
+                const _idHas = _pid != null && (_wm[String(_pid)] !== undefined || ds.cars.some(c=>_sm[_pid+'_'+c.id] !== undefined));
+                const _wKey = _idHas ? String(_pid) : String(i);
+                const _cPre = _idHas ? _pid : i;
+                if(_wm[_wKey]) return 'walk';
+                const found = ds.cars.find(c=>_sm[_cPre+'_'+c.id]);
                 return found ? found.id : '';
               })();
               return (
