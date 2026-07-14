@@ -19939,14 +19939,34 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
   const allRecords = useMemo(() => {
     if (!selectedPatientId) return [];
-    return (appData.ticketRecords || []).filter(r => r.patientId === selectedPatientId)
+    // ★ 分析個人の全データ(グラフ/統計/詳細記録/欠席一覧 等)はここから派生する。
+    //   日付が基本利用日と一致しない“残骸レコード”(他曜日の複製・過去の誤登録)や未来日を、
+    //   この元データ段階で厳格に除外し、全画面で一括して正しい日付だけを扱う。
+    //   ・振替/臨時 は非基本利用日でも正当 → 残す
+    //   ・出席/欠席/休業/休止 は その日が基本利用曜日(getScheduleOnDate)のときだけ有効
+    //   ・未来日(今日以降の未到来日)は除外
+    const _todayEnd = new Date(); _todayEnd.setHours(23,59,59,999);
+    const _recDate = (r) => { const m=(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return null; const y=r.year||new Date().getFullYear(); return new Date(y, parseInt(m[1],10)-1, parseInt(m[2],10)); };
+    const _sp = (appData.patients||[]).find(p => p.id === selectedPatientId || String(p.id) === String(selectedPatientId));
+    return (appData.ticketRecords || []).filter(r => {
+        if (r.patientId !== selectedPatientId) return false;
+        const d = _recDate(r);
+        if (d && d > _todayEnd) return false;                      // 未来日は除外
+        if (r.status==='振替' || r.status==='臨時') return true;    // 振替/臨時は非基本利用日でも正当
+        if (d && _sp) {
+          const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+          const sc=getScheduleOnDate(_sp, iso)?.[d.getDay()]||'';
+          if(!sc) return false;                                    // 非基本利用日の残骸は除外
+        }
+        return true;
+      })
       .sort((a,b)=>{
         const m1=a.date.match(/(\d+)月/),m2=b.date.match(/(\d+)月/);
         const d1=a.date.match(/(\d+)日/),d2=b.date.match(/(\d+)日/);
         const mv=parseInt(m1?.[1]||0,10)-parseInt(m2?.[1]||0,10);
         return mv!==0?mv:parseInt(d1?.[1]||0,10)-parseInt(d2?.[1]||0,10);
       });
-  }, [appData.ticketRecords, selectedPatientId]);
+  }, [appData.ticketRecords, appData.patients, selectedPatientId]);
 
   const records = useMemo(() => {
     if (targetYearMonths === null) return allRecords; // 全期間
