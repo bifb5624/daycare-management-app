@@ -32609,14 +32609,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
       {/* フッター（pageInfo の showExtras が true の場合のみ） */}
       {_showExtras && (() => {
-      // ★ 記入漏れの強調: 記録者が1人もチェックされていない / 管理者確認が未チェック の場合は色付き(黄)で目立たせる
-      const recorderDone = Object.keys(_log.recorder||{}).some(k => (_log.recorder||{})[k]);
-      const managerDone = !!_log.managerConfirmed;
-      const warnBox = { border:'2px solid #f59e0b', backgroundColor:'#fffbeb' };
+      // ★ 未入力の強調は編集画面の「要確認」バッジに一本化。 ここ(帳票)は黄色枠を出さず常に通常表示。
       return (
       <div style={{display:'flex',gap:4,marginTop:'auto',paddingTop:4}}>
-        <div style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden', ...(recorderDone ? {} : warnBox)}}>
-          <div style={{backgroundColor: recorderDone ? '#445' : '#f59e0b',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>記録者{recorderDone ? '' : '（未記入）'}</div>
+        <div style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
+          <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>記録者</div>
           <div style={{padding:'3px 8px',display:'flex',flexWrap:'wrap',gap:'1px 0',minHeight:40,alignContent:'center'}}>
             {/* ★ 同姓同名のスタッフは重複排除 (役職違いの同名スタッフがいるとき片方だけ表示) */}
             {(() => {
@@ -32635,8 +32632,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             ))}
           </div>
         </div>
-        <div style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden', ...(managerDone ? {} : warnBox)}}>
-          <div style={{backgroundColor: managerDone ? '#445' : '#f59e0b',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>管理者確認{managerDone ? '' : '（未確認）'}</div>
+        <div style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
+          <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>管理者確認</div>
           <div style={{padding:'5px 8px',display:'flex',alignItems:'center',gap:4,minHeight:38}}>
             <CB checked={!!(_log.managerConfirmed)} onChange={()=>_updateLog({managerConfirmed:!_log.managerConfirmed})} sz={12}/>
             <span style={{fontSize:11,fontWeight:'bold',lineHeight:1.4}}>{managerName}は上記記録を確認しました。</span>
@@ -33090,17 +33087,30 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           ))}
         </div>
 
-        {/* ★ 1週間前から自動コピーした送迎(未確認)の注意表示。 迎え/送り/運転者/時間 を項目別に表示し、編集すると1つずつ消える */}
-        {log._sougeiPending && Object.keys(log._sougeiPending).length > 0 && (
-          <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2 flex-wrap">
-            <span className="text-lg">⚠</span>
-            <span><b>1週間前から自動コピー</b>（未確認）:</span>
-            {['迎え','送り','運転者','時間'].filter(l=>log._sougeiPending[l]).map(l=>(
-              <span key={l} className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold">{l}</span>
-            ))}
-            <span className="text-xs font-normal text-amber-700">…各項目を確認・編集すると消えます</span>
-          </div>
-        )}
+        {/* ★ 要確認バッジ: 迎え/送り=1週間前コピー未編集、 送迎時間=空欄、 記録者=未入力、 管理者確認=未確認。
+            入力/確認すると消える。 (黄色い枠は廃止しこのバッジに一本化) */}
+        {(() => {
+          const sp = log._sougeiPending || {};
+          const items = [];
+          if (sp['迎え']) items.push({ label:'迎え', hint:'コピー未確認' });
+          if (sp['送り']) items.push({ label:'送り', hint:'コピー未確認' });
+          const _timeEmpty = !Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart));
+          if (_timeEmpty) items.push({ label:'送迎時間', hint:'未入力' });
+          const _recEmpty = !Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k]);
+          if (_recEmpty) items.push({ label:'記録者', hint:'未入力' });
+          if (!log.managerConfirmed) items.push({ label:'管理者確認', hint:'未確認' });
+          if (!items.length) return null;
+          return (
+            <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2 flex-wrap">
+              <span className="text-lg">⚠</span>
+              <span>要確認:</span>
+              {items.map(it=>(
+                <span key={it.label} className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold">{it.label}<span className="ml-1 text-[10px] font-normal text-amber-600">（{it.hint}）</span></span>
+              ))}
+              <span className="text-xs font-normal text-amber-700">…入力/確認すると消えます</span>
+            </div>
+          );
+        })()}
         {/* 送迎車割り当て */}
         <button disabled={isReadOnly} onClick={()=>{setCarAssignModal({prefix:'pick'});setCarAssignSelections({});}}
           className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-50 flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
