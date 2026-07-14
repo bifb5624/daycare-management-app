@@ -24745,7 +24745,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
     const el = measureRef.current; if (!el) return;
     const ph = pat?.html || '';
     el.innerHTML = (all.html||'') + ((all.html&&ph)?'<div style="height:6px"></div>':'') + ph;
-    setWarn(el.scrollHeight > 205 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
+    setWarn(el.scrollHeight > 230 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
   }, [all.html, pat?.html]);
   const save = () => {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
@@ -24791,7 +24791,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-[80] flex items-center justify-center p-0 sm:p-4">
       <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-lg max-h-full sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5">
-        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:420,padding:'8px 10px',lineHeight:1.55,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,visibility:'hidden',pointerEvents:'none'}}/>
+        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:420,padding:'8px 10px',lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,visibility:'hidden',pointerEvents:'none'}}/>
         <style>{`.renraku-editor:empty:before{content:'連絡事項を入力（文字を選んで色・太字・大きさ）';color:#94a3b8;}`}</style>
         <div className="flex items-center justify-between mb-3">
           <div className="text-lg font-bold text-slate-800">連絡事項の編集</div>
@@ -25703,7 +25703,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
             <div className="shrink-0 mb-2">
               <div className="font-bold text-slate-800" style={{fontSize:16,marginBottom:3}}>連絡事項</div>
               {/* ★ 連絡事項は 8〜9 行分を固定確保(運動テーブルはその分自動で縮む)。 文字も少し大きく。 */}
-              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'14rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,lineHeight:1.55,boxSizing:'border-box'}}>
+              <div onClick={()=>onEditRenraku&&onEditRenraku(patient)} className={`border-2 border-black bg-white ${onEditRenraku?'cursor-pointer hover:bg-violet-50 transition-colors':''}`} style={{height:'15.5rem',padding:'8px 10px',overflow:'hidden',whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,lineHeight:1.5,boxSizing:'border-box'}}>
                 {_showAll && <div style={{marginBottom:6}} dangerouslySetInnerHTML={{__html: renrakuToHtml(_all)}}/>}
                 {_showPat && <div dangerouslySetInnerHTML={{__html: renrakuToHtml(_pat)}}/>}
               </div>
