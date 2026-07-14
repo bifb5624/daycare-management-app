@@ -10380,7 +10380,7 @@ const DEV_ANN_META = {
   info:        { label:'お知らせ',     emoji:'ℹ️', color:'#0369a1', bg:'#f0f9ff' },
 };
 // === ホーム / ダッシュボード ===
-function DashboardView({ appData, navigateTo, activeRecorder, notices, scaled }) {
+function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const dow = ['日','月','火','水','木','金','土'][now.getDay()];
@@ -10418,10 +10418,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, scaled })
     </button>
   );
   return (
-    // ★ 縮小 transform 配下(iPad等 scaled=true)では「入れ子スクロール」にするとタップ座標がずれて
-    //   ジャンプしない不具合が出るため、自前の overflow:auto をやめ外側スクロールに委譲(minHeightで背景維持)。
-    //   transform 無し(PC 等幅表示)では従来どおり自前スクロールにする(外側だけだとタイルに届かないため)。
-    <div style={scaled ? {minHeight:'100%',background:'#f0f4f9'} : {height:'100%',overflow:'auto',background:'#f0f4f9'}}>
+    // ★ ホームは縮小 transform を使わず等倍で表示する(親ラッパー側で dashboard を transform 対象外に)。
+    //   これにより transform 内の入れ子スクロールで起きる iOS/一部環境のタップ座標ズレを根本回避。
+    <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
       <div style={{maxWidth:1040,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
         {/* 挨拶 */}
         <div style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',borderRadius:16,color:'white',padding:'18px 22px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
@@ -17471,8 +17470,8 @@ export default function App() {
             {/* QuickNav はヘッダー内に移動 */}
             {/* 全画面で padding:0 にし、QuickNav と各ビューの sticky ツールバーの間に隙間ができないように統一 */}
             <div ref={contentRef} style={{flex:1,overflow:'auto',padding:0}}>
-            <div style={isMobileLayout ? {width:'100%',minWidth:0} : {minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
-            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} scaled={!isMobileLayout && contentScale<1} /> :
+            <div style={isMobileLayout ? {width:'100%',minWidth:0} : currentView==='dashboard' ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH,transformOrigin:'top left',transform:contentScale<1?`scale(${contentScale})`:'none',width:contentScale<1?`${100/contentScale}%`:'100%',height:contentScale<1?`${100/contentScale}%`:'100%'}}>
+            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
