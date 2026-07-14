@@ -32667,17 +32667,18 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       });
       onSave({ ...appData, diaryLogs: { ...(appData.diaryLogs||{}), ...logUpdates }});
     } else {
-      const newLog = { ...log };
+      // ★ 変更した項目(prefix=迎え or 送り)のキーだけを patch する。 log 全体を渡すと、
+      //   バッジ解除ロジックが「送り/運転者/時間も編集した」と誤判定して全バッジが消えるため。
+      const _slot = { ...(log[prefix]||{}) };
+      const _walk = { ...(log[prefix+'_walk']||{}) };
       Object.entries(carAssignSelections).forEach(([idx, val]) => {
         const i = parseInt(idx);
-        const cleared = {};
-        ds.cars.forEach(c => { cleared[i+'_'+c.id] = false; });
-        newLog[prefix] = { ...(newLog[prefix]||{}), ...cleared };
-        newLog[prefix+'_walk'] = { ...(newLog[prefix+'_walk']||{}), [String(i)]: false };
-        if(val === 'walk') newLog[prefix+'_walk'][String(i)] = true;
-        else if(val) newLog[prefix][i+'_'+val] = true;
+        ds.cars.forEach(c => { _slot[i+'_'+c.id] = false; });
+        _walk[String(i)] = false;
+        if(val === 'walk') _walk[String(i)] = true;
+        else if(val) _slot[i+'_'+val] = true;
       });
-      updateLog(newLog);
+      updateLog({ [prefix]: _slot, [prefix+'_walk']: _walk });
     }
     setCarAssignModal(null);
     setCarAssignSelections({});
