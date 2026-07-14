@@ -418,10 +418,17 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const aEmpty = _isEmptyVal(av), bEmpty = _isEmptyVal(bv);
       if (aEmpty && bEmpty) { out[k] = av; return; }
       if (aEmpty !== bEmpty) {
-        const newerIsEmpty = aNewer ? aEmpty : bEmpty;
-        const newerStrict = aNewer ? (at > bt) : (bt > at);
-        if (newerIsEmpty && newerStrict) { out[k] = aNewer ? av : bv; return; } // 新しい方が削除 → 反映
-        out[k] = aEmpty ? bv : av; // それ以外は非空を維持
+        // ★ バイタル(体温/血圧/脈)は「空欄で消えない=非空を無条件優先」。
+        //   記録を保存すると未入力の欄にも新しい _savedAt が付くため、他端末で入力したバイタルを
+        //   『未入力の空欄=削除』と誤判定して消してしまう事故(終了血圧が全端末で空になる等)を防ぐ。
+        //   特記/気分理由 等は従来どおり「新しい方が明示的に空にした=削除」を反映する。
+        const _isVital = /^(temp|bpUpSt|bpDnSt|bpUpEn|bpDnEn|plSt|plEn)(_|$)/.test(k);
+        if (!_isVital) {
+          const newerIsEmpty = aNewer ? aEmpty : bEmpty;
+          const newerStrict = aNewer ? (at > bt) : (bt > at);
+          if (newerIsEmpty && newerStrict) { out[k] = aNewer ? av : bv; return; } // 明示的削除を反映
+        }
+        out[k] = aEmpty ? bv : av; // 非空を維持(バイタルは常に)
         return;
       }
       out[k] = aNewer ? av : bv; // 両方非空の競合 → 新しい方
