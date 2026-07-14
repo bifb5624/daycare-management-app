@@ -30386,7 +30386,23 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         _syncedStoreMembers = [..._syncedStoreMembers, { id:`mem_admin_${Date.now()}`, name:_adminName, roleLabel:'管理者', isAdmin:true, addedAt:new Date().toISOString() }];
       }
     }
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    // ★ I5: つむぎ管理局が同意ポリシーの「版」を上げて保存したとき、改定のお知らせを自動作成し、
+    //   家族・ケアマネの閲覧画面とスタッフのホームお知らせに掲載する。 版が実際に変わった時だけ発火。
+    let _polAnns = appData.familyAnnouncements || [];
+    let _polPosted = false;
+    if (isSuperAdmin) {
+      const _newPolAnns = [];
+      const _nowIso = new Date().toISOString(); const _today = _nowIso.slice(0,10);
+      const _mkPolAnn = (label, ver, date) => ({ id:`news_pol_${Date.now()}_${String(ver).replace(/\W/g,'')}_${label.length}`, title:`【重要】${label}を改定しました（版 ${ver}）`, body:`${label}を改定しました。\n改定日: ${date||_today}\n版: ${ver}\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。詳しい内容は各画面の規約・重要事項をご確認ください。`, date:_today, postedAt:_nowIso, audience:['family','caremanager','related'], photos:[], _policyNotice:true });
+      try {
+        const _oldFamVer = getEffectivePolicy('family', appData.systemSettings).version;
+        const _oldOffVer = getEffectivePolicy('office', appData.systemSettings).version;
+        if (policyFamily?.version && String(policyFamily.version) !== String(_oldFamVer)) _newPolAnns.push(_mkPolAnn('利用規約・プライバシーポリシー', policyFamily.version, policyFamily.date));
+        if (policyOffice?.version && String(policyOffice.version) !== String(_oldOffVer)) _newPolAnns.push(_mkPolAnn('ご利用にあたっての重要事項', policyOffice.version, policyOffice.date));
+      } catch {}
+      if (_newPolAnns.length) { _polAnns = [..._newPolAnns, ..._polAnns]; _polPosted = true; }
+    }
+    onSave({ ...appData, familyAnnouncements: _polAnns, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems, ...(isSuperAdmin ? { policies: { family: policyFamily, office: policyOffice } } : {}) } }, { manual: true, message: _polPosted ? '✓ 各種設定を保存し、改定のお知らせを掲載しました' : '✓ 各種設定を保存しました' });
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
