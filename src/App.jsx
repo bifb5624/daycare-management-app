@@ -18001,15 +18001,33 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           // ★ 休止中の人は「通所予定の基本利用日」のみ表示する。 基本利用日でない日には出さない
           //   (過去の記録やシフトが残っていても、休止者が全曜日・全時間帯に出てしまうのを防ぐ)。
           if (getPauseReasonOnDate(p, selectedDate) && !(isBaseAM || isBasePM)) return false;
-          const comingAM = stateAM === "〇" || stateAM === "出席" || stateAM.startsWith("振") || stateAM === "欠席";
-          const comingPM = statePM === "〇" || statePM === "出席" || statePM.startsWith("振") || statePM === "欠席";
+          // ★ 欠席は基本利用日のみ表示 (非基本利用日の残骸「欠席」シフトで誤表示しない)。出席/振替はそのまま。
+          const comingAM = stateAM === "〇" || stateAM === "出席" || stateAM.startsWith("振") || (stateAM === "欠席" && isBaseAM);
+          const comingPM = statePM === "〇" || statePM === "出席" || statePM.startsWith("振") || (statePM === "欠席" && isBasePM);
           const targetDateStr2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
           const _selYear2 = new Date(selectedDate).getFullYear();
-          const hasRecord = (appData.ticketRecords||[]).some(r=>r.patientId===p.id&&recMatchesDateYear(r, targetDateStr2, _selYear2));
+          const _isBaseDay2 = isBaseAM || isBasePM;
+          // ★ 記録による表示は「基本利用日/振替/臨時/実データあり」だけを正当とする。
+          //   非基本利用日に残った“欠席/休業だけ(実データ無し)”の残骸で、月曜利用者が金曜に出る等の不具合を防ぐ。
+          const hasRecord = (appData.ticketRecords||[]).some(r=>{
+            if(r.patientId!==p.id || !recMatchesDateYear(r, targetDateStr2, _selYear2)) return false;
+            if(_isBaseDay2) return true;                                   // 基本利用日の記録は正当
+            if(r.status==='振替' || r.status==='臨時') return true;         // 振替/臨時は非基本日でも正当
+            // 非基本利用日の欠席/休業などは、実データ(バイタル/運動/気分/特記/実績時間)が無ければ残骸として非表示
+            const _hasData = !!(r.temp_AM||r.temp_PM||r.temp||r.bpUpSt_AM||r.bpUpSt||r.plSt_AM||r.plSt||r.massage||(r.tokki&&String(r.tokki).trim())||r.kibunArrival||r.kibunDeparture||r.actualTime||(r.exercises&&Object.keys(r.exercises).length));
+            return _hasData;
+          });
           // ★ この日に「欠席/振替」がシフトにあれば確実に表示 (AM/PM以外のキー= 全日「24_1日」等 も拾う)
           //   comingAM/PM は 24_AM・24_PM しか見ないため、全日利用の欠席シフト等を取りこぼすのを防ぐ。
+          //   ただし “欠席/休業” は基本利用日のみ表示 (非基本利用日の残骸シフトで誤表示しない)。振替は常に表示。
           const _dayShifts = appData.monthlyShifts?.[monthKey]?.[p.id] || {};
-          const hasAbsentOrFuriThisDay = Object.keys(_dayShifts).some(k => k.startsWith(`${dayNum}_`) && (_dayShifts[k]==='欠席' || _dayShifts[k]==='振替' || _dayShifts[k]==='休業' || (typeof _dayShifts[k]==='string' && _dayShifts[k].startsWith('振'))));
+          const hasAbsentOrFuriThisDay = Object.keys(_dayShifts).some(k => {
+            if(!k.startsWith(`${dayNum}_`)) return false;
+            const v = _dayShifts[k];
+            if(v==='振替' || (typeof v==='string' && v.startsWith('振'))) return true; // 振替は常に表示
+            if(v==='欠席' || v==='休業') return _isBaseDay2;                            // 欠席/休業は基本利用日のみ
+            return false;
+          });
           // ★ この日を「振替元」とする振替が他の日にあれば、欠席としてこの日に表示 (欠席記録/欠席シフトが欠けていても出す)
           //   方法A: 振替記録 tokki「○月○日…分振替」から逆引き
           //   方法B: シフト側の振替タグ「振(M/D)」から逆引き (スケジュール表はこのタグで振替を表示するため最も確実)
@@ -22358,10 +22376,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const detailRecs = records.filter(r => {
             const d = _detRecDate(r);
             if (d && d > _detTodayEnd) return false;                 // 未来日は除外
-            if (r.status && r.status !== '出席') return true;         // 欠席/振替/休業/休止 は表示
+            // その日の基本利用曜日 (基本利用日かどうか)
+            const _detSc = d ? (getScheduleOnDate(selectedPatient, `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)?.[d.getDay()]||'') : '';
+            // 振替/臨時 は非基本利用日でも表示
+            if (r.status==='振替' || r.status==='臨時') return true;
+            // 欠席/休業/休止 は基本利用日のときだけ表示(非利用日に残った残骸は除外)
+            if (r.status && r.status !== '出席') { if (d && !_detSc && !_detHasData(r)) return false; return true; }
             if (_detHasData(r)) return true;                          // データのある出席は表示
             // 空の出席: 基本利用日のときだけ表示(非利用日の空出席=残骸は除外)
-            if (d) { const iso=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; const sc=getScheduleOnDate(selectedPatient, iso)?.[d.getDay()]||''; if(!sc) return false; }
+            if (d && !_detSc) return false;
             return true;
           });
           // 期間ラベル (例: 2026年6月 / 全期間) を見出しに添える
