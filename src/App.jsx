@@ -1357,13 +1357,15 @@ let _globalPolicyCache = null;
 function setGlobalPolicyCache(p) { _globalPolicyCache = (p && typeof p === 'object') ? p : null; }
 function getGlobalPolicyCache() { return _globalPolicyCache; }
 // 有効ポリシー: ①全店共通(管理局) → ②事業所の上書き(systemSettings.policies[kind]) → ③既定
+//   notify = { announce:改定時にお知らせ公開 / login:ログイン時に再同意を求める } (未設定は両方ON=従来動作)。
 function getEffectivePolicy(kind, systemSettings) {
+  const _defNotify = { announce: true, login: true };
   const gv = _globalPolicyCache && _globalPolicyCache[kind];
-  if (gv && gv.version && String(gv.text||'').trim()) return { version: String(gv.version), date: gv.date || '', text: String(gv.text) };
+  if (gv && gv.version && String(gv.text||'').trim()) return { version: String(gv.version), date: gv.date || '', text: String(gv.text), notify: gv.notify || _defNotify, history: Array.isArray(gv.history) ? gv.history : [] };
   const ov = systemSettings?.policies?.[kind];
-  if (ov && ov.version && String(ov.text||'').trim()) return { version: String(ov.version), date: ov.date || '', text: String(ov.text) };
-  if (kind === 'office') return { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT };
-  return { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT };
+  if (ov && ov.version && String(ov.text||'').trim()) return { version: String(ov.version), date: ov.date || '', text: String(ov.text), notify: ov.notify || _defNotify, history: Array.isArray(ov.history) ? ov.history : [] };
+  if (kind === 'office') return { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT, notify: _defNotify, history: [] };
+  return { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT, notify: _defNotify, history: [] };
 }
 const renderPolicyText = (text, facility, tel) => String(text || '').replace(/\{facility\}/g, facility || '当事業所').replace(/\{tel\}/g, tel ? ` / TEL ${tel}` : '');
 // ★ 最新版の同意を求めるゲート(家族/ケアマネ=ログイン後 / 事業所=入場後)。 同意するまで先へ進めない。
@@ -12952,7 +12954,7 @@ function FamilyView() {
   // 同意済みの版: DB(consents)優先。 端末ローカルにも記録し、DBにconsents列が無い環境でも毎回聞かないようにする。
   const _localFamConsentV = (()=>{ try { return (JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}')||{})[String(authAccId)] || ''; } catch { return ''; } })();
   const _famConsented = String(_famAcc?.consents?.version || _famAcc?.consents?.termsVersion || _localFamConsentV || '0');
-  if (!_isPreviewAcc && _famAcc && _famConsented !== String(_effFamPol.version)) {
+  if (!_isPreviewAcc && _famAcc && _famConsented !== String(_effFamPol.version) && _effFamPol.notify?.login !== false) {
     const _famFacility = data.systemSettings?.facilityInfo?.name || facility.name || '当事業所';
     const _famTel = data.systemSettings?.facilityInfo?.phone || facility.phone || '';
     return <ConsentGateModal
@@ -14852,78 +14854,123 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdm
 function GlobalPolicyPanel({ staffSession }) {
   const _defFam = { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT };
   const _defOff = { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT };
-  const [fam, setFam] = React.useState(_defFam);
-  const [off, setOff] = React.useState(_defOff);
+  const _defNotify = { announce: true, login: true };
+  const [open, setOpen] = React.useState(false); // 折りたたみ (既定=閉)
+  const [fam, setFam] = React.useState({ ..._defFam, notify:{ ..._defNotify } });
+  const [off, setOff] = React.useState({ ..._defOff, notify:{ ..._defNotify } });
+  const [famHist, setFamHist] = React.useState([]);
+  const [offHist, setOffHist] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
-  const [busy, setBusy] = React.useState(false);
-  const [msg, setMsg] = React.useState('');
-  const origRef = React.useRef({ fam: '', off: '' }); // 読込時の版(改定検知用)
+  const [busy, setBusy] = React.useState('');         // '' | 'family' | 'office'
+  const [msg, setMsg] = React.useState({});           // {family, office}
+  const [showHist, setShowHist] = React.useState({}); // {family, office}
+  const [histText, setHistText] = React.useState({}); // 展開中の履歴本文
+  const origRef = React.useRef({ family:'', office:'' }); // 読込時の版(改定検知用)
   React.useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const gp = await supabaseLoadGlobalPolicies();
         if (!alive) return;
-        if (gp?.family?.version) setFam({ version:String(gp.family.version), date:gp.family.date||'', text:String(gp.family.text||_defFam.text) });
-        if (gp?.office?.version) setOff({ version:String(gp.office.version), date:gp.office.date||'', text:String(gp.office.text||_defOff.text) });
-        origRef.current = { fam:String(gp?.family?.version||''), off:String(gp?.office?.version||'') };
+        if (gp?.family?.version) { setFam({ version:String(gp.family.version), date:gp.family.date||'', text:String(gp.family.text||_defFam.text), notify:{ ..._defNotify, ...(gp.family.notify||{}) } }); setFamHist(Array.isArray(gp.family.history)?gp.family.history:[]); }
+        if (gp?.office?.version) { setOff({ version:String(gp.office.version), date:gp.office.date||'', text:String(gp.office.text||_defOff.text), notify:{ ..._defNotify, ...(gp.office.notify||{}) } }); setOffHist(Array.isArray(gp.office.history)?gp.office.history:[]); }
+        origRef.current = { family:String(gp?.family?.version||''), office:String(gp?.office?.version||'') };
       } catch {}
       if (alive) setLoading(false);
     })();
     return () => { alive = false; };
   }, []);
-  const save = async () => {
-    if (!String(fam.version).trim() || !String(off.version).trim()) { alert('版(バージョン)を入力してください'); return; }
-    setBusy(true); setMsg('');
+  // ★ 家族・ケアマネ向け / 事業所向け を「それぞれ個別に」保存。 もう一方は最新の共通レコードを保持。
+  const saveKind = async (kind) => {
+    const st = kind==='family' ? fam : off;
+    const hist = kind==='family' ? famHist : offHist;
+    const label = kind==='family' ? '利用規約・プライバシーポリシー' : 'ご利用にあたっての重要事項';
+    if (!String(st.version).trim()) { alert('版(バージョン)を入力してください'); return; }
+    setBusy(kind); setMsg(m=>({ ...m, [kind]:'' }));
     try {
-      const policies = { family:{ version:String(fam.version).trim(), date:fam.date||'', text:fam.text }, office:{ version:String(off.version).trim(), date:off.date||'', text:off.text } };
+      const cur = (await supabaseLoadGlobalPolicies()) || {};
+      const verChanged = String(st.version).trim() !== String(origRef.current[kind]||'');
+      let newHist = Array.isArray(hist) ? hist.slice() : [];
+      if (verChanged) newHist = [{ version:String(st.version).trim(), date:st.date||'', text:st.text, savedAt:new Date().toISOString(), savedBy: staffSession?.username||'honbu' }, ...newHist].slice(0, 50);
+      const kindPolicy = { version:String(st.version).trim(), date:st.date||'', text:st.text, notify:{ announce: st.notify?.announce!==false, login: st.notify?.login!==false }, history:newHist };
+      const policies = { ...cur, [kind]: kindPolicy };
       const ok = await supabaseSaveGlobalPolicies(policies);
-      if (!ok) { alert('保存に失敗しました(通信エラー)'); setBusy(false); return; }
+      if (!ok) { alert('保存に失敗しました(通信エラー)'); setBusy(''); return; }
       setGlobalPolicyCache(policies); // 自画面のキャッシュも即時更新
-      // ★ I5: 版が上がったポリシーは、全店の管理局お知らせ(system_notices, 全店対象)に改定通知を自動掲載
-      const _today = new Date().toISOString().slice(0,10);
-      const _mk = async (label, ver, date) => { try { await supabaseCreateSystemNotice({ title:`【重要】${label}を改定しました（版 ${ver}）`, body:`${label}を改定しました。\n改定日: ${date||_today}\n版: ${ver}\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。`, targetStoreIds:[], severity:'info', endsAt:null, createdBy: staffSession?.username||'honbu' }); } catch(e){ console.warn('policy notice failed', e); } };
-      let posted = 0;
-      if (String(fam.version).trim() !== origRef.current.fam) { await _mk('利用規約・プライバシーポリシー', String(fam.version).trim(), fam.date); posted++; }
-      if (String(off.version).trim() !== origRef.current.off) { await _mk('ご利用にあたっての重要事項', String(off.version).trim(), off.date); posted++; }
-      origRef.current = { fam:String(fam.version).trim(), off:String(off.version).trim() };
-      setMsg(posted ? '✓ 保存し、改定のお知らせを全店に掲載しました' : '✓ 保存しました（版の変更なし＝お知らせは掲載していません）');
+      if (kind==='family') setFamHist(newHist); else setOffHist(newHist);
+      origRef.current = { ...origRef.current, [kind]: String(st.version).trim() };
+      // ★ I5: 版が上がり かつ「お知らせに公開」ONのときだけ、全店の管理局お知らせ(system_notices)に掲載
+      let announced = false;
+      if (verChanged && kindPolicy.notify.announce) {
+        try { await supabaseCreateSystemNotice({ title:`【重要】${label}を改定しました（版 ${kindPolicy.version}）`, body:`${label}を改定しました。\n改定日: ${kindPolicy.date||new Date().toISOString().slice(0,10)}\n版: ${kindPolicy.version}${kindPolicy.notify.login ? '\n\n次回ログイン時に、最新内容へのご同意をお願いする場合があります。' : ''}`, targetStoreIds:[], severity:'info', endsAt:null, createdBy: staffSession?.username||'honbu' }); announced = true; } catch(e){ console.warn('policy notice failed', e); }
+      }
+      setMsg(m=>({ ...m, [kind]: !verChanged ? '✓ 保存しました（版の変更なし）' : (announced ? '✓ 保存し、改定お知らせを全店に掲載しました' : '✓ 保存しました（お知らせ公開はOFF）') }));
     } catch (e) { alert('保存に失敗: ' + (e?.message||'')); }
-    setBusy(false);
+    setBusy('');
   };
   const inp = { width:'100%', padding:'8px 10px', border:'1px solid #cbd5e1', borderRadius:8, fontSize:13, fontWeight:'bold', outline:'none', boxSizing:'border-box' };
-  const renderKind = (label, st, setSt, def) => (
+  const renderKind = (kind, st, setSt, def, hist) => (
     <div style={{border:'1px solid #e2e8f0',borderRadius:12,padding:14,marginBottom:12}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,gap:8,flexWrap:'wrap'}}>
-        <div style={{fontSize:14,fontWeight:'bold',color:'#3d5021'}}>{label}</div>
-        <button type="button" onClick={()=>{ if(window.confirm('この項目を既定文に戻します。よろしいですか?')) setSt({ version:def.version, date:def.date, text:def.text }); }} style={{padding:'5px 10px',background:'#f1f5f9',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>既定文に戻す</button>
+        <div style={{fontSize:14,fontWeight:'bold',color:'#3d5021'}}>{kind==='family'?'利用規約・プライバシーポリシー（家族・ケアマネ向け）':'ご利用にあたっての重要事項（事業所向け）'}</div>
+        <button type="button" onClick={()=>{ if(window.confirm('この項目を既定文に戻します。よろしいですか?')) setSt(s=>({ ...s, version:def.version, date:def.date, text:def.text })); }} style={{padding:'5px 10px',background:'#f1f5f9',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>既定文に戻す</button>
       </div>
-      <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+      <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap',alignItems:'flex-end'}}>
         <div style={{width:120}}><label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>版(バージョン)</label><input value={st.version} onChange={e=>setSt(s=>({...s,version:e.target.value}))} placeholder="例: 2.1" style={inp}/></div>
         <div style={{width:160}}><label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>改定日</label><input type="date" value={st.date} onChange={e=>setSt(s=>({...s,date:e.target.value}))} style={inp}/></div>
       </div>
-      <label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>本文</label>
+      {/* 改定時の通知方法 (それぞれ選択可) */}
+      <div style={{display:'flex',gap:16,flexWrap:'wrap',margin:'4px 0 8px',padding:'8px 10px',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8}}>
+        <div style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:'100%'}}>改定時の通知方法（版を上げて保存したとき）</div>
+        <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>
+          <input type="checkbox" checked={st.notify?.announce!==false} onChange={e=>setSt(s=>({...s,notify:{...(s.notify||{}),announce:e.target.checked}}))} style={{accentColor:'#7daa3d'}}/>お知らせに公開（全店ホーム）
+        </label>
+        <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>
+          <input type="checkbox" checked={st.notify?.login!==false} onChange={e=>setSt(s=>({...s,notify:{...(s.notify||{}),login:e.target.checked}}))} style={{accentColor:'#7daa3d'}}/>ログイン時に再同意を求める
+        </label>
+      </div>
+      <label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>本文（{'{facility}'}=事業所名 / {'{tel}'}=電話番号 に自動置換）</label>
       <textarea value={st.text} onChange={e=>setSt(s=>({...s,text:e.target.value}))} rows={8} style={{...inp,fontWeight:'normal',lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}/>
+      <div style={{display:'flex',gap:8,alignItems:'center',marginTop:8,flexWrap:'wrap'}}>
+        <button type="button" onClick={()=>saveKind(kind)} disabled={busy===kind} style={{padding:'9px 18px',background:busy===kind?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:busy===kind?'not-allowed':'pointer'}}>{busy===kind?'保存中…':'この項目を保存'}</button>
+        {msg[kind] && <span style={{fontSize:12,fontWeight:'bold',color:'#16a34a'}}>{msg[kind]}</span>}
+        {(hist&&hist.length>0) && <button type="button" onClick={()=>setShowHist(h=>({...h,[kind]:!h[kind]}))} style={{marginLeft:'auto',padding:'6px 12px',background:'#eef2ff',color:'#4338ca',border:'1px solid #c7d2fe',borderRadius:8,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>版の履歴 {hist.length}件 {showHist[kind]?'▲':'▼'}</button>}
+      </div>
+      {showHist[kind] && hist && hist.length>0 && (
+        <div style={{marginTop:8,border:'1px solid #e2e8f0',borderRadius:8,maxHeight:260,overflowY:'auto'}}>
+          {hist.map((h,i)=>{ const hk=`${kind}_${i}`; return (
+            <div key={i} style={{padding:'8px 10px',borderBottom:'1px solid #f1f5f9'}}>
+              <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+                <span style={{fontSize:12,fontWeight:'bold',color:'#3d5021'}}>版 {h.version}</span>
+                {h.date && <span style={{fontSize:11,color:'#64748b'}}>改定日 {String(h.date).replace(/-/g,'/')}</span>}
+                <span style={{fontSize:10,color:'#94a3b8'}}>保存 {h.savedAt?String(h.savedAt).slice(0,10):''}{h.savedBy?` / ${h.savedBy}`:''}</span>
+                <button type="button" onClick={()=>setHistText(t=>({...t,[hk]:!t[hk]}))} style={{marginLeft:'auto',fontSize:10,fontWeight:'bold',color:'#4338ca',background:'none',border:'none',cursor:'pointer'}}>{histText[hk]?'本文を隠す':'本文を表示'}</button>
+                <button type="button" onClick={()=>{ if(window.confirm(`版 ${h.version} の内容を編集欄に復元します（このあと保存すると反映）。よろしいですか?`)) setSt(s=>({...s,version:h.version,date:h.date||'',text:h.text||''})); }} style={{fontSize:10,fontWeight:'bold',color:'#7daa3d',background:'none',border:'none',cursor:'pointer'}}>復元</button>
+              </div>
+              {histText[hk] && <div style={{marginTop:6,fontSize:11,color:'#334155',whiteSpace:'pre-wrap',lineHeight:1.6,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:6,padding:8,maxHeight:200,overflowY:'auto'}}>{h.text}</div>}
+            </div>
+          );})}
+        </div>
+      )}
     </div>
   );
   return (
-    <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6,gap:8,flexWrap:'wrap'}}>
-        <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📜 同意ポリシー編集（全店共通）</div>
-        {msg && <div style={{fontSize:12,fontWeight:'bold',color:'#16a34a'}}>{msg}</div>}
-      </div>
-      <div style={{fontSize:11,color:'#64748b',lineHeight:1.6,marginBottom:12,background:'#f0f7e0',border:'1px solid #d4e7a5',borderRadius:8,padding:'8px 10px'}}>
-        ここで編集した内容は<b>全店舗に共通で適用</b>されます。<b>版(バージョン)を上げて保存</b>すると、各店の家族・ケアマネ・スタッフに<b>次回ログイン時の再同意</b>を求め、全店の管理局お知らせに改定通知を自動掲載します。<br/>本文中の <code>{'{facility}'}</code> は各店舗名、<code>{'{tel}'}</code> は電話番号に自動置換されます。
-      </div>
-      {loading ? (
+    <div style={{background:'white',borderRadius:16,padding:'16px 24px',marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
+      <button type="button" onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',background:'none',border:'none',cursor:'pointer',padding:'4px 0'}}>
+        <span style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📜 同意ポリシー編集（全店共通）</span>
+        <span style={{fontSize:13,color:'#94a3b8',fontWeight:'bold'}}>{open?'閉じる ▲':'開く ▼'}</span>
+      </button>
+      {open && (loading ? (
         <div style={{textAlign:'center',padding:24,color:'#94a3b8'}}>読込中...</div>
       ) : (
-        <>
-          {renderKind('利用規約・プライバシーポリシー（家族・ケアマネ向け）', fam, setFam, _defFam)}
-          {renderKind('ご利用にあたっての重要事項（事業所向け）', off, setOff, _defOff)}
-          <button type="button" onClick={save} disabled={busy} style={{padding:'10px 20px',background:busy?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:busy?'not-allowed':'pointer'}}>{busy?'保存中…':'全店共通ポリシーを保存'}</button>
-        </>
-      )}
+        <div style={{marginTop:12}}>
+          <div style={{fontSize:11,color:'#64748b',lineHeight:1.6,marginBottom:12,background:'#f0f7e0',border:'1px solid #d4e7a5',borderRadius:8,padding:'8px 10px'}}>
+            編集内容は<b>全店舗に共通で適用</b>されます。<b>家族・ケアマネ向け</b>と<b>事業所向け</b>は<b>それぞれ個別に保存</b>できます。各項目で<b>通知方法</b>（お知らせ公開／ログイン時再同意）を選べ、<b>版を上げて保存</b>すると履歴に残ります。
+          </div>
+          {renderKind('family', fam, setFam, _defFam, famHist)}
+          {renderKind('office', off, setOff, _defOff, offHist)}
+        </div>
+      ))}
     </div>
   );
 }
@@ -15265,8 +15312,6 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         </div>
         {/* システムお知らせ管理 */}
         <SystemNoticesPanel stores={stores} staffSession={staffSession}/>
-        {/* ★ J: 全店共通ポリシー編集 (各種設定から移設) */}
-        <GlobalPolicyPanel staffSession={staffSession}/>
         {/* 店舗一覧 */}
         <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -15372,6 +15417,8 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
             <button onClick={()=>setShowAddStaff(true)} style={{marginTop:12,padding:'6px 12px',background:'transparent',color:'#94a3b8',border:'1px solid #cbd5e1',borderRadius:8,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>追加でログイン情報を発行 (上級者向け)</button>
           )}
         </div>
+        {/* ★ J: 全店共通ポリシー編集 (一番下・折りたたみ) */}
+        <GlobalPolicyPanel staffSession={staffSession}/>
       </div>
       {/* 店舗追加モーダル */}
       {/* ★ 店舗情報の編集 (後から店舗名・短縮名・法人名・住所・電話・FAXを変更) */}
@@ -16936,7 +16983,7 @@ export default function App() {
   if (isSupabaseEnabled && staffSession?.storeId && activeRecorder && staffSession.role !== 'super_admin' && dataLoadedForStoreRef.current === staffSession.storeId) {
     const _effOfficePol = getEffectivePolicy('office', appData.systemSettings);
     const _officeConsented = String(appData.systemSettings?.officeConsent?.version || '0');
-    if (_officeConsented !== String(_effOfficePol.version)) {
+    if (_officeConsented !== String(_effOfficePol.version) && _effOfficePol.notify?.login !== false) {
       const _ofFacility = appData.systemSettings?.facilityInfo?.name || staffSession.storeName || '当事業所';
       const _ofTel = appData.systemSettings?.facilityInfo?.phone || '';
       return <ConsentGateModal
@@ -31113,7 +31160,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集">
               <div className="text-sm text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-4 leading-relaxed">
                 同意ポリシーの編集は<b className="text-indigo-700">「つむぎ管理局」の店舗選択画面</b>に移設し、<b>全店共通</b>で管理するようになりました。<br/>
-                一度ログアウトして<b>管理局アカウント</b>でログイン → 店舗一覧の上にある<b>「📜 同意ポリシー編集（全店共通）」</b>から編集してください。<br/>
+                一度ログアウトして<b>管理局アカウント</b>でログイン → 画面<b>一番下の「📜 同意ポリシー編集（全店共通）」</b>（折りたたみ）を開いて編集してください。家族・ケアマネ向けと事業所向けを<b>個別に保存</b>でき、<b>通知方法（お知らせ公開／ログイン時再同意）</b>の選択と<b>版の履歴</b>も使えます。<br/>
                 版を上げて保存すると、全店の家族・ケアマネ・スタッフに再同意を求め、全店の管理局お知らせに改定通知を自動掲載します。
               </div>
             </SectionCard>
