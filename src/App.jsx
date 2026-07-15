@@ -31293,7 +31293,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,fax:formatJpPhone(o.fax)}))} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
                     <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax)}]); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
-                    {/* ★ CSV取り込み (他社事業所情報。 Shift-JIS自動判定・ゆるいヘッダー一致・会社名/法人名は除外・住所分割) */}
+                    {/* ★ CSVから一括取り込みは 利用者マスタ管理 側に集約したため、ここでは非表示 (ユーザー要望) */}
+                    {false && (
                     <label className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center cursor-pointer">
                       <CloudUpload size={14} className="mr-1"/>CSVから一括取り込み
                       <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e)=>{
@@ -31341,6 +31342,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         e.target.value='';
                       }}/>
                     </label>
+                    )}
                   </div>
                   <SuggestInput value={officeSearch} onChangeText={setOfficeSearch}
                     options={cmOffices.map((o,i)=>({key:'o'+i, label:o.name, sub:o.corporateName||''}))}
