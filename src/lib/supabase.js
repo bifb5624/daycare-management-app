@@ -722,6 +722,44 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         merged._msSavedAt = Math.max(lMsT, cMsT);
       }
     }
+    // ★ 勤務表(workSchedule): monthlyShifts と同方式で「スタッフ×月ごとの時刻(_wsTs)」で新しい方を採用。
+    {
+      const lWs = (localData.workSchedule && typeof localData.workSchedule === 'object') ? localData.workSchedule : null;
+      const cWs = (cloud.workSchedule && typeof cloud.workSchedule === 'object') ? cloud.workSchedule : null;
+      if (lWs || cWs) {
+        const lTs = (localData._wsTs && typeof localData._wsTs === 'object') ? localData._wsTs : {};
+        const cTs = (cloud._wsTs && typeof cloud._wsTs === 'object') ? cloud._wsTs : {};
+        const lWsT = Number(localData._wsSavedAt) || 0, cWsT = Number(cloud._wsSavedAt) || 0;
+        const localNewerGlobal = lWsT >= cWsT;
+        const outWs = {}; const outTs = {};
+        const monthKeys = new Set([...Object.keys(lWs || {}), ...Object.keys(cWs || {})]);
+        monthKeys.forEach(mk => {
+          const lm = (lWs && lWs[mk] && typeof lWs[mk] === 'object') ? lWs[mk] : {};
+          const cm = (cWs && cWs[mk] && typeof cWs[mk] === 'object') ? cWs[mk] : {};
+          const lmTs = (lTs[mk] && typeof lTs[mk] === 'object') ? lTs[mk] : {};
+          const cmTs = (cTs[mk] && typeof cTs[mk] === 'object') ? cTs[mk] : {};
+          const om = {}; const omTs = {};
+          const sids = new Set([...Object.keys(lm), ...Object.keys(cm)]);
+          sids.forEach(sid => {
+            const hasL = Object.prototype.hasOwnProperty.call(lm, sid);
+            const hasC = Object.prototype.hasOwnProperty.call(cm, sid);
+            if (hasL && hasC) {
+              const lt = Number(lmTs[sid]) || 0, ct = Number(cmTs[sid]) || 0;
+              const useLocal = (lt || ct) ? (lt >= ct) : localNewerGlobal;
+              om[sid] = useLocal ? lm[sid] : cm[sid];
+            } else if (hasL) { om[sid] = lm[sid]; }
+            else { om[sid] = cm[sid]; }
+            const _t = Math.max(Number(lmTs[sid]) || 0, Number(cmTs[sid]) || 0);
+            if (_t) omTs[sid] = _t;
+          });
+          outWs[mk] = om;
+          if (Object.keys(omTs).length) outTs[mk] = omTs;
+        });
+        merged.workSchedule = outWs;
+        merged._wsTs = outTs;
+        merged._wsSavedAt = Math.max(lWsT, cWsT);
+      }
+    }
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
     //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
     if (Array.isArray(merged.ticketRecords)) {

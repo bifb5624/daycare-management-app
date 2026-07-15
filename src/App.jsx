@@ -1763,6 +1763,7 @@ function createBlankAppData(storeRecord, staffSession) {
     storeMembers: [],
     holidays: [],
     monthlyShifts: {},
+    workSchedule: {}, // ★ 勤務表: { 月キー(YYYY-MM): { スタッフキー(氏名|役職): { 日: 区分 } } }
     // 連絡帳設定の最小デフォルト (空配列だと crash しないように items: [] を保証)
     contactBookConfig: {
       facilityName: facility.name || '',
@@ -2243,6 +2244,7 @@ const initialData = {
     }
   },
   monthlyShifts: {},
+  workSchedule: {},
   diaryLogs: {},
   diarySettings: {
     staff: [
@@ -10420,6 +10422,137 @@ const DEV_ANN_META = {
   maintenance: { label:'メンテナンス', emoji:'', color:'#c2410c', bg:'#fff7ed' },
   info:        { label:'お知らせ',     emoji:'ℹ️', color:'#0369a1', bg:'#f0f9ff' },
 };
+// === 勤務表（シフト管理） ===
+// 勤務区分の既定パレット (code をセルに表示、label をピッカーに表示)
+const ROSTER_SHIFTS = [
+  { code:'日',  label:'日勤',   color:'#1d4ed8', bg:'#dbeafe', work:1 },
+  { code:'早',  label:'早番',   color:'#047857', bg:'#d1fae5', work:1 },
+  { code:'遅',  label:'遅番',   color:'#7c3aed', bg:'#ede9fe', work:1 },
+  { code:'AM',  label:'半日AM', color:'#0891b2', bg:'#cffafe', work:0.5 },
+  { code:'PM',  label:'半日PM', color:'#c2410c', bg:'#ffedd5', work:0.5 },
+  { code:'夜',  label:'夜勤',   color:'#4338ca', bg:'#e0e7ff', work:1 },
+  { code:'研',  label:'研修',   color:'#0d9488', bg:'#ccfbf1', work:1 },
+  { code:'休',  label:'公休',   color:'#64748b', bg:'#e2e8f0', work:0 },
+  { code:'有',  label:'有休',   color:'#db2777', bg:'#fce7f3', work:0 },
+  { code:'欠',  label:'欠勤',   color:'#dc2626', bg:'#fee2e2', work:0 },
+];
+const _rosterMeta = (code) => ROSTER_SHIFTS.find(s=>s.code===code) || (code ? { code, label:code, color:'#334155', bg:'#f1f5f9', work:1 } : null);
+function RosterView({ appData, onSave }) {
+  const _now = new Date();
+  const [ym, setYm] = React.useState(`${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`);
+  const [picker, setPicker] = React.useState(null); // { staffKey, day } 編集中セル
+  const [customText, setCustomText] = React.useState('');
+  const [Y, M] = ym.split('-').map(Number);
+  const daysInMonth = new Date(Y, M, 0).getDate();
+  const days = Array.from({length:daysInMonth},(_,i)=>i+1);
+  const dowOf = (d) => new Date(Y, M-1, d).getDay();
+  const dowJp = ['日','月','火','水','木','金','土'];
+  const shiftMonth = (delta) => { let y=Y, m=M+delta; while(m<1){m+=12;y--;} while(m>12){m-=12;y++;} setYm(`${y}-${String(m).padStart(2,'0')}`); setPicker(null); };
+  // 職員行 = storeMembers + diarySettings.staff をマージ・重複排除(氏名+役職)・管理局除外
+  const staffRows = React.useMemo(()=>{
+    const out=[]; const seen=new Set();
+    const add=(name, role, id)=>{ const nm=(name||'').trim(); if(!nm) return; if(nm==='管理局'||id==='hq_viewer') return; const key=`${normalizeName(nm)}|${role||''}`; if(seen.has(key)) return; seen.add(key); out.push({ key, name:nm, role:role||'' }); };
+    (appData.storeMembers||[]).forEach(m=>add(m.name, m.roleLabel, m.id));
+    (appData.diarySettings?.staff||[]).forEach(s=>add(s.name, s.role, s.id));
+    const roleOrder={'管理者':0,'生活相談員':1,'機能訓練指導員':2,'看護師':3,'介護職員':4};
+    return out.sort((a,b)=>((roleOrder[a.role]??9)-(roleOrder[b.role]??9))||a.name.localeCompare(b.name,'ja'));
+  }, [appData.storeMembers, appData.diarySettings]);
+  const monthData = (appData.workSchedule||{})[ym] || {};
+  const cellVal = (staffKey, day) => (monthData[staffKey]||{})[String(day)] || '';
+  const setCell = (staffKey, day, code) => {
+    const cur = appData.workSchedule || {};
+    const month = { ...(cur[ym]||{}) };
+    const staff = { ...(month[staffKey]||{}) };
+    if (!code) delete staff[String(day)]; else staff[String(day)] = code;
+    month[staffKey] = staff;
+    onSave({ ...appData, workSchedule: { ...cur, [ym]: month } }, {});
+  };
+  // 職員ごとの月間集計
+  const totals = (staffKey) => {
+    const sm = monthData[staffKey]||{}; let work=0, off=0, paid=0;
+    days.forEach(d=>{ const m=_rosterMeta(sm[String(d)]); if(!m) return; if(m.code==='休') off++; else if(m.code==='有') paid++; else if(m.code!=='欠') work+=(m.work||0); });
+    return { work, off, paid };
+  };
+  const th = { position:'sticky', top:0, zIndex:2, background:'#f8fafc', borderBottom:'2px solid #cbd5e1', fontSize:11, fontWeight:'bold', color:'#475569', padding:'6px 4px', textAlign:'center', whiteSpace:'nowrap' };
+  return (
+    <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
+      <div style={{maxWidth:1400,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:12}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <button onClick={()=>shiftMonth(-1)} style={{padding:'6px 12px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer'}}>← 前月</button>
+            <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b',minWidth:120,textAlign:'center'}}>{Y}年{M}月</div>
+            <button onClick={()=>shiftMonth(1)} style={{padding:'6px 12px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer'}}>翌月 →</button>
+            <button onClick={()=>{ const d=new Date(); setYm(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); }} style={{padding:'6px 12px',background:'#eef2ff',border:'1px solid #c7d2fe',color:'#4338ca',borderRadius:8,fontWeight:'bold',cursor:'pointer'}}>今月</button>
+          </div>
+          <div style={{fontSize:11,color:'#64748b'}}>セルをタップして勤務区分を選択（自動保存）。職員は「各種設定→日誌の担当職員／スタッフ切替」に連動。</div>
+        </div>
+        {/* 凡例 */}
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          {ROSTER_SHIFTS.map(s=><span key={s.code} style={{fontSize:11,fontWeight:'bold',color:s.color,background:s.bg,border:`1px solid ${s.color}44`,borderRadius:6,padding:'2px 8px'}}>{s.code} {s.label}</span>)}
+        </div>
+        {staffRows.length===0 ? (
+          <div style={{background:'white',borderRadius:12,border:'1px solid #e2e8f0',padding:32,textAlign:'center',color:'#94a3b8',fontWeight:'bold'}}>職員が登録されていません。各種設定 → 日誌 の「担当職員」またはスタッフ切替から職員を登録してください。</div>
+        ) : (
+        <div style={{background:'white',borderRadius:12,border:'1px solid #e2e8f0',overflow:'auto',boxShadow:'0 1px 6px rgba(0,0,0,0.06)'}}>
+          <table style={{borderCollapse:'separate',borderSpacing:0,minWidth:'max-content'}}>
+            <thead>
+              <tr>
+                <th style={{...th, position:'sticky', left:0, zIndex:3, minWidth:130, textAlign:'left', paddingLeft:10, borderRight:'2px solid #cbd5e1'}}>職員</th>
+                {days.map(d=>{ const w=dowOf(d); return <th key={d} style={{...th, minWidth:34, color:w===0?'#dc2626':w===6?'#2563eb':'#475569'}}>{d}<div style={{fontSize:9,fontWeight:'normal'}}>{dowJp[w]}</div></th>; })}
+                <th style={{...th, minWidth:120, borderLeft:'2px solid #cbd5e1'}}>集計</th>
+              </tr>
+            </thead>
+            <tbody>
+              {staffRows.map((s,ri)=>(
+                <tr key={s.key} style={{background: ri%2? '#fbfcfe':'white'}}>
+                  <td style={{position:'sticky',left:0,zIndex:1,background:ri%2?'#fbfcfe':'white',borderRight:'2px solid #cbd5e1',borderBottom:'1px solid #eef2f6',padding:'4px 10px',minWidth:130}}>
+                    <div style={{fontSize:12,fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap'}}>{s.name}</div>
+                    {s.role && <div style={{fontSize:9,color:'#94a3b8'}}>{s.role}</div>}
+                  </td>
+                  {days.map(d=>{ const c=cellVal(s.key,d); const m=_rosterMeta(c); const w=dowOf(d); return (
+                    <td key={d} onClick={()=>{ setPicker({staffKey:s.key, day:d}); setCustomText(''); }} style={{borderBottom:'1px solid #eef2f6',borderRight:'1px solid #f1f5f9',padding:0,textAlign:'center',cursor:'pointer',background: m? m.bg : (w===0?'#fff5f5':w===6?'#f5f9ff':'transparent')}}>
+                      <div style={{minWidth:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:'bold',color: m? m.color : '#cbd5e1'}}>{c||'·'}</div>
+                    </td>
+                  ); })}
+                  {(()=>{ const t=totals(s.key); return (
+                    <td style={{borderLeft:'2px solid #cbd5e1',borderBottom:'1px solid #eef2f6',padding:'4px 8px',whiteSpace:'nowrap',fontSize:11,fontWeight:'bold'}}>
+                      <span style={{color:'#1d4ed8'}}>出勤{t.work%1?t.work.toFixed(1):t.work}</span>
+                      <span style={{color:'#64748b',marginLeft:6}}>公休{t.off}</span>
+                      <span style={{color:'#db2777',marginLeft:6}}>有{t.paid}</span>
+                    </td>
+                  ); })()}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        )}
+      </div>
+      {/* セル編集ピッカー */}
+      {picker && (()=>{ const s=staffRows.find(x=>x.key===picker.staffKey); const cur=cellVal(picker.staffKey, picker.day); return (
+        <div onClick={()=>setPicker(null)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.4)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:360,maxWidth:'94vw',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',padding:18}}>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:2}}>{s?.name} 様</div>
+            <div style={{fontSize:12,color:'#64748b',marginBottom:12}}>{Y}年{M}月{picker.day}日（{dowJp[dowOf(picker.day)]}）の勤務区分</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:12}}>
+              {ROSTER_SHIFTS.map(sh=>(
+                <button key={sh.code} onClick={()=>{ setCell(picker.staffKey, picker.day, sh.code); setPicker(null); }} style={{padding:'10px 6px',borderRadius:10,border:`2px solid ${cur===sh.code?sh.color:sh.color+'33'}`,background:sh.bg,color:sh.color,fontWeight:'bold',fontSize:13,cursor:'pointer'}}>{sh.code}<div style={{fontSize:10,fontWeight:'normal'}}>{sh.label}</div></button>
+              ))}
+            </div>
+            <div style={{display:'flex',gap:6,marginBottom:12}}>
+              <input value={customText} onChange={e=>setCustomText(e.target.value)} placeholder="その他（例: 9-18）" style={{flex:1,padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,fontWeight:'bold',outline:'none'}}/>
+              <button onClick={()=>{ if(customText.trim()){ setCell(picker.staffKey, picker.day, customText.trim()); setPicker(null); } }} style={{padding:'8px 14px',background:'#334155',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer'}}>設定</button>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>{ setCell(picker.staffKey, picker.day, ''); setPicker(null); }} style={{flex:1,padding:'9px',background:'#f1f5f9',color:'#475569',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer'}}>クリア</button>
+              <button onClick={()=>setPicker(null)} style={{flex:1,padding:'9px',background:'white',color:'#64748b',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      ); })()}
+    </div>
+  );
+}
 // === ホーム / ダッシュボード ===
 function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeRead, markNoticeRead }) {
   const now = new Date();
@@ -16623,6 +16756,24 @@ export default function App() {
         });
         newData = { ...newData, _msTs: _ts, _msSavedAt: _now };
       }
+      // ★ 勤務表(workSchedule): 変更された「スタッフ×月」だけに時刻(_wsTs)を刻む(monthlyShifts と同方式)。
+      if (newData.workSchedule && newData.workSchedule !== prev.workSchedule) {
+        const _prevWs = prev.workSchedule || {}, _newWs = newData.workSchedule || {};
+        const _ts = { ...(newData._wsTs || {}) };
+        const _now = Date.now();
+        const _mks = new Set([...Object.keys(_prevWs), ...Object.keys(_newWs)]);
+        _mks.forEach(mk => {
+          const pm = _prevWs[mk] || {}, nm = _newWs[mk] || {};
+          const _sids = new Set([...Object.keys(pm), ...Object.keys(nm)]);
+          let _touched = false;
+          const _mkTs = { ...(_ts[mk] || {}) };
+          _sids.forEach(sid => {
+            try { if (JSON.stringify(pm[sid]) !== JSON.stringify(nm[sid])) { _mkTs[sid] = _now; _touched = true; } } catch { _mkTs[sid] = _now; _touched = true; }
+          });
+          if (_touched) _ts[mk] = _mkTs;
+        });
+        newData = { ...newData, _wsTs: _ts, _wsSavedAt: _now };
+      }
       // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文 等)も、編集された時だけ時刻を刻む。
       //   これが無いと古い端末の push で連絡事項・掲載期間が丸ごと巻き戻る。
       if (newData.contactBookConfig && newData.contactBookConfig !== prev.contactBookConfig) {
@@ -17622,6 +17773,7 @@ export default function App() {
               <SidebarItem icon={<FileText size={18} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
+              <SidebarItem icon={<Users size={18} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
               {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
                 <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['kinou_keikaku','tsusho_keikaku','life_hub'].includes(currentView)}>
                   {hasAddon(appData,'tsusho_keikaku') && (
@@ -17667,6 +17819,7 @@ export default function App() {
                  currentView === 'general_fax' ? '各種連絡' :
                  currentView === 'monitoring' ? 'モニタリング' :
                  currentView === 'schedule' ? 'スケジュール' :
+                 currentView === 'roster' ? '勤務表' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
                  currentView === 'tsusho_keikaku' ? '通所介護計画書' :
                  currentView === 'life_hub' ? 'LIFE・加算' :
@@ -17733,6 +17886,7 @@ export default function App() {
              currentView === 'fitness' ? <FitnessView appData={appData} onSave={handleSaveToCloud} selectedDate={selectedDate} sharedAmpm={sharedAmpm} navigateTo={navigateTo} targetPatientId={targetPatientId} onPatientChange={setTargetPatientId} dirtyRef={fitnessDirtyRef} saveFnRef={fitnessSaveFnRef} /> :
              currentView === 'monitoring' ? <MonitoringView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={monitoringDirtyRef} saveFnRef={monitoringSaveFnRef} /> :
              currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} /> :
+             currentView === 'roster' ? <RosterView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
              currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} /> :
