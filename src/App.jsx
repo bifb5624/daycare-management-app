@@ -15,7 +15,6 @@ import {
   supabaseSignupFamily,
   supabaseLoginFamily,
   supabaseGetInviteByCode,
-  supabaseSyncState,
   supabaseLoadState,
   supabaseSubscribeState,
   supabaseSubscribeStoreRealtime,
@@ -16858,11 +16857,12 @@ export default function App() {
         && _storeMatch
         && (_hasRealData || options.allowEmpty);
       if (_canPush) {
-        // ★ 保存結果を監視: 失敗したら「クラウド保存に失敗」を明示 (静かに消えるのを防ぐ)
+        // ★ 保存結果を監視: 失敗(CASリトライ上限=他端末が更新中／通信不良)なら明示通知 (静かに消えるのを防ぐ)。
+        //   ★ 入力は既にローカル状態＋localStorageに反映済み=下書きは消えない。 再保存で再度CASを試みる。
         Promise.resolve()
           .then(() => supabaseMergeAndSyncStateForStore(staffSession.storeId, newData))
-          .then(ok => { if (ok === false) { setToastMsg('⚠ クラウド保存に失敗しました。通信状況を確認して、もう一度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); } })
-          .catch(e => { console.warn('[supabase] immediate save failed', e); setToastMsg('⚠ クラウド保存に失敗しました。通信を確認して再度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); });
+          .then(ok => { if (ok === false) { setToastMsg('⚠ 同期に失敗しました（他端末が更新中／通信不良の可能性）。入力は保持しています。もう一度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),6000); } })
+          .catch(e => { console.warn('[supabase] immediate save failed', e); setToastMsg('⚠ 同期に失敗しました。入力は保持しています。通信を確認して再度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),6000); });
         if (!options.silent) {
           setToastMsg(options.message || '保存されました');
           setShowToast(true);

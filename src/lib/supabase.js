@@ -252,24 +252,8 @@ const sanitizeForSync = (data) => {
   return rest;
 };
 
-export async function supabaseSyncState(data) {
-  if (!supabase) return false;
-  try {
-    const sanitized = sanitizeForSync(data);
-    const { error } = await supabase
-      .from('app_state')
-      .update({ data: sanitized })
-      .eq('key', APP_STATE_KEY);
-    if (error) {
-      console.warn('[supabase] syncState error', error);
-      return false;
-    }
-    return true;
-  } catch (e) {
-    console.warn('[supabase] syncState exception', e);
-    return false;
-  }
-}
+// ★ レガシー単一テナント用 supabaseSyncState は削除(未使用・非CASの生update)。 マルチテナントは
+//   supabaseMergeAndSyncStateForStore / supabaseSyncStateForStore(いずれもCAS経由)を使用する。
 
 export async function supabaseLoadState() {
   if (!supabase) return null;
@@ -337,13 +321,61 @@ export function supabaseSubscribeStoreRealtime(storeId, onChange) {
 // =========================================================
 // 店舗ごとの app_state 保存・読込 (マルチテナント用)
 // =========================================================
+// ★ 楽観ロック(CAS)用のバックオフ: 指数バックオフ＋ジッター。
+function _casBackoff(attempt) {
+  const capBase = Math.min(1000, 80 * Math.pow(2, attempt)); // 80,160,320,640,1000...
+  const jitter = Math.floor(Math.random() * capBase);
+  return new Promise(r => setTimeout(r, capBase + jitter));
+}
+// ★ 楽観ロック(CAS): app_state への「全書き込みの単一入口」。 lost update(古いデータで新しいデータを上書き)を防ぐ。
+//   mutate(currentData|null) は「保存したい新しい data」を返す純関数(副作用なし・冪等に書くこと)。
+//   フロー: ①最新の {data, version} を取得 → ②mutate → ③『DB側で原子的に』 version 一致を条件に UPDATE
+//     (UPDATE ... SET data=:next, version=version+1 WHERE key=:key AND version=:base)。
+//   ★ 競合判定は「返り行0件」で行う(JS側で version を比較して書く構造にはしない)。 0件=他端末が先に更新済み
+//     → バックオフして①から再取得・再mutate・再試行(最大 opts.maxRetries 回, 既定5)。 上限で {ok:false}。
+//   ★ 応答ロス→再試行での二重適用は、呼び出し側 mutate を「ID冪等」にして防ぐ(同IDが既存なら追加しない)。
+async function supabaseCasUpdate(key, mutate, opts = {}) {
+  if (!supabase || !key) return { ok: false, reason: 'no-supabase' };
+  const MAX = (opts.maxRetries != null) ? opts.maxRetries : 5;
+  for (let attempt = 0; attempt <= MAX; attempt++) {
+    // ① 最新の {data, version} を取得 (読めない=通信/RLSエラーは throw して呼び出し側で保存中止=既存データを守る)
+    const { data: row, error: selErr } = await supabase
+      .from('app_state').select('data, version').eq('key', key).maybeSingle();
+    if (selErr) throw new Error('cas select failed: ' + (selErr.message || selErr.code || 'unknown'));
+    if (!row) {
+      // 行が無い=新規作成 (唯一の非CAS経路: version 0 で insert のみ。 version を巻き戻さない)。
+      const initData = mutate(null);
+      if (initData == null) return { ok: true, version: 0, noop: true };
+      const { data: ins, error: insErr } = await supabase
+        .from('app_state').insert({ key, data: initData, version: 0 }).select('version');
+      if (!insErr && ins && ins.length) return { ok: true, data: initData, version: 0, created: true };
+      // insert 失敗(別端末が同時に作成=一意制約) → 再取得して update 経路へ
+      await _casBackoff(attempt); continue;
+    }
+    const base = Number(row.version) || 0;
+    const next = mutate(row.data || null);
+    if (next == null) return { ok: true, version: base, noop: true };
+    // ② 原子的CAS: WHERE key AND version=base の1行だけ更新(version+1)。 返り行で成否判定。
+    const { data: upd, error: updErr } = await supabase
+      .from('app_state').update({ data: next, version: base + 1 })
+      .eq('key', key).eq('version', base).select('version');
+    if (updErr) throw new Error('cas update failed: ' + (updErr.message || updErr.code || 'unknown'));
+    if (upd && upd.length > 0) return { ok: true, data: next, version: base + 1 };
+    // ③ 0件=競合(他端末が先に version を進めた) → バックオフして再取得・再mutate・再試行
+    await _casBackoff(attempt);
+  }
+  return { ok: false, reason: 'conflict-retries-exhausted' };
+}
+// ★ 上書きCAS: 新規店舗のBLANK初期化 と 全データ一括初期化(リセット) の【2箇所専用】。
+//   ★注意: この経路の再試行は「再マージ」ではなく『再上書き』= 競合時は他端末の同時編集を捨てる(意図的な全置換)。
+//     通常の保存はここを通らない(マージ経路 supabaseMergeAndSyncStateForStore を使う)。
+//   呼び出し元: (1) App.jsx 新規店舗BLANK初期化 (2) App.jsx 全データ一括初期化リセット の2箇所のみ。
 export async function supabaseSyncStateForStore(storeId, data) {
   if (!supabase || !storeId) return false;
   try {
     const sanitized = sanitizeForSync(data);
-    // 行が無ければ作成
-    await supabase.from('app_state').upsert({ key: storeId, data: sanitized });
-    return true;
+    const res = await supabaseCasUpdate(storeId, () => sanitized); // mutate は cloud を無視して常に上書き
+    return !!(res && res.ok);
   } catch (e) {
     console.warn('[supabase] syncStateForStore exception', e);
     return false;
@@ -548,16 +580,12 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     return out;
   };
   try {
-    let cloud = null;
-    try { const row = await supabaseLoadStateForStore(storeId); cloud = row && row.data ? row.data : null; }
-    catch (e) {
-      // クラウドを読めない (通信エラー等) → 上書きで他端末のデータを消す危険があるので保存しない
-      console.warn('[supabase] mergeAndSync: load failed, skip save', e);
-      return false;
-    }
-    // クラウドが空(=新規店舗) ならそのまま保存
+    // ★ 楽観ロック(CAS)経由: 「最新取得 → マージ → version一致でDB原子的更新」。 競合(返り行0)は自動で再取得・再マージ・再試行。
+    //   読めない(通信/RLSエラー)は supabaseCasUpdate 内で throw → 下の catch で保存中止(既存データを守る)。
+    const _casRes = await supabaseCasUpdate(storeId, (cloud) => {
+    // クラウドが空(=新規店舗) ならそのまま(初回作成)
     if (!cloud || Object.keys(cloud).length === 0) {
-      return await supabaseSyncStateForStore(storeId, localData);
+      return sanitizeForSync(localData);
     }
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
@@ -796,7 +824,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       });
       merged.ticketRecords = [...best.values()];
     }
-    return await supabaseSyncStateForStore(storeId, merged);
+    return sanitizeForSync(merged);
+    }); // supabaseCasUpdate の mutate 終わり
+    return !!(_casRes && _casRes.ok);
   } catch (e) {
     console.warn('[supabase] mergeAndSync exception', e);
     return false;
@@ -841,13 +871,13 @@ export async function supabaseLoadGlobalPolicies() {
 export async function supabaseSaveGlobalPolicies(policies) {
   if (!supabase) return false;
   try {
-    // 既存の共通レコードを読み、policies だけ差し替えて保存 (将来の共通データがあれば保持)
-    const { data: row } = await supabase.from('app_state').select('data').eq('key', GLOBAL_STATE_KEY).maybeSingle();
-    const cur = (row && row.data) ? row.data : {};
-    const next = { ...cur, policies, _updatedAt: Date.now() };
-    const { error } = await supabase.from('app_state').upsert({ key: GLOBAL_STATE_KEY, data: next });
-    if (error) { console.warn('[supabase] saveGlobalPolicies error', error); return false; }
-    return true;
+    // ★ CAS経由: 既存の共通レコードに policies だけ差し替え(将来の共通データがあれば保持)。 競合時は再取得して再適用。
+    const _now = Date.now();
+    const res = await supabaseCasUpdate(GLOBAL_STATE_KEY, (cur) => {
+      const base = (cur && typeof cur === 'object') ? cur : {};
+      return { ...base, policies, _updatedAt: _now };
+    });
+    return !!(res && res.ok);
   } catch (e) { console.warn('[supabase] saveGlobalPolicies exception', e); return false; }
 }
 
@@ -930,9 +960,11 @@ export async function supabaseDeleteSystemNotice(id) {
 export async function supabaseMergePatientFromFamily(storeId, patientId, patientPatch, extra) {
   if (!supabase || !storeId || !patientId) return false;
   try {
-    const row = await supabaseLoadStateForStore(storeId);
-    if (!row || !row.data) return false;
-    const currentData = row.data;
+    // ★ CAS: 連絡先/relatedParties/docUpdates の統合は dedup・id和集合で「冪等」。 patientPatch/extra は
+    //   呼び出し側で固定生成済み(再試行しても不変)なので、応答ロス→再試行で二重追加は起きない。
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+    const currentData = cloud;
+    if (!currentData) return null; // 店舗行が無い → 何もしない
     const patients = (currentData.patients || []).map(p => {
       if (String(p.id) !== String(patientId)) return p;
       // emergencyContacts は配列マージ (重複防止)。 ★ 墓石(_deletedEC: 事業所側で削除した連絡先)は復活させない
@@ -1022,8 +1054,9 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
       }
     }
     const updatedData = { ...currentData, patients, systemSettings: nextSettings };
-    await supabase.from('app_state').upsert({ key: storeId, data: updatedData });
-    return true;
+    return updatedData;
+    }); // supabaseCasUpdate mutate 終わり
+    return !!(res && res.ok);
   } catch (e) {
     console.warn('[supabase] mergePatientFromFamily failed', e);
     return false;
@@ -1036,30 +1069,33 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
 export async function supabaseAppendDocUpdate(storeId, patientId, entry) {
   if (!supabase || !storeId || !patientId || !entry) return false;
   try {
-    const row = await supabaseLoadStateForStore(storeId);
-    if (!row || !row.data) return false;
-    const currentData = row.data;
-    const now = new Date().toISOString();
+    // ★ ID冪等: 追加要素の id/at は CAS を呼ぶ前に1回だけ固定生成(mutate内で毎回生成しない)。
+    //   応答ロス→再試行で最新cloudに同idが既存なら追加しない(重複防止)。
+    const _now = new Date().toISOString();
     const e = {
-      id: entry.id || `du_${now}_${Math.round(Math.random() * 1e6)}`,
-      at: entry.at || now,
+      id: entry.id || `du_${_now}_${Math.round(Math.random() * 1e6)}`,
+      at: entry.at || _now,
       by: entry.by || 'family',
       byName: entry.byName || '',
       items: [...new Set(entry.items || [])],
       readOffice: false,
       readCm: true,
     };
-    let matched = false, already = false;
-    const patients = (currentData.patients || []).map(p => {
-      if (String(p.id) !== String(patientId)) return p;
-      matched = true;
-      const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
-      if (log.some(u => u && u.id === e.id)) { already = true; return p; } // 既に反映済み
-      return { ...p, docUpdates: [...log, e].slice(-50) };
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+      const currentData = cloud;
+      if (!currentData) return null;
+      let matched = false, already = false;
+      const patients = (currentData.patients || []).map(p => {
+        if (String(p.id) !== String(patientId)) return p;
+        matched = true;
+        const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+        if (log.some(u => u && u.id === e.id)) { already = true; return p; } // 同id既存=冪等スキップ
+        return { ...p, docUpdates: [...log, e].slice(-50) };
+      });
+      if (!matched || already) return null; // 対象なし or 既反映 → 書き込まない(noop)
+      return { ...currentData, patients };
     });
-    if (!matched || already) return matched; // 対象なし=false / 既反映=true (再送しない)
-    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
-    return true;
+    return !!(res && res.ok);
   } catch (err) {
     console.warn('[supabase] appendDocUpdate failed', err);
     return false;
@@ -1071,27 +1107,34 @@ export async function supabaseAppendDocUpdate(storeId, patientId, entry) {
 export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet, meta = {}) {
   if (!supabase || !storeId || !patientId) return false;
   try {
-    const row = await supabaseLoadStateForStore(storeId);
-    if (!row || !row.data) return false;
-    const currentData = row.data;
-    const now = new Date().toISOString();
-    const patients = (currentData.patients || []).map(p => {
-      if (String(p.id) !== String(patientId)) return p;
-      const pf = p.personalFile || {};
-      const newFs = { ...(pf.faceSheet || {}), ...(faceSheet || {}), updatedAt: now, updatedBy: meta.updatedBy || 'ケアマネ' };
-      const prevHist = Array.isArray(pf.faceSheetHistory) ? pf.faceSheetHistory : [];
-      const version = ((prevHist[prevHist.length - 1] || {}).version || 0) + 1;
-      const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
-      const snapshot = { ...textOnly, _attachCounts: { genogram: (genogramFiles || []).length, floorPlan: (floorPlanFiles || []).length, pickupRoute: (pickupRouteFiles || []).length } };
-      const hist = [...prevHist, { version, updatedAt: now, updatedBy: newFs.updatedBy, source: meta.source || 'caremanager', snapshot }].slice(-20);
-      // 共有の更新ログにも記録 (事業所側バナーに「フェイスシート」更新を表示)
-      const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
-      const docUpdates = [...log, { id: `du_${now}_${Math.round(Math.random() * 1e6)}`, at: now, by: 'caremanager', byName: newFs.updatedBy, items: ['フェイスシート'], readOffice: false, readCm: true }].slice(-50);
-      // ★ F1: フェイスシートの既往歴(kiou)を患者トップにもミラー(計画書/CSV/帳票が参照する source of truth)
-      return { ...p, kiou: (newFs.kiou ?? p.kiou ?? ''), docUpdates, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+    // ★ ID冪等: now と docUpdate id(_duId) を CAS前に1回固定。 応答ロス→再試行で同idが既存なら、
+    //   フェイスシート版(hist)も docUpdate も二重追加しない(version の二重加算も防止)。
+    const _now = new Date().toISOString();
+    const _duId = `du_${_now}_${Math.round(Math.random() * 1e6)}`;
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+      const currentData = cloud;
+      if (!currentData) return null;
+      let matched = false, already = false;
+      const patients = (currentData.patients || []).map(p => {
+        if (String(p.id) !== String(patientId)) return p;
+        matched = true;
+        const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+        if (log.some(u => u && u.id === _duId)) { already = true; return p; } // 同id既存=冪等スキップ
+        const pf = p.personalFile || {};
+        const newFs = { ...(pf.faceSheet || {}), ...(faceSheet || {}), updatedAt: _now, updatedBy: meta.updatedBy || 'ケアマネ' };
+        const prevHist = Array.isArray(pf.faceSheetHistory) ? pf.faceSheetHistory : [];
+        const version = ((prevHist[prevHist.length - 1] || {}).version || 0) + 1;
+        const { genogramFiles, floorPlanFiles, pickupRouteFiles, ...textOnly } = newFs;
+        const snapshot = { ...textOnly, _attachCounts: { genogram: (genogramFiles || []).length, floorPlan: (floorPlanFiles || []).length, pickupRoute: (pickupRouteFiles || []).length } };
+        const hist = [...prevHist, { version, updatedAt: _now, updatedBy: newFs.updatedBy, source: meta.source || 'caremanager', snapshot }].slice(-20);
+        const docUpdates = [...log, { id: _duId, at: _now, by: 'caremanager', byName: newFs.updatedBy, items: ['フェイスシート'], readOffice: false, readCm: true }].slice(-50);
+        // ★ F1: フェイスシートの既往歴(kiou)を患者トップにもミラー(計画書/CSV/帳票が参照する source of truth)
+        return { ...p, kiou: (newFs.kiou ?? p.kiou ?? ''), docUpdates, personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+      });
+      if (!matched || already) return null;
+      return { ...currentData, patients };
     });
-    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
-    return true;
+    return !!(res && res.ok);
   } catch (e) { console.warn('[supabase] mergeFaceSheetFromCM failed', e); return false; }
 }
 
@@ -1103,11 +1146,13 @@ export async function supabaseMergeFaceSheetFromCM(storeId, patientId, faceSheet
 export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch = {}, meta = {}) {
   if (!supabase || !storeId || !patientId) return false;
   try {
-    const row = await supabaseLoadStateForStore(storeId);
-    if (!row || !row.data) return false;
-    const currentData = row.data;
+    // ★ ID冪等: now と docUpdate id(_duId) を CAS前に1回固定。 応答ロス→再試行で同idが既存なら docUpdate を二重追加しない。
     const now = new Date().toISOString();
     const byName = meta.byName || 'ケアマネ';
+    const _duId = `du_${now}_${Math.round(Math.random() * 1e6)}`;
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+    const currentData = cloud;
+    if (!currentData) return null;
     let changed = [];
     const patients = (currentData.patients || []).map(p => {
       if (String(p.id) !== String(patientId)) return p;
@@ -1164,13 +1209,15 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
       if (changed.length) {
         const items = [...new Set(changed)];
         const log = Array.isArray(np.docUpdates) ? np.docUpdates : [];
-        np.docUpdates = [...log, { id: `du_${now}_${Math.round(Math.random() * 1e6)}`, at: now, by: 'caremanager', byName, items, readOffice: false, readCm: true }].slice(-50);
+        // ★ 同 _duId が既存なら二重追加しない(応答ロス→再試行の冪等)
+        np.docUpdates = log.some(u => u && u.id === _duId) ? log : [...log, { id: _duId, at: now, by: 'caremanager', byName, items, readOffice: false, readCm: true }].slice(-50);
       }
       return np;
     });
-    if (!changed.length) return true;
-    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
-    return true;
+    if (!changed.length) return null; // 変更なし → 書き込まない(noop)
+    return { ...currentData, patients };
+    }); // supabaseCasUpdate mutate 終わり
+    return !!(res && res.ok);
   } catch (e) { console.warn('[supabase] mergePatientDocsFromCM failed', e); return false; }
 }
 
@@ -1179,18 +1226,23 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
 export async function supabaseMarkDocUpdatesRead(storeId, patientId, side = 'cm') {
   if (!supabase || !storeId || !patientId) return false;
   try {
-    const row = await supabaseLoadStateForStore(storeId);
-    if (!row || !row.data) return false;
-    const currentData = row.data;
+    // ★ 既読フラグを立てるだけ＝本質的に冪等(再試行で同じ結果)。 CAS化して古いデータで上書きしない。
     const flag = side === 'office' ? 'readOffice' : 'readCm';
-    const patients = (currentData.patients || []).map(p => {
-      if (String(p.id) !== String(patientId)) return p;
-      const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
-      if (!log.some(u => !u[flag])) return p;
-      return { ...p, docUpdates: log.map(u => u[flag] ? u : { ...u, [flag]: true }) };
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+      const currentData = cloud;
+      if (!currentData) return null;
+      let touched = false;
+      const patients = (currentData.patients || []).map(p => {
+        if (String(p.id) !== String(patientId)) return p;
+        const log = Array.isArray(p.docUpdates) ? p.docUpdates : [];
+        if (!log.some(u => !u[flag])) return p;
+        touched = true;
+        return { ...p, docUpdates: log.map(u => u[flag] ? u : { ...u, [flag]: true }) };
+      });
+      if (!touched) return null; // 既に全既読 → 書き込まない
+      return { ...currentData, patients };
     });
-    await supabase.from('app_state').upsert({ key: storeId, data: { ...currentData, patients } });
-    return true;
+    return !!(res && res.ok);
   } catch (e) { console.warn('[supabase] markDocUpdatesRead failed', e); return false; }
 }
 
@@ -1200,11 +1252,13 @@ export async function supabaseMarkDocUpdatesRead(storeId, patientId, side = 'cm'
 export async function supabaseSetStoreAdminAuth(storeId, authPatch) {
   if (!supabase || !storeId) return false;
   try {
-    const row = await supabaseLoadStateForStore(storeId);
-    const data = (row && row.data) ? row.data : {};
-    const nextSettings = { ...(data.systemSettings || {}), adminAuth: { ...(data.systemSettings?.adminAuth || {}), ...(authPatch || {}), setAt: Date.now() } };
-    await supabase.from('app_state').upsert({ key: storeId, data: { ...data, systemSettings: nextSettings } });
-    return true;
+    const _setAt = Date.now();
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+      const data = cloud || {};
+      const nextSettings = { ...(data.systemSettings || {}), adminAuth: { ...(data.systemSettings?.adminAuth || {}), ...(authPatch || {}), setAt: _setAt } };
+      return { ...data, systemSettings: nextSettings };
+    });
+    return !!(res && res.ok);
   } catch (e) { console.warn('[supabase] setStoreAdminAuth failed', e); return false; }
 }
 
