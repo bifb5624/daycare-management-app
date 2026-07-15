@@ -16984,25 +16984,8 @@ export default function App() {
       }) : null}
     />;
   }
-  // ★ 事業所の同意ゲート: 入場後、事業所重要事項の最新版に未同意なら同意を求める(管理局のプレビュー入場は除外)。
-  if (isSupabaseEnabled && staffSession?.storeId && activeRecorder && staffSession.role !== 'super_admin' && dataLoadedForStoreRef.current === staffSession.storeId) {
-    const _effOfficePol = getEffectivePolicy('office', appData.systemSettings);
-    const _officeConsented = String(appData.systemSettings?.officeConsent?.version || '0');
-    if (_officeConsented !== String(_effOfficePol.version) && _effOfficePol.notify?.login !== false) {
-      const _ofFacility = appData.systemSettings?.facilityInfo?.name || staffSession.storeName || '当事業所';
-      const _ofTel = appData.systemSettings?.facilityInfo?.phone || '';
-      return <ConsentGateModal
-        title="つむぎ ご利用にあたっての重要事項（事業所様）"
-        subtitle="内容が更新されました。管理者の方がご確認のうえ、同意して進んでください。"
-        policy={_effOfficePol} facility={_ofFacility} tel={_ofTel}
-        agreeLabel="同意して利用を開始"
-        onAgree={() => {
-          const _v = _effOfficePol.version;
-          handleSaveToCloud({ ...appData, systemSettings: { ...(appData.systemSettings||{}), officeConsent: { version:_v, acceptedAt:new Date().toISOString(), acceptedBy: activeRecorder?.name||'' } } }, { manual:true, message:'✓ 重要事項に同意しました' });
-        }}
-      />;
-    }
-  }
+  // ★ 事業所の同意ゲートは廃止 (ユーザー要望)。 事業所重要事項/プライバシーの改定は、入場時のブロック表示ではなく
+  //   ホームの「運営からのお知らせ」(管理局 system_notices / ポリシー編集の「お知らせに掲載」) で周知する。
   // Supabase 未接続時: 環境変数設定を促す画面
   if (!isSupabaseEnabled && !session) {
     return (

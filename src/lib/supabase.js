@@ -446,6 +446,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   //   ローカル(編集端末)を基準にしつつ、ローカルで「空欄」の項目だけクラウドの値で補完する。
   //   → 別端末で運動メニュー(規定数値)・送迎時間を入力しても、古いスナップショットの端末が
   //     保存した際に上書き消去されるのを防ぐ。 ローカルに無い利用者は復活させない(=削除は保持)。
+  const FAMILY_CONTACT_FIELDS = new Set(['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail']);
   const mergePatientBackfill = (lpArg, cpArg) => {
     if (!cpArg) return lpArg; if (!lpArg) return cpArg;
     // ★ 新しい方(_savedAt)を基準(lp)にし、古い方(cp)で空欄のみ補完する。
@@ -493,6 +494,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       // ★ scheduleAmPm(基本利用日)は「無し」も意図的な設定値。 index 単位の空欄補完をすると、
       //   ある曜日を「無し」にしても クラウドの旧値(AM/PM)で復活してしまう。 最後の編集(ローカル)を優先する。
       if (k === 'scheduleAmPm') { out[k] = (lv !== undefined) ? lv : cv; return; }
+      // ★ 緊急連絡先(代表家族)の各項目は「空欄=意図的な削除」。 空欄補完でクラウドの旧値から復活すると、
+      //   削除しても数秒後に戻る不具合になる。 新しい方(_savedAt優先の lp)の値を採用し、空欄なら空欄のままにする。
+      if (FAMILY_CONTACT_FIELDS.has(k)) { out[k] = (lv !== undefined) ? lv : cv; return; }
       const lObj = lv && typeof lv === 'object' && !Array.isArray(lv);
       const cObj = cv && typeof cv === 'object' && !Array.isArray(cv);
       // プレーンオブジェクト(plannedExercises 等): キー単位で「ローカル空欄のみクラウドで補完」
