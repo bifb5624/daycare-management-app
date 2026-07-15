@@ -10421,7 +10421,7 @@ const DEV_ANN_META = {
   info:        { label:'お知らせ',     emoji:'ℹ️', color:'#0369a1', bg:'#f0f9ff' },
 };
 // === ホーム / ダッシュボード ===
-function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
+function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeRead, markNoticeRead }) {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const dow = ['日','月','火','水','木','金','土'][now.getDay()];
@@ -10432,20 +10432,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
     ...(appData.familyPersonalAnnouncements||[]).map(a=>({...a,_kind:'個別'})),
   ].filter(a=>a.title||a.body).sort((a,b)=>(b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||'')).slice(0,4);
   const patName = (pid) => (appData.patients||[]).find(p=>p.id===pid)?.name || '';
-  // ★ お知らせの既読管理: スタッフ切替で選択中の人単位(端末ローカル保存)。 見たら薄いグレー(未読は色付き)。
-  const _staffKey = (activeRecorder?.name ? normalizeName(activeRecorder.name).trim() : '') || '_';
-  const [readMap, setReadMap] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('tsumugiNoticeReads')||'{}'); } catch { return {}; } });
-  const isRead = (id) => (readMap[_staffKey]||[]).includes(String(id));
-  const markRead = (id) => {
-    if (id==null) return;
-    setReadMap(prev => {
-      const arr = prev[_staffKey]||[];
-      if (arr.includes(String(id))) return prev;
-      const next = { ...prev, [_staffKey]: [...arr, String(id)].slice(-1000) };
-      try { localStorage.setItem('tsumugiNoticeReads', JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
+  // ★ お知らせの既読管理は App 側で保持(サイドバーの新着バッジと共有)。 見たら薄いグレー(未読は色付き)。
+  const isRead = isNoticeRead || (()=>false);
+  const markRead = markNoticeRead || (()=>{});
   const [noticeDetail, setNoticeDetail] = React.useState(null);
   const openDetail = (d) => { setNoticeDetail(d); if (d) markRead(d.id); };
   const Card = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
@@ -10510,17 +10499,20 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {todayEvents.map(e=>{
                   const pt = e.patientId ? (appData.patients||[]).find(x=>x.id===e.patientId) : null;
+                  const _r = isRead(e.id); // ★ #4: タップで既読(グレー)
                   return (
-                  <div key={e.id} style={{display:'flex',alignItems:'flex-start',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px'}}>
+                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日',title:e.title,body:e.note,patientId:e.patientId})}
+                    style={{textAlign:'left',cursor:'pointer',width:'100%',display:'flex',alignItems:'flex-start',gap:10,background:_r?'#f8fafc':'#eef2ff',border:`1px solid ${_r?'#e2e8f0':'#c7d2fe'}`,borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px',opacity:_r?0.72:1}}>
                     <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',minWidth:88,fontVariantNumeric:'tabular-nums',paddingTop:1}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                      <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                         <span>{e.title}</span>
                         {pt && <span style={{fontSize:10,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:4,padding:'0 5px'}}>{pt.name} 様</span>}
+                        {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
                       </div>
                       {e.note && <div style={{fontSize:11,color:'#64748b',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.5}}>{e.note}</div>}
                     </div>
-                  </div>
+                  </button>
                   );
                 })}
               </div>
@@ -10564,14 +10556,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices }) {
             </div>
             {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                {news.map(a=>{ const _r=isRead(a.id); const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
-                  <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:_r?'white':(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_r?'#e2e8f0':_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
+                {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
+                {news.map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
+                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
-                      <span style={{fontSize:9,fontWeight:'bold',color:_r?'#94a3b8':_c,background:_r?'#eef2f6':(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
+                      <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
                       <span style={{fontSize:10,color:'#94a3b8'}}>{a.date||''}</span>
-                      {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
                     </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#1e293b':_c}}>{a.title||'(写真)'}</div>
+                    <div style={{fontSize:13,fontWeight:'bold',color:_c}}>{a.title||'(写真)'}</div>
                     {a.body && <div style={{fontSize:11,color:'#475569',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
                   </button>
                 ); })}
@@ -15891,6 +15883,32 @@ export default function App() {
     try { localStorage.setItem('tsumugiDismissedNotices', JSON.stringify(updated)); } catch {}
   };
   const visibleNotices = systemNotices.filter(n => !dismissedNoticeIds.includes(n.id));
+  // ★ ホームお知らせ等の既読(スタッフ単位・端末ローカル)。 サイドバーの新着バッジと DashboardView で共有する。
+  const _noticeStaffKey = (activeRecorder?.name ? normalizeName(activeRecorder.name).trim() : '') || '_';
+  const [noticeReadMap, setNoticeReadMap] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('tsumugiNoticeReads')||'{}'); } catch { return {}; } });
+  const isNoticeRead = React.useCallback((id) => (noticeReadMap[_noticeStaffKey]||[]).includes(String(id)), [noticeReadMap, _noticeStaffKey]);
+  const markNoticeRead = React.useCallback((id) => {
+    if (id==null) return;
+    setNoticeReadMap(prev => {
+      const arr = prev[_noticeStaffKey]||[];
+      if (arr.includes(String(id))) return prev;
+      const next = { ...prev, [_noticeStaffKey]: [...arr, String(id)].slice(-1000) };
+      try { localStorage.setItem('tsumugiNoticeReads', JSON.stringify(next)); } catch {}
+      return next;
+    });
+  }, [_noticeStaffKey]);
+  // ★ #3 サイドバー「ホーム」の新着バッジ数 = 本日のスケジュール(未読) + 家族・ケアマネ更新(未読) + 運営お知らせ(未読)。
+  //   事業所からのお知らせは既読管理しない(投稿したら表示のみ)ためカウントに含めない。
+  const _homeUnreadCount = React.useMemo(() => {
+    const d = new Date(); const _ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const schedUnread = (appData.scheduleEvents||[]).filter(e=>e.date===_ymd && !isNoticeRead(e.id)).length;
+    const famUnread = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[])).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice && !isNoticeRead(u.id)).length;
+    const nowT = Date.now();
+    const hqIds = (visibleNotices||[]).filter(n=>!(n.ends_at && new Date(n.ends_at).getTime()<nowT)).map(n=>n.id);
+    const devIds = (typeof DEV_ANNOUNCEMENTS!=='undefined'?DEV_ANNOUNCEMENTS:[]).map(a=>a.id);
+    const noticeUnread = [...hqIds, ...devIds].filter(id=>!isNoticeRead(id)).length;
+    return schedUnread + famUnread + noticeUnread;
+  }, [appData.scheduleEvents, appData.patients, visibleNotices, isNoticeRead]);
   // ★ 店舗切替中フラグ (切替中の push を完全に無効化)
   //   true の間は appData が空でもクリアでも Supabase へ push しない
   const storeTransitionRef = React.useRef(false);
@@ -17564,9 +17582,7 @@ export default function App() {
               </div>
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
-              {(()=>{ const _ymd=(()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;})(); const _todayCnt=(appData.scheduleEvents||[]).filter(e=>e.date===_ymd).length; return (
-                <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_todayCnt||null} />
-              ); })()}
+              <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_homeUnreadCount||null} />
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
@@ -17703,7 +17719,7 @@ export default function App() {
                 Chrome等でクリック座標が合わず「押せない/1回だけ押せる」不具合になる。 zoom はレイアウト自体を
                 縮小するので、どのブラウザでもクリック判定が一致する。 ホーム(dashboard)は等倍のまま。 */}
             <div style={isMobileLayout ? {width:'100%',minWidth:0} : currentView==='dashboard' ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : 1, width: contentScale<1 ? `${100/contentScale}%` : '100%', height: contentScale<1 ? `${100/contentScale}%` : '100%'}}>
-            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} /> :
+            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} isNoticeRead={isNoticeRead} markNoticeRead={markNoticeRead} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
