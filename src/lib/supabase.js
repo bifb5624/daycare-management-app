@@ -447,6 +447,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   //   → 別端末で運動メニュー(規定数値)・送迎時間を入力しても、古いスナップショットの端末が
   //     保存した際に上書き消去されるのを防ぐ。 ローカルに無い利用者は復活させない(=削除は保持)。
   const FAMILY_CONTACT_FIELDS = new Set(['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail']);
+  // ★ 利用者の「フィールド単位で時刻(_fieldTs)保護」する項目。 利用者を1項目編集して _savedAt 全体が
+  //   更新されても、これらの項目は触っていなければ古い端末の保存で巻き戻らない(基本利用日/送迎/緊急連絡先)。
+  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden', ...FAMILY_CONTACT_FIELDS]);
   const mergePatientBackfill = (lpArg, cpArg) => {
     if (!cpArg) return lpArg; if (!lpArg) return cpArg;
     // ★ 新しい方(_savedAt)を基準(lp)にし、古い方(cp)で空欄のみ補完する。
@@ -456,8 +459,13 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     const _lT = Number(lpArg._savedAt) || 0, _cT = Number(cpArg._savedAt) || 0;
     const lp = (_cT > _lT) ? cpArg : lpArg;   // 新しい方
     const cp = (_cT > _lT) ? lpArg : cpArg;   // 古い方(補完元)
+    // ★ フィールド単位時刻(生ローカル/雲の _fieldTs を使う。 _savedAt の入れ替えとは独立)
+    const _lFts = (lpArg._fieldTs && typeof lpArg._fieldTs === 'object') ? lpArg._fieldTs : {};
+    const _cFts = (cpArg._fieldTs && typeof cpArg._fieldTs === 'object') ? cpArg._fieldTs : {};
     const out = { ...lp };
     out._savedAt = Math.max(_lT, _cT);
+    // _fieldTs は両者の max を保持
+    { const mf = {}; new Set([...Object.keys(_lFts), ...Object.keys(_cFts)]).forEach(k => { const t = Math.max(Number(_lFts[k]) || 0, Number(_cFts[k]) || 0); if (t) mf[k] = t; }); if (Object.keys(mf).length) out._fieldTs = mf; }
     // ★ 利用状態(status/pauseHistory)は statusUpdatedAt が新しい方を「まとめて」採用する。
     //   利用者フィールドには _savedAt が無く先勝ち/後勝ちが曖昧なため、古い端末の保存で
     //   「休止」が「利用中」に巻き戻る不具合が起きていた。 時刻の新しい状態を必ず優先する。
@@ -471,9 +479,15 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     }
     const keys = new Set([...Object.keys(lp), ...Object.keys(cp)]);
     keys.forEach(k => {
-      if (k === '_savedAt') return;
+      if (k === '_savedAt' || k === '_fieldTs') return;
       // 状態は上で時刻優先で確定済みなら、下の汎用処理はスキップ
       if (_statusTimed && (k === 'status' || k === 'pauseHistory' || k === 'statusUpdatedAt')) return;
+      // ★ フィールド単位保護対象 かつ どちらかに _fieldTs があれば、その項目だけ新しい方を採用(生ローカル/雲を参照)。
+      //   これで「別項目を編集した古い端末」が基本利用日/送迎/緊急連絡先を巻き戻さない。 時刻が無い項目は従来処理へ。
+      if (PATIENT_FIELDLEVEL.has(k)) {
+        const _lft = Number(_lFts[k]) || 0, _cft = Number(_cFts[k]) || 0;
+        if (_lft || _cft) { out[k] = (_lft >= _cft) ? lpArg[k] : cpArg[k]; return; }
+      }
       const lv = lp[k], cv = cp[k];
       // ★ 書類(介護保険証/負担割合証)と更新ログ: 両端末の追加を失わないよう id 単位で和集合マージ。
       //   docUpdates は既読フラグ(readOffice/readCm)を両者で OR (どちらかが既読なら既読)。

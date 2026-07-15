@@ -16727,12 +16727,18 @@ export default function App() {
       if (Array.isArray(newData.patients) && Array.isArray(prev.patients)) {
         const prevMap = new Map(prev.patients.map(p => [String(p && p.id), p]));
         let changed = false;
+        // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
+        //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));
           if (old && old === p) return p; // 参照同一 = 未変更 → 時刻据え置き
           changed = true;
-          return { ...p, _savedAt: Date.now() }; // 新規/変更 → 最新時刻
+          const _now = Date.now();
+          const _fts = { ...(p._fieldTs || {}) };
+          _PT_FL.forEach(k => { let ch; try { ch = JSON.stringify(p[k]) !== JSON.stringify(old ? old[k] : undefined); } catch { ch = true; } if (ch) _fts[k] = _now; });
+          return { ...p, _savedAt: _now, _fieldTs: _fts }; // 新規/変更 → 最新時刻 + 変更項目の _fieldTs
         });
         if (changed) newData = { ...newData, patients: stamped };
       }
@@ -32038,7 +32044,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                             const now = Date.now();
                             const d = { ...appData };
                             ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => (r && r.id!=null) ? { ...r, _savedAt: now } : r); });
-                            if (Array.isArray(d.patients)) d.patients = d.patients.map(p => (p && p.id!=null) ? { ...p, _savedAt: now } : p);
+                            if (Array.isArray(d.patients)) d.patients = d.patients.map(p => { if(!(p && p.id!=null)) return p;
+                              // ★ フィールド単位保護対象にも _fieldTs=now を刻み、この端末の全項目を確実に最新にする。
+                              const _fl=['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+                              const _fts={ ...(p._fieldTs||{}) }; _fl.forEach(k=>{ _fts[k]=now; });
+                              return { ...p, _savedAt: now, _fieldTs: _fts };
+                            });
                             const _ts = {}; Object.keys(d.monthlyShifts||{}).forEach(mk => { const pm = d.monthlyShifts[mk]||{}; _ts[mk] = {}; Object.keys(pm).forEach(pid => { _ts[mk][pid] = now; }); }); d._msTs = _ts; d._msSavedAt = now;
                             if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ dl[k]={ ...(d.diaryLogs[k]||{}), _savedAt: now }; }); d.diaryLogs = dl; }
                             if (d.faxDataStore && typeof d.faxDataStore==='object') { const fx={}; Object.keys(d.faxDataStore).forEach(k=>{ fx[k]={ ...(d.faxDataStore[k]||{}), _updatedAt: now }; }); d.faxDataStore = fx; }
