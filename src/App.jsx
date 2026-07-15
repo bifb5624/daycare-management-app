@@ -16828,15 +16828,29 @@ export default function App() {
       //   マージ(mergeById)は _savedAt の新しい方を採用するので、体力測定・モニタリング・スケジュール・計画書・
       //   お知らせ 等も、古い端末の保存で新しい入力が巻き戻らなくなる(全データに時刻を付ける一括対応)。
       const _now2 = Date.now();
+      // ★ 提供記録/日誌は「フィールド単位マージ」対象。 変更した項目だけ _fieldTs=now を刻む(空にした=意図的削除も含む)。
+      //   これで「意図的に空にした→反映」「触っていない空欄→他端末の入力を消さない(バイタル復活の事故防止)」を両立。
+      const _FIELD_TS_KEYS = new Set(['ticketRecords','dailyLogs']);
       ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(_key => {
         if (!Array.isArray(newData[_key]) || !Array.isArray(prev[_key])) return;
         const _pm = new Map(prev[_key].map(r => [String(r && r.id), r]));
+        const _fieldLevel = _FIELD_TS_KEYS.has(_key);
         let _ch = false;
         const _st = newData[_key].map(r => {
           if (!r || r.id == null) return r;
           const _old = _pm.get(String(r.id));
           if (_old && _old === r) return r; // 参照同一 = 未変更 → 据え置き
-          _ch = true; return { ...r, _savedAt: Date.now() }; // 新規/変更 → 最新時刻
+          _ch = true;
+          if (!_fieldLevel) return { ...r, _savedAt: _now2 }; // 新規/変更 → 最新時刻
+          // 変更フィールドだけ _fieldTs を刻む(オブジェクト/配列も含め、実際に値が変わった項目のみ)
+          const _fts = { ...(r._fieldTs || {}) };
+          const _fk = new Set([...Object.keys(r), ...(_old ? Object.keys(_old) : [])]);
+          _fk.forEach(k => {
+            if (k === '_savedAt' || k === '_fieldTs' || k === 'id') return;
+            let chg; try { chg = JSON.stringify(r[k]) !== JSON.stringify(_old ? _old[k] : undefined); } catch { chg = true; }
+            if (chg) _fts[k] = _now2;
+          });
+          return { ...r, _savedAt: _now2, _fieldTs: _fts };
         });
         if (_ch) newData = { ...newData, [_key]: _st };
       });
@@ -32090,7 +32104,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                           try {
                             const now = Date.now();
                             const d = { ...appData };
-                            ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => (r && r.id!=null) ? { ...r, _savedAt: now } : r); });
+                            const _FTKEYS = new Set(['ticketRecords','dailyLogs']);
+                            ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => { if(!(r && r.id!=null)) return r;
+                              if (!_FTKEYS.has(k)) return { ...r, _savedAt: now };
+                              // ★ 記録(提供記録/日誌)は全項目の _fieldTs=now を刻み、この端末の記録を確実に最新にする。
+                              const _fts = { ...(r._fieldTs||{}) }; Object.keys(r).forEach(fk => { if(fk!=='_savedAt'&&fk!=='_fieldTs'&&fk!=='id') _fts[fk]=now; });
+                              return { ...r, _savedAt: now, _fieldTs: _fts };
+                            }); });
                             if (Array.isArray(d.patients)) d.patients = d.patients.map(p => { if(!(p && p.id!=null)) return p;
                               // ★ フィールド単位保護対象にも _fieldTs=now を刻み、この端末の全項目を確実に最新にする。
                               const _fl=['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];

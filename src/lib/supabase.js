@@ -411,11 +411,21 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     if (!a) return b; if (!b) return a;
     const at = Number(a._savedAt) || 0, bt = Number(b._savedAt) || 0;
     const aNewer = at >= bt;
+    // ★ フィールド単位の更新時刻。 「実際に触った項目」だけ時刻が付く(空にした=意図的削除も含む)。
+    //   触っていない空欄は時刻が付かないので、下の「非空優先」保護に委ねる(古い端末の空欄で入力を消さない)。
+    const _aFts = (a._fieldTs && typeof a._fieldTs === 'object') ? a._fieldTs : {};
+    const _bFts = (b._fieldTs && typeof b._fieldTs === 'object') ? b._fieldTs : {};
     const out = {};
     const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
     keys.forEach(k => {
-      if (k === '_savedAt') return;
+      if (k === '_savedAt' || k === '_fieldTs') return;
       const av = a[k], bv = b[k];
+      // ★ スカラー項目で _fieldTs があれば「新しい方」を採用(意図的に空にした削除も反映)。 バイタルもこれで削除可能。
+      //   オブジェクト値(exercises 等)は下のキー単位マージに任せる(_fieldTs 短絡しない)。
+      if (!(av && typeof av === 'object') && !(bv && typeof bv === 'object')) {
+        const _aft = Number(_aFts[k]) || 0, _bft = Number(_bFts[k]) || 0;
+        if (_aft || _bft) { out[k] = (_aft >= _bft) ? av : bv; return; }
+      }
       // ★ 次回予定(nextDateOverride/nextTimeOverride)は「空欄=未設定(自動計算に任せる)」であり、
       //   「明示的な削除」と区別できない(1項目の保存でも記録全体の _savedAt が新しくなり、空欄も新しく見える)。
       //   別端末で入力済みの時間が、当端末の空欄保存で消える事故を防ぐため、非空を無条件優先する。
@@ -466,6 +476,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       out[k] = aNewer ? av : bv; // 両方非空の競合 → 新しい方
     });
     out._savedAt = Math.max(at, bt);
+    // _fieldTs は両者の項目別 max を保持
+    { const mf = {}; new Set([...Object.keys(_aFts), ...Object.keys(_bFts)]).forEach(k => { const t = Math.max(Number(_aFts[k]) || 0, Number(_bFts[k]) || 0); if (t) mf[k] = t; }); if (Object.keys(mf).length) out._fieldTs = mf; }
     return out;
   };
   const mergeByIdFieldLevel = (localArr, cloudArr) => {
