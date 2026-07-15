@@ -16580,6 +16580,46 @@ export default function App() {
   const seikatsuKinouSaveFnRef = React.useRef(null);
   const kyomiKanshinDirtyRef = React.useRef(false);
   const kyomiKanshinSaveFnRef = React.useRef(null);
+  // ★ 新バージョン検知 → 通知バナー＋安全時の自動リロード。 デプロイ後に各端末を手動リロードしなくても更新される。
+  //   仕組み: index.html(no-cache)を定期取得し、参照する /assets/*.js が起動時と変わっていたら「更新あり」。
+  const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  const _selfAssetsRef = React.useRef(null);
+  const _isEditingNow = React.useCallback(() => {
+    try { const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return true; } catch {}
+    const refs = [recordDirtyRef, masterDirtyRef, settingsDirtyRef, printDirtyRef, fitnessDirtyRef, diaryDirtyRef, monitoringDirtyRef, ticketDirtyRef, absenceDirtyRef, generalFaxDirtyRef, kinouKeikakuDirtyRef, tsushoKeikakuDirtyRef, lifeHubDirtyRef, seikatsuKinouDirtyRef, kyomiKanshinDirtyRef];
+    return refs.some(r => r && r.current);
+  }, []);
+  useEffect(() => {
+    try {
+      const own = [...document.querySelectorAll('script[src]')].map(s => s.getAttribute('src') || '').filter(s => /\/assets\/.*\.js(\?|$)/.test(s)).sort().join('|');
+      _selfAssetsRef.current = own || null;
+    } catch {}
+    let stopped = false;
+    const check = async () => {
+      if (!_selfAssetsRef.current) return;
+      try {
+        const res = await fetch('/index.html?_v=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const html = await res.text();
+        const latest = (html.match(/\/assets\/[^"'()\s]+\.js/g) || []).sort().join('|');
+        if (latest && latest !== _selfAssetsRef.current && !stopped) setUpdateAvailable(true);
+      } catch {}
+    };
+    const t = setInterval(check, 5 * 60 * 1000); // 5分ごと
+    const onFocus = () => { if (document.visibilityState !== 'hidden') check(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    const first = setTimeout(check, 20000);
+    return () => { stopped = true; clearInterval(t); clearTimeout(first); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+  }, []);
+  useEffect(() => {
+    if (!updateAvailable) return;
+    // ★ タブを離れた(背景化)時に、編集中でなければ自動リロードして最新プログラムへ更新(復帰時には更新済み)。
+    //   未保存入力は下の別effectが背景化時に自動保存するため、少し待ってからリロードする。
+    const onVis = () => { if (document.visibilityState === 'hidden' && !_isEditingNow()) { setTimeout(() => { try { if (document.visibilityState === 'hidden' && !_isEditingNow()) window.location.reload(); } catch {} }, 1800); } };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [updateAvailable, _isEditingNow]);
   // ★ データ消失対策: アプリ切替/タブ離脱/スリープ移行時に、開いている入力画面の未保存データを自動保存。
   //   入力画面は「保存」を押すまでローカル保持のため、押さずに離れると消える。 これを背景化時に拾う。
   useEffect(() => {
@@ -17540,7 +17580,14 @@ export default function App() {
         </div>,
         document.body
       )}
-
+      {/* ★ 新バージョン通知バナー (安全時は自動更新するが、すぐ更新したい場合の手動ボタンも出す) */}
+      {updateAvailable && ReactDOM.createPortal(
+        <div style={{position:'fixed',left:'50%',bottom:20,transform:'translateX(-50%)',zIndex:2000000,background:'#0f172a',color:'white',padding:'10px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:12,maxWidth:'92vw'}}>
+          <span style={{fontSize:13,fontWeight:'bold'}}>🔄 新しいバージョンがあります</span>
+          <button onClick={()=>{ try{ window.location.reload(); }catch{} }} style={{background:'#7daa3d',color:'white',border:'none',borderRadius:8,padding:'6px 14px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ更新</button>
+        </div>,
+        document.body
+      )}
 
       {/* ★ モバイル時のサイドバー背景オーバーレイ (タップで閉じる) */}
       {isSidebarOpen && (
