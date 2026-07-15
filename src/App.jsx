@@ -16795,12 +16795,26 @@ export default function App() {
         });
         if (_ch) newData = { ...newData, [_key]: _st };
       });
-      // ★ 各種設定・日誌設定も編集された時だけ更新時刻を刻む(新しい方優先マージ用)。
+      // ★ 各種設定・日誌設定は「変更されたフィールドだけ」に更新時刻(_fieldTs[field])を刻む。
+      //   これにより、古い端末が1項目だけ編集して保存しても、触っていない項目(送迎自動コピー/ケアマネ/各設定)は
+      //   フィールド単位マージで巻き戻らない(「1項目直すと他が復活/数時間〜数日で戻る」の恒久対策)。
+      const _stampFieldTs = (nObj, pObj, now) => {
+        const out = { ...nObj };
+        const fts = { ...(nObj._fieldTs || {}) };
+        const keys = new Set([...Object.keys(nObj || {}), ...Object.keys(pObj || {})]);
+        keys.forEach(k => {
+          if (k === '_updatedAt' || k === '_fieldTs') return;
+          let changed; try { changed = JSON.stringify(nObj ? nObj[k] : undefined) !== JSON.stringify(pObj ? pObj[k] : undefined); } catch { changed = true; }
+          if (changed) fts[k] = now;
+        });
+        out._fieldTs = fts; out._updatedAt = now;
+        return out;
+      };
       if (newData.systemSettings && newData.systemSettings !== prev.systemSettings) {
-        newData = { ...newData, systemSettings: { ...newData.systemSettings, _updatedAt: _now2 } };
+        newData = { ...newData, systemSettings: _stampFieldTs(newData.systemSettings, prev.systemSettings, _now2) };
       }
       if (newData.diarySettings && newData.diarySettings !== prev.diarySettings) {
-        newData = { ...newData, diarySettings: { ...newData.diarySettings, _updatedAt: _now2 } };
+        newData = { ...newData, diarySettings: _stampFieldTs(newData.diarySettings, prev.diarySettings, _now2) };
       }
       // ★ 休み連絡(faxDataStore): 変更された「日付|利用者」キーだけに _updatedAt を刻む。
       if (newData.faxDataStore && newData.faxDataStore !== prev.faxDataStore) {
@@ -32028,7 +32042,12 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                             const _ts = {}; Object.keys(d.monthlyShifts||{}).forEach(mk => { const pm = d.monthlyShifts[mk]||{}; _ts[mk] = {}; Object.keys(pm).forEach(pid => { _ts[mk][pid] = now; }); }); d._msTs = _ts; d._msSavedAt = now;
                             if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ dl[k]={ ...(d.diaryLogs[k]||{}), _savedAt: now }; }); d.diaryLogs = dl; }
                             if (d.faxDataStore && typeof d.faxDataStore==='object') { const fx={}; Object.keys(d.faxDataStore).forEach(k=>{ fx[k]={ ...(d.faxDataStore[k]||{}), _updatedAt: now }; }); d.faxDataStore = fx; }
-                            ['systemSettings','contactBookConfig','diarySettings','generalFaxDraft'].forEach(k => { if (d[k] && typeof d[k]==='object') d[k] = { ...d[k], _updatedAt: now }; });
+                            ['systemSettings','contactBookConfig','diarySettings','generalFaxDraft'].forEach(k => { if (d[k] && typeof d[k]==='object') {
+                              // ★ フィールド単位マージ対策: 全フィールドに _fieldTs=now を刻み、この端末の全項目を確実に最新にする。
+                              const _fts = { ...(d[k]._fieldTs||{}) };
+                              Object.keys(d[k]).forEach(fk => { if (fk!=='_updatedAt' && fk!=='_fieldTs') _fts[fk] = now; });
+                              d[k] = { ...d[k], _fieldTs: _fts, _updatedAt: now };
+                            } });
                             onSave(d, { manual:true, message:'✓ この端末のデータを最新として確定しました（他端末はリロードしてください）' });
                           } catch(e) { alert('確定に失敗しました: ' + (e?.message||'')); }
                           finally { setStampingAll(false); }

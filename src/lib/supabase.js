@@ -574,43 +574,48 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         .filter(lp => !(lp && lp.id != null && _patTomb[String(lp.id)])) // ★ 墓石にある利用者は除外(復活防止)
         .map(lp => { if (!lp || lp.id == null) return lp; const cp = cloudPatMap.get(String(lp.id)); return cp ? mergePatientBackfill(lp, cp) : lp; });
     }
-    // ★ systemSettings: 端末間で「新しい方(_updatedAt)」を丸ごと採用する。
-    //   これが無いと、運動メニュー等の設定を別端末で追加しても、古い systemSettings を持つ端末が
-    //   別の保存(日誌等)をした拍子に push で上書きし、数時間〜1日後に設定が消えてしまう。
-    //   _updatedAt が無い(旧データ)場合は、消失防止のため主要な配列を id/名前 で union して両端末の追加を保持。
+    // ★ オブジェクトをフィールド単位でマージ。 各フィールドは _fieldTs[field] の新しい方を採用。
+    //   _fieldTs が両者に無いフィールドは、全体 _updatedAt の新しい方(base)を採用(後方互換)。
+    //   → 古い端末が別フィールドを1つ編集して _updatedAt を更新しても、触っていないフィールドは巻き戻らない。
+    //   (これが「1項目直すと他が復活する / 数時間〜数日で戻る」不具合の恒久対策)。
+    const mergeObjFieldLevel = (lo, co) => {
+      if (!lo) return co; if (!co) return lo;
+      const lT = Number(lo._updatedAt) || 0, cT = Number(co._updatedAt) || 0;
+      const lFts = (lo._fieldTs && typeof lo._fieldTs === 'object') ? lo._fieldTs : {};
+      const cFts = (co._fieldTs && typeof co._fieldTs === 'object') ? co._fieldTs : {};
+      const base = (lT >= cT) ? lo : co;
+      const out = { ...base };
+      const keys = new Set([...Object.keys(lo), ...Object.keys(co)]);
+      keys.forEach(k => {
+        if (k === '_updatedAt' || k === '_fieldTs') return;
+        const lft = Number(lFts[k]) || 0, cft = Number(cFts[k]) || 0;
+        if (lft || cft) { out[k] = (lft >= cft) ? lo[k] : co[k]; }
+        else if (!(k in base)) { out[k] = (k in lo) ? lo[k] : co[k]; }
+      });
+      const mFts = {};
+      new Set([...Object.keys(lFts), ...Object.keys(cFts)]).forEach(k => { const t = Math.max(Number(lFts[k]) || 0, Number(cFts[k]) || 0); if (t) mFts[k] = t; });
+      out._fieldTs = mFts; out._updatedAt = Math.max(lT, cT);
+      return out;
+    };
+    // ★ systemSettings: フィールド単位マージ。 ケアマネ事業所/担当者は union で両端末の追加を保持。
     {
       const ls = localData.systemSettings, cs = cloud.systemSettings;
       if (ls || cs) {
-        const lt = Number(ls && ls._updatedAt) || 0, ct = Number(cs && cs._updatedAt) || 0;
-        if (lt || ct) {
-          const base = (lt >= ct) ? ls : cs;   // 新しい方をベースに丸ごと採用
-          const other = (lt >= ct) ? cs : ls;  // 古い方
-          const out = { ...base };
-          // ★ ケアマネ事業所/担当者は「追加を失わない」よう新旧をユニオン(ベース優先)。
-          //   CSV取込で追加したケアマネが、別端末の設定保存(より新しい_updatedAt・CSV分を持たない)で
-          //   丸ごと上書きされて消える不具合を防ぐ。
-          const unionBy = (keyFn, k) => {
-            const a = Array.isArray(base && base[k]) ? base[k] : [], b = Array.isArray(other && other[k]) ? other[k] : [];
+        if (!ls || !cs) { merged.systemSettings = ls || cs; }
+        else {
+          const out = mergeObjFieldLevel(ls, cs);
+          // ★ 追加を失わない配列は union(両端末の追加を保持。 同一キーはローカル優先)。
+          const unionBy = (k, keyFn) => {
+            const a = Array.isArray(ls[k]) ? ls[k] : [], b = Array.isArray(cs[k]) ? cs[k] : [];
             if (!a.length && !b.length) return;
             const m = new Map();
             b.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); });
-            a.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); }); // ベース優先で上書き
+            a.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); });
             out[k] = [...m.values()];
           };
-          unionBy(o => (o && o.name != null) ? `off|${String(o.name).trim()}` : null, 'cmOffices');
-          unionBy(o => (o && (o.office != null || o.name != null)) ? `cm|${String(o.office||'').trim()}|${String(o.name||'').trim()}` : null, 'careManagers');
+          unionBy('cmOffices', o => (o && o.name != null) ? `off|${String(o.name).trim()}` : null);
+          unionBy('careManagers', o => (o && (o.office != null || o.name != null)) ? `cm|${String(o.office||'').trim()}|${String(o.name||'').trim()}` : null);
           merged.systemSettings = out;
-        } else if (ls && cs) {
-          // timestamp 無し: フィールドはローカル優先。 ただし主要な設定配列は「多い方」を採用して追加消失を防ぐ。
-          const out = { ...cs, ...ls };
-          ['exerciseItems','individualExerciseItems','serviceItems','cmOffices','careManagers','massageTypes','fitnessItems','fitnessTargets'].forEach(k => {
-            const la = Array.isArray(ls[k]) ? ls[k] : null, ca = Array.isArray(cs[k]) ? cs[k] : null;
-            if (la && ca) out[k] = (ca.length > la.length) ? ca : la;
-            else out[k] = la || ca || out[k];
-          });
-          merged.systemSettings = out;
-        } else {
-          merged.systemSettings = ls || cs;
         }
       }
     }
@@ -624,13 +629,13 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         else merged.contactBookConfig = lc || cc; // 旧データ(時刻なし)は従来どおりローカル優先
       }
     }
-    // ★ 日誌設定(diarySettings=担当職員/送迎車/タイムスケジュール)も「新しい方(_updatedAt)」を採用。
+    // ★ 日誌設定(diarySettings=担当職員/送迎車/タイムスケジュール/送迎自動コピー)もフィールド単位マージ。
+    //   古い端末が職員を1人足しただけで送迎自動コピー等が巻き戻るのを防ぐ。
     {
       const lc = localData.diarySettings, cc = cloud.diarySettings;
       if (lc || cc) {
-        const lt = Number(lc && lc._updatedAt) || 0, ct = Number(cc && cc._updatedAt) || 0;
-        if (lt || ct) merged.diarySettings = (lt >= ct) ? lc : cc;
-        else merged.diarySettings = lc || cc;
+        if (!lc || !cc) merged.diarySettings = lc || cc;
+        else merged.diarySettings = mergeObjFieldLevel(lc, cc);
       }
     }
     // ★ 休み連絡(faxDataStore=日付×利用者の連絡状態)は「日付|利用者」キー単位でマージし、同キーは新しい方(_updatedAt)。
