@@ -34488,6 +34488,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     id:`tk_${pid}_${Date.now()}`, patientId:pid, createdAt:Date.now(),
     createdDate:toReiwa(new Date().toISOString().slice(0,10)), prevDate:'', firstDate:'',
     author:'', authorJob:'生活相談員',
+    riyoubi:'', teikyoTime:'',
     honninKibou:'', kazokuKibou:'', hoshin:'',
     longGoal:'', longPeriod:'', longAchieve:'',
     shortGoal:'', shortPeriod:'', shortAchieve:'',
@@ -34544,6 +34545,16 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     const kibou=[ st.length?`してみたい：${st.join('、')}`:'', si.length?`している：${si.join('、')}`:'', bikou ].filter(Boolean).join('\n');
     if(kibou) _appendField('honninKibou', kibou);
   };
+  // ★ 利用予定: 基本利用日(scheduleAmPm)＋送迎時間(pickupTimes)から「曜日（区分 時間）」を組み立てて反映
+  const _baseUseDays=()=>{
+    if(!patient) return '';
+    const dows=['日','月','火','水','木','金','土'];
+    const parts=[];
+    (patient.scheduleAmPm||[]).forEach((v,i)=>{ if(v){ const t=(patient.pickupTimes?.[i]||'').trim(); parts.push(`${dows[i]}（${v}${t?` ${t}`:''}）`); } });
+    return parts.join('・');
+  };
+  const fillRiyoubi=()=>{ const s=_baseUseDays(); if(!s){ alert('この利用者の基本利用日が登録されていません（利用者マスタで設定してください）。'); return; } upd({riyoubi:s}); };
+  const TEIKYO_TIMES=['3時間以上4時間未満','4時間以上5時間未満','5時間以上6時間未満','6時間以上7時間未満','7時間以上8時間未満','8時間以上9時間未満'];
 
   const printRec = editing || records[0] || null;
   return (
@@ -34580,6 +34591,20 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                 <KKField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
                 <KKField label="計画作成者" value={editing.author} onChange={v=>upd({author:v})}/>
                 <KKField label="職種" value={editing.authorJob} onChange={v=>upd({authorJob:v})}/>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-bold text-blue-700">利用予定</div>
+                <button onClick={fillRiyoubi} className="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-bold">基本利用日から反映</button>
+              </div>
+              <div className="grid md:grid-cols-2 gap-3">
+                <KKField label="利用曜日・時間帯" value={editing.riyoubi} onChange={v=>upd({riyoubi:v})} rows={2} ph="例: 月（AM 09:00）・水（1日）"/>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">提供時間区分</label>
+                  <input value={editing.teikyoTime||''} onChange={e=>upd({teikyoTime:e.target.value})} list="tsusho-teikyo-times" placeholder="例: 7時間以上8時間未満" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                  <datalist id="tsusho-teikyo-times">{TEIKYO_TIMES.map(x=><option key={x} value={x}/>)}</datalist>
+                </div>
               </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -34704,6 +34729,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
             <tr><td style="${lab}">要介護度</td><td style="${cs}">${esc(patient?.careLevel)||'&nbsp;'}</td><td style="${lab}">認定有効期間</td><td style="${cs}">${esc(_certPeriod)||'&nbsp;'}</td></tr>
             <tr><td style="${lab}">作成日</td><td style="${cs}">${esc(printRec.createdDate)||'&nbsp;'}</td><td style="${lab}">計画作成者</td><td style="${cs}">${esc(printRec.author)||''}${printRec.authorJob?`（${esc(printRec.authorJob)}）`:''}</td></tr>
             <tr><td style="${lab}">前回作成日</td><td style="${cs}">${esc(printRec.prevDate)||'&nbsp;'}</td><td style="${lab}">初回作成日</td><td style="${cs}">${esc(printRec.firstDate)||'&nbsp;'}</td></tr>
+            <tr><td style="${lab}">利用予定</td><td style="${cs}">${esc(printRec.riyoubi)||'&nbsp;'}</td><td style="${lab}">提供時間区分</td><td style="${cs}">${esc(printRec.teikyoTime)||'&nbsp;'}</td></tr>
           </table>
           <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
             <tr><td style="${lab}width:130px;">ご本人の意向</td><td style="${cs}">${esc(printRec.honninKibou)||'&nbsp;'}</td></tr>
