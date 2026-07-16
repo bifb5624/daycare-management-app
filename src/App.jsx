@@ -28826,7 +28826,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     そこで介護度/負担割合/ケアマネを変更すると この履歴と支援経過表へ自動記録される。
                     二重入力＝同期漏れの原因だったため。 誤記録の修正用に各行の 編集/削除 は残す。 */}
                 <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2">
-                  <span className="text-blue-500 shrink-0 mt-0.5"><Info size={15}/></span>
+                  <span className="text-blue-500 shrink-0 mt-0.5"><History size={15}/></span>
                   <div className="text-[12px] text-blue-900 leading-relaxed">
                     <span className="font-bold">履歴はここでは追加しません。</span>
                     <span className="opacity-80">「基本情報」タブで介護度・負担割合・ケアマネを変更して保存すると、この変更履歴と<span className="font-bold">支援経過表に自動で記録</span>されます（保険証・負担割合証の写真も基本情報タブから添付）。誤って記録された履歴は、各行の編集・削除ボタンで直せます。</span>
