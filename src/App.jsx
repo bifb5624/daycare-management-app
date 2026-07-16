@@ -19337,6 +19337,41 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     displayRecords = displayRecords.filter(r => r.name && (r.name.includes(query) || (r.kana && r.kana.includes(query))));
   }
 
+  // ★ 氏名検索時は「その月の利用日を全て」一覧表示する(当日ロスターに縛られない)。
+  //   各日はタップで当日入力へジャンプ。 月モードの一括保存は他月を消す危険があるため使わず、
+  //   安全な当日モードで編集する。
+  const searchActive = !!(searchQuery && searchQuery.trim());
+  const searchDaysGroups = React.useMemo(() => {
+    if (!searchActive) return [];
+    const q = searchQuery.trim().toLowerCase();
+    const matched = (appData.patients||[]).filter(p => p && p.status!=='退所' && ((p.name&&p.name.toLowerCase().includes(q)) || (p.kana&&String(p.kana).includes(q))));
+    const d0 = new Date(selectedDate);
+    const y = d0.getFullYear(), mo = d0.getMonth();
+    const monthKey = `${y}-${String(mo+1).padStart(2,'0')}`;
+    const daysInMonth = new Date(y, mo+1, 0).getDate();
+    const closed = (appData.systemSettings?.facilityInfo?.closedDays)||[0];
+    const dowN = ['日','月','火','水','木','金','土'];
+    return matched.map(p => {
+      const days = [];
+      for (let d=1; d<=daysInMonth; d++) {
+        const dow = new Date(y, mo, d).getDay();
+        const iso = `${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const dateStr = `${mo+1}月${d}日`;
+        const rec = (appData.ticketRecords||[]).find(r => r.patientId===p.id && recMatchesDateYear(r, dateStr, y));
+        const base = getScheduleOnDate(p, iso)?.[dow] || '';
+        const baseComes = base==='AM'||base==='PM'||base==='1日';
+        const sAM = appData.monthlyShifts?.[monthKey]?.[p.id]?.[`${d}_AM`];
+        const sPM = appData.monthlyShifts?.[monthKey]?.[p.id]?.[`${d}_PM`];
+        const shiftComes = [sAM,sPM].some(s => s==='〇'||s==='出席'||(typeof s==='string'&&s.startsWith('振')));
+        const recComes = rec && ['出席','欠席','振替','休業'].includes(rec.status);
+        if (closed.includes(dow) && !recComes) continue;
+        if (!baseComes && !shiftComes && !recComes) continue;
+        days.push({ iso, label:`${mo+1}月${d}日（${dowN[dow]}）`, rec: rec||null });
+      }
+      return { patient:p, days };
+    }).filter(g => g.days.length);
+  }, [searchActive, searchQuery, selectedDate, appData.patients, appData.ticketRecords, appData.monthlyShifts, appData.systemSettings]);
+
   const getMassageFontSize = (name) => {
     if (!name) return "text-sm";
     if (name.length <= 3) return "text-sm tracking-widest";
@@ -19497,8 +19532,41 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           /* Firefox 用 */
           .record-view-scroll { scrollbar-width: auto !important; scrollbar-color: #94a3b8 #e2e8f0; }
         `}</style>
+        {/* ★ 氏名検索中: その月の利用日を全て一覧表示。 行タップで当日入力へジャンプ(安全な当日モードで編集) */}
+        {searchActive && (
+          <div className="p-3 space-y-4">
+            {searchDaysGroups.length===0 && <div className="text-center text-slate-400 font-bold py-10">「{searchQuery}」に一致する利用日がありません（この月）</div>}
+            {searchDaysGroups.map(({patient, days}) => (
+              <div key={patient.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-slate-800">{patient.name}</span>
+                  {patient.kana && <span className="text-[11px] text-slate-400">{patient.kana}</span>}
+                  <span className="text-[11px] text-slate-500 ml-1">{new Date(selectedDate).getMonth()+1}月の利用日 {days.length}日</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {days.map(({iso, label, rec}) => {
+                    const st = rec?.status || '予定';
+                    const stColor = st==='出席'?'#1d4ed8':st==='欠席'?'#dc2626':st==='振替'?'#7c3aed':st==='休業'||st==='休止'?'#64748b':'#94a3b8';
+                    const hasVital = rec && (rec.temp||rec.bpUpSt||rec.plSt);
+                    return (
+                      <button key={iso} type="button" onClick={()=>{ setSelectedDate(iso); setSearchQuery(''); }}
+                        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                        <span className="font-bold text-slate-700 text-sm w-32 shrink-0">{label}</span>
+                        <span style={{color:stColor}} className="text-xs font-bold w-12 shrink-0">{st}</span>
+                        <span className="text-xs text-slate-500 flex-1 truncate">
+                          {hasVital ? [rec.temp&&`${rec.temp}℃`, (rec.bpUpSt||rec.bpDnSt)&&`${rec.bpUpSt||''}/${rec.bpDnSt||''}`, rec.plSt&&`P${rec.plSt}`].filter(Boolean).join('　') : (rec?.tokki||'')}
+                        </span>
+                        <ArrowRight size={15} className="text-slate-300 shrink-0"/>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {/* ★ スマホ用カード表示 (md未満)。 PC/iPad は下のテーブル。 横長の表をスマホで縦カードに */}
-        <div className="md:hidden p-2 space-y-3">
+        <div className={searchActive ? 'hidden' : 'md:hidden p-2 space-y-3'}>
           {displayRecords.length===0 && <div className="text-center text-slate-400 font-bold py-8">対象の利用者がいません</div>}
           {displayRecords.map((p) => {
             const masterData = (appData.patients||[]).find(pt => pt.id === p.patientId || pt.id === p.id || pt.name === p.name) || {};
@@ -19593,7 +19661,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             );
           })}
         </div>
-        <table id="record-table" draggable={false} onDragStart={e=>e.preventDefault()} className="hidden md:table text-sm text-left relative" style={{
+        <table id="record-table" draggable={false} onDragStart={e=>e.preventDefault()} className={searchActive ? 'hidden' : 'hidden md:table text-sm text-left relative'} style={{
           tableLayout:'fixed',borderCollapse:'separate',borderSpacing:0,
           minWidth:'max-content',width:'max-content',
           // ★ 全画面時のみ 1.1 倍拡大 (transform-origin top-left でレイアウト整合)
