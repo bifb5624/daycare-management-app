@@ -19561,6 +19561,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       <col style={{width:'120px'}}/>{/* 開始 血圧+脈 */}
                       <col style={{width:'120px'}}/>{/* 終了 血圧+脈 */}
                       {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => <col key={item.id} style={{width:'58px'}}/>)}
+                      <col style={{width:'62px'}}/>{/* 介護整体 */}
                       <col style={{width:'260px'}}/>{/* 特記 */}
                     </colgroup>
                     <thead className="bg-slate-800 text-white">
@@ -19572,31 +19573,42 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">開始 血圧/脈</th>
                         <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">{secondBpLabel(appData)} 血圧/脈</th>
                         {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => (
-                          <th key={item.id} className="px-0.5 py-2 font-bold text-center border border-slate-700 text-[11px] truncate">{item.name}</th>
+                          <th key={item.id} className={`px-0.5 py-2 font-bold text-center border text-[11px] truncate ${item.type==='individual' ? 'bg-emerald-800 text-emerald-50 border-emerald-700' : 'border-slate-700'}`}>{item.name}</th>
                         ))}
+                        <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap text-xs">介護整体</th>
                         <th className="px-2 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">特記</th>
                       </tr>
                     </thead>
                     <tbody>
                       {days.map(({iso, label, rec}) => {
                         const st = rec?.status || '予定';
-                        const stColor = st==='出席'?'#1d4ed8':st==='欠席'?'#dc2626':st==='振替'?'#7c3aed':st==='休業'||st==='休止'?'#64748b':'#94a3b8';
+                        // ★ 状態の色は提供記録入力と同じ statusOptions を使う (振替=emerald/緑)
+                        const _stOpt = appSettings.statusOptions.find(o=>o.label===st);
+                        const stCls = _stOpt ? _stOpt.textColor : 'text-slate-400';
                         const dim = (st==='欠席'||st==='休業'||st==='休止');
                         const _mA = KIBUN_MOOD_META.find(m=>m.key===rec?.kibunArrival);
                         const _mD = KIBUN_MOOD_META.find(m=>m.key===rec?.kibunDeparture);
-                        const bpStr = (u,d,p) => (u||d||p) ? `${u||''}${(u||d)?'/':''}${d||''}${p?`　P${p}`:''}` : '';
+                        // ★ 血圧/脈は提供記録入力と同じ色分け。 脈は P ではなく () で表示
+                        const bpCell = (u,d,p) => (!u && !d && !p) ? '' : (
+                          <span className="inline-flex items-center gap-0.5">
+                            {u && <span className={getBpUpColorClass(u)}>{u}</span>}
+                            {(u && d) && <span className="text-slate-400">/</span>}
+                            {d && <span className={getBpDnColorClass(d)}>{d}</span>}
+                            {p && <span className={`ml-1 ${getPulseColorClass(p, true)}`}>（{p}）</span>}
+                          </span>
+                        );
                         return (
                           <tr key={iso} onClick={()=>{ setSelectedDate(iso); setSearchQuery(''); }}
                             className={`cursor-pointer group ${dim?'bg-slate-50':'bg-white'} hover:bg-blue-50`} title="タップするとこの日の入力へ移動します">
                             <td className="px-2 py-2 font-bold text-slate-700 border border-slate-300 whitespace-nowrap group-hover:text-blue-700">{label}</td>
-                            <td style={{color:stColor}} className="px-2 py-2 text-xs font-bold text-center border border-slate-300">{st}</td>
+                            <td className={`px-2 py-2 text-xs font-bold text-center border border-slate-300 ${stCls}`}>{st}</td>
                             <td className="px-1 py-2 text-center border border-slate-300 whitespace-nowrap">
                               {_mA && <span title={`通所時: ${_mA.label}`}>{_mA.emoji}</span>}
                               {_mD && <span title={`帰宅時: ${_mD.label}`} className="ml-0.5">{_mD.emoji}</span>}
                             </td>
                             <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800">{rec?.temp||''}</td>
-                            <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800 whitespace-nowrap">{bpStr(rec?.bpUpSt, rec?.bpDnSt, rec?.plSt)}</td>
-                            <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800 whitespace-nowrap">{bpStr(rec?.bpUpEn, rec?.bpDnEn, rec?.plEn)}</td>
+                            <td className="px-1 py-2 text-center border border-slate-300 font-bold whitespace-nowrap">{bpCell(rec?.bpUpSt, rec?.bpDnSt, rec?.plSt)}</td>
+                            <td className="px-1 py-2 text-center border border-slate-300 font-bold whitespace-nowrap">{bpCell(rec?.bpUpEn, rec?.bpDnEn, rec?.plEn)}</td>
                             {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => {
                               let v = rec?.exercises ? rec.exercises[item.id] : '';
                               if (v == null) v = '';
@@ -19609,6 +19621,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                                 </td>
                               );
                             })}
+                            <td className={`px-1 py-2 text-center border border-slate-300 font-bold ${getMassageFontSize(rec?.massage)}`}>{rec?.massage||''}</td>
                             <td className="px-2 py-2 border border-slate-300 text-xs text-slate-600 truncate" title={rec?.tokki||''}>{rec?.tokki||''}</td>
                           </tr>
                         );
