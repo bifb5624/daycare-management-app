@@ -9340,14 +9340,28 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
     current.setHours(0,0,0,0);
     const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
     const closedDays = (appData?.systemSettings?.facilityInfo?.closedDays)||[0];
+    // ★ 提供記録(実績/予定)を「年|月|日」で引ける形にする。 月間シフトより提供記録の状態を優先し、
+    //   欠席の日は次回候補から外す。 振替/臨時は基本利用日でなくても来所日として扱う(=手前の振替が優先される)。
+    const _recMap = new Map();
+    (appData?.ticketRecords || []).forEach(r => {
+        if (!r || r.patientId !== patient.id) return;
+        const mm = String(r.date || '').match(/(\d+)月(\d+)日/);
+        if (!mm) return;
+        _recMap.set(`${r.year ?? ''}|${parseInt(mm[1],10)}|${parseInt(mm[2],10)}`, r);
+    });
+    const _recOn = (y, m, d) => _recMap.get(`${y}|${m}|${d}`) || _recMap.get(`|${m}|${d}`) || null;
     for (let i = 1; i <= 30; i++) {
         const nextDate = new Date(current);
         nextDate.setDate(current.getDate() + i);
         const dayOfWeek = nextDate.getDay();
-        if (closedDays.includes(dayOfWeek)) continue; 
+        if (closedDays.includes(dayOfWeek)) continue;
         const monthKey = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
 
         const day = nextDate.getDate();
+        // ★ 提供記録が「欠席/休業/休止」ならこの日は来所しない → 次の候補へ
+        const _rec = _recOn(nextDate.getFullYear(), nextDate.getMonth()+1, day);
+        const _recStatus = _rec ? String(_rec.status || '') : '';
+        if (_recStatus === '欠席' || _recStatus === '休業' || _recStatus === '休止') continue;
         let shiftAM = monthlyShifts?.[monthKey]?.[patient.id]?.[`${day}_AM`];
         let shiftPM = monthlyShifts?.[monthKey]?.[patient.id]?.[`${day}_PM`];
         const baseAmPm = patient.scheduleAmPm?.[dayOfWeek] || "";
@@ -9355,10 +9369,15 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
         const isBasePM = baseAmPm === "PM" || baseAmPm === "1日";
         const stateAM = shiftAM !== undefined ? shiftAM : (isBaseAM ? "〇" : "空欄");
         const statePM = shiftPM !== undefined ? shiftPM : (isBasePM ? "〇" : "空欄");
-        const isComing = (stateAM === "〇" || stateAM === "出席" || stateAM.startsWith("振")) || 
+        // ★ 提供記録が 振替/臨時/出席 なら、基本利用日でなくても来所日として扱う(手前の振替を優先)
+        const _recComing = (_recStatus === '振替' || _recStatus === '臨時' || _recStatus === '出席');
+        const isComing = _recComing ||
+                         (stateAM === "〇" || stateAM === "出席" || stateAM.startsWith("振")) ||
                          (statePM === "〇" || statePM === "出席" || statePM.startsWith("振"));
         if (isComing) {
-            const ampmStr = (stateAM !== "空欄" && stateAM !== "欠席" && stateAM !== "休業") ? "AM" : "PM";
+            // 振替は furikaeAmpm に振替先の区分が入る (提供記録に ampm フィールドは無い)
+            const _pmOnlyRec = _recComing && String(_rec?.furikaeAmpm || '') === 'PM';
+            const ampmStr = _pmOnlyRec ? "PM" : (stateAM !== "空欄" && stateAM !== "欠席" && stateAM !== "休業") ? "AM" : "PM";
             let timeStr = "　時　分";
             if (patient.pickupType === 'fixed' || patient.pickupType === 'partial') {
                 const t = patient.pickupTimes?.[dayOfWeek] || "";
