@@ -34707,10 +34707,18 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         const scale=(opts,sel)=>opts.map(o=><span key={o} style={{marginRight:6,padding:sel===o?'0 3px':'0',fontWeight:sel===o?'bold':'normal',border:sel===o?'1.5px solid #000':'none',borderRadius:sel===o?'3px':0}}>{o}</span>);
         const pr=printRec; const bd=patient?.birthDate?new Date(patient.birthDate):null;
         return (
-        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'16px 34px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
-          <style>{`#kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere} #kk-print-area *{max-width:100%}`}</style>
-          <div style={{fontSize:'10px'}}>別紙様式３－３</div>
-          <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
+        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'210mm',height:'297mm',padding:'6mm 7mm 4mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3,overflow:'hidden',flexDirection:'column'}}>
+          {/* ★ A4(210x297mm)を1枚で使い切る。 各セクションを flex 比率で縦に配分し、下部に余白を残さない。
+              印刷プレビューは display:none を block に置換するため、flex は CSS 側で指定する。 */}
+          <style>{`#kk-print-area{display:flex!important}
+            #kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%}
+            #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere}
+            #kk-print-area *{max-width:100%}
+            #kk-print-area .kkgrow{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+            #kk-print-area .kkgrow>table{height:100%}
+            #kk-print-area .kkfix{flex:0 0 auto}`}</style>
+          <div className="kkfix" style={{fontSize:'10px'}}>別紙様式３－３</div>
+          <div className="kkfix" style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={cell}>作成日：{pr.createdDate||'令和　年　月　日'}</td><td style={cell}>前回作成日：{pr.prevDate||'令和　年　月　日'}</td><td style={cell}>初回作成日：{pr.firstDate||'令和　年　月　日'}</td></tr>
           </tbody></table>
@@ -34727,37 +34735,41 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             <tr><td style={{...cell,width:'50%'}}><b>障害高齢者の日常生活自立度:</b><br/>{scale(JIRITSU_BODY,pr.jiritsuBody)}</td><td style={cell}><b>認知症高齢者の日常生活自立度:</b><br/>{scale(JIRITSU_DEM,pr.jiritsuDementia)}</td></tr>
           </tbody></table>
 
-          <div style={sec}>Ⅰ　利用者の基本情報<span style={{fontSize:'8px',fontWeight:'normal',marginLeft:8}}>※別紙様式3-1・3-2を別途活用すること</span></div>
+          <div className="kkfix" style={sec}>Ⅰ　利用者の基本情報<span style={{fontSize:'8px',fontWeight:'normal',marginLeft:8}}>※別紙様式3-1・3-2を別途活用すること</span></div>
+          <div className="kkgrow" style={{flexGrow:34}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
-            <tr><td style={{...lab,width:'18%'}}>利用者本人の希望</td><td style={{...cell,width:'32%',height:'46px'}}>{pr.honninKibou}</td><td style={{...lab,width:'18%'}}>家族の希望</td><td style={{...cell,height:'46px'}}>{pr.kazokuKibou}</td></tr>
-            <tr><td style={lab}>本人の社会参加の状況</td><td style={{...cell,height:'46px'}}>{pr.shakaiSanka}</td><td style={lab}>居宅の環境（環境因子）</td><td style={{...cell,height:'46px'}}>{pr.kyotakuKankyo}</td></tr>
-          </tbody></table>
+            <tr><td style={{...lab,width:'18%'}}>利用者本人の希望</td><td style={{...cell,width:'32%'}}>{pr.honninKibou}</td><td style={{...lab,width:'18%'}}>家族の希望</td><td style={cell}>{pr.kazokuKibou}</td></tr>
+            <tr><td style={lab}>本人の社会参加の状況</td><td style={cell}>{pr.shakaiSanka}</td><td style={lab}>居宅の環境（環境因子）</td><td style={cell}>{pr.kyotakuKankyo}</td></tr>
+          </tbody></table></div>
 
-          <div style={sec}>健康状態・経過</div>
+          <div className="kkfix" style={sec}>健康状態・経過</div>
+          <div className="kkgrow" style={{flexGrow:42}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
-            <tr><td style={lab}>病名</td><td style={cell}>{pr.byomei}</td><td style={cell}>発症日・受傷日：{pr.hasshoDate}</td><td style={cell}>入院日：{pr.nyuinDate}</td><td style={cell}>退院日：{pr.taiinDate}</td></tr>
-            <tr><td style={lab}>治療経過</td><td style={{...cell,height:'40px'}} colSpan={4}>{pr.chiryoKeika}</td></tr>
-            <tr><td style={lab}>合併疾患・状態</td><td style={{...cell,height:'40px'}} colSpan={4}>{pr.gappei}</td></tr>
-            <tr><td style={lab}>機能訓練実施上の留意事項</td><td style={{...cell,height:'40px'}} colSpan={4}>{pr.ryuiPoint}</td></tr>
-          </tbody></table>
-          <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※①〜⑤に加えて、介護支援専門員から、居宅サービス計画上の利用者本人等の意向、総合的な支援方針等について確認すること。</div>
+            <tr><td style={{...lab,width:'22%'}}>病名</td><td style={cell}>{pr.byomei}</td><td style={cell}>発症日・受傷日：{pr.hasshoDate}</td><td style={cell}>入院日：{pr.nyuinDate}</td><td style={cell}>退院日：{pr.taiinDate}</td></tr>
+            <tr><td style={lab}>治療経過</td><td style={cell} colSpan={4}>{pr.chiryoKeika}</td></tr>
+            <tr><td style={lab}>合併疾患・状態</td><td style={cell} colSpan={4}>{pr.gappei}</td></tr>
+            <tr><td style={lab}>機能訓練実施上の留意事項</td><td style={cell} colSpan={4}>{pr.ryuiPoint}</td></tr>
+          </tbody></table></div>
+          <div className="kkfix" style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※①〜⑤に加えて、介護支援専門員から、居宅サービス計画上の利用者本人等の意向、総合的な支援方針等について確認すること。</div>
 
-          <div style={sec}>Ⅱ　個別機能訓練の目標・個別機能訓練項目の設定</div>
-          <div style={{fontSize:'10px',fontWeight:'bold',margin:'2px 0'}}>個別機能訓練の目標</div>
+          <div className="kkfix" style={sec}>Ⅱ　個別機能訓練の目標・個別機能訓練項目の設定</div>
+          <div className="kkfix" style={{fontSize:'10px',fontWeight:'bold',margin:'2px 0'}}>個別機能訓練の目標</div>
+          <div className="kkgrow" style={{flexGrow:40}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'50%'}}>機能訓練の短期目標（今後3ヶ月）　目標達成度（達成・一部・未達）：{pr.shortAchieve||''}</td><td style={lab}>機能訓練の長期目標　目標達成度（達成・一部・未達）：{pr.longAchieve||''}</td></tr>
-            <tr><td style={{...cell,height:'36px'}}>（機能）{pr.shortKinou}</td><td style={{...cell,height:'36px'}}>（機能）{pr.longKinou}</td></tr>
-            <tr><td style={{...cell,height:'36px'}}>（活動）{pr.shortKatsudo}</td><td style={{...cell,height:'36px'}}>（活動）{pr.longKatsudo}</td></tr>
-            <tr><td style={{...cell,height:'36px'}}>（参加）{pr.shortSanka}</td><td style={{...cell,height:'36px'}}>（参加）{pr.longSanka}</td></tr>
-          </tbody></table>
+            <tr><td style={cell}>（機能）{pr.shortKinou}</td><td style={cell}>（機能）{pr.longKinou}</td></tr>
+            <tr><td style={cell}>（活動）{pr.shortKatsudo}</td><td style={cell}>（活動）{pr.longKatsudo}</td></tr>
+            <tr><td style={cell}>（参加）{pr.shortSanka}</td><td style={cell}>（参加）{pr.longSanka}</td></tr>
+          </tbody></table></div>
           <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※短期目標（長期目標を達成するために必要な行為）は、訓練実施期間内に達成を目指す項目のみを記載することとして差し支えない。目標達成の目安となる期間もあわせて記載すること。</div>
-          <div style={{fontSize:'10px',fontWeight:'bold',margin:'5px 0 2px'}}>個別機能訓練項目</div>
+          <div className="kkfix" style={{fontSize:'10px',fontWeight:'bold',margin:'5px 0 2px'}}>個別機能訓練項目</div>
+          <div className="kkgrow" style={{flexGrow:56}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <thead><tr>{['プログラム内容（何を目的に（〜のために）〜する）','留意点','頻度','時間','主な実施者'].map((h,i)=><th key={h} style={{...lab,textAlign:'center',width:i===0?'40%':i===1?'24%':'12%'}}>{h}</th>)}</tr></thead>
             <tbody>
               {Array.from({length:Math.max(4,(pr.programs||[]).length)}).map((_,i)=>{ const p=(pr.programs||[])[i]||{}; return (
                 <tr key={i}>
-                  <td style={{...cell,height:'40px'}}>{['①','②','③','④','⑤','⑥','⑦','⑧'][i]||''} {p.content||''}</td>
+                  <td style={cell}>{['①','②','③','④','⑤','⑥','⑦','⑧'][i]||''} {p.content||''}</td>
                   <td style={cell}>{p.point||''}</td>
                   <td style={{...cell,textAlign:'center'}}>{p.freqWeek?`週${String(p.freqWeek).replace(/[週回]/g,'')}回`:'週　回'}</td>
                   <td style={{...cell,textAlign:'center'}}>{p.time||'　分'}</td>
@@ -34765,22 +34777,24 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                 </tr>
               ); })}
             </tbody>
-          </table>
-          <table style={{width:'100%',borderCollapse:'collapse',marginTop:'-1px'}}><tbody>
+          </table></div>
+          <table className="kkfix" style={{width:'100%',borderCollapse:'collapse',marginTop:'-1px'}}><tbody>
             <tr><td style={{...cell,textAlign:'left',fontSize:'8px',color:'#333'}}>※短期目標で設定した目標を達成するために必要な行為に対応するよう、訓練項目を具体的に設定すること。</td><td style={{...cell,width:'30%',textAlign:'right'}}>プログラム立案者：{pr.programPlanner||''}</td></tr>
           </tbody></table>
+          <div className="kkgrow" style={{flexGrow:22}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
-            <tr><td style={{...lab,width:'40%'}}>利用者本人・家族等がサービス利用時間以外に実施すること</td><td style={{...cell,height:'40px'}}>{pr.jikangaiJisshi}</td><td style={{...lab,width:'14%'}}>特記事項</td><td style={{...cell,height:'40px'}}>{pr.tokki}</td></tr>
-          </tbody></table>
+            <tr><td style={{...lab,width:'40%'}}>利用者本人・家族等がサービス利用時間以外に実施すること</td><td style={cell}>{pr.jikangaiJisshi}</td><td style={{...lab,width:'14%'}}>特記事項</td><td style={cell}>{pr.tokki}</td></tr>
+          </tbody></table></div>
 
-          <div style={sec}>Ⅲ　個別機能訓練実施後の対応</div>
+          <div className="kkfix" style={sec}>Ⅲ　個別機能訓練実施後の対応</div>
+          <div className="kkgrow" style={{flexGrow:30}}>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
             <tr><td style={{...lab,width:'50%',textAlign:'center'}}>個別機能訓練の実施による変化</td><td style={{...lab,textAlign:'center'}}>個別機能訓練実施における課題とその要因</td></tr>
-            <tr><td style={{...cell,height:'92px'}}>{pr.henka}</td><td style={{...cell,height:'92px'}}>{pr.kadai}</td></tr>
-          </tbody></table>
-          <div style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※実施結果等をふまえ、目標の見直しや訓練項目の変更等を行った場合は計画書の再作成又は更新等を行うこと。初回作成時にはⅢについては記載不要である。</div>
+            <tr><td style={cell}>{pr.henka}</td><td style={cell}>{pr.kadai}</td></tr>
+          </tbody></table></div>
+          <div className="kkfix" style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※実施結果等をふまえ、目標の見直しや訓練項目の変更等を行った場合は計画書の再作成又は更新等を行うこと。初回作成時にはⅢについては記載不要である。</div>
 
-          <table style={{width:'100%',borderCollapse:'collapse',marginTop:'6px'}}><tbody>
+          <table className="kkfix" style={{width:'100%',borderCollapse:'collapse',marginTop:'4px'}}><tbody>
             <tr><td style={cell}>（地域密着型）通所介護　{facility.name||'○○○'}　事業所No.{facility.jigyoshoNo||facility.officeNo||'000000000'}<br/>住所{facility.address||'○○○'}　電話番号{facility.phone||'○○○'}</td><td style={{...cell,width:'40%'}}>説明日：{pr.setsumeiDate||'令和　年　月　日'}<br/>説明者：{pr.setsumeisha||''}</td></tr>
           </tbody></table>
         </div>
