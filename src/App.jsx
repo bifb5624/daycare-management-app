@@ -38499,7 +38499,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     const { _deletedAt, _kind, _field, ...file } = t;
     const newTrash = (personalFile.trash || []).filter(x => x.id !== trashId);
     if (_kind === 'doc' && _field) {
-      onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [_field]: [...(p[_field]||[]), file], personalFile: { ...personalFile, trash: newTrash } } : p) });
+      // ★ 復元は「新しい id を振り直して追加」する。 墓石(_delDocs)は他端末にも和集合で伝わるため、
+      //   墓石を外す方式では他端末の墓石が戻ってきて再び除外され、復元できない。 旧 id は墓石のままにする。
+      const _restored = { ...file, id: Date.now()+Math.random() };
+      onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [_field]: [...(p[_field]||[]), _restored], personalFile: { ...personalFile, trash: newTrash } } : p) }, { manual: true, message: '✓ 復元しました' });
     } else if (_kind === 'fs' && _field) {
       const fsObj = personalFile.faceSheet || {};
       updatePatient({ faceSheet: { ...fsObj, [_field]: [...(fsObj[_field]||[]), file] }, trash: newTrash });
@@ -38841,7 +38844,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                               // ★ ゴミ箱へ (Storage実体は残し、7日後に自動完全削除)
                               const next = (patient[key]||[]).filter(x => x.id !== img.id);
                               const newTrash = [...(personalFile.trash||[]), { ...img, _deletedAt: new Date().toISOString(), _kind: 'doc', _field: key }];
-                              onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: next, personalFile: { ...personalFile, trash: newTrash } } : p) });
+                              // ★ 墓石を刻む。 docInsurance/docBurden は id 単位の和集合マージのため、
+                              //   墓石が無いとクラウドに残った同 id が必ず復活する(削除が戻る不具合の原因)。
+                              const _del = { ...(patient._delDocs||{}), [String(img.id)]: Date.now() };
+                              onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===patient.id ? { ...p, [key]: next, _delDocs: _del, personalFile: { ...personalFile, trash: newTrash } } : p) }, { manual: true, message: '✓ ゴミ箱に移動しました' });
                             }} style={{position:'absolute',top:-4,right:-4,background:'#ef4444',color:'white',border:'none',borderRadius:'50%',width:18,height:18,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✕</button>
                             <div className="text-[9px] text-slate-400 text-center mt-1 truncate">{img.uploadedAt}</div>
                           </div>

@@ -508,7 +508,17 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   // ★ 利用者の「フィールド単位で時刻(_fieldTs)保護」する項目。 利用者を1項目編集して _savedAt 全体が
   //   更新されても、これらの項目は触っていなければ古い端末の保存で巻き戻らない(基本利用日/送迎/緊急連絡先)。
   const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden', ...FAMILY_CONTACT_FIELDS]);
+  // ★ 削除済み書類の墓石を両端末ぶん合算する。 _delDocs = { "<書類id>": 削除時刻(ms) }
+  //   和集合(union)マージは「追加を失わない」代わりに削除を必ず復活させるため、墓石で除外する。
+  const _mergeDocTombs = (...srcs) => {
+    const t = {};
+    srcs.forEach(s => { if (s && typeof s === 'object') Object.keys(s).forEach(id => { const v = Number(s[id]) || 0; if (v >= (t[id] || 0)) t[id] = v; }); });
+    return t;
+  };
   const mergePatientBackfill = (lpArg, cpArg) => {
+    // 墓石はローカル/クラウド双方の和集合。 どちらかで削除された書類は復活させない。
+    const _tomb = _mergeDocTombs(cpArg && cpArg._delDocs, lpArg && lpArg._delDocs);
+    const _isDead = (id) => id != null && !!_tomb[String(id)];
     if (!cpArg) return lpArg; if (!lpArg) return cpArg;
     // ★ 新しい方(_savedAt)を基準(lp)にし、古い方(cp)で空欄のみ補完する。
     //   これが無いと、古いスナップショットの端末が保存した際に、新しい端末で編集した
@@ -553,9 +563,10 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         const la = Array.isArray(lv) ? lv : [], ca = Array.isArray(cv) ? cv : [];
         if (!la.length && !ca.length) return;
         const byId = new Map();
-        ca.forEach(d => { if (d && d.id != null) byId.set(String(d.id), d); });
+        // ★ 墓石にある id は復活させない (削除がクラウド側の残存で戻る不具合の恒久対策)
+        ca.forEach(d => { if (d && d.id != null && !_isDead(d.id)) byId.set(String(d.id), d); });
         la.forEach(d => {
-          if (!d || d.id == null) return;
+          if (!d || d.id == null || _isDead(d.id)) return;
           const key = String(d.id), prev = byId.get(key);
           if (prev && k === 'docUpdates') byId.set(key, { ...prev, ...d, readOffice: !!(prev.readOffice || d.readOffice), readCm: !!(prev.readCm || d.readCm) });
           else byId.set(key, d);
@@ -581,8 +592,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         if (k === 'personalFile' && (lo.assessment || co.assessment)) {
           const la = lo.assessment || {}, ca = co.assessment || {};
           const byId = new Map();
-          (ca.files || []).forEach(d => { if (d && d.id != null) byId.set(String(d.id), d); });
-          (la.files || []).forEach(d => { if (d && d.id != null) byId.set(String(d.id), d); });
+          // ★ 墓石にある添付は復活させない
+          (ca.files || []).forEach(d => { if (d && d.id != null && !_isDead(d.id)) byId.set(String(d.id), d); });
+          (la.files || []).forEach(d => { if (d && d.id != null && !_isDead(d.id)) byId.set(String(d.id), d); });
           const newer = (String(ca.updatedAt || '') > String(la.updatedAt || '')) ? ca : la;
           mo.assessment = { ...la, ...ca, ...newer, files: [...byId.values()] };
         }
@@ -603,6 +615,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       // スカラー: ローカルが空欄ならクラウドで補完 (それ以外はローカル維持)
       if (_isEmptyVal(lv) && !_isEmptyVal(cv)) out[k] = cv;
     });
+    // ★ 墓石は必ず和集合で残す。 片方の端末が古い墓石を落とすと、その id がまた復活してしまうため。
+    if (Object.keys(_tomb).length) out._delDocs = _tomb;
     return out;
   };
   try {
@@ -1202,11 +1216,13 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
     const patients = (currentData.patients || []).map(p => {
       if (String(p.id) !== String(patientId)) return p;
       const np = { ...p };
+      // ★ 事業所側で削除済み(墓石)の書類は、ケアマネ端末に残っていても再追加しない
+      const _tomb = (p && p._delDocs && typeof p._delDocs === 'object') ? p._delDocs : {};
       const unionDocs = (key, incoming, label) => {
         if (!Array.isArray(incoming) || !incoming.length) return;
         const ex = Array.isArray(np[key]) ? np[key] : [];
         const ids = new Set(ex.map(d => String(d && d.id)));
-        const add = incoming.filter(d => d && !ids.has(String(d.id)));
+        const add = incoming.filter(d => d && !ids.has(String(d.id)) && !_tomb[String(d.id)]);
         if (add.length) { np[key] = [...ex, ...add]; changed.push(label); }
       };
       unionDocs('docInsurance', patch.docInsurance, '介護保険証');
