@@ -30648,6 +30648,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const _np = appData.systemSettings?.careManagers || [];
     setCmOffices(prev => JSON.stringify(prev) === JSON.stringify(_no) ? prev : _no);
     setCmPersons(prev => JSON.stringify(prev) === JSON.stringify(_np) ? prev : _np);
+    // ★ クラウド同期で値が入れ替わった分は「ユーザーの編集」ではないので、未保存判定の基準を取り直す
+    //   (これが無いと、同期が来ただけで「未保存のデータがあります」と出てしまう)。
+    _dirtyBaseRef.current = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appData.systemSettings?.cmOffices, appData.systemSettings?.careManagers]);
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
@@ -30694,13 +30697,22 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   // dirtyRef: facilityInfo等が変わったらdirtyをセット
   const setDirty = React.useCallback(() => { if (dirtyRef) dirtyRef.current = true; }, [dirtyRef]);
 
-  // facilityInfo等の変化を監視
+  // ★ facilityInfo等の変化を監視。 ただし「参照が変わった」だけで未保存にすると、クラウド同期で値が来ただけ/
+  //   開いただけでも「未保存のデータがあります」と出てしまう。 → 内容の署名(JSON)を基準と比較し、
+  //   実際に中身が変わった時だけ未保存にする(戻したら未保存も解除)。
   const isInitialMount = React.useRef(true);
+  const _dirtyBaseRef = React.useRef(null); // 基準(=保存済み/同期直後の内容)の署名
   const diarySettingsRef = React.useRef(appData.diarySettings || { staff:[], cars:[], scheduleAM:[], schedulePM:[] });
+  const _draftSig = React.useMemo(() => {
+    try { return JSON.stringify({ facilityInfo, massageInput, onyokuInput, massageStaffInput, exerciseItems, exerciseItemsHistory, individualExerciseItems, cmOffices, cmPersons, anthropicApiKey }); }
+    catch { return null; }
+  }, [facilityInfo, massageInput, onyokuInput, massageStaffInput, exerciseItems, exerciseItemsHistory, individualExerciseItems, cmOffices, cmPersons, anthropicApiKey]);
   React.useEffect(() => {
-    if (isInitialMount.current) { isInitialMount.current = false; return; }
+    if (isInitialMount.current) { isInitialMount.current = false; _dirtyBaseRef.current = _draftSig; return; }
+    if (_dirtyBaseRef.current === null) { _dirtyBaseRef.current = _draftSig; return; } // 同期/保存後の再基準化
+    if (_draftSig === _dirtyBaseRef.current) { if (dirtyRef) dirtyRef.current = false; return; } // 内容が基準と同じ=未編集
     setDirty();
-  }, [facilityInfo, massageInput, onyokuInput, massageStaffInput, exerciseItems, exerciseItemsHistory, individualExerciseItems, cmOffices, cmPersons, anthropicApiKey, setDirty]);
+  }, [_draftSig, setDirty, dirtyRef]);
 
   const [fitnessItems, setFitnessItems] = useState(
     appData.systemSettings?.fitnessItems || appSettings.fitnessItems
@@ -30785,6 +30797,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     }
     // ★ 同意ポリシーは全店共通(管理局コンソールで編集)へ移設したため、ここでは保存しない。
     onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    // ★ 保存したので未保存フラグを解除し、未保存判定の基準も現在の内容に取り直す
+    if (dirtyRef) dirtyRef.current = false;
+    _dirtyBaseRef.current = null;
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -32630,7 +32645,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     }
     setLocalLog(loaded);
     logKeyRef.current = logKey;
-    if (dirtyRef) dirtyRef.current = _didAutoCopy; // 自動コピー時は未保存扱い → 移動時に自動保存
+    // ★ 自動コピー(1週間前の送迎)は「アプリが自動でやった変更」でありユーザーの編集ではないため、未保存扱いにしない。
+    //   (触っていないのに「未保存のデータがあります」と出る原因だった)。 次に開いた時も同じ条件で自動再適用され、
+    //   ユーザーが何か編集して保存すれば一緒に保存される。
+    if (dirtyRef) dirtyRef.current = false;
   }, [logKey]); // eslint-disable-line
 
   // ★ スタッフ切替時の自動チェック切替: アクティブ記録者が変わったら、
@@ -32655,7 +32673,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       return { ...prev, staff: newStaff, recorder: newRec };
     });
     prevAutoCheckIdRef.current = matched.id;
-    if (dirtyRef) dirtyRef.current = true;
+    // ★ 記録者の自動チェックも「アプリが自動でやった変更」= ユーザー編集ではないので未保存扱いにしない。
+    //   (開いただけ/スタッフ切替しただけで「未保存のデータがあります」と出る原因だった)。
   }, [_activeRecForDailyLog]); // eslint-disable-line
 
   // 初回マウント時にも読み込む
