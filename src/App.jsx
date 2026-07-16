@@ -19548,15 +19548,22 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const st = rec?.status || '予定';
                     const stColor = st==='出席'?'#1d4ed8':st==='欠席'?'#dc2626':st==='振替'?'#7c3aed':st==='休業'||st==='休止'?'#64748b':'#94a3b8';
                     const hasVital = rec && (rec.temp||rec.bpUpSt||rec.plSt);
+                    const vitalStr = hasVital ? [rec.temp&&`${rec.temp}℃`, (rec.bpUpSt||rec.bpDnSt)&&`${rec.bpUpSt||''}/${rec.bpDnSt||''}`, rec.plSt&&`P${rec.plSt}`].filter(Boolean).join('　') : '';
+                    // ★ 運動の数値も表示 (各種設定の運動項目 name + 記録値、値が入っているものだけ)
+                    const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems || []);
+                    const exStr = (rec && rec.exercises && typeof rec.exercises==='object')
+                      ? _exItems.map(it => { const v=rec.exercises[it.id]; const val=(v&&typeof v==='object')?v.value:v; return (val!=null && String(val).trim()!=='' && String(val)!=='ー' && String(val)!=='×') ? `${(it.name||'').replace(/^[①-⑳]/,'')}${val}` : null; }).filter(Boolean).join('　')
+                      : '';
                     return (
                       <button key={iso} type="button" onClick={()=>{ setSelectedDate(iso); setSearchQuery(''); }}
-                        className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-blue-50 active:bg-blue-100 transition-colors">
-                        <span className="font-bold text-slate-700 text-sm w-32 shrink-0">{label}</span>
-                        <span style={{color:stColor}} className="text-xs font-bold w-12 shrink-0">{st}</span>
-                        <span className="text-xs text-slate-500 flex-1 truncate">
-                          {hasVital ? [rec.temp&&`${rec.temp}℃`, (rec.bpUpSt||rec.bpDnSt)&&`${rec.bpUpSt||''}/${rec.bpDnSt||''}`, rec.plSt&&`P${rec.plSt}`].filter(Boolean).join('　') : (rec?.tokki||'')}
+                        className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-blue-50 active:bg-blue-100 transition-colors">
+                        <span className="font-bold text-slate-700 text-sm w-28 shrink-0 pt-0.5">{label}</span>
+                        <span style={{color:stColor}} className="text-xs font-bold w-12 shrink-0 pt-0.5">{st}</span>
+                        <span className="text-xs text-slate-500 flex-1 min-w-0">
+                          <span className="block truncate">{vitalStr || rec?.tokki || ''}</span>
+                          {exStr && <span className="block truncate text-[11px] text-slate-400 mt-0.5">{exStr}</span>}
                         </span>
-                        <ArrowRight size={15} className="text-slate-300 shrink-0"/>
+                        <ArrowRight size={15} className="text-slate-300 shrink-0 mt-0.5"/>
                       </button>
                     );
                   })}
