@@ -422,7 +422,11 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const av = a[k], bv = b[k];
       // ★ スカラー項目で _fieldTs があれば「新しい方」を採用(意図的に空にした削除も反映)。 バイタルもこれで削除可能。
       //   オブジェクト値(exercises 等)は下のキー単位マージに任せる(_fieldTs 短絡しない)。
-      if (!(av && typeof av === 'object') && !(bv && typeof bv === 'object')) {
+      //   ★ 例外: 次回予定(nextDateOverride/nextTimeOverride)は「空欄=未設定(自動計算に任せる)」であり
+      //     『意図的な削除』と区別できない。 画面側が正規化で空文字を書くことがあり、それを _fieldTs で
+      //     「新しい空欄=削除」と誤判定すると、別端末で入力済みの次回時間が消える。 → 常に下の非空優先に委ねる。
+      if (k !== 'nextDateOverride' && k !== 'nextTimeOverride'
+          && !(av && typeof av === 'object') && !(bv && typeof bv === 'object')) {
         const _aft = Number(_aFts[k]) || 0, _bft = Number(_bFts[k]) || 0;
         if (_aft || _bft) { out[k] = (_aft >= _bft) ? av : bv; return; }
       }
