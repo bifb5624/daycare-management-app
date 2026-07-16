@@ -19190,16 +19190,21 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           });
       } else {
         // ★ multiple / month モード: 変更があった record にだけ recorder を反映 (他の日付の担当者は変えない)
+        //   ★ localTicketRecords は「選択中の月」のレコードしか保持していない (メモリ節約のため)。
+        //     そのため以前は updatedTicketRecords = localTicketRecords.map(...) と全置換しており、
+        //     このモードで保存すると【他の月の記録が全て消える】データ消失バグがあった。
+        //     id 単位でマージし、選択月以外の記録は必ず温存する。
         const _activeRec = getRecorderName();
         const _originalById = new Map((appData.ticketRecords || []).map(r => [r.id, r]));
-        updatedTicketRecords = localTicketRecords.map(r => {
+        const _mergedById = new Map(updatedTicketRecords.map(r => [r.id, r]));
+        localTicketRecords.forEach(r => {
           const original = _originalById.get(r.id);
           // 変更検知: 元の record と JSON 文字列で差分があれば recorder 上書き
           const changed = !original || JSON.stringify({...original, recorder:undefined,_savedAt:undefined}) !== JSON.stringify({...r, recorder:undefined,_savedAt:undefined});
           // ★ 変更された記録は _savedAt を更新 (複数端末マージ用)
-          if (changed) return { ...r, ...(_activeRec ? {recorder:_activeRec} : {}), _savedAt: Date.now() };
-          return r;
+          _mergedById.set(r.id, changed ? { ...r, ...(_activeRec ? {recorder:_activeRec} : {}), _savedAt: Date.now() } : r);
         });
+        updatedTicketRecords = [..._mergedById.values()];
       }
       // 振替の新規シフト（保留分）をマージ
       pendingFurikaeShifts.forEach(({shifts}) => {
