@@ -1472,6 +1472,23 @@ if (typeof window !== 'undefined' && !window.__tsumugiErrInit) {
 // ★ 印刷プレビュー用: 要素の outerHTML を取得する際、 制御された input/textarea/select の【現在値】を
 //   HTML属性に焼き込む。 (Reactの制御フォームは value を属性に反映しないため、 素の outerHTML だと
 //   selectは先頭option・inputは空 になってしまう。 → 選んだ担当者などが印刷で消える不具合の対策)
+// ★ 日常生活自立度の共通化: 保存先はフェイスシート(patient.faceSheet.adlLevel / dementiaLevel)を正とし、
+//   各計画書はそこから取り込む。 フェイスシートの認知症自立度は半角ローマ字(I/IIa/IIIb…)で保存されてきたが、
+//   計画書(様式3-3/3-4)は全角ローマ数字(Ⅰ/Ⅱa/Ⅲb…)で○を付けるため、表記ゆれを吸収して突き合わせる。
+const DEM_LEVEL_CANON = { 'I':'Ⅰ','II':'Ⅱ','IIa':'Ⅱa','IIb':'Ⅱb','III':'Ⅲ','IIIa':'Ⅲa','IIIb':'Ⅲb','IV':'Ⅳ','M':'M','自立':'自立' };
+const normalizeDemLevel = (v) => {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  if (DEM_LEVEL_CANON[s]) return DEM_LEVEL_CANON[s];
+  // 既に全角(Ⅰ/Ⅱa 等)ならそのまま
+  return s;
+};
+// 障害高齢者自立度(自立/J1/A2/B1/C2…)は3画面とも同じ表記。 前後空白と英字の大小のみ吸収する。
+const normalizeAdlLevel = (v) => {
+  const s = String(v ?? '').trim().replace(/\s/g,'');
+  return /^[a-zA-Z][0-9]$/.test(s) ? s.toUpperCase() : s;
+};
+
 // ★ 気分の理由(既定)。 各種設定で systemSettings.kibunReasons があればそれを優先し、無ければこれを使う。
 const KIBUN_MOOD_META = [
   { key: 'excellent', label: 'とても良い', emoji: '🤩' },
@@ -34409,6 +34426,30 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const toReiwa = (iso) => { if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return iso; const r=d.getFullYear()-2018; return `令和${r}年${d.getMonth()+1}月${d.getDate()}日`; };
   const JIRITSU_BODY = ['自立','J1','J2','A1','A2','B1','B2','C1','C2'];
   const JIRITSU_DEM = ['自立','Ⅰ','Ⅱa','Ⅱb','Ⅲa','Ⅲb','Ⅳ','M'];
+  // ★ 共通項目の連携: フェイスシートを正としてこの計画書へ取り込む(通所介護計画書と同じ考え方)。
+  //   自立度は表記ゆれ(半角I/全角Ⅰ)を正規化して合わせる。
+  const _kkFsAuto = (p) => {
+    const fs = p?.faceSheet || {};
+    const j = (...a) => a.filter(x => String(x||'').trim()).join('\n');
+    return {
+      jiritsuBody: normalizeAdlLevel(fs.adlLevel),
+      jiritsuDementia: normalizeDemLevel(fs.dementiaLevel),
+      honninKibou: j(fs.needs),
+      shakaiSanka: j(fs.hobby && `趣味・楽しみ：${fs.hobby}`, fs.personality && `性格・人柄：${fs.personality}`, fs.otherServices && `他サービスの利用：${fs.otherServices}`),
+      kyotakuKankyo: j(fs.floorPlan, fs.householdType && `世帯：${fs.householdType}${fs.householdTypeOther?`（${fs.householdTypeOther}）`:''}`),
+      byomei: j((fs.kiou ?? p?.kiou)),
+      gappei: j(fs.chronicDiseases && `主治医：${fs.chronicDiseases}`, fs.medication && `服薬：${fs.medication}`),
+      ryuiPoint: j(p?.ryui, fs.allergies && `アレルギー：${fs.allergies}`),
+    };
+  };
+  // フェイスシートから空欄のみ補完 (入力済みは上書きしない)
+  const kkImportFromFaceSheet = () => {
+    const a = _kkFsAuto(patient);
+    const fill = Object.keys(a).filter(k => String(a[k]||'').trim() && !String(editing?.[k]||'').trim());
+    if (!fill.length) { alert('フェイスシートから補完できる空欄がありませんでした。（入力済みの欄は上書きしません）'); return; }
+    setEditing(e => { const ne={...e}; fill.forEach(k => { ne[k]=a[k]; }); return ne; });
+    markDirty();
+  };
   const blankProgram = () => ({ content:'', point:'', freqWeek:'', time:'', person:'機能訓練指導員' });
   const programsFromPlanned = () => {
     const pe = patient?.plannedExercises || {};
@@ -34420,10 +34461,11 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     id: `kk_${pid}_${Date.now()}`, patientId: pid, createdAt: Date.now(),
     createdDate: toReiwa(new Date().toISOString().slice(0,10)), prevDate: '', firstDate: '',
     author: '', authorJob: '機能訓練指導員',
-    jiritsuBody: '', jiritsuDementia: '',
-    honninKibou: '', kazokuKibou: '', shakaiSanka: '', kyotakuKankyo: '',
-    byomei: patient?.kiou || '', hasshoDate: '', nyuinDate: '', taiinDate: '',
-    chiryoKeika: '', gappei: '', ryuiPoint: patient?.ryui || '',
+    // ★ 自立度・希望・社会参加・居宅環境・病名・留意事項はフェイスシートから自動取込
+    ..._kkFsAuto(patient),
+    kazokuKibou: '',
+    hasshoDate: '', nyuinDate: '', taiinDate: '',
+    chiryoKeika: '',
     shortKinou: '', shortKatsudo: '', shortSanka: '', shortAchieve: '',
     longKinou: '', longKatsudo: '', longSanka: '', longAchieve: '',
     programs: programsFromPlanned(), programPlanner: '',
@@ -34518,8 +34560,12 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             {/* 計画書連携: 他様式から取り込む */}
             <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4">
               <div className="text-sm font-bold text-indigo-700 mb-1 flex items-center gap-2">他の様式から取り込む（計画書連携）</div>
-              <div className="text-[11px] text-indigo-900 opacity-70 mb-3">生活機能チェック・興味関心チェック・運動メニューの最新内容を、この計画書の該当欄へ取り込みます（既存の内容の下に追記します）。</div>
+              <div className="text-[11px] text-indigo-900 opacity-70 mb-3">フェイスシート・生活機能チェック・興味関心チェック・運動メニューの最新内容を、この計画書の該当欄へ取り込みます（既存の内容の下に追記します）。</div>
               <div className="flex flex-wrap gap-2">
+                <button onClick={kkImportFromFaceSheet} title="フェイスシートから 自立度・本人の希望・社会参加・居宅環境・病名・留意事項 を空欄にだけ補完します（入力済みは上書きしません）"
+                  className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100">
+                  フェイスシートから空欄を補完
+                </button>
                 <button onClick={importFromSeikatsu} title="最新の生活機能チェックから、介助が必要なADL/IADL・心身機能を『機能訓練実施上の留意事項』へ取り込みます"
                   className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100">
                   生活機能チェックから取り込む <span className="font-normal opacity-70">{latestSeikatsu?`（${latestSeikatsu.recordDate||'日付なし'}）`:'（未作成）'}</span>
@@ -35088,7 +35134,8 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     const fs = p?.faceSheet || {};
     const j = (...a)=>a.filter(x=>String(x||'').trim()).join('\n');
     return {
-      adlLevel: fs.adlLevel||'', demLevel: fs.dementiaLevel||'',
+      // ★ 自立度はフェイスシートを正とする。 認知症自立度は半角(I/IIa)保存のため全角(Ⅰ/Ⅱa)へ正規化して○を合わせる
+      adlLevel: normalizeAdlLevel(fs.adlLevel), demLevel: normalizeDemLevel(fs.dementiaLevel),
       keii: j(fs.lifeHistory, (fs.kiou ?? p?.kiou), fs.currentSituation),
       honninKibou: j(fs.needs),
       kazokuKibou: '',
