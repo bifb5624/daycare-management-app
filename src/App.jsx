@@ -25172,20 +25172,30 @@ function renrakuToHtml(o) {
 const renrakuHasText = (o) => !!(renrakuToHtml(o).replace(/<[^>]*>/g,'').replace(/&nbsp;/g,' ').trim());
 
 // リッチ入力エディタ (文字を選択して 太字/色/サイズ を部分的に適用)。 contentEditable は非制御 (初回のみ innerHTML を設定しカーソルを保持)
+// ★ 定型文の内容を HTML として扱う。 旧データ(プレーン文字列)は改行を <br> に変換して後方互換。
+const tmplToHtml = (c) => {
+  const s = String(c ?? '');
+  if (/<[a-z][\s\S]*>/i.test(s)) return s; // 既にHTML(書式付き)
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+};
+// ★ HTML からプレーン文字列 (タイトル自動生成・一覧プレビュー用)
+const tmplToPlain = (h) => String(h ?? '')
+  .replace(/<br\s*\/?>/gi,'\n').replace(/<\/(div|p)>/gi,'\n').replace(/<[^>]+>/g,'')
+  .replace(/&nbsp;/g,' ').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&').trim();
 function RichEditor({ initialHtml, onChange, onRegister }) {
   const ref = React.useRef(null);
   const COLORS = [['#000000','黒'],['#dc2626','赤'],['#2563eb','青'],['#16a34a','緑']];
   React.useEffect(() => { if (ref.current && ref.current.innerHTML !== (initialHtml||'')) ref.current.innerHTML = initialHtml || ''; }, []); // 初回のみ
   const emit = () => { if (ref.current) onChange(ref.current.innerHTML); };
   const exec = (cmd, val) => { ref.current?.focus(); try { document.execCommand('styleWithCSS', false, true); } catch(e){} document.execCommand(cmd, false, val); emit(); };
-  // 末尾に文章を挿入 (定型文の適応用)
+  // 末尾に文章を挿入 (定型文の適応用)。 ★ 定型文は書式(色/太字/下線/大きさ)付きHTMLなので insertHTML で挿入する。
   const insertAtEnd = (t) => {
     const el = ref.current; if (!el) return;
     el.focus();
     const sel = window.getSelection(); const range = document.createRange();
     range.selectNodeContents(el); range.collapse(false); sel.removeAllRanges(); sel.addRange(range);
-    const pre = (el.textContent && !el.textContent.endsWith('\n')) ? '\n' : '';
-    document.execCommand('insertText', false, pre + t);
+    const pre = (el.textContent && el.textContent.trim()) ? '<br>' : '';
+    document.execCommand('insertHTML', false, pre + tmplToHtml(t));
     emit();
   };
   React.useEffect(() => { if (onRegister) onRegister(insertAtEnd); }, []); // 親に挿入関数を登録
@@ -25250,7 +25260,12 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   const allInsertRef = React.useRef(null); // 全員エディタへ挿入
   const patInsertRef = React.useRef(null); // 個別エディタへ挿入
   const [tmplView, setTmplView] = React.useState(null); // null | 'add' | 'list'
-  const [tmplForm, setTmplForm] = React.useState({ title:'', content:'' }); // 登録/編集フォーム
+  const [tmplForm, setTmplForm] = React.useState({ title:'', content:'' }); // 登録/編集フォーム(content=書式付きHTML)
+  const [tmplEditKey, setTmplEditKey] = React.useState(0); // フォームを開く度に増やし、リッチ入力を初期化する
+  // ★ 定型文フォームを開く (prefill があればその内容で。 本文からの「定型文に追加」でも使う)
+  const openTmplForm = React.useCallback((form, editIdx = -1) => {
+    setTmplForm(form); setTmplEditIdx(editIdx); setTmplEditKey(k => k + 1); setApplyIdx(-1); setTmplView('add');
+  }, []);
   const [tmplEditIdx, setTmplEditIdx] = React.useState(-1); // 編集中の index (-1=新規)
   const [applyIdx, setApplyIdx] = React.useState(-1); // 適応先を選択中の index
   // ★ 連絡帳の連絡事項欄に収まるか実測。 測定条件は実際のカードの欄と一致させる(ズレると誤警告になる)。
@@ -25265,7 +25280,8 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   }, [all.html, pat?.html]);
   const save = () => {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
-    const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t && ((t.title||'').trim() || (t.content||'').trim())) };
+    // ★ content は書式付きHTML。 空判定はタグを除いたプレーンで行う(<br>だけ等の空定型文を保存しない)
+    const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t && ((t.title||'').trim() || tmplToPlain(t.content))) };
     const nextPatients = (appData.patients||[]).map(p => patMap[p.id] ? { ...p, contactBookRenraku: clean(patMap[p.id]) } : p);
     // ★ 即時クラウド保存(編集ウィンドウを立て、保存直後に古いpullで戻る隙を無くす)
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients }, { manual:true, message:'✓ 連絡事項を保存しました' });
@@ -25274,7 +25290,13 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   // 1セクション分の編集UI。 ★ <Section/>で描画すると再マウントしカーソルが飛ぶため関数として呼び出す
   const renderSection = ({ title, sub, st, set, editorKey, headerExtra, onRegister }) => (
     <div className="rounded-xl border border-slate-200 p-3 bg-slate-50/50">
-      <div className="flex items-center gap-2 mb-2 flex-wrap"><div className="text-sm font-bold text-slate-700">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>{headerExtra}</div>
+      <div className="flex items-center gap-2 mb-2 flex-wrap"><div className="text-sm font-bold text-slate-700">{title}<span className="text-[10px] text-slate-400 font-normal ml-2">{sub}</span></div>{headerExtra}
+        {/* ★ 本文をそのまま定型文として登録 (書式ごと) */}
+        <button type="button" disabled={!tmplToPlain(st.html)}
+          onClick={()=>openTmplForm({ title:'', content: st.html || '' }, -1)}
+          className="ml-auto px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-white text-blue-700 border-blue-300 hover:bg-blue-50 disabled:opacity-40 shrink-0"
+          title="いま入力している本文を、書式ごと定型文として登録します">＋ 定型文に追加</button>
+      </div>
       <RichEditor key={editorKey} initialHtml={st.html} onRegister={onRegister} onChange={(html)=>set(s=>({...s,html}))}/>
       {(() => {
         const isNone = !st.from && !st.until;
@@ -25330,7 +25352,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
           <div className="rounded-xl border border-slate-200 p-3">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-bold text-slate-700">定型文</span>
-              <button type="button" onClick={()=>{ setTmplForm({title:'',content:''}); setTmplEditIdx(-1); setTmplView(v=>v==='add'?null:'add'); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${tmplView==='add'?'bg-blue-600 text-white border-blue-600':'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'}`}>＋ 登録</button>
+              <button type="button" onClick={()=>{ if(tmplView==='add'){ setTmplView(null); return; } openTmplForm({title:'',content:''}, -1); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${tmplView==='add'?'bg-blue-600 text-white border-blue-600':'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'}`}>＋ 登録</button>
               <button type="button" onClick={()=>{ setApplyIdx(-1); setTmplView(v=>v==='list'?null:'list'); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${tmplView==='list'?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}>一覧 ({templates.length})</button>
             </div>
 
@@ -25339,11 +25361,12 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
               <div className="mt-3 space-y-2 bg-slate-50 rounded-lg p-3 border border-slate-200">
                 <div className="text-xs font-bold text-slate-500">{tmplEditIdx>=0?'定型文を編集':'新しい定型文'}</div>
                 <input value={tmplForm.title} onChange={e=>setTmplForm(f=>({...f,title:e.target.value}))} placeholder="タイトル（例: 負担割合証）" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
-                <textarea value={tmplForm.content} onChange={e=>setTmplForm(f=>({...f,content:e.target.value}))} rows={3} placeholder="内容（改行可。例: 負担割合証のご提出をお願いします）" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-y"/>
+                {/* ★ 定型文も本文と同じリッチ入力(色/太字/下線/大きさ)。 書式付きで保存し、挿入時も書式ごと入る。 */}
+                <RichEditor key={tmplEditKey} initialHtml={tmplToHtml(tmplForm.content)} onChange={(html)=>setTmplForm(f=>({...f,content:html}))}/>
                 <div className="flex justify-end gap-2">
                   <button type="button" onClick={()=>setTmplView(null)} className="px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100">キャンセル</button>
-                  <button type="button" disabled={!tmplForm.title.trim() && !tmplForm.content.trim()} onClick={()=>{
-                    const item = { title: tmplForm.title.trim()|| (tmplForm.content.split('\n')[0]||'定型文').slice(0,20), content: tmplForm.content };
+                  <button type="button" disabled={!tmplForm.title.trim() && !tmplToPlain(tmplForm.content)} onClick={()=>{
+                    const item = { title: tmplForm.title.trim()|| (tmplToPlain(tmplForm.content).split('\n')[0]||'定型文').slice(0,20), content: tmplForm.content };
                     setTemplates(ts => tmplEditIdx>=0 ? ts.map((x,j)=>j===tmplEditIdx?item:x) : [...ts, item]);
                     setTmplView('list'); setTmplEditIdx(-1);
                   }} className="px-4 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40">{tmplEditIdx>=0?'更新':'登録'}</button>
@@ -25360,10 +25383,11 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
                     <div className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-bold text-slate-700 truncate">{t.title||'(無題)'}</div>
-                        <div className="text-[11px] text-slate-400 truncate">{(t.content||'').replace(/\n/g,' ')}</div>
+                        {/* ★ content は書式付きHTML。 一覧はタグを除いたプレーンで1行プレビュー */}
+                        <div className="text-[11px] text-slate-400 truncate">{tmplToPlain(t.content).replace(/\n/g,' ')}</div>
                       </div>
                       <button type="button" onClick={()=>setApplyIdx(applyIdx===i?-1:i)} className="px-2.5 py-1 rounded text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shrink-0">適応</button>
-                      <button type="button" onClick={()=>{ setTmplForm({title:t.title||'',content:t.content||''}); setTmplEditIdx(i); setTmplView('add'); }} className="px-2 py-1 rounded text-xs font-bold bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 shrink-0">編集</button>
+                      <button type="button" onClick={()=>openTmplForm({title:t.title||'',content:t.content||''}, i)} className="px-2 py-1 rounded text-xs font-bold bg-white text-slate-600 border border-slate-300 hover:bg-slate-50 shrink-0">編集</button>
                       <button type="button" onClick={()=>{ setTemplates(ts=>ts.filter((_,j)=>j!==i)); if(applyIdx===i) setApplyIdx(-1); }} className="px-2 py-1 rounded text-xs font-bold text-red-500 hover:bg-red-50 shrink-0">削除</button>
                     </div>
                     {applyIdx===i && (
