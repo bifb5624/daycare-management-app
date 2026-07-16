@@ -34735,6 +34735,17 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const blankSvc = ()=>({ from:'', to:'', content:'', jisshi:'', tassei:'', effect:'' });
   const _defaultSvcs = ()=>Array.from({length:5}, blankSvc);
   const _defaultFlow = ()=>Array.from({length:8}, ()=>({ time:'', content:'' }));
+  // ★ プログラム(1日の流れ)は日誌スケジュール(各種設定)から生成する。利用者の基本利用日がPMのみならPM表を使う。
+  const _flowSrc = (p)=>{
+    const ds=appData.diarySettings||{};
+    const amp=(p?.scheduleAmPm||[]).map(v=>String(v||''));
+    const hasAM=amp.some(v=>v.includes('AM')), hasPM=amp.some(v=>v.includes('PM'));
+    return ((hasPM && !hasAM) ? ds.schedulePM : ds.scheduleAM) || [];
+  };
+  const _autoFlow = (p)=>{ const s=_flowSrc(p); return s.length ? s.map(x=>({ time:x.time||'', content:x.content||'' })) : _defaultFlow(); };
+  // ★ 職員名の候補 (計画作成者・説明者のプルダウン用)
+  const _staffOpts = Array.from(new Set((appData.diarySettings?.staff||[]).map(s=>String(s?.name||'').trim()).filter(Boolean)));
+  const _roleOpts = Array.from(new Set((appData.diarySettings?.staff||[]).map(s=>String(s?.role||'').trim()).filter(Boolean).concat(['生活相談員','機能訓練指導員','看護師','介護職員','管理者'])));
   // ★ フェイスシート／基本情報から自動読込 (経緯・希望・健康状態・自立度 等)
   const _fsAuto = (p)=>{
     const fs = p?.faceSheet || {};
@@ -34761,7 +34772,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     shortSetDate:'', shortDueDate:'', shortGoal:'', shortAchieve:'',
     services:_defaultSvcs(),
     mukae: patient?.pickupType ? '有' : '', okuri: patient?.pickupType ? '有' : '',
-    flow:_defaultFlow(),
+    flow:_autoFlow(patient),
     tokki:'', soukatsu:'', saihyokaDate:'',
     setsumeiDate:'', setsumeisha:'', doui:'',
   });
@@ -34793,11 +34804,15 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   };
   // ★ プログラム(1日の流れ): 各種設定の日誌スケジュール(AM/PM)から反映
   const fillFlow = ()=>{
-    const ds=appData.diarySettings||{};
-    const isPM=(patient?.scheduleAmPm||[]).some(v=>String(v||'').includes('PM')) && !(patient?.scheduleAmPm||[]).some(v=>String(v||'').includes('AM'));
-    const src=(isPM ? ds.schedulePM : ds.scheduleAM)||[];
+    const src=_flowSrc(patient);
     if(!src.length){ alert('各種設定「日誌」の1日の流れ（AM/PM）が未登録です。'); return; }
     upd({ flow: src.map(s=>({ time:s.time||'', content:s.content||'' })) });
+  };
+  // ★ 目標の設定日/達成予定日を「サービス提供内容①」の期間からコピーする
+  const copyGoalDates = (k)=>{
+    const s=(editing?.services||[])[0]||{};
+    if(!String(s.from||'').trim() && !String(s.to||'').trim()){ alert('サービス提供内容①の期間（○月○日〜○月○日）を先に入力してください。'); return; }
+    upd({ [k+'SetDate']: s.from||'', [k+'DueDate']: s.to||'' });
   };
   const upd = (patch)=>{ setEditing(e=>({...e,...patch})); markDirty(); };
   const updProg = (i,patch)=>{ setEditing(e=>({...e, programs:e.programs.map((p,idx)=>idx===i?{...p,...patch}:p)})); markDirty(); };
@@ -34897,9 +34912,17 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                 <KKField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})} ph="令和○年○月○日"/>
                 <KKField label="前回作成日" value={editing.prevDate} onChange={v=>upd({prevDate:v})} ph="（初回は空欄）"/>
                 <KKField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
-                <KKField label="計画作成者" value={editing.author} onChange={v=>upd({author:v})}/>
-                <KKField label="職種" value={editing.authorJob} onChange={v=>upd({authorJob:v})}/>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">計画作成者</label>
+                  <input value={editing.author||''} onChange={e=>upd({author:e.target.value})} list="tk-staff-names" placeholder="職員を選択／入力" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-1">職種</label>
+                  <input value={editing.authorJob||''} onChange={e=>upd({authorJob:e.target.value})} list="tk-staff-roles" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                </div>
               </div>
+              <datalist id="tk-staff-names">{_staffOpts.map(x=><option key={x} value={x}/>)}</datalist>
+              <datalist id="tk-staff-roles">{_roleOpts.map(x=><option key={x} value={x}/>)}</datalist>
               <div className="grid md:grid-cols-2 gap-3 mt-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">障害高齢者の日常生活自立度</label>
@@ -34943,6 +34966,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                     <span className="text-xs font-bold text-slate-600 w-16">{t}</span>
                     <input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/>
                     <input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-44"/>
+                    <button onClick={()=>copyGoalDates(k)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap">①の期間をコピー</button>
                     <span className="text-[11px] text-slate-400 ml-1">達成度</span>
                     {TK_ACHIEVE.map(o=>(
                       <button key={o} onClick={()=>upd({[k+'Achieve']: editing[k+'Achieve']===o?'':o})} className={`px-2.5 py-1 rounded border text-xs font-bold ${editing[k+'Achieve']===o?'bg-emerald-500 text-white border-emerald-500':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{o}</button>
@@ -35040,7 +35064,14 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
               </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 gap-3">
-              <KKField label="説明者" value={editing.setsumeisha} onChange={v=>upd({setsumeisha:v})}/>
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1">説明者</label>
+                <select value={editing.setsumeisha||''} onChange={e=>upd({setsumeisha:e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none">
+                  <option value="">（選択してください）</option>
+                  {_staffOpts.map(x=><option key={x} value={x}>{x}</option>)}
+                  {editing.setsumeisha && !_staffOpts.includes(editing.setsumeisha) && <option value={editing.setsumeisha}>{editing.setsumeisha}</option>}
+                </select>
+              </div>
               <KKField label="説明・同意日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})} ph="令和○年○月○日"/>
             </div>
           </div>
@@ -35093,147 +35124,138 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         )}
       </div>
       {printRec && (() => {
+        // ★ 別紙様式３－４ 準拠のA4 1枚。flex比率で縦を配分し、下部に余白が残らないようにする。
         // 一覧から直接印刷する旧レコードも様式3-4の構造へ引き上げてから描画する
         const rec = _migrate(printRec);
-        // ★ 別紙様式３－４ 準拠のA4 1枚。flex比率で縦を配分し、下部に余白が残らないようにする。
         const esc=(s)=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const B='1px solid #000';
+        // cs=利用者入力を出す枠(pre-wrapで改行保持) / csm=HTMLを組むだけの枠
+        //   ※ csm を使わずにHTMLを複数行で書くと pre-wrap が改行とインデントを空白として描画し、行が異常に高くなる
         const cs=`border:${B};padding:2px 4px;vertical-align:top;white-space:pre-wrap;font-size:9px;word-break:break-word;line-height:1.4;`;
-        const lab=cs+'background:#f2f2f2;font-weight:bold;text-align:center;vertical-align:middle;white-space:nowrap;';
-        const cap='display:block;font-size:7.5px;font-weight:bold;margin-bottom:1px;line-height:1.25;white-space:pre-wrap;';
+        const csm=cs.replace('white-space:pre-wrap;','');
+        const lab=csm+'background:#f2f2f2;font-weight:bold;text-align:center;vertical-align:middle;white-space:nowrap;';
+        const cap='display:block;font-size:7.5px;font-weight:bold;margin-bottom:1px;line-height:1.25;';
+        const cg=(...w)=>`<colgroup>${w.map(x=>`<col style="width:${x}%"/>`).join('')}</colgroup>`;
         const circ=(v,sel)=> String(sel||'').trim()===String(v)
           ? `<span style="display:inline-block;border:1.2px solid #000;border-radius:50%;padding:0 2px;min-width:10px;text-align:center;font-weight:bold;">${esc(v)}</span>`
           : `<span style="display:inline-block;padding:0 2px;min-width:10px;text-align:center;">${esc(v)}</span>`;
-        // --- ヘッダ (作成日 / 氏名・生年月日・要介護度・作成者 / 自立度) ---
-        const hdr1=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;">
-          <tr>
-            <td style="${cs}width:34%;">作成日：　${esc(rec.createdDate)||'　　　年　　月　　日'}</td>
-            <td style="${cs}width:33%;">前回作成日：　${esc(rec.prevDate)||'　　　年　　月　　日'}</td>
-            <td style="${cs}">初回作成日：　${esc(rec.firstDate)||'　　　年　　月　　日'}</td>
-          </tr></table>`;
+        // --- ヘッダ ---
+        const hdr1=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;">${cg(34,33,33)}<tr>`
+          +`<td style="${csm}">作成日：　${esc(rec.createdDate)||'　　　年　　月　　日'}</td>`
+          +`<td style="${csm}">前回作成日：　${esc(rec.prevDate)||'　　　年　　月　　日'}</td>`
+          +`<td style="${csm}">初回作成日：　${esc(rec.firstDate)||'　　　年　　月　　日'}</td>`
+          +`</tr></table>`;
         const _bd=patient?.birthDate?new Date(patient.birthDate):null;
         const _bdOk=_bd&&!isNaN(_bd.getTime());
         const _era=_bdOk?(_bd.getFullYear()<1926?'大正':'昭和'):'';
         const _eraY=_bdOk?(_era==='大正'?_bd.getFullYear()-1911:_bd.getFullYear()-1925):'';
-        const hdr2=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;">
-          <tr>
-            <td style="${cs}width:27%;padding:0;">
-              <div style="font-size:7.5px;padding:1px 4px;border-bottom:1px dotted #999;">ふりがな　${esc(patient?.kana||'')}</div>
-              <div style="font-size:11px;font-weight:bold;padding:3px 4px;">氏　名　${esc(patient?.name||'')}</div>
-            </td>
-            <td style="${cs}width:6%;text-align:center;vertical-align:middle;"><div style="font-size:7.5px;">性別</div><div style="font-size:10px;font-weight:bold;">${esc(patient?.gender||'')}</div></td>
-            <td style="${cs}width:26%;text-align:center;vertical-align:middle;font-size:9px;">
-              <div>${circ('大正',_era)}　/　${circ('昭和',_era)}</div>
-              <div style="margin-top:1px;">${_eraY||'　　'}年　${_bdOk?_bd.getMonth()+1:'　　'}月　${_bdOk?_bd.getDate():'　　'}日生　${_age(patient?.birthDate)!==''?_age(patient?.birthDate):'　　'}歳</div>
-            </td>
-            <td style="${cs}width:11%;text-align:center;vertical-align:middle;"><div style="font-size:7.5px;">要介護度</div><div style="font-size:10px;font-weight:bold;">${esc(patient?.careLevel||'')}</div></td>
-            <td style="${cs}font-size:9px;">計画作成者：${esc(rec.author)}<div style="margin-top:3px;">職種：${esc(rec.authorJob)}</div></td>
-          </tr></table>`;
-        const hdr3=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;">
-          <tr>
-            <td style="${cs}width:50%;font-size:8.5px;text-align:center;">障害高齢者の日常生活自立度:　${TK_ADL_OPTS.map(o=>circ(o,rec.adlLevel)).join(' ')}</td>
-            <td style="${cs}font-size:8.5px;text-align:center;">認知症高齢者の日常生活自立度:　${TK_DEM_OPTS.map(o=>circ(o,rec.demLevel)).join(' ')}</td>
-          </tr></table>`;
+        const hdr2=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;">${cg(26,6,26,10,32)}<tr>`
+          +`<td style="${csm}padding:0;vertical-align:middle;"><div style="font-size:7px;padding:0 4px;border-bottom:1px dotted #999;line-height:1.5;">ふりがな　${esc(patient?.kana||'')}</div><div style="font-size:11px;font-weight:bold;padding:1px 4px;line-height:1.5;">氏　名　${esc(patient?.name||'')}</div></td>`
+          +`<td style="${csm}text-align:center;vertical-align:middle;line-height:1.3;"><div style="font-size:7px;">性別</div><div style="font-size:10px;font-weight:bold;">${esc(patient?.gender||'')}</div></td>`
+          +`<td style="${csm}text-align:center;vertical-align:middle;font-size:9px;line-height:1.4;"><div>${circ('大正',_era)}　/　${circ('昭和',_era)}</div><div>${_eraY||'　　'}年　${_bdOk?_bd.getMonth()+1:'　　'}月　${_bdOk?_bd.getDate():'　　'}日生　${_age(patient?.birthDate)!==''?_age(patient?.birthDate):'　　'}歳</div></td>`
+          +`<td style="${csm}text-align:center;vertical-align:middle;line-height:1.3;"><div style="font-size:7px;">要介護度</div><div style="font-size:10px;font-weight:bold;">${esc(patient?.careLevel||'')}</div></td>`
+          +`<td style="${csm}font-size:9px;vertical-align:middle;line-height:1.6;"><div>計画作成者：${esc(rec.author)}</div><div>職種：${esc(rec.authorJob)}</div></td>`
+          +`</tr></table>`;
+        const hdr3=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;">${cg(50,50)}<tr>`
+          +`<td style="${csm}font-size:8.5px;text-align:center;">障害高齢者の日常生活自立度:　${TK_ADL_OPTS.map(o=>circ(o,rec.adlLevel)).join(' ')}</td>`
+          +`<td style="${csm}font-size:8.5px;text-align:center;">認知症高齢者の日常生活自立度:　${TK_DEM_OPTS.map(o=>circ(o,rec.demLevel)).join(' ')}</td>`
+          +`</tr></table>`;
         // --- Ⅰ 利用者の基本情報 ---
-        const sec1=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
-          <tr style="height:23%"><td style="${cs}" colspan="2"><span style="${cap}">通所介護利用までの経緯(活動歴や病歴)</span>${esc(rec.keii)}</td></tr>
-          <tr style="height:22%"><td style="${cs}width:50%;"><span style="${cap}">利用者本人の希望</span>${esc(rec.honninKibou)}</td><td style="${cs}"><span style="${cap}">家族の希望</span>${esc(rec.kazokuKibou)}</td></tr>
-          <tr style="height:16%"><td style="${cs}" colspan="2"><span style="${cap}">利用者本人の社会参加の状況</span>${esc(rec.shakaiSanka)}</td></tr>
-          <tr style="height:17%"><td style="${cs}" colspan="2"><span style="${cap}">利用者の居宅の環境（利用者の居宅での生活状況をふまえ、特によく使用する場所・使用したいと考えている場所の環境を記入）★</span>${esc(rec.kyotakuKankyo)}</td></tr>
-          <tr style="height:22%"><td style="${cs}"><span style="${cap}">健康状態(病名､合併症(心疾患､呼吸器疾患等)､服薬状況等)★</span>${esc(rec.kenkoJotai)}</td><td style="${cs}"><span style="${cap}">ケアの上での医学的リスク(血圧､転倒､嚥下障害等)･留意事項★</span>${esc(rec.iryoRisk)}</td></tr>
-        </table>`;
-        // --- Ⅱ 利用目標 ---
-        const goalRow=(t,setD,dueD,goal,ach)=>`<tr>
-          <td style="${lab}width:6%;font-size:8.5px;">${t}<br/>目標</td>
-          <td style="${cs}width:17%;font-size:8px;vertical-align:middle;">設定日　${esc(setD)||'　　　年　　月'}<div style="margin-top:2px;">達成予定日　${esc(dueD)||'　　年　　月'}</div></td>
-          <td style="${cs}">${esc(goal)}</td>
-          <td style="${lab}width:7%;font-size:8.5px;">目標<br/>達成度</td>
-          <td style="${cs}width:16%;text-align:center;vertical-align:middle;font-size:8.5px;">${TK_ACHIEVE.map(o=>circ(o,ach)).join(' ・ ')}</td>
-        </tr>`;
-        const goalTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
-          <tr style="height:1px;"><td colspan="5" style="${lab}font-size:9px;">利用目標</td></tr>
-          ${goalRow('長期',rec.longSetDate,rec.longDueDate,rec.longGoal,rec.longAchieve)}
-          ${goalRow('短期',rec.shortSetDate,rec.shortDueDate,rec.shortGoal,rec.shortAchieve)}
-        </table>`;
+        const sec1=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(50,50)}`
+          +`<tr style="height:23%"><td style="${cs}" colspan="2"><span style="${cap}">通所介護利用までの経緯(活動歴や病歴)</span>${esc(rec.keii)}</td></tr>`
+          +`<tr style="height:22%"><td style="${cs}"><span style="${cap}">利用者本人の希望</span>${esc(rec.honninKibou)}</td><td style="${cs}"><span style="${cap}">家族の希望</span>${esc(rec.kazokuKibou)}</td></tr>`
+          +`<tr style="height:16%"><td style="${cs}" colspan="2"><span style="${cap}">利用者本人の社会参加の状況</span>${esc(rec.shakaiSanka)}</td></tr>`
+          +`<tr style="height:17%"><td style="${cs}" colspan="2"><span style="${cap}">利用者の居宅の環境（利用者の居宅での生活状況をふまえ、特によく使用する場所・使用したいと考えている場所の環境を記入）★</span>${esc(rec.kyotakuKankyo)}</td></tr>`
+          +`<tr style="height:22%"><td style="${cs}"><span style="${cap}">健康状態(病名､合併症(心疾患､呼吸器疾患等)､服薬状況等)★</span>${esc(rec.kenkoJotai)}</td><td style="${cs}"><span style="${cap}">ケアの上での医学的リスク(血圧､転倒､嚥下障害等)･留意事項★</span>${esc(rec.iryoRisk)}</td></tr>`
+          +`</table>`;
+        // --- Ⅱ 利用目標 (固定ラベル列は細く、入力欄=利用目標を最大化) ---
+        const goalRow=(t,setD,dueD,goal,ach)=>`<tr>`
+          +`<td style="${lab}font-size:8.5px;">${t}<br/>目標</td>`
+          +`<td style="${csm}font-size:7.5px;vertical-align:middle;line-height:1.5;"><div>設定日　${esc(setD)||'　　年　　月'}</div><div>達成予定日　${esc(dueD)||'　　年　　月'}</div></td>`
+          +`<td style="${cs}">${esc(goal)}</td>`
+          +`<td style="${lab}font-size:8px;">目標<br/>達成度</td>`
+          +`<td style="${csm}text-align:center;vertical-align:middle;font-size:8px;">${TK_ACHIEVE.map(o=>circ(o,ach)).join('・')}</td>`
+          +`</tr>`;
+        const goalTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(5,12,67,6,10)}`
+          +`<tr style="height:1px;"><td colspan="5" style="${lab}font-size:9px;">利用目標</td></tr>`
+          +goalRow('長期',rec.longSetDate,rec.longDueDate,rec.longGoal,rec.longAchieve)
+          +goalRow('短期',rec.shortSetDate,rec.shortDueDate,rec.shortGoal,rec.shortAchieve)
+          +`</table>`;
         // --- Ⅱ サービス提供内容 (①〜⑤ × 評価3段 + 右列に1日の流れ) ---
         const _svcs=[...(rec.services||[])].slice(0,5);
         while(_svcs.length<5) _svcs.push({from:'',to:'',content:'',jisshi:'',tassei:'',effect:''});
         const _flow=(rec.flow||[]).filter(f=>f&&(String(f.time||'')+String(f.content||'')).trim());
-        const flowTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
-          <tr><td colspan="2" style="${lab}font-size:8.5px;border-top:none;">プログラム（1日の流れ）</td></tr>
-          <tr><td style="${lab}font-size:7.5px;width:42%;">(予定時間)</td><td style="${lab}font-size:7.5px;">(ｻｰﾋﾞｽ内容)</td></tr>
-          ${_flow.map(f=>`<tr><td style="${cs}font-size:7.5px;text-align:center;white-space:nowrap;">${esc(f.time)}</td><td style="${cs}font-size:7.5px;line-height:1.3;">${esc(f.content)}</td></tr>`).join('')}
-          <tr style="height:100%"><td style="${cs}"></td><td style="${cs}"></td></tr>
-        </table>`;
-        let svcRows=`<tr>
-          <td style="${lab}" colspan="2" rowspan="2">目的とケアの提供方針・内容</td>
-          <td style="${lab}" colspan="3">評価</td>
-          <td style="${lab}font-size:8.5px;" rowspan="2">迎え（${circ('有',rec.mukae)}・${circ('無',rec.mukae)}）</td>
-        </tr>
-        <tr>
-          <td style="${lab}font-size:7.5px;width:6%;">実施</td>
-          <td style="${lab}font-size:7.5px;width:6%;">達成</td>
-          <td style="${lab}font-size:8px;width:19%;">効果、満足度など</td>
-        </tr>`;
+        const flowTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(40,60)}`
+          +`<tr><td colspan="2" style="${lab}font-size:8.5px;border-top:none;">プログラム（1日の流れ）</td></tr>`
+          +`<tr><td style="${lab}font-size:7.5px;">(予定時間)</td><td style="${lab}font-size:7.5px;">(ｻｰﾋﾞｽ内容)</td></tr>`
+          +_flow.map(f=>`<tr><td style="${csm}font-size:7px;text-align:center;line-height:1.3;">${esc(f.time)}</td><td style="${csm}font-size:7px;line-height:1.3;">${esc(f.content)}</td></tr>`).join('')
+          +`<tr style="height:100%"><td style="${csm}"></td><td style="${csm}"></td></tr>`
+          +`</table>`;
+        let svcRows=`<tr>`
+          +`<td style="${lab}" colspan="2" rowspan="2">目的とケアの提供方針・内容</td>`
+          +`<td style="${lab}" colspan="3">評価</td>`
+          +`<td style="${lab}font-size:8.5px;" rowspan="2">迎え（${circ('有',rec.mukae)}・${circ('無',rec.mukae)}）</td>`
+          +`</tr><tr>`
+          +`<td style="${lab}font-size:7.5px;">実施</td>`
+          +`<td style="${lab}font-size:7.5px;">達成</td>`
+          +`<td style="${lab}font-size:8px;">効果、満足度など</td>`
+          +`</tr>`;
         _svcs.forEach((s,i)=>{
           for(let k=0;k<3;k++){
             let tr='<tr>';
             if(k===0){
-              tr+=`<td style="${lab}background:#fff;font-weight:normal;font-size:11px;width:4%;" rowspan="3">${TK_MARU[i]}</td>`;
-              tr+=`<td style="${cs}width:32%;" rowspan="3"><div style="font-size:8px;border-bottom:1px dotted #bbb;padding-bottom:1px;margin-bottom:2px;">${esc(s.from)||'　　月　　日'}　～　${esc(s.to)||'　　月　　日'}</div>${esc(s.content)}</td>`;
+              tr+=`<td style="${lab}background:#fff;font-weight:normal;font-size:11px;" rowspan="3">${TK_MARU[i]}</td>`;
+              tr+=`<td style="${cs}" rowspan="3"><div style="font-size:8px;border-bottom:1px dotted #bbb;padding-bottom:1px;margin-bottom:2px;">${esc(s.from)||'　　月　　日'}　～　${esc(s.to)||'　　月　　日'}</div>${esc(s.content)}</td>`;
             }
-            tr+=`<td style="${cs}text-align:center;vertical-align:middle;font-size:7.5px;padding:1px;">${circ(TK_JISSHI[k],s.jisshi)}</td>`;
-            tr+=`<td style="${cs}text-align:center;vertical-align:middle;font-size:7.5px;padding:1px;">${circ(TK_TASSEI[k],s.tassei)}</td>`;
+            tr+=`<td style="${csm}text-align:center;vertical-align:middle;font-size:7.5px;padding:1px;">${circ(TK_JISSHI[k],s.jisshi)}</td>`;
+            tr+=`<td style="${csm}text-align:center;vertical-align:middle;font-size:7.5px;padding:1px;">${circ(TK_TASSEI[k],s.tassei)}</td>`;
             if(k===0) tr+=`<td style="${cs}" rowspan="3">${esc(s.effect)}</td>`;
-            if(i===0&&k===0) tr+=`<td style="border:${B};padding:0;vertical-align:top;width:23%;" rowspan="13">${flowTbl}</td>`;
+            if(i===0&&k===0) tr+=`<td style="border:${B};padding:0;vertical-align:top;" rowspan="13">${flowTbl}</td>`;
             if(i===4&&k===1) tr+=`<td style="${lab}font-size:8.5px;" rowspan="2">送り（${circ('有',rec.okuri)}・${circ('無',rec.okuri)}）</td>`;
             tr+='</tr>';
             svcRows+=tr;
           }
         });
-        const svcTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
-          <tr style="height:1px;"><td colspan="6" style="${lab}font-size:9px;">サービス提供内容（※）</td></tr>
-          ${svcRows}
-        </table>`;
+        const svcTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(4,40,5,5,21,25)}`
+          +`<tr style="height:1px;"><td colspan="6" style="${lab}font-size:9px;">サービス提供内容（※）</td></tr>`
+          +svcRows+`</table>`;
         // --- 特記事項 / 実施後の変化 / 説明者・同意日 ---
         // 利用予定・提供時間区分は様式3-4に専用欄が無いため、特記事項の先頭に印字する
         const _riyo=[rec.riyoubi&&`利用予定：${rec.riyoubi}`, rec.teikyoTime&&`提供時間区分：${rec.teikyoTime}`].filter(Boolean).join('　／　');
         const _tokki=[_riyo, String(rec.tokki||'')].filter(s=>String(s).trim()).join('\n');
-        const bottom=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">
-          <tr style="height:44%">
-            <td style="${cs}width:53%;"><span style="${cap}">特記事項</span>${esc(_tokki)}</td>
-            <td style="padding:1px 4px;font-size:7px;line-height:1.35;vertical-align:top;">※サービス提供内容の設定にあたっては、長期目標・短期目標として設定した目標を達成するために必要なプログラムとなるよう、具体的に設定すること。<br/>※入浴介助加算（Ⅱ）を算定する場合は、★が記載された欄等において必要な情報を記入すること。</td>
-          </tr>
-          <tr style="height:56%">
-            <td style="${cs}"><span style="${cap}">実施後の変化(総括)　　再評価日：　${esc(rec.saihyokaDate)||'　　　年　　月　　日'}</span>${esc(rec.soukatsu)}</td>
-            <td style="padding:0;vertical-align:bottom;">
-              <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
-                <tr><td colspan="2" style="${lab}font-size:8.5px;">利用者・家族に対する本計画の説明者及び同意日</td></tr>
-                <tr><td style="${lab}font-size:8.5px;width:50%;">説明者</td><td style="${lab}font-size:8.5px;">説明・同意日</td></tr>
-                <tr><td style="${cs}text-align:center;vertical-align:middle;height:9mm;font-size:10px;">${esc(rec.setsumeisha)}</td><td style="${cs}text-align:center;vertical-align:middle;font-size:9px;">${esc(rec.setsumeiDate)||'　　年　　月　　日'}</td></tr>
-              </table>
-            </td>
-          </tr>
-        </table>`;
+        const douiTbl=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;">${cg(50,50)}`
+          +`<tr><td colspan="2" style="${lab}font-size:8.5px;">利用者・家族に対する本計画の説明者及び同意日</td></tr>`
+          +`<tr><td style="${lab}font-size:8.5px;">説明者</td><td style="${lab}font-size:8.5px;">説明・同意日</td></tr>`
+          +`<tr><td style="${csm}text-align:center;vertical-align:middle;height:9mm;font-size:10px;">${esc(rec.setsumeisha)}</td><td style="${csm}text-align:center;vertical-align:middle;font-size:9px;">${esc(rec.setsumeiDate)||'　　年　　月　　日'}</td></tr>`
+          +`</table>`;
+        const bottom=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(53,47)}`
+          +`<tr style="height:44%">`
+          +`<td style="${cs}"><span style="${cap}">特記事項</span>${esc(_tokki)}</td>`
+          +`<td style="padding:1px 4px;font-size:7px;line-height:1.35;vertical-align:top;">※サービス提供内容の設定にあたっては、長期目標・短期目標として設定した目標を達成するために必要なプログラムとなるよう、具体的に設定すること。<br/>※入浴介助加算（Ⅱ）を算定する場合は、★が記載された欄等において必要な情報を記入すること。</td>`
+          +`</tr><tr style="height:56%">`
+          +`<td style="${cs}"><span style="${cap}">実施後の変化(総括)　　再評価日：　${esc(rec.saihyokaDate)||'　　　年　　月　　日'}</span>${esc(rec.soukatsu)}</td>`
+          +`<td style="padding:0;vertical-align:bottom;">${douiTbl}</td>`
+          +`</tr></table>`;
         const _fzip=facility.zip||facility.zipCode||'';
         const _fno=facility.jigyoshoNo||facility.officeNo||'';
         const _fmgr=facility.manager||[facility.managerLast,facility.managerFirst].filter(Boolean).join(' ')||'';
-        const footer=`<div style="flex:0 0 auto;border:${B};padding:2px 5px;font-size:8.5px;line-height:1.55;margin-top:1mm;">
-          （地域密着型）通所介護　${esc(facility.name)}　　　${_fzip?'〒'+esc(_fzip):''}　住所：${esc(facility.address)}${esc(facility.addressBuilding||'')}　　　管理者：${esc(_fmgr)}
-          <div>　事業所No.${esc(_fno)}　　　　　　　　　Tel.${esc(facility.phone)}/Fax.${esc(facility.fax)}</div>
-        </div>`;
-        const html=`<div style="width:210mm;height:297mm;padding:6mm 5mm 4mm;box-sizing:border-box;display:flex;flex-direction:column;font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;background:#fff;overflow:hidden;">
-          <div style="flex:0 0 auto;font-size:9px;font-weight:bold;">別紙様式３－４</div>
-          <div style="flex:0 0 auto;text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:0.8mm 0 1.5mm;">【（地域密着型）通所介護計画書】</div>
-          <div style="flex:0 0 auto;">${hdr1}${hdr2}${hdr3}</div>
-          <div style="flex:0 0 auto;font-size:9.5px;font-weight:bold;margin:1.6mm 0 0.6mm;border-bottom:1px solid #000;">Ⅰ　利用者の基本情報</div>
-          <div style="flex:92 1 0;min-height:0;">${sec1}</div>
-          <div style="flex:0 0 auto;font-size:9.5px;font-weight:bold;margin:1.6mm 0 0.6mm;border-bottom:1px solid #000;">Ⅱ　サービス利用目標・サービス提供内容の設定</div>
-          <div style="flex:30 1 0;min-height:0;">${goalTbl}</div>
-          <div style="flex:150 1 0;min-height:0;margin-top:1.2mm;">${svcTbl}</div>
-          <div style="flex:52 1 0;min-height:0;margin-top:1.2mm;">${bottom}</div>
-          ${footer}
-        </div>`;
+        const _faddr=[facility.address,facility.addressBuilding].filter(Boolean).join('');
+        const footer=`<div style="flex:0 0 auto;border:${B};padding:2px 5px;font-size:8.5px;line-height:1.55;margin-top:1mm;">`
+          +`<div>（地域密着型）通所介護　${esc(facility.name)||'　　　　'}　　　${_fzip?'〒'+esc(_fzip):''}　住所：${esc(_faddr)}　　　管理者：${esc(_fmgr)}</div>`
+          +`<div>　事業所No.${esc(_fno)}　　　　　　　　　Tel.${esc(facility.phone)}/Fax.${esc(facility.fax)}</div>`
+          +`</div>`;
+        const html=`<div style="width:210mm;height:297mm;padding:6mm 5mm 4mm;box-sizing:border-box;display:flex;flex-direction:column;font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;background:#fff;overflow:hidden;">`
+          +`<div style="flex:0 0 auto;font-size:9px;font-weight:bold;">別紙様式３－４</div>`
+          +`<div style="flex:0 0 auto;text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:0.8mm 0 1.5mm;">【（地域密着型）通所介護計画書】</div>`
+          +`<div style="flex:0 0 auto;">${hdr1}${hdr2}${hdr3}</div>`
+          +`<div style="flex:0 0 auto;font-size:9.5px;font-weight:bold;margin:1.6mm 0 0.6mm;border-bottom:1px solid #000;">Ⅰ　利用者の基本情報</div>`
+          +`<div style="flex:92 1 0;min-height:0;">${sec1}</div>`
+          +`<div style="flex:0 0 auto;font-size:9.5px;font-weight:bold;margin:1.6mm 0 0.6mm;border-bottom:1px solid #000;">Ⅱ　サービス利用目標・サービス提供内容の設定</div>`
+          +`<div style="flex:28 1 0;min-height:0;">${goalTbl}</div>`
+          +`<div style="flex:152 1 0;min-height:0;margin-top:1.2mm;">${svcTbl}</div>`
+          +`<div style="flex:52 1 0;min-height:0;margin-top:1.2mm;">${bottom}</div>`
+          +footer
+          +`</div>`;
         return <div id="tk-print-area" style={{display:'none'}} dangerouslySetInnerHTML={{__html:html}}/>;
       })()}
     </div>
