@@ -673,14 +673,14 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         }
       }
     }
-    // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文)は「新しい方(_updatedAt)」を丸ごと採用。
-    //   これが無いと、古い端末が別の保存をした拍子に連絡事項・掲載期間を巻き戻してしまう。
+    // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文)もフィールド単位マージ。
+    //   丸ごと採用だと、古い端末が別項目を1つ触っただけで 連絡事項・掲載期間(〜8/31等)が
+    //   その端末の古い内容で上書きされ、毎回巻き戻っていた。
     {
       const lc = localData.contactBookConfig, cc = cloud.contactBookConfig;
       if (lc || cc) {
-        const lt = Number(lc && lc._updatedAt) || 0, ct = Number(cc && cc._updatedAt) || 0;
-        if (lt || ct) merged.contactBookConfig = (lt >= ct) ? lc : cc;
-        else merged.contactBookConfig = lc || cc; // 旧データ(時刻なし)は従来どおりローカル優先
+        if (!lc || !cc) merged.contactBookConfig = lc || cc;
+        else merged.contactBookConfig = mergeObjFieldLevel(lc, cc);
       }
     }
     // ★ 日誌設定(diarySettings=担当職員/送迎車/タイムスケジュール/送迎自動コピー)もフィールド単位マージ。

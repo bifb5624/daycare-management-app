@@ -16763,6 +16763,20 @@ export default function App() {
     //   古い端末が「1人だけ編集」しても他の全員を最新扱いにしてしまうことはない。
     try {
       const prev = appData || {};
+      // ★ オブジェクト設定(systemSettings/diarySettings/contactBookConfig)の「変更フィールドだけ」に
+      //   _fieldTs[field]=now を刻む共通処理。 function 宣言=巻き上げされるので、以降どこから呼んでもよい。
+      function _stampFieldTs(nObj, pObj, now) {
+        const out = { ...nObj };
+        const fts = { ...(nObj._fieldTs || {}) };
+        const keys = new Set([...Object.keys(nObj || {}), ...Object.keys(pObj || {})]);
+        keys.forEach(k => {
+          if (k === '_updatedAt' || k === '_fieldTs') return;
+          let changed; try { changed = JSON.stringify(nObj ? nObj[k] : undefined) !== JSON.stringify(pObj ? pObj[k] : undefined); } catch { changed = true; }
+          if (changed) fts[k] = now;
+        });
+        out._fieldTs = fts; out._updatedAt = now;
+        return out;
+      }
       if (Array.isArray(newData.patients) && Array.isArray(prev.patients)) {
         const prevMap = new Map(prev.patients.map(p => [String(p && p.id), p]));
         let changed = false;
@@ -16819,10 +16833,11 @@ export default function App() {
         });
         newData = { ...newData, _wsTs: _ts, _wsSavedAt: _now };
       }
-      // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文 等)も、編集された時だけ時刻を刻む。
-      //   これが無いと古い端末の push で連絡事項・掲載期間が丸ごと巻き戻る。
+      // ★ 連絡帳設定(contactBookConfig=連絡事項/掲載期間/定型文 等)は「変更されたフィールドだけ」に
+      //   時刻(_fieldTs[field])を刻む。 丸ごと時刻だと、古い端末が別項目を触っただけで
+      //   連絡事項・掲載期間(〜8/31等)がその端末の古い内容で巻き戻っていた。
       if (newData.contactBookConfig && newData.contactBookConfig !== prev.contactBookConfig) {
-        newData = { ...newData, contactBookConfig: { ...newData.contactBookConfig, _updatedAt: Date.now() } };
+        newData = { ...newData, contactBookConfig: _stampFieldTs(newData.contactBookConfig, prev.contactBookConfig, Date.now()) };
       }
       // ★ その他の記録配列も「変更されたレコードだけ」に _savedAt を刻む(参照が変わった=編集された物だけ)。
       //   マージ(mergeById)は _savedAt の新しい方を採用するので、体力測定・モニタリング・スケジュール・計画書・
@@ -16854,21 +16869,10 @@ export default function App() {
         });
         if (_ch) newData = { ...newData, [_key]: _st };
       });
-      // ★ 各種設定・日誌設定は「変更されたフィールドだけ」に更新時刻(_fieldTs[field])を刻む。
-      //   これにより、古い端末が1項目だけ編集して保存しても、触っていない項目(送迎自動コピー/ケアマネ/各設定)は
-      //   フィールド単位マージで巻き戻らない(「1項目直すと他が復活/数時間〜数日で戻る」の恒久対策)。
-      const _stampFieldTs = (nObj, pObj, now) => {
-        const out = { ...nObj };
-        const fts = { ...(nObj._fieldTs || {}) };
-        const keys = new Set([...Object.keys(nObj || {}), ...Object.keys(pObj || {})]);
-        keys.forEach(k => {
-          if (k === '_updatedAt' || k === '_fieldTs') return;
-          let changed; try { changed = JSON.stringify(nObj ? nObj[k] : undefined) !== JSON.stringify(pObj ? pObj[k] : undefined); } catch { changed = true; }
-          if (changed) fts[k] = now;
-        });
-        out._fieldTs = fts; out._updatedAt = now;
-        return out;
-      };
+      // ★ 各種設定・日誌設定・連絡帳設定は「変更されたフィールドだけ」に更新時刻(_fieldTs[field])を刻む。
+      //   これにより、古い端末が1項目だけ編集して保存しても、触っていない項目(送迎自動コピー/ケアマネ/各設定/
+      //   連絡事項・掲載期間)は フィールド単位マージで巻き戻らない(「1項目直すと他が復活」の恒久対策)。
+      //   ※ 定義は function 宣言(巻き上げあり)。 上の contactBookConfig の刻印より前に使うため const にしない。
       if (newData.systemSettings && newData.systemSettings !== prev.systemSettings) {
         newData = { ...newData, systemSettings: _stampFieldTs(newData.systemSettings, prev.systemSettings, _now2) };
       }
@@ -25212,6 +25216,11 @@ function RichEditor({ initialHtml, onChange, onRegister }) {
   );
 }
 
+// ★ 連絡帳「連絡事項」欄の実効テキスト寸法。 カードの欄(ContactBookCard)と必ず一致させること。
+//   用紙182mm(≒688px) − 枠線4 − 左余白72 − px-3(24) = 588px の欄 → テキスト幅 = 588 − 枠線4 − padding20 = 564
+//   高さ 15.5rem(248px) − 枠線4 − padding16 = 228
+const RENRAKU_BOX_W = 564;
+const RENRAKU_BOX_H = 228;
 // 連絡帳の連絡事項 編集モーダル (全員共通／個別・リッチ入力・表示期間・定型文)
 function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   const cfg = appData.contactBookConfig || {};
@@ -25244,12 +25253,15 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   const [tmplForm, setTmplForm] = React.useState({ title:'', content:'' }); // 登録/編集フォーム
   const [tmplEditIdx, setTmplEditIdx] = React.useState(-1); // 編集中の index (-1=新規)
   const [applyIdx, setApplyIdx] = React.useState(-1); // 適応先を選択中の index
-  // 連絡帳欄(高さ10rem≒144px)に収まるか実測 (約420px幅で折返しも考慮)。 はみ出すと警告
+  // ★ 連絡帳の連絡事項欄に収まるか実測。 測定条件は実際のカードの欄と一致させる(ズレると誤警告になる)。
+  //   カード: 用紙182mm(≒688px) − 枠線4 − 左余白72 − px-3(24) = 588px の欄。
+  //   欄: border-2(4) + padding 8px 10px, box-sizing:border-box, fontSize 16.5, lineHeight 1.5, height 15.5rem(248px)。
+  //   → テキスト幅 = 588 − 4 − 20 = 564px / テキスト高さ = 248 − 4 − 16 = 228px。
   React.useEffect(() => {
     const el = measureRef.current; if (!el) return;
     const ph = pat?.html || '';
     el.innerHTML = (all.html||'') + ((all.html&&ph)?'<div style="height:6px"></div>':'') + ph;
-    setWarn(el.scrollHeight > 230 ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
+    setWarn(el.scrollHeight > RENRAKU_BOX_H ? '連絡帳の欄からはみ出しています（見切れます）。改行や文字を減らすか、文字を小さくしてください。' : '');
   }, [all.html, pat?.html]);
   const save = () => {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
@@ -25295,7 +25307,9 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-[80] flex items-center justify-center p-0 sm:p-4">
       <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-lg max-h-full sm:max-h-[92vh] overflow-y-auto p-4 sm:p-5">
-        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:420,padding:'8px 10px',lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,visibility:'hidden',pointerEvents:'none'}}/>
+        {/* ★ 測定用: 実際のカードの欄と同条件(テキスト幅564 / fontSize16.5 / lineHeight1.5)。 padding は入れず、
+            高さ判定は RENRAKU_BOX_H(228=テキスト領域の高さ) と直接比較する。 */}
+        <div ref={measureRef} aria-hidden style={{position:'absolute',left:-9999,top:0,width:RENRAKU_BOX_W,padding:0,lineHeight:1.5,whiteSpace:'pre-wrap',wordBreak:'break-word',fontSize:16.5,visibility:'hidden',pointerEvents:'none'}}/>
         <style>{`.renraku-editor:empty:before{content:'連絡事項を入力（文字を選んで色・太字・大きさ）';color:#94a3b8;}`}</style>
         <div className="flex items-center justify-between mb-3">
           <div className="text-lg font-bold text-slate-800">連絡事項の編集</div>
