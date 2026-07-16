@@ -1472,6 +1472,92 @@ if (typeof window !== 'undefined' && !window.__tsumugiErrInit) {
 // ★ 印刷プレビュー用: 要素の outerHTML を取得する際、 制御された input/textarea/select の【現在値】を
 //   HTML属性に焼き込む。 (Reactの制御フォームは value を属性に反映しないため、 素の outerHTML だと
 //   selectは先頭option・inputは空 になってしまう。 → 選んだ担当者などが印刷で消える不具合の対策)
+// ★ 計画書の作成日は「令和8年7月16日」形式(和暦)で保存されている。 期限計算のため Date に戻す。
+//   西暦(2026-07-16 / 2026年7月16日)で保存された古いデータも受け付ける。
+const parseJpDate = (s) => {
+  const t = String(s ?? '').trim();
+  if (!t) return null;
+  let m = t.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日/);
+  if (m) return new Date(2018 + Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = t.match(/平成\s*(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日/);
+  if (m) return new Date(1988 + Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  m = t.match(/^(\d{4})\s*[-/年]\s*(\d+)\s*[-/月]\s*(\d+)/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const d = new Date(t);
+  return isNaN(d.getTime()) ? null : d;
+};
+// 「令和8年3月」「令和8年3月31日」など月までの指定も拾う(目標の達成予定日用)
+const parseJpMonth = (s) => {
+  const t = String(s ?? '').trim();
+  if (!t) return null;
+  let m = t.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月/);
+  if (m) return new Date(2018 + Number(m[1]), Number(m[2]) - 1, 1);
+  m = t.match(/^(\d{4})\s*[-/年]\s*(\d+)/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, 1);
+  return parseJpDate(t);
+};
+const addMonths = (d, n) => { const x = new Date(d.getTime()); x.setMonth(x.getMonth() + n); return x; };
+const ymKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+
+// ★ 計画書・加算の「次に作成すべき時期」を利用者ごとに算出する。
+//   通所介護計画書 : 短期/長期目標の達成予定日(=見直し期限)。 その1ヶ月前から予告する。
+//                    目標が未設定なら作成日から6ヶ月を目安にする。
+//   個別機能訓練   : 前回作成から3ヶ月ごと。
+//   科学的介護推進 : 直近のADL評価から6ヶ月ごと(加算ONの店舗のみ)。
+//   ADL維持等加算  : 評価開始から6ヶ月後に再評価(加算ONの店舗のみ)。
+//   いずれも「未作成」は即対象。 期限の1ヶ月前になったら一覧に出す。
+const PLAN_DUE_LEAD_DAYS = 30;
+const computePlanDues = (appData, baseDate) => {
+  const today = baseDate ? new Date(baseDate) : new Date();
+  today.setHours(0,0,0,0);
+  const addons = appData?.systemSettings?.addons || {};
+  const out = [];
+  const latestBy = (arr, pid, dateKey) => (arr||[])
+    .filter(r => r && r.patientId === pid)
+    .map(r => ({ r, d: parseJpDate(r[dateKey]) }))
+    .filter(x => x.d)
+    .sort((a,b) => b.d - a.d)[0] || null;
+  const push = (patient, kind, label, due, view, note) => {
+    if (!due) return;
+    const daysLeft = Math.round((due - today) / 86400000);
+    if (daysLeft > PLAN_DUE_LEAD_DAYS) return; // まだ先 → 出さない
+    out.push({ patient, kind, label, due, view, note, daysLeft, overdue: daysLeft < 0, ym: ymKey(due) });
+  };
+  (appData?.patients || []).filter(p => p && (p.status === '利用中' || p.status === '休止')).forEach(p => {
+    // --- 通所介護計画書 ---
+    const tk = latestBy(appData?.tsushoKeikakuRecords, p.id, 'createdDate');
+    if (!tk) push(p, 'tsusho', '通所介護計画書', today, 'tsusho_keikaku', '未作成');
+    else {
+      const short = parseJpMonth(tk.r.shortDueDate) || parseJpMonth(tk.r.shortPeriod);
+      const long  = parseJpMonth(tk.r.longDueDate)  || parseJpMonth(tk.r.longPeriod);
+      const goal = [short, long].filter(Boolean).sort((a,b)=>a-b)[0];
+      const due = goal || addMonths(tk.d, 6);
+      push(p, 'tsusho', '通所介護計画書', due, 'tsusho_keikaku', goal ? '目標の達成予定' : '前回作成から6ヶ月');
+    }
+    // --- 個別機能訓練計画書 (3ヶ月ごと) ---
+    if (addons.kasan_kinou2 || (appData?.kinouKeikakuRecords||[]).some(r=>r.patientId===p.id)) {
+      const kk = latestBy(appData?.kinouKeikakuRecords, p.id, 'createdDate');
+      if (!kk) { if (addons.kasan_kinou2) push(p, 'kinou', '個別機能訓練計画書', today, 'kinou_keikaku', '未作成'); }
+      else push(p, 'kinou', '個別機能訓練計画書', addMonths(kk.d, 3), 'kinou_keikaku', '前回作成から3ヶ月');
+    }
+    // --- 加算: ADL評価(Barthel)を起点に再評価時期を出す ---
+    const adl = (appData?.adlRecords||[])
+      .filter(r => r && r.patientId === p.id)
+      .map(r => ({ r, d: parseJpDate(r.evalDate) }))
+      .filter(x => x.d)
+      .sort((a,b) => b.d - a.d)[0] || null;
+    if (addons.kasan_kagaku) {
+      if (!adl) push(p, 'kagaku', '科学的介護推進体制加算', today, 'life_hub', 'ADL評価が未実施');
+      else push(p, 'kagaku', '科学的介護推進体制加算', addMonths(adl.d, 6), 'life_hub', '前回評価から6ヶ月');
+    }
+    if (addons.kasan_adl) {
+      if (!adl) push(p, 'adl', 'ADL維持等加算', today, 'life_hub', 'ADL評価が未実施');
+      else push(p, 'adl', 'ADL維持等加算', addMonths(adl.d, 6), 'life_hub', '評価から6ヶ月後の再評価');
+    }
+  });
+  return out.sort((a,b) => a.due - b.due || String(a.patient.kana||'').localeCompare(String(b.patient.kana||''), 'ja'));
+};
+
 // ★ 日常生活自立度の共通化: 保存先はフェイスシート(patient.faceSheet.adlLevel / dementiaLevel)を正とし、
 //   各計画書はそこから取り込む。 フェイスシートの認知症自立度は半角ローマ字(I/IIa/IIIb…)で保存されてきたが、
 //   計画書(様式3-3/3-4)は全角ローマ数字(Ⅰ/Ⅱa/Ⅲb…)で○を付けるため、表記ゆれを吸収して突き合わせる。
@@ -10665,6 +10751,50 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
                     {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6,maxHeight:40,overflow:'hidden'}}>{a.body}</div>}
                   </button>
                 ); })}
+              </div>
+            </Card>
+          );
+        })()}
+        {/* ★ 計画書・加算の作成予定: 期限の1ヶ月前から、月ごと・利用者ごとに出す */}
+        {(() => {
+          const dues = computePlanDues(appData);
+          if (!dues.length) return null;
+          const byYm = {};
+          dues.forEach(d => { (byYm[d.ym] = byYm[d.ym] || []).push(d); });
+          const yms = Object.keys(byYm).sort();
+          const overdueN = dues.filter(d => d.overdue).length;
+          const KIND_COLOR = { tsusho:'#0891b2', kinou:'#7c3aed', kagaku:'#059669', adl:'#d97706' };
+          return (
+            <Card>
+              <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                <ClipboardList size={16}/>計画書・加算の作成予定
+                <span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（期限の1ヶ月前からお知らせします）</span>
+                {overdueN > 0 && <span style={{fontSize:11,fontWeight:'bold',background:'#fee2e2',color:'#b91c1c',padding:'2px 8px',borderRadius:6}}>期限超過 {overdueN}件</span>}
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                {yms.map(ym => {
+                  const [yy,mm] = ym.split('-');
+                  return (
+                    <div key={ym}>
+                      <div style={{fontSize:12,fontWeight:'bold',color:'#475569',borderBottom:'1px solid #e2e8f0',paddingBottom:3,marginBottom:6}}>
+                        {Number(yy)}年{Number(mm)}月 <span style={{color:'#94a3b8',fontWeight:'normal'}}>{byYm[ym].length}件</span>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                        {byYm[ym].map((d,i) => (
+                          <button key={i} onClick={()=>navigateTo(d.view)}
+                            style={{display:'flex',alignItems:'center',gap:8,width:'100%',textAlign:'left',background:d.overdue?'#fef2f2':'#f8fafc',border:`1px solid ${d.overdue?'#fecaca':'#e2e8f0'}`,borderRadius:8,padding:'6px 10px',cursor:'pointer',flexWrap:'wrap'}}>
+                            <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:90}}>{d.patient.name}</span>
+                            <span style={{fontSize:11,fontWeight:'bold',color:KIND_COLOR[d.kind]||'#475569'}}>{d.label}</span>
+                            <span style={{fontSize:10,color:'#94a3b8'}}>{d.note}</span>
+                            <span style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:d.overdue?'#b91c1c':d.daysLeft<=7?'#d97706':'#64748b',whiteSpace:'nowrap'}}>
+                              {d.overdue ? `${Math.abs(d.daysLeft)}日超過` : d.daysLeft===0 ? '本日' : `あと${d.daysLeft}日`}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </Card>
           );
