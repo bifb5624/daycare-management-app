@@ -742,8 +742,27 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
           const lv = lLogs[k], cv = (cLogs || {})[k];
           if (!cv) { outLogs[k] = lv; return; }
           const lt = Number(lv && lv._savedAt) || 0, ct = Number(cv && cv._savedAt) || 0;
-          if (lt || ct) outLogs[k] = (lt >= ct) ? lv : cv;
-          else outLogs[k] = (JSON.stringify(lv).length >= JSON.stringify(cv).length) ? lv : cv;
+          if (lt || ct) {
+            // ★ フィールド単位: _fieldTs のある項目はその項目だけ新しい方を採用する。
+            //   (古い端末の「1週間前の送迎の自動コピー」等が、他端末で入力済みの本物の送迎を潰さない)
+            //   _fieldTs が無い項目は、従来どおりログ全体の _savedAt が新しい方(base)を採用。
+            const lFts = (lv && lv._fieldTs && typeof lv._fieldTs === 'object') ? lv._fieldTs : {};
+            const cFts = (cv && cv._fieldTs && typeof cv._fieldTs === 'object') ? cv._fieldTs : {};
+            const base = (lt >= ct) ? lv : cv;
+            const o = { ...base };
+            new Set([...Object.keys(lv || {}), ...Object.keys(cv || {})]).forEach(kk => {
+              if (kk === '_savedAt' || kk === '_fieldTs') return;
+              const lft = Number(lFts[kk]) || 0, cft = Number(cFts[kk]) || 0;
+              if (lft || cft) o[kk] = (lft >= cft) ? lv[kk] : cv[kk];
+              else if (!(kk in base)) o[kk] = (kk in (lv || {})) ? lv[kk] : cv[kk];
+            });
+            const mf = {};
+            new Set([...Object.keys(lFts), ...Object.keys(cFts)]).forEach(kk => { const t = Math.max(Number(lFts[kk]) || 0, Number(cFts[kk]) || 0); if (t) mf[kk] = t; });
+            if (Object.keys(mf).length) o._fieldTs = mf;
+            o._savedAt = Math.max(lt, ct);
+            outLogs[k] = o;
+          }
+          else outLogs[k] = (JSON.stringify(lv).length >= JSON.stringify(cv).length) ? lv : cv; // 旧データ(時刻なし)のみ従来判定
         });
         merged.diaryLogs = outLogs;
       }

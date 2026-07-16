@@ -16840,6 +16840,27 @@ export default function App() {
       if (newData.contactBookConfig && newData.contactBookConfig !== prev.contactBookConfig) {
         newData = { ...newData, contactBookConfig: _stampFieldTs(newData.contactBookConfig, prev.contactBookConfig, Date.now()) };
       }
+      // ★ 日誌(diaryLogs): 変更されたログだけに _savedAt、さらに変更フィールドだけ _fieldTs を刻む。
+      //   これが無いと _savedAt が付かず、マージが「内容が多い方を採用」という粗い判定になり、
+      //   古い端末の自動コピー等が他端末の入力済みの送迎を上書きしうる。
+      if (newData.diaryLogs && newData.diaryLogs !== prev.diaryLogs && typeof newData.diaryLogs === 'object') {
+        const _pl = prev.diaryLogs || {}, _nl = newData.diaryLogs || {};
+        const _outL = { ..._nl }; let _lch = false; const _lnow = Date.now();
+        Object.keys(_nl).forEach(k => {
+          const nv = _nl[k], pv = _pl[k];
+          if (!nv || typeof nv !== 'object' || pv === nv) return; // 参照同一 = 未変更
+          let same; try { same = JSON.stringify({ ...nv, _savedAt:0, _fieldTs:0 }) === JSON.stringify({ ...(pv||{}), _savedAt:0, _fieldTs:0 }); } catch { same = false; }
+          if (same) return; // 中身が同じ = 未変更
+          const fts = { ...(nv._fieldTs || {}) };
+          new Set([...Object.keys(nv), ...Object.keys(pv || {})]).forEach(fk => {
+            if (fk === '_savedAt' || fk === '_fieldTs') return;
+            let chg; try { chg = JSON.stringify(nv[fk]) !== JSON.stringify(pv ? pv[fk] : undefined); } catch { chg = true; }
+            if (chg) fts[fk] = _lnow;
+          });
+          _outL[k] = { ...nv, _savedAt: _lnow, _fieldTs: fts }; _lch = true;
+        });
+        if (_lch) newData = { ...newData, diaryLogs: _outL };
+      }
       // ★ その他の記録配列も「変更されたレコードだけ」に _savedAt を刻む(参照が変わった=編集された物だけ)。
       //   マージ(mergeById)は _savedAt の新しい方を採用するので、体力測定・モニタリング・スケジュール・計画書・
       //   お知らせ 等も、古い端末の保存で新しい入力が巻き戻らなくなる(全データに時刻を付ける一括対応)。
@@ -32234,7 +32255,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                               return { ...p, _savedAt: now, _fieldTs: _fts };
                             });
                             const _ts = {}; Object.keys(d.monthlyShifts||{}).forEach(mk => { const pm = d.monthlyShifts[mk]||{}; _ts[mk] = {}; Object.keys(pm).forEach(pid => { _ts[mk][pid] = now; }); }); d._msTs = _ts; d._msSavedAt = now;
-                            if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ dl[k]={ ...(d.diaryLogs[k]||{}), _savedAt: now }; }); d.diaryLogs = dl; }
+                            // ★ 日誌もフィールド単位マージ対象: 全項目に _fieldTs=now を刻み、この端末の日誌を確実に最新にする。
+                            if (d.diaryLogs && typeof d.diaryLogs==='object') { const dl={}; Object.keys(d.diaryLogs).forEach(k=>{ const lg=d.diaryLogs[k]||{}; const _fts={ ...(lg._fieldTs||{}) }; Object.keys(lg).forEach(fk=>{ if(fk!=='_savedAt'&&fk!=='_fieldTs') _fts[fk]=now; }); dl[k]={ ...lg, _savedAt: now, _fieldTs: _fts }; }); d.diaryLogs = dl; }
                             if (d.faxDataStore && typeof d.faxDataStore==='object') { const fx={}; Object.keys(d.faxDataStore).forEach(k=>{ fx[k]={ ...(d.faxDataStore[k]||{}), _updatedAt: now }; }); d.faxDataStore = fx; }
                             ['systemSettings','contactBookConfig','diarySettings','generalFaxDraft'].forEach(k => { if (d[k] && typeof d[k]==='object') {
                               // ★ フィールド単位マージ対策: 全フィールドに _fieldTs=now を刻み、この端末の全項目を確実に最新にする。
@@ -36933,9 +36955,13 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
   const closeFax = () => { setSelectedEntry(null); setIsPrint(false); };
 
-  const updateFax = (key, updates) => {
-    setFaxData(prev => ({ ...prev, [key]: { ...getFax(...key.split('_')), ...updates } }));
-    markDirty();
+  // opts.autoSave: 印刷/PDF後の状態記録など「アプリが自動で付ける情報」は、未保存にせずその場で保存する。
+  //   (ユーザーは印刷しただけで何も編集していないのに「未保存のデータがあります」が出るのを防ぐ)
+  const updateFax = (key, updates, opts = {}) => {
+    const next = { ...faxData, [key]: { ...getFax(...key.split('_')), ...updates } };
+    setFaxData(next);
+    if (opts.autoSave) { try { onSave({ ...appData, faxDataStore: next }, {}); } catch {} markClean(); }
+    else markDirty();
   };
   // 未保存ポップアップ用: faxData を appData に書き戻す
   const flushSave = () => {
@@ -36955,12 +36981,12 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
 
   const handlePrint = () => {
-    const doAfterPrint = () => { document.title='つむぎ｜デイサービス管理';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:'printed'});}};
+    const doAfterPrint = () => { document.title='つむぎ｜デイサービス管理';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:'printed'},{autoSave:true});}};
     if(onShowPrintPreview){setIsPrint(true);setTimeout(()=>{onShowPrintPreview(`休み連絡_${selectedEntry?.patient?.name||''}`, 'A4 portrait', 'print-content-fax');doAfterPrint();},100);}
     else{setIsPrint(true);document.title=`休み連絡_${selectedEntry?.patient?.name||''}`;setTimeout(()=>{window.print();setTimeout(doAfterPrint,500);},100);}
   };
   const handleSavePdf = () => {
-    const doAfterPdf=()=>{document.title='つむぎ｜デイサービス管理';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);const cur=getFax(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:cur.status==='printed'?'both':'pdf'});}};
+    const doAfterPdf=()=>{document.title='つむぎ｜デイサービス管理';setIsPrint(false);if(selectedEntry){const key=getKey(selectedEntry.date,selectedEntry.patient.id);const cur=getFax(selectedEntry.date,selectedEntry.patient.id);updateFax(key,{status:cur.status==='printed'?'both':'pdf'},{autoSave:true});}};
     if(onShowPrintPreview){setIsPrint(true);setTimeout(()=>{onShowPrintPreview(`休み連絡_${selectedEntry?.patient?.name||''}`, 'A4 portrait', 'print-content-fax');doAfterPdf();},100);}
     else{setIsPrint(true);document.title=`休み連絡_${selectedEntry?.patient?.name||''}`;setTimeout(()=>{window.print();setTimeout(doAfterPdf,500);},100);}
   };
