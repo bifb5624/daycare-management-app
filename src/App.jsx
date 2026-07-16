@@ -23958,11 +23958,35 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   }, [recsAP, patMap]);
 
   // 6. 欠席理由ランキング
+  //   ★ 集計キーの正規化:
+  //   ① 振替の欠席レコードは tokki が「○月○日PMへ振替（私用）」形式 → 括弧内の実際の理由だけを取り出す
+  //      (取り出せない=理由未記入の振替は「振替」に丸める。 日付そのものが理由として並ばないようにする)
+  //   ② 「体調不良で休み」「体調不良のため中止」等の語尾ゆらぎを、代表的な欠席理由に寄せてまとめる
+  const _REASON_CANON = ['体調不良','発熱','通院','家族の都合','私用','不在','入院','腰痛','ぎっくり腰','転倒','めまい','自宅療養','体調調整','疲労','高血圧','寝不足'];
+  const normalizeAbsenceReason = React.useCallback((tokki) => {
+    let t = String(tokki || '').trim();
+    if (!t) return '';
+    // ① 振替表記なら括弧内の理由を採用 (無ければ「振替」)
+    const fm = t.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:（(.+)）|\((.+)\))?$/);
+    if (fm) { t = (fm[1] || fm[2] || '').trim(); if (!t) return '振替'; }
+    // ② 付帯語(で休み/のため中止 等)を除いて代表理由に寄せる。 最長一致を優先。
+    const hit = _REASON_CANON.filter(c => t.includes(c)).sort((a,b)=>b.length-a.length)[0];
+    if (hit) {
+      // 「体調不良」を含むが「体調不良と転倒」のように別理由も併記されている場合は原文維持(取りこぼし防止)
+      const others = _REASON_CANON.filter(c => c !== hit && t.includes(c));
+      if (!others.length) return hit;
+    }
+    return t;
+  }, []);
   const reasonRank = React.useMemo(() => {
     const m = {};
-    recsAP.filter(r=>r.status==='欠席'&&r.tokki?.trim()).forEach(r=>{ m[r.tokki.trim()]=(m[r.tokki.trim()]||0)+1; });
+    recsAP.filter(r=>r.status==='欠席'&&r.tokki?.trim()).forEach(r=>{
+      const key = normalizeAbsenceReason(r.tokki);
+      if (!key) return;
+      m[key]=(m[key]||0)+1;
+    });
     return Object.entries(m).map(([r,cnt])=>({reason:r,count:cnt})).sort((a,b)=>b.count-a.count);
-  }, [recsAP]);
+  }, [recsAP, normalizeAbsenceReason]);
   const Card = OpsCard; // グローバルCardコンポーネントを使用
 
   const RateBar = ({rate,max=100,color}) => (
