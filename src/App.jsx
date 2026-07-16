@@ -14,6 +14,7 @@ import {
   supabaseCreateInvite,
   supabaseSignupFamily,
   supabaseLoginFamily,
+  supabaseFamilyUsernameExists, // ★ import 漏れ: ログインIDの重複チェックが常に失敗(catchで握り潰し)していた
   supabaseGetInviteByCode,
   supabaseLoadState,
   supabaseSubscribeState,
@@ -17037,7 +17038,9 @@ export default function App() {
         if (applicable.length > 0) {
           const latest = applicable.sort((a,b) => b.from.localeCompare(a.from))[0];
           if (latest.value !== upd.careLevel) {
-            upd = {...upd, careLevel: latest.value, careLevelFrom: latest.from, careLevelTo: latest.to||''};
+            // ★ careLevelTo は「空=期限未記録」。 履歴側に終了日が無いからといって、既に手入力された
+            //   認定有効期間(終了)を空で潰さない(起動時の自動適用=ユーザー編集ではないため他端末の入力を消す)。
+            upd = {...upd, careLevel: latest.value, careLevelFrom: latest.from, careLevelTo: latest.to || upd.careLevelTo || ''};
             changed = true;
           }
         }
@@ -18463,6 +18466,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
              pData.massage = existingRecord.massage || "";
              pData.exercises = existingRecord.exercises || {};
              pData.tokki = existingRecord.tokki || "";
+             // ★ actualTime(提供時間)を復元。 これが無いと保存時に必ず "" で再構築され(19051)、
+             //   保存済みの提供時間を全端末で消してしまっていた(空欄=施設の既定時間を使う意味)。
+             pData.actualTime = existingRecord.actualTime || "";
              pData.kibunArrival = existingRecord.kibunArrival || "";
              pData.kibunArrivalReason = existingRecord.kibunArrivalReason || "";
              pData.kibunDeparture = existingRecord.kibunDeparture || "";
@@ -30806,7 +30812,22 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const newOnyoku = onyokuInput.split(/[、,]+/).map(s => s.trim()).filter(s => s);
     const newMassageStaff = massageStaffInput.split(/[、,]+/).map(s => s.trim()).filter(s => s);
     if (dirtyRef) dirtyRef.current = false;
-    let diarySettings = diarySettingsRef.current || appData.diarySettings;
+    // ★ diarySettingsRef はマウント時に1回だけ appData から初期化される(日誌タブを開かないと再同期もされない)。
+    //   その古いスナップショットをそのまま保存すると、他端末が後から追加した職員/送迎車/時間割を消してしまう
+    //   (最悪、初回pull前にマウントしていると空の既定で全消し)。 → 中身が空/未同期なら appData 側を採用し、
+    //   さらに職員・車・時間割は「ローカルが空なら appData を残す」ガードを掛ける。
+    const _ds0 = appData.diarySettings || {};
+    let diarySettings = diarySettingsRef.current || _ds0;
+    {
+      const _dsKeep = (a, b) => (Array.isArray(a) && a.length) ? a : (Array.isArray(b) ? b : (a || []));
+      diarySettings = {
+        ..._ds0, ...diarySettings,
+        staff: _dsKeep(diarySettings.staff, _ds0.staff),
+        cars: _dsKeep(diarySettings.cars, _ds0.cars),
+        scheduleAM: _dsKeep(diarySettings.scheduleAM, _ds0.scheduleAM),
+        schedulePM: _dsKeep(diarySettings.schedulePM, _ds0.schedulePM),
+      };
+    }
     let _facilityInfo = facilityInfo;
     const _nm = (n)=>normalizeName(n||'').trim();
     // ★ 管理者の相互連携: 事業所管理者(facilityInfo.manager) ⇄ 日誌の管理者(staff role='管理者') ⇄ スタッフ切替(storeMembers.isAdmin)
@@ -30836,7 +30857,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       }
     }
     // ★ 同意ポリシーは全店共通(管理局コンソールで編集)へ移設したため、ここでは保存しない。
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (appData.systemSettings?.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (appData.systemSettings?.careManagers||[]), facilityInfo: _facilityInfo, exerciseItems, exerciseItemsHistory, individualExerciseItems, exerciseQuickButtons, anthropicApiKey, serviceItems } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    // ★ 各 state は「マウント時に1回だけ」appData から初期化される。 マウント後にクラウド同期で値が増えても
+    //   state は古いまま → その状態で保存すると『古い空/既定のスナップショット』が最新時刻で書かれ、
+    //   他端末が入れた APIキー・事業所情報・運動メニュー・職員リスト等を消してしまう。
+    //   → cmOffices と同じ「空/既定なら appData 側を残す」ガードを全項目に適用する。
+    const _ss0 = appData.systemSettings || {};
+    const _keepArr = (local, cur) => (Array.isArray(local) && local.length) ? local : (Array.isArray(cur) ? cur : (local || []));
+    const _keepStr = (local, cur) => (String(local ?? '').trim()) ? local : (cur ?? local ?? '');
+    // 事業所情報: 全項目が空(=未同期の既定)なら appData 側を維持
+    const _fiHasAny = !!(_facilityInfo && Object.keys(_facilityInfo).some(k => String(_facilityInfo[k] ?? '').trim()));
+    const _fiSafe = _fiHasAny ? _facilityInfo : (_ss0.facilityInfo || _facilityInfo);
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (_ss0.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (_ss0.careManagers||[]), facilityInfo: _fiSafe, exerciseItems: _keepArr(exerciseItems, _ss0.exerciseItems), exerciseItemsHistory: _keepArr(exerciseItemsHistory, _ss0.exerciseItemsHistory), individualExerciseItems: _keepArr(individualExerciseItems, _ss0.individualExerciseItems), exerciseQuickButtons: _keepArr(exerciseQuickButtons, _ss0.exerciseQuickButtons), anthropicApiKey: _keepStr(anthropicApiKey, _ss0.anthropicApiKey), serviceItems: _keepArr(serviceItems, _ss0.serviceItems) } }, { manual: true, message: '✓ 各種設定を保存しました' });
     // ★ 保存したので未保存フラグを解除し、未保存判定の基準も現在の内容に取り直す
     if (dirtyRef) dirtyRef.current = false;
     _dirtyBaseRef.current = null;
@@ -37360,14 +37391,28 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     if (o.recipientName!=null) setRecipientName(o.recipientName);
     const pat = (appData.patients||[]).find(p=>p.name===o.patientName);
     if (pat) setSelectedPatientId(pat.id); else if (o.patientName) setCustomPatientName(o.patientName);
+    // ★ 復元は「ユーザーの編集」ではないので、未保存判定の基準を取り直す(復元しただけで未保存にしない)
+    _gfBaseRef.current = null;
   }, []);
 
-  // 任意のフォーム値が変わったら dirty を立てる (初回 mount はスキップ)
+  // ★ フォーム値が「実際に変わった時だけ」dirty を立てる。 初回スキップだけでは、下書き復元・個人ファイルからの
+  //   ディープリンク・利用者選択の自動補完など『アプリ都合の state 更新』でも未保存になってしまうため、
+  //   内容の署名(JSON)を基準と比較する(各種設定と同じ方式)。 値を元に戻したら未保存も解除。
+  //   ★ 基準refは undefined=未設定 / null=「次回に取り直す」(復元・保存が要求) / string=基準の署名。
+  //     ディープリンク復元effectは この watch-effect より先に走るため、null を立てておけば
+  //     初回runでは基準を取らず、復元後の再renderで『復元後の内容』を基準にできる(復元で未保存にしない)。
   const _firstRef = React.useRef(true);
-  React.useEffect(() => {
-    if (_firstRef.current) { _firstRef.current = false; return; }
-    markDirty();
+  const _gfBaseRef = React.useRef(undefined);
+  const _gfSig = React.useMemo(() => {
+    try { return JSON.stringify({ selectedPatientId, subject, memo, pageCount, checks, recipientOffice, recipientName, customPatientName, selectedManager }); }
+    catch { return null; }
   }, [selectedPatientId, subject, memo, pageCount, checks, recipientOffice, recipientName, customPatientName, selectedManager]);
+  React.useEffect(() => {
+    if (_firstRef.current) { _firstRef.current = false; if (_gfBaseRef.current === undefined) _gfBaseRef.current = _gfSig; return; }
+    if (_gfBaseRef.current === undefined || _gfBaseRef.current === null) { _gfBaseRef.current = _gfSig; return; } // 復元/保存後の再基準化
+    if (_gfSig === _gfBaseRef.current) { if (dirtyRef) dirtyRef.current = false; return; } // 内容が基準と同じ=未編集
+    markDirty();
+  }, [_gfSig]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 未保存ポップアップ用: 下書きを appData に書き戻す
   const flushSave = () => {
@@ -37409,19 +37454,17 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const today = toWareki(new Date().toISOString().split('T')[0]);
   const maskedName = patient ? maskName(patient.name) : '';
 
-  // 利用者選択を変えたとき、御中の前 / 様の前 / 利用者名の表示を自動補完
-  React.useEffect(() => {
-    if (patient) {
-      setRecipientOffice(patient.cmOffice || '');
-      setRecipientName(patient.cmName || '');
-      setCustomPatientName(patient.name || '');
-    } else {
-      setRecipientOffice('');
-      setRecipientName('');
-      setCustomPatientName('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPatientId]);
+  // ★ 利用者を「ユーザーが選び直した時」だけ、御中の前 / 様の前 / 利用者名を自動補完する(下の select の onChange から呼ぶ)。
+  //   以前は useEffect([selectedPatientId]) で行っており初回マウントや復元時にも走ったため、
+  //   下書き(generalFaxDraft)や個人ファイルからの遷移で復元した「手入力の宛先」を利用者マスタの値で
+  //   上書きして消していた(＋未保存の誤検知)。 → effect をやめ、実ユーザー操作だけに限定。
+  const pickPatient = (pid) => {
+    setSelectedPatientId(pid);
+    const p = pid ? (appData.patients||[]).find(x=>x.id===pid) : null;
+    setRecipientOffice(p?.cmOffice || '');
+    setRecipientName(p?.cmName || '');
+    setCustomPatientName(p?.name || '');
+  };
 
   const handlePreview = () => {
     const label = patient ? patient.name : (customPatientName || '汎用');
@@ -37475,7 +37518,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
         {/* 利用者 */}
         <label style={{display:'flex',alignItems:'center',gap:6,whiteSpace:'nowrap'}}>
           <span style={{fontSize:12,fontWeight:'bold',color:'#cbd5e1'}}>利用者:</span>
-          <select value={selectedPatientId||''} onChange={e=>setSelectedPatientId(Number(e.target.value)||null)}
+          <select value={selectedPatientId||''} onChange={e=>pickPatient(Number(e.target.value)||null)}
                   style={{padding:'5px 8px',border:'1px solid rgba(255,255,255,0.25)',borderRadius:6,fontSize:13,fontWeight:'bold',outline:'none',background:'rgba(255,255,255,0.1)',color:'white',minWidth:160,textAlign:'center',textAlignLast:'center'}}>
             <option value="" style={{color:'#1e293b'}}>— 利用者なし —</option>
             {groupPatientsByKanaRow(patients).map(g => (

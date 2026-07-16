@@ -407,6 +407,13 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   //   採用すると片方が消える。 → 非空を優先し、両方非空で異なる時だけ _savedAt が新しい方を採る。
   //   オブジェクト値(exercises・送迎の pick/drop 等)は中身をキー単位で結合する。
   const _isEmptyVal = (v) => v == null || v === '';
+  // ★ _fieldTs の「新しい方が空=意図的削除」判定から除外する項目。 これらは画面側が正規化/派生で空を書くため、
+  //   除外しないと『別端末で入力済みの値』が空で消える(下の非空優先の保護に必ず委ねる)。
+  const FIELDTS_EXCLUDE = new Set([
+    'nextDateOverride','nextTimeOverride', // 空=未設定(自動計算)
+    'actualTime',                          // 空=施設の既定提供時間を使う(専用の入力UIが無い)
+    'temp','bpUpSt','bpDnSt','bpUpEn','bpDnEn','plSt','plEn', // *_AM/*_PM からの旧形式互換の派生値
+  ]);
   const mergeRecordFields = (a, b) => {
     if (!a) return b; if (!b) return a;
     const at = Number(a._savedAt) || 0, bt = Number(b._savedAt) || 0;
@@ -422,10 +429,13 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const av = a[k], bv = b[k];
       // ★ スカラー項目で _fieldTs があれば「新しい方」を採用(意図的に空にした削除も反映)。 バイタルもこれで削除可能。
       //   オブジェクト値(exercises 等)は下のキー単位マージに任せる(_fieldTs 短絡しない)。
-      //   ★ 例外: 次回予定(nextDateOverride/nextTimeOverride)は「空欄=未設定(自動計算に任せる)」であり
-      //     『意図的な削除』と区別できない。 画面側が正規化で空文字を書くことがあり、それを _fieldTs で
-      //     「新しい空欄=削除」と誤判定すると、別端末で入力済みの次回時間が消える。 → 常に下の非空優先に委ねる。
-      if (k !== 'nextDateOverride' && k !== 'nextTimeOverride'
+      //   ★ 例外(FIELDTS_EXCLUDE): 画面側が「ユーザー編集ではない正規化/派生」で空文字を書く項目は、
+      //     _fieldTs で「新しい空欄=削除」と誤判定すると別端末の入力を消してしまう → 常に下の非空優先に委ねる。
+      //     ・nextDateOverride/nextTimeOverride: 空欄=未設定(自動計算に任せる)
+      //     ・actualTime: 空欄=施設の既定提供時間を使う(入力UIは無く、保存時に必ず空で再構築される)
+      //     ・temp/bpUpSt/... (サフィックス無し): *_AM/*_PM からの旧形式互換の派生値(独立した削除意図を持たない)
+      //     ※ *_AM/*_PM のバイタルは対象外にしない = 意図的な削除は従来どおり反映される。
+      if (!FIELDTS_EXCLUDE.has(k)
           && !(av && typeof av === 'object') && !(bv && typeof bv === 'object')) {
         const _aft = Number(_aFts[k]) || 0, _bft = Number(_bFts[k]) || 0;
         if (_aft || _bft) { out[k] = (_aft >= _bft) ? av : bv; return; }
