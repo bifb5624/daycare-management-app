@@ -25254,6 +25254,11 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
     return m;
   });
   const [curPid, setCurPid] = React.useState(patientId || patientList[0]?.id || null);
+  // ★ 開いた時点の署名。 保存時にこれと比べ「ユーザーが実際に編集した分だけ」書き戻す(未編集の分で最新を潰さない)。
+  const _cleanSig0 = (o) => JSON.stringify({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
+  const _allSig0Ref = React.useRef(null);
+  const _patSig0Ref = React.useRef({});
+  const _tmplSig0Ref = React.useRef(null);
   const pat = curPid ? (patMap[curPid] || { html:'', from:'', until:'' }) : null;
   const setPat = (updater) => setPatMap(m => ({ ...m, [curPid]: typeof updater==='function' ? updater(m[curPid]||{html:'',from:'',until:''}) : updater }));
   const curPatient = patientList.find(p => p.id === curPid);
@@ -25261,6 +25266,13 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   const _today = _addDays(0);
   // 定型文: {title, content} の配列。 旧形式(文字列)は自動変換
   const [templates, setTemplates] = React.useState(() => (cfg.renrakuTemplates||[]).map(t => typeof t==='string' ? { title:(t.split('\n')[0]||'定型文').slice(0,20), content:t } : { title:t.title||'', content:t.content||'' }));
+  // 開いた時点の署名を1回だけ確定 (レンダー中に ref を埋めるだけなので副作用なし)
+  if (_allSig0Ref.current === null) {
+    _allSig0Ref.current = _cleanSig0(all);
+    const m0 = {}; Object.keys(patMap).forEach(k => { m0[k] = _cleanSig0(patMap[k]); });
+    _patSig0Ref.current = m0;
+    _tmplSig0Ref.current = JSON.stringify(templates);
+  }
   const [warn, setWarn] = React.useState('');
   const measureRef = React.useRef(null);
   const allInsertRef = React.useRef(null); // 全員エディタへ挿入
@@ -25286,9 +25298,22 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   }, [all.html, pat?.html]);
   const save = () => {
     const clean = (o) => ({ html: renrakuHasText(o) ? o.html : '', from: o?.from||'', until: o?.until||'' });
+    // ★ all / patMap / templates は「モーダルを開いた時点のスナップショット」。 開いている間に他端末が
+    //   連絡事項や掲載期間を更新しても state は古いままなので、触っていない分まで書き戻すと
+    //   最新の内容を古い値で潰してしまう(掲載期間が戻る原因の一つ)。
+    //   → 開いた時の署名と比べ、【ユーザーが実際に編集した分だけ】書く。 未編集は現在の最新(cfg/patient)を維持。
+    const _sig = (o) => JSON.stringify(clean(o));
+    const allTouched = _sig(all) !== _allSig0Ref.current;
+    const tmplTouched = JSON.stringify(templates) !== _tmplSig0Ref.current;
+    const nextCfg = { ...cfg };
+    if (allTouched) nextCfg.renrakuAll = clean(all);
     // ★ content は書式付きHTML。 空判定はタグを除いたプレーンで行う(<br>だけ等の空定型文を保存しない)
-    const nextCfg = { ...cfg, renrakuAll: clean(all), renrakuTemplates: templates.filter(t=>t && ((t.title||'').trim() || tmplToPlain(t.content))) };
-    const nextPatients = (appData.patients||[]).map(p => patMap[p.id] ? { ...p, contactBookRenraku: clean(patMap[p.id]) } : p);
+    if (tmplTouched) nextCfg.renrakuTemplates = templates.filter(t=>t && ((t.title||'').trim() || tmplToPlain(t.content)));
+    const nextPatients = (appData.patients||[]).map(p => {
+      if (!patMap[p.id]) return p;
+      if (_sig(patMap[p.id]) === (_patSig0Ref.current[p.id] ?? null)) return p; // 未編集 → 最新を維持
+      return { ...p, contactBookRenraku: clean(patMap[p.id]) };
+    });
     // ★ 即時クラウド保存(編集ウィンドウを立て、保存直後に古いpullで戻る隙を無くす)
     onSave({ ...appData, contactBookConfig: nextCfg, patients: nextPatients }, { manual:true, message:'✓ 連絡事項を保存しました' });
     onClose();
@@ -32748,12 +32773,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     //   (開いただけ/スタッフ切替しただけで「未保存のデータがあります」と出る原因だった)。
   }, [_activeRecForDailyLog]); // eslint-disable-line
 
-  // 初回マウント時にも読み込む
-  React.useEffect(() => {
-    const latest = (appData.diaryLogs||{})[logKey] || {};
-    lastRemoteSigRef.current = JSON.stringify(latest);
-    setLocalLog(JSON.parse(JSON.stringify(latest)));
-  }, []); // eslint-disable-line
+  // ★ 「初回マウント時にも読み込む」effect は削除した。
+  //   上の [logKey] effect は マウント時にも走り、素の読込に加えて『1週間前の送迎の自動コピー』と
+  //   『記録者の自動チェック』まで行って setLocalLog(loaded) している。 この effect は宣言順で後に走り、
+  //   素の latest で上書きしていたため、初回に日誌を開いた時だけ自動コピー/自動チェックが消えていた
+  //   (日付を変えた時=logKey変化 では効くので分かりにくい不具合だった)。 lastRemoteSigRef も
+  //   [logKey] effect 内(32660)で設定済みのため、この effect は不要。
 
   // ★ 他端末の保存が pull で届いたら、表示中の日誌を即時更新する (編集中は上書きしない)。
   //   logKey は変わらないため従来の読込effectでは反映されず「同期しない」ように見えていた。
