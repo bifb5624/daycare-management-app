@@ -1230,21 +1230,34 @@ export async function supabaseMergePatientDocsFromCM(storeId, patientId, patch =
       // 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映。 値変更は変更履歴にも記録。
       const m = patch.master || {};
       const nowDay = now.split('T')[0];
-      const appendHist = (histKey, oldVal, newVal, from, to) => {
+      // ★ App.jsx の appendValueHistory と同じ規則: 値の変更に加え、値が同じでも認定有効期間の
+      //   開始日が変わったら「認定更新」として1件残す(prevFrom を渡した時のみ判定)。
+      const appendHist = (histKey, oldVal, newVal, from, to, prevFrom) => {
         const hist = Array.isArray(np[histKey]) ? [...np[histKey]] : [];
         const nv = newVal == null ? '' : String(newVal);
-        if (!nv || String(oldVal || '') === nv) return hist;
+        if (!nv) return hist;
         const f = from || nowDay;
-        if (oldVal) {
-          if (hist.length > 0 && !hist[hist.length - 1].to) hist[hist.length - 1] = { ...hist[hist.length - 1], to: f };
-          else if (hist.length === 0) hist.push({ value: oldVal, from: null, to: f, note: '' });
+        const last = hist.length ? hist[hist.length - 1] : null;
+        const valChanged = String(oldVal || '') !== nv;
+        const periodChanged = prevFrom !== undefined && String(prevFrom || '') !== String(from || '');
+        if (last && String(last.value || '') === nv && String(last.from || '') === String(f)) {
+          if (to && String(last.to || '') !== String(to)) hist[hist.length - 1] = { ...last, to };
+          return hist;
         }
-        hist.push({ value: nv, from: f, to: to || null, note: '' });
+        if (!valChanged && !periodChanged) return hist;
+        if (oldVal) {
+          if (last && !last.to) hist[hist.length - 1] = { ...last, to: f };
+          else if (!hist.length) hist.push({ value: oldVal, from: prevFrom || null, to: f, note: '' });
+        }
+        hist.push({ value: nv, from: f, to: to || null, note: valChanged ? '' : '認定更新' });
         return hist;
       };
-      if (m.careLevel != null && m.careLevel !== '' && String(m.careLevel) !== String(np.careLevel || '')) {
-        np.careLevelHistory = appendHist('careLevelHistory', np.careLevel, m.careLevel, (m.careLevelFrom || np.careLevelFrom), (m.careLevelTo || np.careLevelTo));
-        np.careLevel = String(m.careLevel); changed.push('介護度');
+      // 介護度: 値が変わった時、または 値は同じでも認定開始日が変わった時に履歴を残す
+      const _mCl = (m.careLevel != null && m.careLevel !== '') ? String(m.careLevel) : String(np.careLevel || '');
+      const _mClFrom = (m.careLevelFrom != null && m.careLevelFrom !== '') ? String(m.careLevelFrom) : (np.careLevelFrom || '');
+      if (_mCl && (_mCl !== String(np.careLevel || '') || _mClFrom !== String(np.careLevelFrom || ''))) {
+        np.careLevelHistory = appendHist('careLevelHistory', np.careLevel, _mCl, _mClFrom, (m.careLevelTo || np.careLevelTo), np.careLevelFrom);
+        if (_mCl !== String(np.careLevel || '')) { np.careLevel = _mCl; changed.push('介護度'); }
       }
       if (m.careLevelFrom != null && m.careLevelFrom !== '' && String(m.careLevelFrom) !== String(np.careLevelFrom || '')) { np.careLevelFrom = String(m.careLevelFrom); changed.push('認定有効期間'); }
       if (m.careLevelTo != null && m.careLevelTo !== '' && String(m.careLevelTo) !== String(np.careLevelTo || '')) { np.careLevelTo = String(m.careLevelTo); changed.push('認定有効期間'); }

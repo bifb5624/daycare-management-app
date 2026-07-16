@@ -1574,17 +1574,28 @@ function stripPatientData(appData, idSet) {
 
 // ★ 介護度/負担割合などの変更履歴に1件追加する。 直前の未終了エントリを終了させ、新しい値を追加。
 //   entries: { value, from, to, note }
-function appendValueHistory(existingHist, oldValue, newValue, from, to) {
+//   ★ prevFrom を渡すと「値は同じでも認定有効期間の開始日が変わった=認定更新」も1件として残す。
+//     (要介護2のまま R7.4.1〜R8.3.31 → R8.4.1〜R9.3.31 に更新した、という事実を履歴に残すため)
+function appendValueHistory(existingHist, oldValue, newValue, from, to, prevFrom) {
   const hist = Array.isArray(existingHist) ? [...existingHist] : [];
   const today = new Date().toISOString().split('T')[0];
   const nv = newValue == null ? '' : String(newValue);
-  if (!nv || String(oldValue || '') === nv) return hist; // 変更なし/空は履歴を作らない
+  if (!nv) return hist; // 空は履歴を作らない
   const f = from || today;
-  if (oldValue) {
-    if (hist.length > 0 && !hist[hist.length - 1].to) hist[hist.length - 1] = { ...hist[hist.length - 1], to: f };
-    else if (hist.length === 0) hist.push({ value: oldValue, from: null, to: f, note: '' });
+  const last = hist.length ? hist[hist.length - 1] : null;
+  const valChanged = String(oldValue || '') !== nv;
+  const periodChanged = prevFrom !== undefined && String(prevFrom || '') !== String(from || '');
+  // 直近エントリと「値も開始日も同じ」なら二重に積まない。 終了日だけの修正はその場で反映。
+  if (last && String(last.value || '') === nv && String(last.from || '') === String(f)) {
+    if (to && String(last.to || '') !== String(to)) hist[hist.length - 1] = { ...last, to };
+    return hist;
   }
-  hist.push({ value: nv, from: f, to: to || null, note: '' });
+  if (!valChanged && !periodChanged) return hist; // 変更なし
+  if (oldValue) {
+    if (last && !last.to) hist[hist.length - 1] = { ...last, to: f };
+    else if (!hist.length) hist.push({ value: oldValue, from: prevFrom || null, to: f, note: '' });
+  }
+  hist.push({ value: nv, from: f, to: to || null, note: valChanged ? '' : '認定更新' });
   return hist;
 }
 
@@ -27641,11 +27652,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ 介護度/負担割合/ケアマネの変更は、この編集1か所から「変更履歴」と「支援経過表」へ自動記録する。
     //   (支援経過表は変更履歴から自動生成されるため、履歴を書けば両方に載る)
     //   変更履歴タブの手動「追加」ボタンは廃止。 入力起点を一本化して二重入力と同期漏れを防ぐ。
-    if (String(prev.careLevel||'') !== String(pat.careLevel||'') && String(pat.careLevel||'').trim()) {
-      pat = { ...pat, careLevelHistory: appendValueHistory(prev.careLevelHistory, prev.careLevel, pat.careLevel, pat.careLevelFrom, pat.careLevelTo) };
+    //   ※ 値が同じでも認定有効期間(開始日)が変わったら「認定更新」として履歴に残す(prevFrom を渡す)
+    if (String(pat.careLevel||'').trim() &&
+        (String(prev.careLevel||'') !== String(pat.careLevel||'') || String(prev.careLevelFrom||'') !== String(pat.careLevelFrom||''))) {
+      pat = { ...pat, careLevelHistory: appendValueHistory(prev.careLevelHistory, prev.careLevel, pat.careLevel, pat.careLevelFrom, pat.careLevelTo, prev.careLevelFrom) };
     }
-    if (String(prev.costBurden||'') !== String(pat.costBurden||'') && String(pat.costBurden||'').trim()) {
-      pat = { ...pat, costBurdenHistory: appendValueHistory(prev.costBurdenHistory, prev.costBurden, pat.costBurden, pat.costBurdenFrom, pat.costBurdenTo) };
+    if (String(pat.costBurden||'').trim() &&
+        (String(prev.costBurden||'') !== String(pat.costBurden||'') || String(prev.costBurdenFrom||'') !== String(pat.costBurdenFrom||''))) {
+      pat = { ...pat, costBurdenHistory: appendValueHistory(prev.costBurdenHistory, prev.costBurden, pat.costBurden, pat.costBurdenFrom, pat.costBurdenTo, prev.costBurdenFrom) };
     }
     const _cmOld = `${prev.cmOffice||''}|${prev.cmName||''}`, _cmNew = `${pat.cmOffice||''}|${pat.cmName||''}`;
     if (_cmOld !== _cmNew && (String(pat.cmOffice||'').trim() || String(pat.cmName||'').trim())) {
@@ -38460,11 +38474,23 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   // ★ 保険証・負担割合証の内容(介護度/認定有効期間/負担割合)を利用者マスタへ反映。 値変更は変更履歴にも記録。
   const saveMaster = (patch) => {
     const np = { ...patch };
-    if ('careLevel' in patch && String(patch.careLevel||'') !== String(patient.careLevel||'')) {
-      np.careLevelHistory = appendValueHistory(patient.careLevelHistory, patient.careLevel, patch.careLevel, patch.careLevelFrom ?? patient.careLevelFrom, patch.careLevelTo ?? patient.careLevelTo);
+    // ★ 保険証/負担割合証の欄が唯一の入力起点。 値の変更に加え、値は同じでも認定有効期間(開始日)が
+    //   変わった「認定更新」も履歴に残す(変更履歴＋支援経過表に自動反映)。
+    if ('careLevel' in patch || 'careLevelFrom' in patch || 'careLevelTo' in patch) {
+      const _v = 'careLevel' in patch ? patch.careLevel : patient.careLevel;
+      const _f = 'careLevelFrom' in patch ? patch.careLevelFrom : patient.careLevelFrom;
+      const _t = 'careLevelTo' in patch ? patch.careLevelTo : patient.careLevelTo;
+      if (String(_v||'').trim() && (String(_v||'') !== String(patient.careLevel||'') || String(_f||'') !== String(patient.careLevelFrom||''))) {
+        np.careLevelHistory = appendValueHistory(patient.careLevelHistory, patient.careLevel, _v, _f, _t, patient.careLevelFrom);
+      }
     }
-    if ('costBurden' in patch && String(patch.costBurden||'') !== String(patient.costBurden||'')) {
-      np.costBurdenHistory = appendValueHistory(patient.costBurdenHistory, patient.costBurden, patch.costBurden, patch.costBurdenFrom ?? patient.costBurdenFrom, patch.costBurdenTo ?? patient.costBurdenTo);
+    if ('costBurden' in patch || 'costBurdenFrom' in patch || 'costBurdenTo' in patch) {
+      const _v = 'costBurden' in patch ? patch.costBurden : patient.costBurden;
+      const _f = 'costBurdenFrom' in patch ? patch.costBurdenFrom : patient.costBurdenFrom;
+      const _t = 'costBurdenTo' in patch ? patch.costBurdenTo : patient.costBurdenTo;
+      if (String(_v||'').trim() && (String(_v||'') !== String(patient.costBurden||'') || String(_f||'') !== String(patient.costBurdenFrom||''))) {
+        np.costBurdenHistory = appendValueHistory(patient.costBurdenHistory, patient.costBurden, _v, _f, _t, patient.costBurdenFrom);
+      }
     }
     savePatientTop(np, { manual:true, message:'✓ 利用者マスタに反映しました' });
   };
