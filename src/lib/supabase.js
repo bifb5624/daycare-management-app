@@ -492,6 +492,19 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     out._savedAt = Math.max(at, bt);
     // _fieldTs は両者の項目別 max を保持
     { const mf = {}; new Set([...Object.keys(_aFts), ...Object.keys(_bFts)]).forEach(k => { const t = Math.max(Number(_aFts[k]) || 0, Number(_bFts[k]) || 0); if (t) mf[k] = t; }); if (Object.keys(mf).length) out._fieldTs = mf; }
+    // ★ プレーンのバイタル(temp/bpUpSt/…)は *_AM/*_PM からの派生値(旧形式互換)。 これを独立にマージすると
+    //   上の「バイタルは非空優先」により、一度入った値が空にしても永久に消えない。 その結果
+    //   「提供記録入力は空欄なのに連絡帳/月間表には古い値が出続ける」ことになる。
+    //   AM/PM を持つ記録では、マージ後に必ず AM/PM から射影し直して整合させる(空なら空にする)。
+    const _PLAIN_VITALS = ['temp','bpUpSt','bpDnSt','plSt','bpUpEn','bpDnEn','plEn'];
+    const _nonEmpty = (v) => v != null && String(v) !== '';
+    if (_PLAIN_VITALS.some(f => (`${f}_AM` in out) || (`${f}_PM` in out))) {
+      _PLAIN_VITALS.forEach(f => {
+        const am = out[`${f}_AM`], pm = out[`${f}_PM`];
+        if (am === undefined && pm === undefined) return; // AM/PM が無い項目は旧データなので触らない
+        out[f] = _nonEmpty(am) ? am : (_nonEmpty(pm) ? pm : '');
+      });
+    }
     return out;
   };
   const mergeByIdFieldLevel = (localArr, cloudArr) => {
