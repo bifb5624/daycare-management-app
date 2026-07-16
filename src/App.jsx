@@ -16304,6 +16304,32 @@ export default function App() {
               });
             } catch (e) { console.warn('[pull preserve] settings failed', e); }
           }
+          // ★ 書類(保険証/負担割合証/お薬手帳/その他)の削除を pull で復活させない。
+          //   pull は patients も丸ごと置換するため、push が完了する前の4秒ポーリングで
+          //   墓石ごと消えて削除済みの書類が戻る(1回目の×で消えず、2回目で消える症状の原因)。
+          if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.patients) && Array.isArray(merged.patients)) {
+            try {
+              const _prevById = new Map(prev.patients.filter(p=>p&&p.id!=null).map(p => [String(p.id), p]));
+              let _docChg = false;
+              merged.patients = merged.patients.map(cp => {
+                if (!cp || cp.id == null) return cp;
+                const lp = _prevById.get(String(cp.id));
+                const lTomb = (lp && lp._delDocs && typeof lp._delDocs === 'object') ? lp._delDocs : null;
+                if (!lTomb || !Object.keys(lTomb).length) return cp;
+                const tomb = { ...(cp._delDocs || {}), ...lTomb };
+                let np = { ...cp, _delDocs: tomb };
+                let touched = Object.keys(tomb).length !== Object.keys(cp._delDocs || {}).length;
+                ['docInsurance','docBurden','docUpdates','medicationImages','docOther'].forEach(k => {
+                  if (!Array.isArray(np[k])) return;
+                  const f = np[k].filter(d => !(d && d.id != null && tomb[String(d.id)]));
+                  if (f.length !== np[k].length) { np[k] = f; touched = true; }
+                });
+                if (touched) _docChg = true;
+                return np;
+              });
+              if (_docChg) _mergedForPush = merged;
+            } catch (e) { console.warn('[pull preserve] docs failed', e); }
+          }
           return merged;
         });
         // ★ 端末内の新しい記録を保持した場合は、クラウドにも反映(失敗していた保存を再送し、次回pullで消えないように)。
@@ -25523,6 +25549,11 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [localOverrides, setLocalOverrides] = useState({});
+  // ★ 次回予定モーダルを開いた時点の値(=自動計算の表示値)。 保存時にこれと比べ、
+  //   実際に手入力で変わった項目だけを保存する。 これをしないと、モーダルを開いて保存しただけで
+  //   全員ぶんの nextDateOverride/nextTimeOverride が確定値として焼き付き、
+  //   1人の時間を直しただけで他全員が「変更済み(自動計算に戻らない)」になってしまう。
+  const _ovBaseRef = React.useRef({});
   const [keypad, setKeypad] = useState({ isOpen: false, recordId: null, field: null, value: "", isFirstInput: false });
   const [isPrintPreview, setIsPrintPreview] = useState(false);
 
@@ -25604,6 +25635,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
               };
           });
           setLocalOverrides(initialOverrides);
+          // 開いた時点の表示値を基準として控える (差分のあった項目だけ保存するため)
+          _ovBaseRef.current = JSON.parse(JSON.stringify(initialOverrides));
       }
   }, [isBulkEditOpen, isScheduleModalOpen]);
 
@@ -25762,17 +25795,29 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const saveAllOverrides = () => {
       const now = Date.now();
       let recs = [...(appData.ticketRecords || [])];
+      const base = _ovBaseRef.current || {};
+      let _changed = 0;
       Object.entries(localOverrides).forEach(([rid, ov]) => {
         if (!ov) return;
+        // ★ 開いた時点の表示値から実際に変わった項目だけを保存する。
+        //   触っていない人は record に一切書かない = 自動計算のまま(欠席/振替に追従し続ける)。
+        const b = base[rid] || {};
+        const patch = {};
+        ['nextDateOverride','nextTimeOverride'].forEach(f => {
+          if (String(ov[f] ?? '') !== String(b[f] ?? '')) patch[f] = ov[f];
+        });
+        if (!Object.keys(patch).length) return;
+        _changed++;
         const idx = recs.findIndex(r => String(r.id) === String(rid));
-        if (idx >= 0) { recs[idx] = { ...recs[idx], ...ov, _savedAt: now }; }
+        if (idx >= 0) { recs[idx] = { ...recs[idx], ...patch, _savedAt: now }; }
         else if (String(rid).startsWith('auto-')) {
           const pid = Number(String(rid).slice(5));
           const pat = (appData.patients || []).find(p => p.id === pid);
-          if (pat) { const d = new Date(selectedDate); recs.push({ id:`tr_${pid}_${targetYear}_${d.getMonth()+1}_${d.getDate()}`, patientId:pid, date:targetDateStr, year:targetYear, status:'出席', ...ov, _savedAt:now }); }
+          if (pat) { const d = new Date(selectedDate); recs.push({ id:`tr_${pid}_${targetYear}_${d.getMonth()+1}_${d.getDate()}`, patientId:pid, date:targetDateStr, year:targetYear, status:'出席', ...patch, _savedAt:now }); }
         }
       });
       markClean();
+      if (!_changed) return; // 何も編集していない = 保存しない(誤って全員を確定値にしない)
       onSave({ ...appData, ticketRecords: recs }, { silent: true }); // ★ 即時クラウド保存
   };
 
@@ -25889,13 +25934,14 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                       if (!h && !mi) return '';
                       return `${h||''}時${mi||''}分`;
                     };
+                    // ★ 触った側(日付 or 時間)だけを更新する。 両方を毎回書くと、時間を入れただけで
+                    //   日付まで確定値として保存され、自動計算(欠席/振替への追従)が効かなくなる。
                     const updateOverride = (kind, m, d, h, mi) => {
                       setLocalOverrides(prev => ({
                         ...prev,
                         [r.id]: {
                           ...prev[r.id],
-                          nextDateOverride: composeDate(m, d),
-                          nextTimeOverride: composeTime(h, mi),
+                          ...(kind === 'date' ? { nextDateOverride: composeDate(m, d) } : { nextTimeOverride: composeTime(h, mi) }),
                         }
                       }));
                     };
@@ -38372,6 +38418,10 @@ function OfficeAssessmentCard({ patientId, assessment, onSaveAssessment }) {
 }
 
 function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange, initialTab }) {
+  // ★ 個人ファイルを開いている間はクラウドポーリング(4秒)を止める。 pull は patients を丸ごと置換するため、
+  //   書類の削除や添付の保存(push)が完了する前に pull が走ると、その操作が古いクラウド値で消える。
+  //   (フェイスシートのモーダルと同じ扱い。 閉じたら解除)
+  React.useEffect(() => { officeEditingActive.current = true; return () => { officeEditingActive.current = false; }; }, []);
   // ★ 常に最新の appData から利用者を取得する。
   //   patientProp はモーダルを開いた時点のスナップショットで、保存(updatePatient → onSave → setAppData)後も
   //   更新されない。そのため担当者会議などを保存しても画面に反映されず、再度開いても出ず
