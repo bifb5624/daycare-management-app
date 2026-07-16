@@ -27545,6 +27545,24 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       const nv = Array.isArray(pat[field]) ? JSON.stringify(pat[field]||[]) : (pat[field]||'');
       if (ov !== nv) pat = addChangeLog(pat, field, prev[field], pat[field]);
     });
+    // ★ 介護度/負担割合/ケアマネの変更は、この編集1か所から「変更履歴」と「支援経過表」へ自動記録する。
+    //   (支援経過表は変更履歴から自動生成されるため、履歴を書けば両方に載る)
+    //   変更履歴タブの手動「追加」ボタンは廃止。 入力起点を一本化して二重入力と同期漏れを防ぐ。
+    if (String(prev.careLevel||'') !== String(pat.careLevel||'') && String(pat.careLevel||'').trim()) {
+      pat = { ...pat, careLevelHistory: appendValueHistory(prev.careLevelHistory, prev.careLevel, pat.careLevel, pat.careLevelFrom, pat.careLevelTo) };
+    }
+    if (String(prev.costBurden||'') !== String(pat.costBurden||'') && String(pat.costBurden||'').trim()) {
+      pat = { ...pat, costBurdenHistory: appendValueHistory(prev.costBurdenHistory, prev.costBurden, pat.costBurden, pat.costBurdenFrom, pat.costBurdenTo) };
+    }
+    const _cmOld = `${prev.cmOffice||''}|${prev.cmName||''}`, _cmNew = `${pat.cmOffice||''}|${pat.cmName||''}`;
+    if (_cmOld !== _cmNew && (String(pat.cmOffice||'').trim() || String(pat.cmName||'').trim())) {
+      const _h = Array.isArray(prev.cmHistory) ? [...prev.cmHistory] : [];
+      const _td = new Date().toISOString().slice(0,10);
+      if (_h.length && !_h[_h.length-1].to) _h[_h.length-1] = { ..._h[_h.length-1], to: _td };
+      else if (!_h.length && (prev.cmOffice||prev.cmName)) _h.push({ office: prev.cmOffice||'', name: prev.cmName||'', from: null, to: _td, note: '' });
+      _h.push({ office: pat.cmOffice||'', name: pat.cmName||'', from: _td, to: null, note: '' });
+      pat = { ...pat, cmHistory: _h };
+    }
     if (pat.changeLog !== localPatient.changeLog) setLocalPatient(pat);
     next.patients = appData.patients.map(p => p.id === pat.id ? pat : p);
     // ★ 運動メニュー(予定値)が変わり、かつ過去の提供記録がある場合のみ「何月から適用するか」を確認。
@@ -28804,10 +28822,15 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             {/* 変更履歴タブ */}
             {activeDetailTab === 'history' && localPatient && (
               <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <button onClick={()=>setCareLevelModal({newValue:'',from:new Date().toISOString().split('T')[0],to:'',note:'',isCostBurden:false})} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold flex items-center gap-1.5 active:scale-95"><Plus size={15}/>介護度変更を追加</button>
-                  <button onClick={()=>setCareLevelModal({newValue:'',from:new Date().toISOString().split('T')[0],to:'',note:'',isCostBurden:true})} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center gap-1.5 active:scale-95"><Plus size={15}/>負担割合変更を追加</button>
-                  <button onClick={()=>setCmChangeModal({office:localPatient.cmOffice||'',name:localPatient.cmName||'',from:new Date().toISOString().split('T')[0],note:''})} className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold flex items-center gap-1.5 active:scale-95"><Plus size={15}/>ケアマネ変更を追加</button>
+                {/* ★ 手動の「変更を追加」は廃止。 入力起点を「基本情報タブ」に一本化し、
+                    そこで介護度/負担割合/ケアマネを変更すると この履歴と支援経過表へ自動記録される。
+                    二重入力＝同期漏れの原因だったため。 誤記録の修正用に各行の 編集/削除 は残す。 */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2">
+                  <span className="text-blue-500 shrink-0 mt-0.5"><Info size={15}/></span>
+                  <div className="text-[12px] text-blue-900 leading-relaxed">
+                    <span className="font-bold">履歴はここでは追加しません。</span>
+                    <span className="opacity-80">「基本情報」タブで介護度・負担割合・ケアマネを変更して保存すると、この変更履歴と<span className="font-bold">支援経過表に自動で記録</span>されます（保険証・負担割合証の写真も基本情報タブから添付）。誤って記録された履歴は、各行の編集・削除ボタンで直せます。</span>
+                  </div>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden"><div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"/><span className="font-bold text-sm text-slate-700">介護度 変更履歴</span></div>
                   {!(localPatient.careLevelHistory||[]).length?<div className="px-4 py-8 text-center text-sm text-slate-400">変更履歴なし</div>:<div className="divide-y divide-slate-100">{[...(localPatient.careLevelHistory||[])].sort((a,b)=>(b.from||'').localeCompare(a.from||'')).map((h,si)=>{const ri=(localPatient.careLevelHistory||[]).findIndex(x=>x===h);const isF=h.from>new Date().toISOString().split('T')[0];return(<div key={si} className={`px-4 py-3 flex items-start gap-3 ${isF?'bg-blue-50':''}`}><div className="flex-1 min-w-0"><div className="flex items-center gap-2 flex-wrap mb-0.5"><span className="text-sm text-slate-500">{h.from?fD(h.from):'?'}{h.to?' 〜 '+fD(h.to):' 〜'}</span><span className="font-bold text-sm text-slate-800">{h.value}</span>{isF&&<span className="text-[11px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded font-bold">予定</span>}</div>{h.note&&<div className="text-[11px] text-slate-400">{h.note}</div>}</div><div className="flex gap-1 shrink-0"><button onClick={()=>setEditHistModal({type:'careLevel',idx:ri,entry:{...h}})} className="text-blue-400 hover:text-blue-600 p-1"><Edit3 size={13}/></button><button onClick={()=>setDeleteHistConfirm({type:'careLevel',idx:ri})} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={13}/></button></div></div>);})}</div>}
