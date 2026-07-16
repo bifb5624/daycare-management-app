@@ -19550,30 +19550,71 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   {patient.kana && <span className="text-[11px] text-slate-400">{patient.kana}</span>}
                   <span className="text-[11px] text-slate-500 ml-1">{new Date(selectedDate).getMonth()+1}月の利用日 {days.length}日</span>
                 </div>
-                <div className="divide-y divide-slate-100">
-                  {days.map(({iso, label, rec}) => {
-                    const st = rec?.status || '予定';
-                    const stColor = st==='出席'?'#1d4ed8':st==='欠席'?'#dc2626':st==='振替'?'#7c3aed':st==='休業'||st==='休止'?'#64748b':'#94a3b8';
-                    const hasVital = rec && (rec.temp||rec.bpUpSt||rec.plSt);
-                    const vitalStr = hasVital ? [rec.temp&&`${rec.temp}℃`, (rec.bpUpSt||rec.bpDnSt)&&`${rec.bpUpSt||''}/${rec.bpDnSt||''}`, rec.plSt&&`P${rec.plSt}`].filter(Boolean).join('　') : '';
-                    // ★ 運動の数値も表示 (各種設定の運動項目 name + 記録値、値が入っているものだけ)
-                    const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems || []);
-                    const exStr = (rec && rec.exercises && typeof rec.exercises==='object')
-                      ? _exItems.map(it => { const v=rec.exercises[it.id]; const val=(v&&typeof v==='object')?v.value:v; return (val!=null && String(val).trim()!=='' && String(val)!=='ー' && String(val)!=='×') ? `${(it.name||'').replace(/^[①-⑳]/,'')}${val}` : null; }).filter(Boolean).join('　')
-                      : '';
-                    return (
-                      <button key={iso} type="button" onClick={()=>{ setSelectedDate(iso); setSearchQuery(''); }}
-                        className="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-blue-50 active:bg-blue-100 transition-colors">
-                        <span className="font-bold text-slate-700 text-sm w-28 shrink-0 pt-0.5">{label}</span>
-                        <span style={{color:stColor}} className="text-xs font-bold w-12 shrink-0 pt-0.5">{st}</span>
-                        <span className="text-xs text-slate-500 flex-1 min-w-0">
-                          <span className="block truncate">{vitalStr || rec?.tokki || ''}</span>
-                          {exStr && <span className="block truncate text-[11px] text-slate-400 mt-0.5">{exStr}</span>}
-                        </span>
-                        <ArrowRight size={15} className="text-slate-300 shrink-0 mt-0.5"/>
-                      </button>
-                    );
-                  })}
+                {/* ★ 元のサービス提供記録入力と同じ列構成の表 (読み取り専用)。 行タップで当日入力へジャンプ */}
+                <div style={{overflowX:'auto'}}>
+                  <table className="text-sm text-left" style={{tableLayout:'fixed',borderCollapse:'separate',borderSpacing:0,minWidth:'max-content',width:'max-content'}}>
+                    <colgroup>
+                      <col style={{width:'115px'}}/>{/* 日付 */}
+                      <col style={{width:'62px'}}/>{/* 状態 */}
+                      <col style={{width:'70px'}}/>{/* 気分 */}
+                      <col style={{width:'58px'}}/>{/* 体温 */}
+                      <col style={{width:'120px'}}/>{/* 開始 血圧+脈 */}
+                      <col style={{width:'120px'}}/>{/* 終了 血圧+脈 */}
+                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => <col key={item.id} style={{width:'58px'}}/>)}
+                      <col style={{width:'260px'}}/>{/* 特記 */}
+                    </colgroup>
+                    <thead className="bg-slate-800 text-white">
+                      <tr>
+                        <th className="px-2 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">日付</th>
+                        <th className="px-2 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">状態</th>
+                        <th className="px-2 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">気分</th>
+                        <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">体温</th>
+                        <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">開始 血圧/脈</th>
+                        <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">{secondBpLabel(appData)} 血圧/脈</th>
+                        {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => (
+                          <th key={item.id} className="px-0.5 py-2 font-bold text-center border border-slate-700 text-[11px] truncate">{item.name}</th>
+                        ))}
+                        <th className="px-2 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">特記</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {days.map(({iso, label, rec}) => {
+                        const st = rec?.status || '予定';
+                        const stColor = st==='出席'?'#1d4ed8':st==='欠席'?'#dc2626':st==='振替'?'#7c3aed':st==='休業'||st==='休止'?'#64748b':'#94a3b8';
+                        const dim = (st==='欠席'||st==='休業'||st==='休止');
+                        const _mA = KIBUN_MOOD_META.find(m=>m.key===rec?.kibunArrival);
+                        const _mD = KIBUN_MOOD_META.find(m=>m.key===rec?.kibunDeparture);
+                        const bpStr = (u,d,p) => (u||d||p) ? `${u||''}${(u||d)?'/':''}${d||''}${p?`　P${p}`:''}` : '';
+                        return (
+                          <tr key={iso} onClick={()=>{ setSelectedDate(iso); setSearchQuery(''); }}
+                            className={`cursor-pointer group ${dim?'bg-slate-50':'bg-white'} hover:bg-blue-50`} title="タップするとこの日の入力へ移動します">
+                            <td className="px-2 py-2 font-bold text-slate-700 border border-slate-300 whitespace-nowrap group-hover:text-blue-700">{label}</td>
+                            <td style={{color:stColor}} className="px-2 py-2 text-xs font-bold text-center border border-slate-300">{st}</td>
+                            <td className="px-1 py-2 text-center border border-slate-300 whitespace-nowrap">
+                              {_mA && <span title={`通所時: ${_mA.label}`}>{_mA.emoji}</span>}
+                              {_mD && <span title={`帰宅時: ${_mD.label}`} className="ml-0.5">{_mD.emoji}</span>}
+                            </td>
+                            <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800">{rec?.temp||''}</td>
+                            <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800 whitespace-nowrap">{bpStr(rec?.bpUpSt, rec?.bpDnSt, rec?.plSt)}</td>
+                            <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800 whitespace-nowrap">{bpStr(rec?.bpUpEn, rec?.bpDnEn, rec?.plEn)}</td>
+                            {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => {
+                              let v = rec?.exercises ? rec.exercises[item.id] : '';
+                              if (v == null) v = '';
+                              if (typeof v === 'object') v = '';
+                              const disp = applyExUnits(String(v), item);
+                              const isSym = disp==='○'||disp==='◯'||disp==='×'||disp==='✕'||disp==='ー';
+                              return (
+                                <td key={item.id} className="px-0.5 py-2 text-center border border-slate-300">
+                                  <span className={isSym ? ((disp==='○'||disp==='◯') ? 'text-slate-800 font-bold' : 'text-slate-400 text-xs') : 'text-blue-700 font-bold text-xs'}>{disp}</span>
+                                </td>
+                              );
+                            })}
+                            <td className="px-2 py-2 border border-slate-300 text-xs text-slate-600 truncate" title={rec?.tokki||''}>{rec?.tokki||''}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             ))}
