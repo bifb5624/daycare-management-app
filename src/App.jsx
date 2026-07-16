@@ -13344,6 +13344,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
     const sorted = [...myPeers].sort((x,y) => (x.createdAt||'').localeCompare(y.createdAt||''));
     return sorted[0]?.id === loggedAcc.id;
   }, [myPeers, loggedAcc]);
+  // ★ ご本人アカウント判定 (続柄=本人)。 分析個人で「今回の様子・特記」を非表示にするため。
+  //   ケアマネは対象外。 プレビュー種別 'self' も本人扱い。
+  const isSelfAccount = !isCmAccount && (
+    _isPreview ? (_previewKind === 'self')
+      : ((String(loggedAcc?.relation||'').includes('本人')) || (String(patient?.familyRelation||'') === '本人' && isPrimaryAcc && !loggedAcc?.relation))
+  );
   // ★ 利用者基本情報の編集可否: 代表家族 or ケアマネ(全項目編集可)
   const canEditMyInfo = isPrimaryAcc || isCmAccount;
   // 親アカウント招待用 (親のみ他メンバーを招待できる)
@@ -13643,6 +13649,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             targetPatientId={pid}
             familyMode={!isCmAccount}
             cmViewerMode={isCmAccount}
+            selfMode={isSelfAccount}
             externalPeriod={familyPeriod}
             externalDisplayMode={familyDisplayMode}
             hidePatientSelector={true}
@@ -20426,7 +20433,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 }
 
 // === PersonalDashboardView (簡易版) ===
-function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null, externalDisplayMode = null }) {
+function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, selfMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null, externalDisplayMode = null }) {
   // ★ ケアマネ閲覧モード = 事業所と同じフルセット内容を読取専用で表示。 縦型 (スマホ) でも見やすく縦並びに
   const compactMode = familyMode || cmViewerMode; // 基本指標を縦並びにする判定
   // familyMode 時の sticky top 既定値: stickyTopOffset 未指定なら 56 (FamilyView 内)
@@ -20471,7 +20478,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   //   - ケアマネ閲覧時 (=familyMode=false) は事業所側と同じフルセット
   // ★ 基本指標 (sec-kpi) は通所率が月別通所状況と重複するため、 事業所では削除。 家族には簡易通所率として残す
   const ALL_SECTIONS = familyMode
-    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-fitness','体力測定','長'],['sec-monitoring','モニタリング','中']]
+    ? [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-kpi','基本指標','短'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-fitness','体力測定','長']]
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
@@ -21370,8 +21377,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         {records.length > 0 && (
         <div style={{border:'2.5px solid #60a5fa',borderRadius:18,padding:'14px 16px 4px',marginBottom:16,background:'#f5f9ff',boxShadow:'0 2px 8px rgba(59,130,246,0.12)'}}>
         {/* ★ 今回の様子 (家族・ケアマネ・事業所 共通): 特記事項を一目でわかるように大きく表示。
-            「今回の記録」内の特記と重複するため、特記はこちらに集約し下側からは削除 */}
-        {(() => {
+            「今回の記録」内の特記と重複するため、特記はこちらに集約し下側からは削除。
+            ★ ご本人(selfMode)には表示しない: 特記には「匂いがあった」等ご本人が読むと傷つく所見が
+            入る場合があるため。 ご家族・ケアマネには従来どおり表示。 */}
+        {!selfMode && (() => {
           // 最新の通所記録の特記を取得
           const _today = new Date(); _today.setHours(0,0,0,0);
           const _recordToDate = (rec) => {
@@ -22931,6 +22940,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>}
 
         {/* 家族向けの「日々の記録」セクションは削除 (特記は「今回の記録」に最新分が表示される) */}
+        {/* ★ モニタリングは尿意・状態悪化など率直な臨床所見を含むため、ケアマネ・関係者(と事業所)のみ表示。
+            ご本人・ご家族には表示しない(familyMode=本人/家族 では非表示)。 */}
+        {!familyMode && (<>
         <div id="sec-monitoring" data-sec="sec-monitoring" style={{scrollMarginTop:170}}/>{/* === モニタリング === */}
         <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #d1fae5',overflow:'hidden',marginBottom:16}}>
           <div style={{padding:'12px 20px',borderBottom:'1px solid #d1fae5',background:'#f0fdf4',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -22974,6 +22986,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             </div>
           )}
         </div>
+        </>)}{/* /モニタリング (ケアマネ・関係者のみ) */}
         {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:170}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
         {!familyMode && !isCol('sec-detail') && (()=>{
           // ★ 詳細記録は上の「期間」選択 (records) を表示。 ただし
