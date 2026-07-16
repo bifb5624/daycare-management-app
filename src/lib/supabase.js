@@ -1336,6 +1336,27 @@ export async function supabaseMarkDocUpdatesRead(storeId, patientId, side = 'cm'
 // ★ 店舗の管理者パスワード(adminAuth)だけを安全に更新する。
 //   対象店舗のクラウドデータを読み直し、systemSettings.adminAuth のみ変更して書き戻す。
 //   → 店舗切替直後などに「別店舗の appData 全体」を誤って書き込む(=店舗間データ混在)のを防ぐ。
+// ★ 管理局から店舗のアドオンをON/OFFする。 CAS内で「読み→変更」を完結させ、_fieldTs.addons を必ず更新する。
+//   これをしないと:
+//   ①読み(supabaseLoadStateForStore)→書きの間に別の切替が入ると、後の書きが前の切替を消す
+//     (アドオンを続けて複数ONにすると最後の1個しか残らない)
+//   ②_fieldTs.addons が古いままなので、店舗側の端末が次に保存した時にフィールド単位マージで
+//     「ローカル(古いaddons)が新しい」と判定され、管理局の変更が巻き戻る
+export async function supabaseSetStoreAddon(storeId, key, value) {
+  if (!supabase || !storeId || !key) return false;
+  try {
+    const now = Date.now();
+    const res = await supabaseCasUpdate(storeId, (cloud) => {
+      const data = cloud || {};
+      const ss = data.systemSettings || {};
+      const nextAddons = { ...(ss.addons || {}), [key]: !!value };
+      const nextFts = { ...(ss._fieldTs && typeof ss._fieldTs === 'object' ? ss._fieldTs : {}), addons: now };
+      return { ...data, systemSettings: { ...ss, addons: nextAddons, _fieldTs: nextFts, _updatedAt: now } };
+    });
+    return !!(res && res.ok);
+  } catch (e) { console.warn('[supabase] setStoreAddon failed', e); return false; }
+}
+
 export async function supabaseSetStoreAdminAuth(storeId, authPatch) {
   if (!supabase || !storeId) return false;
   try {

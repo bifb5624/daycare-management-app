@@ -39,6 +39,7 @@ import {
   supabaseMergePatientDocsFromCM,
   supabaseMarkDocUpdatesRead,
   supabaseSetStoreAdminAuth,
+  supabaseSetStoreAddon,
   supabaseDeletePatientFamily,
   supabaseListSystemNotices,
   supabaseListAllSystemNotices,
@@ -15300,13 +15301,15 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   const toggleStoreAddon = async (storeId, key) => {
     setAddonBusy(storeId);
     try {
+      // ★ 「読んでから書く」をやめ、CAS内で読み→変更を完結させる(supabaseSetStoreAddon)。
+      //   従来は読みと書きの間に別の切替が入ると前の切替が消え、さらに _fieldTs.addons を
+      //   更新していなかったため店舗端末の次回保存で管理局の変更が巻き戻っていた。
+      const want = !((storeAddons[storeId] || {})[key]);
+      const ok = await supabaseSetStoreAddon(storeId, key, want);
+      if (!ok) throw new Error('保存に失敗しました（他の端末が更新中の可能性）');
+      // 反映後の実際の値をクラウドから取り直して表示を合わせる
       const row = await supabaseLoadStateForStore(storeId);
-      const data = row?.data || {};
-      const cur = data.systemSettings?.addons || {};
-      const nextAddons = { ...cur, [key]: !cur[key] };
-      // merge版: 記録(ticketRecords等)は他端末の更新を保ちつつ、systemSettings(addons)を反映
-      await supabaseMergeAndSyncStateForStore(storeId, { ...data, systemSettings: { ...(data.systemSettings||{}), addons: nextAddons } });
-      setStoreAddons(prev => ({ ...prev, [storeId]: nextAddons }));
+      setStoreAddons(prev => ({ ...prev, [storeId]: (row?.data?.systemSettings?.addons) || { ...(prev[storeId]||{}), [key]: want } }));
     } catch (e) { alert('アドオンの更新に失敗しました: ' + (e?.message||'')); }
     setAddonBusy(null);
   };
