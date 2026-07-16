@@ -16257,6 +16257,34 @@ export default function App() {
               if (_preserved > 0) { merged.ticketRecords = [...map.values()]; _mergedForPush = merged; }
             } catch (e) { console.warn('[firstload merge] ticketRecords failed', e); }
           }
+          // ★ 設定オブジェクトも pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に
+          //   4秒ポーリングが走ると、まだクラウドに無いローカルの変更が古いクラウド値で消える。
+          //   (例: 気分の理由を削除→一瞬復活→もう一度押すと消える、という症状の原因)
+          //   push 側と同じ「項目単位の _fieldTs で新しい方を採用」にするので、他端末の変更は潰さない。
+          if (prev && prev._sbStoreId === newStoreId) {
+            try {
+              ['systemSettings','diarySettings','contactBookConfig'].forEach(_k => {
+                const lo = prev[_k], co = merged[_k];
+                if (!lo || typeof lo !== 'object' || Array.isArray(lo)) return;
+                if (!co || typeof co !== 'object' || Array.isArray(co)) { if (lo) { merged[_k] = lo; _mergedForPush = merged; } return; }
+                const lT = Number(lo._updatedAt) || 0, cT = Number(co._updatedAt) || 0;
+                const lFts = (lo._fieldTs && typeof lo._fieldTs === 'object') ? lo._fieldTs : {};
+                const cFts = (co._fieldTs && typeof co._fieldTs === 'object') ? co._fieldTs : {};
+                const out = { ...((lT >= cT) ? lo : co) };
+                new Set([...Object.keys(lo), ...Object.keys(co)]).forEach(f => {
+                  if (f === '_updatedAt' || f === '_fieldTs') return;
+                  const lft = Number(lFts[f]) || 0, cft = Number(cFts[f]) || 0;
+                  if (lft || cft) out[f] = (lft >= cft) ? lo[f] : co[f];
+                  else if (!(f in out)) out[f] = (f in lo) ? lo[f] : co[f];
+                });
+                const mF = {};
+                new Set([...Object.keys(lFts), ...Object.keys(cFts)]).forEach(f => { const t = Math.max(Number(lFts[f]) || 0, Number(cFts[f]) || 0); if (t) mF[f] = t; });
+                out._fieldTs = mF; out._updatedAt = Math.max(lT, cT);
+                let differs; try { differs = JSON.stringify(out) !== JSON.stringify(co); } catch { differs = false; }
+                if (differs) { merged[_k] = out; _mergedForPush = merged; }
+              });
+            } catch (e) { console.warn('[pull preserve] settings failed', e); }
+          }
           return merged;
         });
         // ★ 端末内の新しい記録を保持した場合は、クラウドにも反映(失敗していた保存を再送し、次回pullで消えないように)。
