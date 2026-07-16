@@ -23978,10 +23978,27 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     }
     return t;
   }, []);
+  // 括弧内の理由だけを取り出す(振替側 tokki「○月○日PM分振替（私用）」から (私用) を得る等)
+  const _bracketReason = (t) => { const mm = String(t||'').match(/[（(]([^）)]+)[）)]\s*$/); return mm ? mm[1].trim() : ''; };
   const reasonRank = React.useMemo(() => {
+    // ★ 振替側レコード(status=振替, tokki「○月○日…分振替（理由）」)に付いた理由を、対の欠席レコードから拾えるよう索引化。
+    //   欠席側(源泉)に理由が無く、利用者が振替側(出席日)にだけ理由を書いた場合でも集計に反映するため。
+    //   キーは「利用者ID|振替先の日付」。 欠席側 tokki「○月○日…へ振替」の日付が振替側レコードの日付に一致する。
+    const furiReasonByKey = {};
+    recsAP.forEach(r => {
+      if (r.status !== '振替') return;
+      const rsn = _bracketReason(r.tokki);
+      if (rsn) furiReasonByKey[`${r.patientId}|${String(r.date||'').trim()}`] = rsn;
+    });
     const m = {};
     recsAP.filter(r=>r.status==='欠席'&&r.tokki?.trim()).forEach(r=>{
-      const key = normalizeAbsenceReason(r.tokki);
+      let key = normalizeAbsenceReason(r.tokki);
+      // 欠席側の理由が「振替」に丸められた(=理由未記入の振替)なら、対の振替側レコードの理由を使う
+      if (key === '振替') {
+        const dm = String(r.tokki||'').match(/^(\d+月\d+日)(?:AM|PM|1日)?へ振替/);
+        const rsn = dm ? furiReasonByKey[`${r.patientId}|${dm[1]}`] : '';
+        if (rsn) key = normalizeAbsenceReason(rsn);
+      }
       if (!key) return;
       m[key]=(m[key]||0)+1;
     });
