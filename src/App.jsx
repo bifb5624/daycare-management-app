@@ -10755,50 +10755,6 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
             </Card>
           );
         })()}
-        {/* ★ 計画書・加算の作成予定: 期限の1ヶ月前から、月ごと・利用者ごとに出す */}
-        {(() => {
-          const dues = computePlanDues(appData);
-          if (!dues.length) return null;
-          const byYm = {};
-          dues.forEach(d => { (byYm[d.ym] = byYm[d.ym] || []).push(d); });
-          const yms = Object.keys(byYm).sort();
-          const overdueN = dues.filter(d => d.overdue).length;
-          const KIND_COLOR = { tsusho:'#0891b2', kinou:'#7c3aed', kagaku:'#059669', adl:'#d97706' };
-          return (
-            <Card>
-              <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
-                <ClipboardList size={16}/>計画書・加算の作成予定
-                <span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（期限の1ヶ月前からお知らせします）</span>
-                {overdueN > 0 && <span style={{fontSize:11,fontWeight:'bold',background:'#fee2e2',color:'#b91c1c',padding:'2px 8px',borderRadius:6}}>期限超過 {overdueN}件</span>}
-              </div>
-              <div style={{display:'flex',flexDirection:'column',gap:12}}>
-                {yms.map(ym => {
-                  const [yy,mm] = ym.split('-');
-                  return (
-                    <div key={ym}>
-                      <div style={{fontSize:12,fontWeight:'bold',color:'#475569',borderBottom:'1px solid #e2e8f0',paddingBottom:3,marginBottom:6}}>
-                        {Number(yy)}年{Number(mm)}月 <span style={{color:'#94a3b8',fontWeight:'normal'}}>{byYm[ym].length}件</span>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-                        {byYm[ym].map((d,i) => (
-                          <button key={i} onClick={()=>navigateTo(d.view)}
-                            style={{display:'flex',alignItems:'center',gap:8,width:'100%',textAlign:'left',background:d.overdue?'#fef2f2':'#f8fafc',border:`1px solid ${d.overdue?'#fecaca':'#e2e8f0'}`,borderRadius:8,padding:'6px 10px',cursor:'pointer',flexWrap:'wrap'}}>
-                            <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:90}}>{d.patient.name}</span>
-                            <span style={{fontSize:11,fontWeight:'bold',color:KIND_COLOR[d.kind]||'#475569'}}>{d.label}</span>
-                            <span style={{fontSize:10,color:'#94a3b8'}}>{d.note}</span>
-                            <span style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:d.overdue?'#b91c1c':d.daysLeft<=7?'#d97706':'#64748b',whiteSpace:'nowrap'}}>
-                              {d.overdue ? `${Math.abs(d.daysLeft)}日超過` : d.daysLeft===0 ? '本日' : `あと${d.daysLeft}日`}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
-          );
-        })()}
         {/* 本日のスケジュール + お知らせ */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:16}}>
           <Card>
@@ -18125,7 +18081,8 @@ export default function App() {
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<Users size={18} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
               {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
-                <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['kinou_keikaku','tsusho_keikaku','life_hub'].includes(currentView)}>
+                <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['keikaku_yotei','kinou_keikaku','tsusho_keikaku','life_hub'].includes(currentView)}>
+                  <SidebarItem icon={<ClipboardList size={16} />} label="作成予定" active={currentView === 'keikaku_yotei'} onClick={() => navigateTo('keikaku_yotei')} />
                   {hasAddon(appData,'tsusho_keikaku') && (
                     <SidebarItem icon={<FileText size={16} />} label="通所介護計画書" active={currentView === 'tsusho_keikaku'} onClick={() => navigateTo('tsusho_keikaku')} />
                   )}
@@ -18171,6 +18128,7 @@ export default function App() {
                  currentView === 'schedule' ? 'スケジュール' :
                  currentView === 'roster' ? '勤務表' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
+                 currentView === 'keikaku_yotei' ? '計画書・加算の作成予定' :
                  currentView === 'tsusho_keikaku' ? '通所介護計画書' :
                  currentView === 'life_hub' ? 'LIFE・加算' :
                  currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
@@ -18241,6 +18199,7 @@ export default function App() {
              currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'roster' ? <RosterView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
+             currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
              currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
@@ -34515,7 +34474,7 @@ const TPL_KATSUDO = ['屋内を安全に歩行できる','立ち上がり・移�
 const TPL_SANKA = ['外出・買い物に参加できる','趣味活動に参加できる','地域行事・交流の場に参加できる','家庭内で役割を持てる'];
 
 // 個別機能訓練 関連書類のタブ帯 (計画書3-3 / 生活機能チェック3-2 / 興味関心3-1 を相互リンク)
-const KEIKAKU_DOCS = [['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['tsusho_keikaku','通所介護計画書']];
+const KEIKAKU_DOCS = [['keikaku_yotei','作成予定'],['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['tsusho_keikaku','通所介護計画書']];
 function KeikakuTabs({ current, navigateTo }) {
   if (!navigateTo) return null;
   return (
@@ -34523,6 +34482,69 @@ function KeikakuTabs({ current, navigateTo }) {
       {KEIKAKU_DOCS.map(([v,l]) => (
         <button key={v} onClick={()=>navigateTo(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${current===v?'bg-blue-600 text-white':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{l}</button>
       ))}
+    </div>
+  );
+}
+
+// === 計画書・加算の作成予定 (サイドバー: 計画書 > 作成予定) ===
+//   期限の1ヶ月前から「誰の・何を・いつまでに」を月ごとにまとめて表示する。 行タップで該当画面へ。
+const PLAN_KIND_COLOR = { tsusho:'#0891b2', kinou:'#7c3aed', kagaku:'#059669', adl:'#d97706' };
+function KeikakuYoteiView({ appData, navigateTo }) {
+  const [showDone, setShowDone] = React.useState(false); // 未作成(まだ1件も無い人)も含めるか
+  const all = React.useMemo(() => computePlanDues(appData), [appData]);
+  // 「未作成」は初回導入時に全員ぶん出て件数が膨らむため、既定では期限があるものだけ表示する
+  const dues = showDone ? all : all.filter(d => d.note !== '未作成' && d.note !== 'ADL評価が未実施');
+  const newN = all.length - dues.length;
+  const byYm = {};
+  dues.forEach(d => { (byYm[d.ym] = byYm[d.ym] || []).push(d); });
+  const yms = Object.keys(byYm).sort();
+  const overdueN = dues.filter(d => d.overdue).length;
+  return (
+    <div className="flex flex-col h-full">
+      <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <KeikakuTabs current="keikaku_yotei" navigateTo={navigateTo}/>
+        <div className="flex-1"/>
+        {overdueN > 0 && <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg">期限超過 {overdueN}件</span>}
+        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
+          <input type="checkbox" checked={showDone} onChange={e=>setShowDone(e.target.checked)} className="w-4 h-4"/>
+          未作成の方も表示{newN>0 && <span className="text-slate-400 font-normal">（{newN}件）</span>}
+        </label>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+        <div className="max-w-4xl mx-auto space-y-4">
+          <div className="text-[11px] text-slate-500 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+            期限の1ヶ月前からお知らせします。通所介護計画書=目標の達成予定日（未設定なら作成から6ヶ月）／個別機能訓練計画書=3ヶ月ごと／加算=前回のADL評価から6ヶ月。
+          </div>
+          {yms.length === 0 ? (
+            <div className="text-center text-slate-400 py-16 font-bold">
+              作成予定はありません
+              {newN>0 && <div className="text-xs font-normal mt-2">まだ計画書が無い方が {newN}件 あります。上の「未作成の方も表示」で確認できます。</div>}
+            </div>
+          ) : yms.map(ym => {
+            const [yy,mm] = ym.split('-');
+            return (
+              <div key={ym} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-700">
+                  {Number(yy)}年{Number(mm)}月 <span className="text-slate-400 font-normal text-xs ml-1">{byYm[ym].length}件</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {byYm[ym].map((d,i) => (
+                    <button key={i} onClick={()=>navigateTo(d.view)}
+                      className={`w-full text-left px-4 py-3 flex items-center gap-3 flex-wrap hover:bg-blue-50 active:bg-blue-100 ${d.overdue?'bg-red-50':''}`}>
+                      <span className="font-bold text-slate-800 text-sm" style={{minWidth:110}}>{d.patient.name}</span>
+                      <span className="text-xs font-bold" style={{color:PLAN_KIND_COLOR[d.kind]||'#475569'}}>{d.label}</span>
+                      <span className="text-[11px] text-slate-400">{d.note}</span>
+                      <span className={`ml-auto text-xs font-bold whitespace-nowrap ${d.overdue?'text-red-600':d.daysLeft<=7?'text-amber-600':'text-slate-500'}`}>
+                        {d.overdue ? `${Math.abs(d.daysLeft)}日超過` : d.daysLeft===0 ? '本日' : `あと${d.daysLeft}日`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
