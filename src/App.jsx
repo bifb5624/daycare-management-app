@@ -22951,9 +22951,14 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const maxV = vals.length ? Math.max(...vals) : null;
             const minV = vals.length ? Math.min(...vals) : null;
             const avgV = vals.length ? (vals.reduce((s,v)=>s+v,0)/vals.length) : null;
-            const W2f=600,H2f=160,LW2f=60;
-            const _stepF=(W2f-10)/(dailyFit.length+1||1);
-            const xPF=(i)=>_stepF+i*_stepF;
+            // ★ 運動グラフ(sec-exercise)と同じ「固定ステップ＋左パディング」方式にする。
+            //   従来は 幅600固定・ステップ=(600-10)/(件数+1) で、1件だと最初の点が x=295 と大きく右へ
+            //   ずれていた(=グラフの開始位置が右に寄りすぎる)。 件数に応じて幅を伸ばす方式に統一。
+            const H2f=160,LW2f=30; // LW2f=最後の日付ラベル用の右余白
+            const PAD_F=16;
+            const _stepF = dailyFit.length<=14?50:dailyFit.length<=30?28:14;
+            const W2f = Math.max(320, dailyFit.length*_stepF + PAD_F*2);
+            const xPF=(i)=>PAD_F+_stepF/2+i*_stepF;
             const yMinF = vals.length ? Math.floor(Math.min(...vals)*0.9) : 0;
             const yMaxF = vals.length ? Math.ceil(Math.max(...vals)*1.1) : 10;
             const yPF = (v) => 8+((yMaxF-v)/(yMaxF-yMinF||1))*(H2f-16);
@@ -22978,17 +22983,19 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     <div style={{display:'flex',justifyContent:'flex-start',alignItems:'flex-end',marginBottom:20,flexWrap:'wrap',gap:16}}>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{selFitItem?.name}（{selFitItem?.unit}）</div>
                       <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                        {avgV!==null&&<div style={{textAlign:'center',padding:'4px 10px',background:'#f0fdf4',borderRadius:8,border:'1px solid #86efac'}}>
-                          <div style={{fontSize:14,color:'#16a34a',fontWeight:'bold'}}>平均</div>
-                          <div style={{fontSize:14,fontWeight:'bold',color:'#15803d'}}>{avgV.toFixed(1)}<span style={{fontSize:13,color:'#16a34a'}}>{selFitItem?.unit}</span></div>
+                        {/* ★ 平均/最高/最低は同じ体裁で揃える: ラベル12px / 数値16px / 単位11px / 最小幅80px。
+                            (最低のラベルだけ 8px になっており、平均だけ単位が付いていた) */}
+                        {avgV!==null&&<div style={{textAlign:'center',padding:'6px 12px',background:'#f0fdf4',borderRadius:10,border:'1px solid #86efac',minWidth:80}}>
+                          <div style={{fontSize:12,color:'#16a34a',fontWeight:'normal',marginBottom:2}}>平均</div>
+                          <div style={{fontSize:16,fontWeight:'bold',color:'#15803d',lineHeight:1}}>{avgV.toFixed(1)}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>{selFitItem?.unit}</span></div>
                         </div>}
-                        {maxV!==null&&<div style={{textAlign:'center',padding:'4px 10px',background:'#fef2f2',borderRadius:8,border:'1px solid #fecaca'}}>
-                          <div style={{fontSize:14,color:'#ef4444',fontWeight:'bold'}}>最高</div>
-                          <div style={{fontSize:14,fontWeight:'bold',color:'#dc2626'}}>{maxV}</div>
+                        {maxV!==null&&<div style={{textAlign:'center',padding:'6px 12px',background:'#fef2f2',borderRadius:10,border:'1px solid #fecaca',minWidth:80}}>
+                          <div style={{fontSize:12,color:'#ef4444',fontWeight:'normal',marginBottom:2}}>最高</div>
+                          <div style={{fontSize:16,fontWeight:'bold',color:'#dc2626',lineHeight:1}}>{maxV}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>{selFitItem?.unit}</span></div>
                         </div>}
-                        {minV!==null&&<div style={{textAlign:'center',padding:'4px 10px',background:'#eff6ff',borderRadius:8,border:'1px solid #bfdbfe'}}>
-                          <div style={{fontSize:8,color:'#2563eb',fontWeight:'bold'}}>最低</div>
-                          <div style={{fontSize:14,fontWeight:'bold',color:'#1d4ed8'}}>{minV}</div>
+                        {minV!==null&&<div style={{textAlign:'center',padding:'6px 12px',background:'#eff6ff',borderRadius:10,border:'1px solid #bfdbfe',minWidth:80}}>
+                          <div style={{fontSize:12,color:'#2563eb',fontWeight:'normal',marginBottom:2}}>最低</div>
+                          <div style={{fontSize:16,fontWeight:'bold',color:'#1d4ed8',lineHeight:1}}>{minV}<span style={{fontSize:11,fontWeight:'normal',marginLeft:1}}>{selFitItem?.unit}</span></div>
                         </div>}
                       </div>
                     </div>
@@ -22999,7 +23006,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </div>
                       <div style={{flex:1,minWidth:0}}>
                         <svg viewBox={`0 0 ${W2f+LW2f} ${H2f+14}`} preserveAspectRatio="xMinYMid meet" style={{width:'100%',height:H2f+14,display:'block'}}>
-                          {(()=>{const ticks=[];const rng=yMaxF-yMinF||1;const st=rng<=5?0.5:rng<=20?2:rng<=100?10:50;for(let v=Math.ceil(yMinF/st)*st;v<=yMaxF;v+=st)ticks.push(v);return ticks.map(v=><line key={v} x1={0} y1={yPF(v)} x2={W2f-44} y2={yPF(v)} stroke="#f1f5f9" strokeWidth={1}/>);})()}
+                          {(()=>{const ticks=[];const rng=yMaxF-yMinF||1;const st=rng<=5?0.5:rng<=20?2:rng<=100?10:50;for(let v=Math.ceil(yMinF/st)*st;v<=yMaxF;v+=st)ticks.push(v);return ticks.map(v=><line key={v} x1={0} y1={yPF(v)} x2={W2f} y2={yPF(v)} stroke="#f1f5f9" strokeWidth={1}/>);})()}
                           <polyline points={dailyFit.map((r,i)=>`${xPF(i)},${yPF(Number(r.values[_selFitId]))}`).join(' ')} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"/>
                           {dailyFit.map((r,i)=>(
                             <circle key={i} cx={xPF(i)} cy={yPF(Number(r.values[_selFitId]))} r={4} fill="#6366f1" stroke="white" strokeWidth={1.5} pointerEvents="none"/>
