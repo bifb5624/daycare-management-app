@@ -22745,11 +22745,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               }
               if (raw == null || raw === '' || raw === '×' || raw === '✕' || raw === 'x' || raw === 'ー' || raw === '-') return '';
               if (raw === '○' || raw === '◯') {
-                const mm = (r.date||'').match(/(\d+)月/);
+                const mm = (r.date||'').match(/(\d+)月(\d+)日/);
                 const ry = r.year || new Date().getFullYear();
-                // ★ 規定値も id 直接一致だけで引くと、項目を作り直した店舗で取れず ○ のままになる。
-                //   記録側と同じく「id 一致 → 無ければ同名」で解決する。
-                const _plan = getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1) || {};
+                // ★ 規定値は「その記録の“実日付”時点」で引く。 月初(1日)で引いてはいけない。
+                //   規定値を月の途中(例:7/17)に設定すると履歴は from='2026-07-17' で積まれるため、
+                //   月初(7/1)基準だと まだ有効でない=古い(空の)値が返り、○ が数値に置き換わらず
+                //   グラフにならなかった(提供記録入力は実日付で引くので規定値が見えており、食い違っていた)。
+                const _dd = mm ? String(+mm[2]).padStart(2,'0') : '01';
+                const _mo = mm ? String(+mm[1]).padStart(2,'0') : '01';
+                const _plan = getPlannedExercisesForDate(selectedPatient, `${ry}-${_mo}-${_dd}`) || {};
                 const pv = resolveExerciseValue(_plan, selEx.id,
                   appData.systemSettings?.exerciseItems || appSettings.exerciseItems, appSettings.exerciseItems);
                 // ★ ○ は「実施した」という記録そのもの。 その月の規定値が未設定/ーでも実施の事実は消さず
