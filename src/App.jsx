@@ -26620,10 +26620,13 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
     if (item.type === 'linked') {
       // 1. linkedField の id で値を引く (直接 id 一致)
       //    ★ id が変わっていても同名の項目から拾う(分析個人と同じ解決規則)
-      let rawVal = resolveExerciseValue(ex, item.linkedField, _exItems, appSettings.exerciseItems);
+      //    ★ linkedField が空/無効なら先頭の運動項目に繋ぐ。 設定画面の select と同じ実効値にすることで
+      //      「画面では①ﾊﾞｲｸが選ばれて見えるのに、中身が空で連動しない」状態をなくす。
+      const _lf = _exItems.some(e => e.id === item.linkedField) ? item.linkedField : (_exItems[0]?.id || '');
+      let rawVal = resolveExerciseValue(ex, _lf, _exItems, appSettings.exerciseItems);
       // ★ linkedField が空のとき、 item.label と一致する現在の運動項目を当てる
       //    (旧 config で linkedField が空 or 不明の項目を救済)
-      if ((rawVal == null || rawVal === '') && !item.linkedField && item.label) {
+      if ((rawVal == null || rawVal === '') && !_lf && item.label) {
         const labelKey = _normalizeName(item.label);
         const matched = _exItems.find(it => _normalizeName(it.name) === labelKey);
         if (matched) rawVal = ex[matched.id];
@@ -26636,11 +26639,11 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
         //    a) exerciseItemMap[linkedField]?.name (linkedField が現存する id のとき)
         //    b) item.label (連絡帳側の項目ラベル - ユーザーが手で付けた名前)
         //    c) item.linkedField 自体 (linkedField が文字列で名前らしいケース)
-        const linkedItem = exerciseItemMap[item.linkedField];
+        const linkedItem = exerciseItemMap[_lf];
         const nameCandidates = [
           linkedItem?.name,
           item.label,
-          item.linkedField,
+          _lf,
         ].filter(Boolean).map(_normalizeName);
         // 2. appData の同名項目の全 id (現在の exerciseItems) を試す
         for (const nk of nameCandidates) {
@@ -26918,6 +26921,8 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
 function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
   const [localConfig, setLocalConfig] = useState(JSON.parse(JSON.stringify(config)));
+  // ★ 連動先の実効値: 空/無効なら先頭の運動項目に繋ぐ(未選択という状態を作らない)
+  const effLinkedField = (item) => (exerciseItems.some(ex => ex.id === item.linkedField) ? item.linkedField : (exerciseItems[0]?.id || ''));
   // ★ type を 'linked' に変えたとき、 linkedField が空なら先頭の運動項目を自動セット
   //   (空のまま保存すると連絡帳に値が出ない不具合を防ぐ)
   const handleItemChange = (id, field, value) => setLocalConfig(prev => ({
@@ -26982,12 +26987,11 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
                     <div className="col-span-4"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">項目名</label><input type="text" value={item.label || ""} onChange={e => handleItemChange(item.id, 'label', e.target.value)} placeholder="新しい項目" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none placeholder-slate-300" /></div>
                     <div className="col-span-3"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">反映方法</label><select value={item.type || "fixed"} onChange={e => handleItemChange(item.id, 'type', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"><option value="fixed">自由入力</option><option value="linked">提供記録連動</option></select></div>
                     <div className="col-span-5"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">{item.type === 'fixed' ? '表示文字' : '反映元'}</label>
-                      {item.type === 'fixed' ? <input type="text" value={item.value || ""} onChange={e => handleItemChange(item.id, 'value', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /> : <select value={(exerciseItems.some(ex=>ex.id===item.linkedField) ? item.linkedField : "")} onChange={e => handleItemChange(item.id, 'linkedField', e.target.value)} className={`w-full px-3 py-1.5 rounded-lg text-sm font-bold outline-none border ${exerciseItems.some(ex=>ex.id===item.linkedField) ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-400 text-amber-800'}`}>
-                        {/* ★ 「未選択」を明示する。 これが無いと linkedField が空/無効(項目を作り直して id が変わった等)でも
-                            ブラウザが先頭の選択肢(①ﾊﾞｲｸ)を表示してしまい、設定済みに見えるのに実際は連動しない。
-                            (項目名が運動名と一致する「平行棒」等は名前フォールバックで拾えるため動き、
-                             一致しない「有酸素運動」だけ空欄になる、という分かりにくい症状になっていた) */}
-                        <option value="">— 未選択（連動しません）—</option>
+                      {item.type === 'fixed' ? <input type="text" value={item.value || ""} onChange={e => handleItemChange(item.id, 'value', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /> : <select value={effLinkedField(item)} onChange={e => handleItemChange(item.id, 'linkedField', e.target.value)} className="w-full px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-sm font-bold outline-none">
+                        {/* ★ 「未選択」は用意しない(連動を選んだのに未選択では自由記述と変わらず無意味なため)。
+                            linkedField が空/無効(項目を作り直して id が変わった等)なら先頭の運動項目に繋ぐ。
+                            従来はブラウザが先頭を表示するだけで中身は空のままだったため、設定済みに見えて
+                            連動しない状態になっていた(表示と実挙動を一致させる)。 */}
                         {exerciseItems.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
                       </select>}
                     </div>
