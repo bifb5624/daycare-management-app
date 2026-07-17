@@ -30459,16 +30459,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             plannedExercises:{u1:'',u2:'',u3:'',u4:'',u5:'',u6:'',heikobo:'',fumidai:'',stepper:'',okugai:'',onyoku:''},
             careLevel:'', gender:'', birthDate:'', phone:''
           };
-          // ★ 個別機能訓練アドオンが有効なら、必要書類(計画書3-3/生活機能3-2/興味関心3-1)を自動作成し、入力可能な状態にしておく
+          // ★ 計画書(3-3)・生活機能チェック(3-2)・興味関心(3-1)の空レコードを自動作成するのは廃止。
+          //   利用者を追加しただけで「その日に作成された記録」が出来てしまい、入力していないのに
+          //   作成済みに見える(＝作成漏れの判断を誤らせる)ため。 各画面の「＋ 新規作成」で作る。
           const _extra = {};
-          if (hasAddon(appData, 'kinou_keikaku')) {
-            const _st = Date.now();
-            const _r = new Date(); const _reiwa = `令和${_r.getFullYear()-2018}年${_r.getMonth()+1}月${_r.getDate()}日`;
-            const _blankProg = () => ({ content:'', point:'', freqWeek:'', time:'', person:'機能訓練指導員' });
-            _extra.kinouKeikakuRecords = [...(appData.kinouKeikakuRecords||[]), { id:`kk_${newId}_${_st}`, patientId:newId, createdAt:_st, createdDate:_reiwa, prevDate:'', firstDate:_reiwa, author:'', authorJob:'機能訓練指導員', jiritsuBody:'', jiritsuDementia:'', honninKibou:'', kazokuKibou:'', shakaiSanka:'', kyotakuKankyo:'', byomei:'', hasshoDate:'', nyuinDate:'', taiinDate:'', chiryoKeika:'', gappei:'', ryuiPoint:'', shortKinou:'', shortKatsudo:'', shortSanka:'', shortAchieve:'', longKinou:'', longKatsudo:'', longSanka:'', longAchieve:'', programs:[_blankProg(),_blankProg()], programPlanner:'', jikangaiJisshi:'', tokki:'', henka:'', kadai:'', setsumeiDate:'', setsumeisha:'', _auto:true }];
-            _extra.seikatsuKinouRecords = [...(appData.seikatsuKinouRecords||[]), { id:`sk_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:'', bikou:'', _auto:true }];
-            _extra.kyomiKanshinRecords = [...(appData.kyomiKanshinRecords||[]), { id:`ki_${newId}_${_st}`, patientId:newId, createdAt:_st, recordDate:_reiwa, recorder:'', items:{}, custom:[], bikou:'', _auto:true }];
-          }
           // ★ B1: 新規追加は保存ボタン不要で即時クラウド保存(自動保存)。 debounce待ちで消えるのを防ぐ。
           onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message:'✓ 利用者を追加しました' });
           setEditingPatientId(newId);
@@ -34731,7 +34725,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   // ★ 共通項目の連携: フェイスシートを正としてこの計画書へ取り込む(通所介護計画書と同じ考え方)。
   //   自立度は表記ゆれ(半角I/全角Ⅰ)を正規化して合わせる。
   const _kkFsAuto = (p) => {
-    const fs = p?.faceSheet || {};
+    // ★ フェイスシートの保存先は patient.personalFile.faceSheet (patient.faceSheet は添付専用)。
+    //   ここを取り違えると連携が丸ごと効かず、自立度が入らない/経緯に既往歴しか出ない等になる。
+    const fs = (p?.personalFile?.faceSheet) || p?.faceSheet || {};
     const j = (...a) => a.filter(x => String(x||'').trim()).join('\n');
     return {
       jiritsuBody: normalizeAdlLevel(fs.adlLevel),
@@ -35421,19 +35417,55 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const _defaultSvcs = ()=>Array.from({length:5}, blankSvc);
   const _defaultFlow = ()=>Array.from({length:8}, ()=>({ time:'', content:'' }));
   // ★ プログラム(1日の流れ)は日誌スケジュール(各種設定)から生成する。利用者の基本利用日がPMのみならPM表を使う。
+  // ★ 1日の流れは 各種設定「日誌」のスケジュールをそのまま使う。
+  //   午前のみ→AM表 / 午後のみ→PM表 / 午前も午後もある(1日 or 両方)→AM表とPM表の両方を載せる。
+  const _useAmPm = (p)=>{
+    const amp=(p?.scheduleAmPm||[]).map(v=>String(v||''));
+    const hasAM=amp.some(v=>v.includes('AM')||v.includes('1日'));
+    const hasPM=amp.some(v=>v.includes('PM')||v.includes('1日'));
+    return { hasAM, hasPM };
+  };
   const _flowSrc = (p)=>{
     const ds=appData.diarySettings||{};
-    const amp=(p?.scheduleAmPm||[]).map(v=>String(v||''));
-    const hasAM=amp.some(v=>v.includes('AM')), hasPM=amp.some(v=>v.includes('PM'));
-    return ((hasPM && !hasAM) ? ds.schedulePM : ds.scheduleAM) || [];
+    const { hasAM, hasPM } = _useAmPm(p);
+    const am=(ds.scheduleAM||[]), pm=(ds.schedulePM||[]);
+    if (hasAM && hasPM) return [...am, ...pm];   // 午前・午後とも利用 → 両方
+    if (hasPM) return pm;
+    if (hasAM) return am;
+    return am.length ? am : pm;                   // 基本利用日が未設定なら AM を既定に
   };
   const _autoFlow = (p)=>{ const s=_flowSrc(p); return s.length ? s.map(x=>({ time:x.time||'', content:x.content||'' })) : _defaultFlow(); };
+  // ★ 利用予定: 基本利用日(scheduleAmPm)＋送迎時間(pickupTimes)から「曜日（区分 時間）」を組み立てる
+  const _baseUseDays=(p)=>{
+    const patient = p || null;
+    if(!patient) return '';
+    const dows=['日','月','火','水','木','金','土'];
+    const parts=[];
+    (patient.scheduleAmPm||[]).forEach((v,i)=>{ if(v){ const t=(patient.pickupTimes?.[i]||'').trim(); parts.push(`${dows[i]}（${v}${t?` ${t}`:''}）`); } });
+    return parts.join('・');
+  };
+  // ★ 提供時間区分: 施設の提供時間(各種設定→事業所情報)から所要時間を計算して区分に落とす。
+  //   午前・午後とも利用なら 1日(serviceTimeFullDay)、午後のみなら PM、それ以外は AM を使う。
+  const _teikyoKubun = (p)=>{
+    const f = appData.systemSettings?.facilityInfo || {};
+    const { hasAM, hasPM } = _useAmPm(p);
+    const src = (hasAM && hasPM) ? (f.serviceTimeFullDay || '') : hasPM ? (f.serviceTimePM || '') : (f.serviceTimeAM || '');
+    const m = String(src).match(/(\d{1,2}):(\d{2})\s*[~〜～-]\s*(\d{1,2}):(\d{2})/);
+    if (!m) return '';
+    const mins = (Number(m[3])*60+Number(m[4])) - (Number(m[1])*60+Number(m[2]));
+    if (!(mins > 0)) return '';
+    const h = mins/60;
+    for (let lo=3; lo<=8; lo++) { if (h >= lo && h < lo+1) return `${lo}時間以上${lo+1}時間未満`; }
+    return h < 3 ? '2時間以上3時間未満' : '8時間以上9時間未満';
+  };
   // ★ 職員名の候補 (計画作成者・説明者のプルダウン用)
   const _staffOpts = Array.from(new Set((appData.diarySettings?.staff||[]).map(s=>String(s?.name||'').trim()).filter(Boolean)));
   const _roleOpts = Array.from(new Set((appData.diarySettings?.staff||[]).map(s=>String(s?.role||'').trim()).filter(Boolean).concat(['生活相談員','機能訓練指導員','看護師','介護職員','管理者'])));
   // ★ フェイスシート／基本情報から自動読込 (経緯・希望・健康状態・自立度 等)
   const _fsAuto = (p)=>{
-    const fs = p?.faceSheet || {};
+    // ★ フェイスシートの保存先は patient.personalFile.faceSheet (patient.faceSheet は添付専用)。
+    //   ここを取り違えると連携が丸ごと効かず、自立度が入らない/経緯に既往歴しか出ない等になる。
+    const fs = (p?.personalFile?.faceSheet) || p?.faceSheet || {};
     const j = (...a)=>a.filter(x=>String(x||'').trim()).join('\n');
     return {
       // ★ 自立度はフェイスシートを正とする。 認知症自立度は半角(I/IIa)保存のため全角(Ⅰ/Ⅱa)へ正規化して○を合わせる
@@ -35453,7 +35485,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     prevDate:(records[0]?.createdDate||''), firstDate:(records[records.length-1]?.createdDate||''),
     author:'', authorJob:'生活相談員',
     ..._fsAuto(patient),
-    riyoubi:'', teikyoTime:'', hoshin:'',
+    riyoubi:_baseUseDays(patient), teikyoTime:_teikyoKubun(patient), hoshin:'',
     longSetDate:'', longDueDate:'', longGoal:'', longAchieve:'',
     shortSetDate:'', shortDueDate:'', shortGoal:'', shortAchieve:'',
     services:_defaultSvcs(),
@@ -35555,14 +35587,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     if(kibou) _appendField('honninKibou', kibou);
   };
   // ★ 利用予定: 基本利用日(scheduleAmPm)＋送迎時間(pickupTimes)から「曜日（区分 時間）」を組み立てて反映
-  const _baseUseDays=()=>{
-    if(!patient) return '';
-    const dows=['日','月','火','水','木','金','土'];
-    const parts=[];
-    (patient.scheduleAmPm||[]).forEach((v,i)=>{ if(v){ const t=(patient.pickupTimes?.[i]||'').trim(); parts.push(`${dows[i]}（${v}${t?` ${t}`:''}）`); } });
-    return parts.join('・');
-  };
-  const fillRiyoubi=()=>{ const s=_baseUseDays(); if(!s){ alert('この利用者の基本利用日が登録されていません（利用者マスタで設定してください）。'); return; } upd({riyoubi:s}); };
+  const fillRiyoubi=()=>{ const s=_baseUseDays(patient); if(!s){ alert('この利用者の基本利用日が登録されていません（利用者マスタで設定してください）。'); return; } upd({riyoubi:s}); };
   const TEIKYO_TIMES=['3時間以上4時間未満','4時間以上5時間未満','5時間以上6時間未満','6時間以上7時間未満','7時間以上8時間未満','8時間以上9時間未満'];
 
   const printRec = editing || records[0] || null;
