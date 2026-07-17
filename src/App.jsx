@@ -22707,6 +22707,22 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const _selExId = selExId || (allExItems.length>0?allExItems[0].id:null);
             const selEx = allExItems.find(e=>e.id===_selExId);
             if(!selEx) return null;
+            // ★ 個別運動(type='individual')は「個別運動①」ではなく、その利用者が実際に選んでいる
+            //   運動名(屋外歩行訓練・平行棒 等)を表示する。 利用者ごとの設定 → 記録に入っている itemId の順で解決。
+            const _indName = (ex) => {
+              if (!ex || ex.type !== 'individual') return ex?.name || '';
+              const sys = appData.systemSettings?.individualExerciseItems || [];
+              const pick = (itemId) => sys.find(x => x.id === itemId)?.name || '';
+              // 記録に実際に入っている itemId を最優先 (提供記録入力のセルと同じ解決順)
+              let nm = '';
+              for (const r of validRecs) {
+                const v = r.exercises?.[ex.id];
+                if (v && typeof v === 'object' && v.itemId) { nm = pick(v.itemId); if (nm) break; }
+              }
+              // 無ければ利用者マスタのスロット既定 (個別運動①=屋外歩行訓練 等)
+              if (!nm) nm = pick(selectedPatient?.individualExerciseSlotDefaults?.[ex.id] || '');
+              return nm || ex.name;
+            };
 
             // ★ 値の解決: ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー・空=反映しない('') / 個別運動オブジェクトは value
             const _exMonthVal = (r) => {
@@ -22731,7 +22747,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               if (raw === '○' || raw === '◯') {
                 const mm = (r.date||'').match(/(\d+)月/);
                 const ry = r.year || new Date().getFullYear();
-                const pv = getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[selEx.id];
+                // ★ 規定値も id 直接一致だけで引くと、項目を作り直した店舗で取れず ○ のままになる。
+                //   記録側と同じく「id 一致 → 無ければ同名」で解決する。
+                const _plan = getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1) || {};
+                const pv = resolveExerciseValue(_plan, selEx.id,
+                  appData.systemSettings?.exerciseItems || appSettings.exerciseItems, appSettings.exerciseItems);
                 // ★ ○ は「実施した」という記録そのもの。 その月の規定値が未設定/ーでも実施の事実は消さず
                 //   ○ のまま返す(従来は '' を返しており、規定値が無い月の実施記録が
                 //   「記録なし」として分析個人から消えていた)。 規定値が数値ならその数値を採用する。
@@ -22799,7 +22819,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             const tabs = (
               <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:12}}>
                 {allExItems.map(ex=>(
-                  <button key={ex.id} onClick={()=>setSelExId(ex.id)} style={{padding:'5px 14px',borderRadius:20,fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer',background:_selExId===ex.id?'#6366f1':'#f1f5f9',color:_selExId===ex.id?'white':'#64748b'}}>{ex.name}</button>
+                  <button key={ex.id} onClick={()=>setSelExId(ex.id)} style={{padding:'5px 14px',borderRadius:20,fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer',background:_selExId===ex.id?'#6366f1':'#f1f5f9',color:_selExId===ex.id?'white':'#64748b'}}>{_indName(ex)}</button>
                 ))}
               </div>
             );
@@ -22808,7 +22828,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div>
                 {tabs}
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #94a3b8'}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{selEx.name} — 記録一覧</div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>{_indName(selEx)} — 記録一覧</div>
                   {validRecs.filter(r=>_exMonthVal(r)).slice(0,20).map((r,i)=>{
                     const rawV = _exMonthVal(r);
                     const vStr = String(rawV ?? '');
