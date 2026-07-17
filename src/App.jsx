@@ -35992,6 +35992,39 @@ const BARTHEL_ITEMS = [
   { key:'urine',    label:'排尿コントロール',      opts:[[10,'失禁なし'],[5,'時に失禁'],[0,'失禁あり']] },
 ];
 const barthelTotal = (items) => BARTHEL_ITEMS.reduce((s,it)=>s+(Number(items?.[it.key])||0), 0);
+
+// ★ 生活機能チェック(様式3-2)のADL → Barthel の点数へ変換する対応表。
+//   同じ10項目を二度入力しているため、生活機能チェックから点数を「自動提案」できるようにする。
+//   ★ あくまで提案値。 段階数も配点も項目ごとに違い(食事は3段階/移乗は4段階)、
+//     「見守り」に完全に対応する選択肢が無い項目もあるため、最終判断は職員が行う前提。
+//   SEIKATSU_ADL の並び順と BARTHEL_ITEMS の並び順は一致している(食事/移乗/整容/トイレ動作/
+//   入浴/歩行/階段昇降/更衣/排便管理/排尿管理)。
+const SEIKATSU_TO_BARTHEL_KEY = { '食事':'eat','移乗':'transfer','整容':'groom','トイレ動作':'toilet','入浴':'bath','歩行':'walk','階段昇降':'stairs','更衣':'dress','排便管理':'stool','排尿管理':'urine' };
+const SEIKATSU_TO_BARTHEL_SCORE = {
+  //           自立  見守り 一部介助 全介助
+  eat:      { '自立':10, '見守り':5,  '一部介助':5,  '全介助':0 },
+  transfer: { '自立':15, '見守り':10, '一部介助':5,  '全介助':0 }, // 見守り=軽介助・監視(10)
+  groom:    { '自立':5,  '見守り':0,  '一部介助':0,  '全介助':0 }, // 2段階のみ
+  toilet:   { '自立':10, '見守り':5,  '一部介助':5,  '全介助':0 },
+  bath:     { '自立':5,  '見守り':0,  '一部介助':0,  '全介助':0 }, // 2段階のみ
+  walk:     { '自立':15, '見守り':10, '一部介助':10, '全介助':0 }, // 見守り/一部介助=介助歩行(10)
+  stairs:   { '自立':10, '見守り':5,  '一部介助':5,  '全介助':0 },
+  dress:    { '自立':10, '見守り':5,  '一部介助':5,  '全介助':0 },
+  stool:    { '自立':10, '見守り':5,  '一部介助':5,  '全介助':0 }, // 失禁なし/時に失禁/失禁あり
+  urine:    { '自立':10, '見守り':5,  '一部介助':5,  '全介助':0 },
+};
+// 生活機能チェックの adl マップ → Barthel の items マップ。 未選択(空)の項目は含めない。
+const seikatsuAdlToBarthel = (adlMap) => {
+  const out = {};
+  Object.keys(SEIKATSU_TO_BARTHEL_KEY).forEach(label => {
+    const v = String((adlMap || {})[label] || '').trim();
+    if (!v) return;
+    const key = SEIKATSU_TO_BARTHEL_KEY[label];
+    const sc = SEIKATSU_TO_BARTHEL_SCORE[key]?.[v];
+    if (sc != null) out[key] = sc;
+  });
+  return out;
+};
 function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
@@ -36004,6 +36037,20 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const [editing, setEditing] = React.useState(null);
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
+  // ★ 生活機能チェック(3-2)のADLから Barthel の点数を「提案」する。 同じ10項目を二度入力しないため。
+  //   あくまで候補として入れるだけで、保存は職員が内容を確認してから行う。
+  const latestSeikatsu = (appData.seikatsuKinouRecords||[])
+    .filter(r => r && r.patientId === pid)
+    .sort((a,b) => String(b.recordDate||'').localeCompare(String(a.recordDate||'')) || ((b.createdAt||0)-(a.createdAt||0)))[0] || null;
+  const importFromSeikatsu = () => {
+    if (!latestSeikatsu) { alert('この利用者の生活機能チェック（様式3-2）がまだありません。'); return; }
+    const sug = seikatsuAdlToBarthel(latestSeikatsu.adl);
+    const n = Object.keys(sug).length;
+    if (!n) { alert('生活機能チェックのADLがまだ入力されていません。'); return; }
+    if (!window.confirm(`生活機能チェック（${latestSeikatsu.recordDate||''}）のADLから点数を提案します。\n${n}項目に候補を入れます。内容を確認して保存してください。\n\n※ 段階や配点が項目ごとに異なるため、あくまで目安です。`)) return;
+    setEditing(e => ({ ...(e || blank()), items: { ...((e||{}).items||{}), ...sug } }));
+    markDirty();
+  };
   const save = () => {
     if (!editing) return;
     const rec = { ...editing, total: barthelTotal(editing.items), _savedAt: Date.now() };
@@ -36073,6 +36120,17 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             </div>
             {editing ? (
               <div className="space-y-3">
+                {/* ★ 生活機能チェック(3-2)と同じ10項目のため、そこから点数を提案できる(二度入力の解消)。
+                    入るのは候補で、確認して保存する前提。 */}
+                <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-3 flex items-center gap-3 flex-wrap">
+                  <div className="text-[11px] text-indigo-900 flex-1 min-w-[200px]">
+                    <span className="font-bold">生活機能チェック（様式3-2）から点数を提案できます。</span>
+                    <span className="opacity-70">同じ10項目を二度入力しなくて済みます。入った点数は必ず確認してから保存してください。</span>
+                  </div>
+                  <button onClick={importFromSeikatsu} className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 whitespace-nowrap">
+                    生活機能チェックから取り込む <span className="font-normal opacity-70">{latestSeikatsu?`（${latestSeikatsu.recordDate||''}）`:'（未作成）'}</span>
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div><label className="block text-xs font-bold text-slate-500 mb-1">評価日</label><input type="date" value={editing.evalDate} onChange={e=>{setEditing(x=>({...x,evalDate:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
                   <div><label className="block text-xs font-bold text-slate-500 mb-1">評価者</label><input value={editing.evaluator} onChange={e=>{setEditing(x=>({...x,evaluator:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
