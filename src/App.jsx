@@ -20176,6 +20176,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const _isCross = displayVal==='×'||displayVal==='✕';
                     const _isDash = displayVal==='ー';
                     const _isSym = _isCircle || _isCross || _isDash;
+                    // ★ セル幅(64px)に収める文字サイズの基準。 値が空のときは「規定値(プレースホルダー)」の
+                    //   長さで判定する。 従来は値の長さだけを見ていたため、空セルは常に14pxとなり
+                    //   「20分×5回」のような長い規定値がセルからはみ出して切れていた。
+                    const _fitLen = Math.max(displayVal.length, String(placeholderText || '').length);
                     return (
                     <td key={item.id} className={`px-0.5 py-1 text-center border border-slate-300 ${(isAbsent || isPause) ? 'bg-slate-100' : 'bg-white'}`}>
                       {item.type === 'toggle' ? (
@@ -20196,7 +20200,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             updateExercise(p.id, item.id, e.target.value);
                           }}
                           onBlur={(e) => { if (item.useKeypad && _keypadOn) return; updateExercise(p.id, item.id, applyExUnits(e.target.value, item)); }}
-                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 9 ? 8 : displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
+                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (_fitLen > 9 ? 8 : _fitLen > 7 ? 9 : _fitLen > 5 ? 10 : _fitLen > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
                           className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
