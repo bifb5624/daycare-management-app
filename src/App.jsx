@@ -1291,6 +1291,34 @@ const getFitnessItemsForPatient = (appData, patient, fallbackItems) => {
   });
 };
 
+// ★ 運動記録の値を「項目id」で引く。 id が変わっていても“同じ名前”の値を拾い直す。
+//   各種設定で運動項目を 削除→再作成 すると id が変わる(例: u1 → ex_1734567890)が、過去の記録は
+//   古い id のまま保存されている。 id 一致だけで引くと、その店舗だけ「記録なし」になる。
+//   名前は NFKC で正規化して比較する(「①ﾊﾞｲｸ」=「①バイク」)。 古い id の名前は既定項目からも解決する。
+const resolveExerciseValue = (exercises, itemId, exItems, fallbackItems) => {
+  if (!exercises || typeof exercises !== 'object' || !itemId) return undefined;
+  const direct = exercises[itemId];
+  if (direct !== undefined && direct !== '') return direct;
+  const norm = (s) => String(s || '').normalize('NFKC');
+  const cur = Array.isArray(exItems) ? exItems : [];
+  const defs = Array.isArray(fallbackItems) ? fallbackItems : [];
+  const nameOf = (id) => {
+    const a = cur.find(x => x && x.id === id);
+    if (a) return norm(a.name);
+    const b = defs.find(x => x && x.id === id);
+    return b ? norm(b.name) : '';
+  };
+  const want = nameOf(itemId);
+  if (!want) return direct;
+  // 現在の項目のうち同名の別id → 記録側の全キーを名前で突き合わせ
+  for (const k of Object.keys(exercises)) {
+    const v = exercises[k];
+    if (v === undefined || v === '') continue;
+    if (nameOf(k) === want) return v;
+  }
+  return direct;
+};
+
 // ★ 全角で入力された数値を半角へ直す (体力測定・身長体重など数値入力の共通処理)。
 //   全角数字/全角ピリオド/全角マイナス/読点・句点(テンキー誤入力)を半角に寄せ、数値に使う文字だけ残す。
 //   例: "１６０．５" → "160.5" / "36。5" → "36.5"
@@ -22664,7 +22692,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
             // ★ 値の解決: ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー・空=反映しない('') / 個別運動オブジェクトは value
             const _exMonthVal = (r) => {
-              let raw = r.exercises?.[selEx.id];
+              // ★ id が変わっていても同名の項目から拾う(店舗ごとに項目を作り直すと id が変わり、
+              //   その店舗だけ「記録なし」になっていた)。 連絡帳と同じ解決規則に揃える。
+              let raw = resolveExerciseValue(r.exercises, selEx.id,
+                appData.systemSettings?.exerciseItems || appSettings.exerciseItems, appSettings.exerciseItems);
               if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
                 const _val = String(raw.value ?? '').trim();
                 if (_val === '○' || _val === '◯') { const ind = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
@@ -26568,11 +26599,13 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
           if (rawVal !== null && rawVal !== undefined && rawVal !== '') break;
         }
         // 3. ex の全キーをスキャンして名前マッチ (古い id で保存された値も拾う)
+        //    ★ 現在の項目に無い古い id (u1 等) は、既定項目(appSettings)からも名前を解決する。
+        //      これをしないと「項目を作り直した店舗」で過去記録を拾えず連絡帳が空になる。
         if (!rawVal) {
           for (const key of Object.keys(ex)) {
             const v = ex[key];
             if (!v && v !== 0) continue;
-            const exItem = exerciseItemMap[key];
+            const exItem = exerciseItemMap[key] || appSettings.exerciseItems.find(it => it.id === key);
             if (!exItem) continue;
             const exName = _normalizeName(exItem.name);
             if (nameCandidates.includes(exName)) { rawVal = v; break; }
