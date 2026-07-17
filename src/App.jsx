@@ -21137,7 +21137,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                             let raw = r.exercises?.[exItem.id];
                             if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
                               const _val = String(raw.value ?? '').trim();
-                              if (_val === '○' || _val === '◯') { const ind = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
+                              if (_val === '○' || _val === '◯') {
+                                // ★ 個別運動の規定値は「利用者ごとの設定」(patient.individualExercises[].defaultValue)にある。
+                                //   設定側(individualExerciseItems)は名前と単位しか持たないため先に見ると必ずヒットし、
+                                //   || が働かず defaultValue=undefined → 常に空になり分析個人に反映されなかった。
+                                const _indPat = (selectedPatient?.individualExercises||[]).find(x=>x.itemId===raw.itemId);
+                                const _indSys = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId);
+                                const _dv = String(_indPat?.defaultValue ?? _indSys?.defaultValue ?? '').trim();
+                                raw = _dv || '○'; // 規定値が無くても「実施した」事実は残す
+                              }
                               else raw = _val;
                             }
                             if (raw==null||raw===''||raw==='×'||raw==='✕'||raw==='x'||raw==='ー'||raw==='-') return null;
@@ -21773,7 +21781,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         if (v && typeof v === 'object') {
                           // 個別運動スロット {itemId,value}: ○ は基準値(個別運動メニューのdefaultValue)に変換、数値はそのまま
                           const val = String(v.value ?? '').trim();
-                          if (val === '○' || val === '◯') { const ind = allIndItems.find(x=>x.id===v.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===v.itemId); const dv = String(ind?.defaultValue||'').trim(); return dv || null; }
+                          if (val === '○' || val === '◯') {
+                            // ★ 規定値は利用者側(individualExercises[].defaultValue)。 設定側を先に見ると || が働かず空になる
+                            const _p = (selectedPatient?.individualExercises||[]).find(x=>x.itemId===v.itemId);
+                            const _s = allIndItems.find(x=>x.id===v.itemId);
+                            const dv = String(_p?.defaultValue ?? _s?.defaultValue ?? '').trim();
+                            return dv || null;
+                          }
                           return val || null;
                         }
                         if (v==null||v===''||v==='×'||v==='✕'||v==='x'||v==='ー'||v==='-') return null;
@@ -22698,7 +22712,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 appData.systemSettings?.exerciseItems || appSettings.exerciseItems, appSettings.exerciseItems);
               if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
                 const _val = String(raw.value ?? '').trim();
-                if (_val === '○' || _val === '◯') { const ind = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId) || (selectedPatient.individualExercises||[]).find(x=>x.itemId===raw.itemId); raw = String(ind?.defaultValue||'').trim(); }
+                if (_val === '○' || _val === '◯') {
+                  // ★ 個別運動の規定値は「利用者ごとの設定」(patient.individualExercises[].defaultValue)にある。
+                  //   設定側(individualExerciseItems)は名前と単位しか持たないため先に見ると必ずヒットし、
+                  //   || が働かず defaultValue=undefined → 常に空になり分析個人に反映されなかった。
+                  const _indPat = (selectedPatient?.individualExercises||[]).find(x=>x.itemId===raw.itemId);
+                  const _indSys = (appData.systemSettings?.individualExerciseItems||[]).find(x=>x.id===raw.itemId);
+                  const _dv = String(_indPat?.defaultValue ?? _indSys?.defaultValue ?? '').trim();
+                  raw = _dv || '○'; // 規定値が無くても「実施した」事実は残す
+                }
                 else raw = _val;
               }
               if (raw == null || raw === '' || raw === '×' || raw === '✕' || raw === 'x' || raw === 'ー' || raw === '-') return '';
@@ -22786,8 +22808,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   {validRecs.filter(r=>_exMonthVal(r)).slice(0,20).map((r,i)=>{
                     const rawV = _exMonthVal(r);
                     const vStr = String(rawV ?? '');
-                    // ★ 単位を後ろに付与 (unitLabel = selEx.defaultUnit 等)
-                    const disp = (vStr && unitLabel && !vStr.endsWith(unitLabel)) ? `${vStr}${unitLabel}` : vStr;
+                    // ★ 単位を後ろに付与 (unitLabel = selEx.defaultUnit 等)。
+                    //   記号(○/◯)には単位を付けない(「○分」になってしまうため)。 数値のみ付与する。
+                    const _isSym = /^[○◯]$/.test(vStr.trim());
+                    const disp = (vStr && unitLabel && !_isSym && !vStr.endsWith(unitLabel)) ? `${vStr}${unitLabel}` : vStr;
                     return (
                     <div key={i} style={{display:'flex',gap:12,padding:'6px 0',borderBottom:'1px solid #f8fafc',fontSize:14}}>
                       <span style={{color:'#334155',minWidth:56,fontWeight:'bold'}}>{r.date}</span>
