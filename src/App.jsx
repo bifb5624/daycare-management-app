@@ -1291,7 +1291,7 @@ const getFitnessItemsForPatient = (appData, patient, fallbackItems) => {
   });
 };
 
-// 日本の電話番号フォーマッタ: ハイフン無しの数字 → 自動でハイフン付与
+// 日本の電話番号フォーマッタ: ハイフン無しの数字 → 自動でハイフン付与 (実装は下部 formatJpPhone)
 // ★ 稼働率/出席率の「予定(分母)」判定。 振替=出席扱い。 振替済みの欠席(tokkiに「へ振替」)は相殺で分母から除外。
 const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
 // ★ 事業所側の編集モーダル(フェイスシート等)を開いている間は true。 その間はクラウドポーリング(checkAndPull)を
@@ -1396,7 +1396,9 @@ function ConsentGateModal({ title, subtitle, policy, facility, tel, agreeLabel, 
   );
 }
 const formatJpPhone = (s) => {
-  const digits = (s || '').replace(/[^0-9]/g, '');
+  // ★ 全角数字(０-９)も受け付ける (iPad等で全角入力されると従来はすべて除去され消えていた)
+  const half = String(s ?? '').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const digits = half.replace(/[^0-9]/g, '');
   if (!digits) return '';
   // 携帯 (090/080/070) と IP (050) → 3-4-4
   if (/^(090|080|070|050)/.test(digits)) {
@@ -28788,8 +28790,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
               {/* ⑤ 電話固定・携帯・メアド横並び */}
               <div className="grid grid-cols-3 gap-4">
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（固定）</label><input type="tel" inputMode="numeric" disabled={isOff} value={localPatient.phone||''} onChange={e=>updateLP('phone',e.target.value.replace(/[０-９ー－]/g,c=>c==='ー'||c==='－'?'-':String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（携帯）</label><input type="tel" inputMode="numeric" disabled={isOff} value={localPatient.phoneMobile||''} onChange={e=>updateLP('phoneMobile',e.target.value.replace(/[０-９ー－]/g,c=>c==='ー'||c==='－'?'-':String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（固定）</label><input type="tel" inputMode="numeric" disabled={isOff} value={localPatient.phone||''} onChange={e=>updateLP('phone',formatJpPhone(e.target.value))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（携帯）</label><input type="tel" inputMode="numeric" disabled={isOff} value={localPatient.phoneMobile||''} onChange={e=>updateLP('phoneMobile',formatJpPhone(e.target.value))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">メールアドレス</label><input type="email" disabled={isOff} value={localPatient.email||''} onChange={e=>updateLP('email',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９＠．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} placeholder="taro@example.com" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
               </div>
 
