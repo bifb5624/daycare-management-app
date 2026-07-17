@@ -1291,6 +1291,18 @@ const getFitnessItemsForPatient = (appData, patient, fallbackItems) => {
   });
 };
 
+// ★ 全角で入力された数値を半角へ直す (体力測定・身長体重など数値入力の共通処理)。
+//   全角数字/全角ピリオド/全角マイナス/読点・句点(テンキー誤入力)を半角に寄せ、数値に使う文字だけ残す。
+//   例: "１６０．５" → "160.5" / "36。5" → "36.5"
+const toHalfWidthNum = (v) => {
+  let s = String(v ?? '');
+  s = s.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  s = s.replace(/[．。・]/g, '.').replace(/[，、]/g, '.');
+  s = s.replace(/[ー－―‐−]/g, '-');
+  s = s.replace(/[^0-9.\-]/g, '');
+  return s;
+};
+
 // 日本の電話番号フォーマッタ: ハイフン無しの数字 → 自動でハイフン付与 (実装は下部 formatJpPhone)
 // ★ 稼働率/出席率の「予定(分母)」判定。 振替=出席扱い。 振替済みの欠席(tokkiに「へ振替」)は相殺で分母から除外。
 const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
@@ -26907,6 +26919,26 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [values, setValues] = useState({});
+  // ★ 数値入力用テンキー (提供記録入力と同じ DigitalKeypad)。 身長・体重・体力測定の各項目で使う。
+  //   field は測定項目のid。 iPad等でOSキーボードを出さずに素早く入力できるようにする。
+  const [keypad, setKeypad] = useState({ isOpen: false, field: null, value: '', isFirstInput: true });
+  const openFitKeypad = (itemId) => {
+    setKeypad({ isOpen: true, field: itemId, value: String(values[itemId] ?? ''), isFirstInput: true });
+  };
+  const handleKeypadInput = (newValue, isFirst) => {
+    setKeypad(prev => ({ ...prev, value: newValue, isFirstInput: isFirst }));
+    setValues(prev => ({ ...prev, [keypad.field]: toHalfWidthNum(newValue) }));
+    markDirty();
+  };
+  const handleKeypadEnter = () => setKeypad(prev => ({ ...prev, isOpen: false }));
+  // Tab: 次の測定項目へ移動 (入力を止めずに続けて打てる)
+  const handleKeypadTab = () => {
+    const ids = (appData.systemSettings?.fitnessItems || appSettings.fitnessItems).map(i => i.id);
+    const i = ids.indexOf(keypad.field);
+    const next = ids[i + 1];
+    if (next == null) { setKeypad(prev => ({ ...prev, isOpen: false })); return; }
+    setKeypad({ isOpen: true, field: next, value: String(values[next] ?? ''), isFirstInput: true });
+  };
 
   const fitnessItems = appData.systemSettings?.fitnessItems || appSettings.fitnessItems;
   const records = appData.fitnessRecords || [];
@@ -27203,17 +27235,20 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                   <div key={item.id} className="grid grid-cols-4 border-b border-slate-100 items-center hover:bg-slate-50">
                     <div className="px-1.5 sm:px-4 py-3 font-bold text-[13px] sm:text-sm text-slate-700 leading-tight">{item.name}<span className="text-xs text-slate-400 ml-0.5">（{item.unit}）</span></div>
                     <div className="px-1 sm:px-4 py-2">
-                      <input type="number" step="0.1" value={values[item.id] ?? ''}
-                        onChange={e => { setValues({...values, [item.id]: e.target.value}); markDirty(); }}
+                      {/* ★ タップでテンキーを表示。 手入力(OSキーボード)も可能で、全角は半角へ自動変換する */}
+                      <input type="text" inputMode="decimal" value={values[item.id] ?? ''}
+                        onClick={() => openFitKeypad(item.id)}
+                        onChange={e => { setValues({...values, [item.id]: toHalfWidthNum(e.target.value)}); markDirty(); }}
                         placeholder="—"
-                        className="w-full px-1 sm:px-3 py-1.5 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400 text-center" />
+                        className={`w-full px-1 sm:px-3 py-1.5 border rounded-lg text-sm font-bold outline-none text-center cursor-pointer ${keypad.isOpen && keypad.field===item.id ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 focus:border-blue-400'}`} />
                     </div>
                     <div className="px-1 sm:px-4 py-2 text-center">
                       {!lastRecord ? <span className="text-slate-300">—</span>
                        : editPast ? (
-                        <input type="number" step="0.1" defaultValue={prev ?? ''}
+                        <input type="text" inputMode="decimal" defaultValue={prev ?? ''}
                           onBlur={e => {
-                            const v = e.target.value;
+                            // ★ 全角で入力されても半角に直して保存する
+                            const v = toHalfWidthNum(e.target.value); e.target.value = v;
                             if ((prev ?? '') === v) return;
                             const newRecords = records.map(r => r.id === lastRecord.id ? {...r, values: {...r.values, [item.id]: v}} : r);
                             onSave({...appData, fitnessRecords: newRecords});
@@ -27266,9 +27301,10 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                             return (
                               <td key={item.id} className="px-2 py-1 text-center">
                                 {editPast ? (
-                                  <input type="number" step="0.1" defaultValue={cur}
+                                  <input type="text" inputMode="decimal" defaultValue={cur}
                                     onBlur={e => {
-                                      const v = e.target.value;
+                                      // ★ 全角で入力されても半角に直して保存する
+                                      const v = toHalfWidthNum(e.target.value); e.target.value = v;
                                       if (String(cur) === v) return;
                                       const newRecords = records.map(rr => rr.id === r.id ? {...rr, values: {...rr.values, [item.id]: v}} : rr);
                                       onSave({...appData, fitnessRecords: newRecords});
@@ -27310,6 +27346,11 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
           </div>
         )}
       </div>
+      {/* ★ 数値入力用テンキー (提供記録入力と同じもの)。 Tabで次の測定項目へ移動 */}
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`fit-${keypad.field}`} value={keypad.value}
+        isFirstInput={keypad.isFirstInput} mode="record"
+        onClose={() => setKeypad(prev => ({ ...prev, isOpen: false }))}
+        onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
     </div>
   );
 }
