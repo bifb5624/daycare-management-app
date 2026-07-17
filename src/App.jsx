@@ -26619,7 +26619,8 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const renderItemValue = (item) => {
     if (item.type === 'linked') {
       // 1. linkedField の id で値を引く (直接 id 一致)
-      let rawVal = ex[item.linkedField];
+      //    ★ id が変わっていても同名の項目から拾う(分析個人と同じ解決規則)
+      let rawVal = resolveExerciseValue(ex, item.linkedField, _exItems, appSettings.exerciseItems);
       // ★ linkedField が空のとき、 item.label と一致する現在の運動項目を当てる
       //    (旧 config で linkedField が空 or 不明の項目を救済)
       if ((rawVal == null || rawVal === '') && !item.linkedField && item.label) {
@@ -26981,7 +26982,14 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
                     <div className="col-span-4"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">項目名</label><input type="text" value={item.label || ""} onChange={e => handleItemChange(item.id, 'label', e.target.value)} placeholder="新しい項目" className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none placeholder-slate-300" /></div>
                     <div className="col-span-3"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">反映方法</label><select value={item.type || "fixed"} onChange={e => handleItemChange(item.id, 'type', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none"><option value="fixed">自由入力</option><option value="linked">提供記録連動</option></select></div>
                     <div className="col-span-5"><label className="block text-[12px] font-bold text-slate-500 mb-0.5">{item.type === 'fixed' ? '表示文字' : '反映元'}</label>
-                      {item.type === 'fixed' ? <input type="text" value={item.value || ""} onChange={e => handleItemChange(item.id, 'value', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /> : <select value={item.linkedField || ""} onChange={e => handleItemChange(item.id, 'linkedField', e.target.value)} className="w-full px-3 py-1.5 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-sm font-bold outline-none">{exerciseItems.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}</select>}
+                      {item.type === 'fixed' ? <input type="text" value={item.value || ""} onChange={e => handleItemChange(item.id, 'value', e.target.value)} className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none" /> : <select value={(exerciseItems.some(ex=>ex.id===item.linkedField) ? item.linkedField : "")} onChange={e => handleItemChange(item.id, 'linkedField', e.target.value)} className={`w-full px-3 py-1.5 rounded-lg text-sm font-bold outline-none border ${exerciseItems.some(ex=>ex.id===item.linkedField) ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-amber-50 border-amber-400 text-amber-800'}`}>
+                        {/* ★ 「未選択」を明示する。 これが無いと linkedField が空/無効(項目を作り直して id が変わった等)でも
+                            ブラウザが先頭の選択肢(①ﾊﾞｲｸ)を表示してしまい、設定済みに見えるのに実際は連動しない。
+                            (項目名が運動名と一致する「平行棒」等は名前フォールバックで拾えるため動き、
+                             一致しない「有酸素運動」だけ空欄になる、という分かりにくい症状になっていた) */}
+                        <option value="">— 未選択（連動しません）—</option>
+                        {exerciseItems.map(ex => <option key={ex.id} value={ex.id}>{ex.name}</option>)}
+                      </select>}
                     </div>
                   </div>
                   <button onClick={() => deleteItem(item.id)} className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg ml-2"><Trash2 size={18}/></button>
