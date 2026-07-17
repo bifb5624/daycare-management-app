@@ -34693,8 +34693,9 @@ function KeikakuYoteiView({ appData, navigateTo }) {
   );
 }
 // 状態選択セル (生活機能チェック用)
-const KKSelect = ({ value, onChange, opts }) => (
-  <select value={value||''} onChange={e=>onChange(e.target.value)} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none">
+// ★ className で幅を上書きできる (既定は w-full。 生活機能チェックは w-28 で項目名に寄せる)
+const KKSelect = ({ value, onChange, opts, className = 'w-full' }) => (
+  <select value={value||''} onChange={e=>onChange(e.target.value)} className={`${className} px-2 py-1.5 bg-white border border-slate-300 rounded text-xs outline-none`}>
     <option value="">―</option>{opts.map(o=><option key={o} value={o}>{o}</option>)}
   </select>
 );
@@ -35169,11 +35170,14 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const grpForm = (title, group, items, opts) => (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
       <div className="text-sm font-bold text-blue-700 mb-2">{title}</div>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+      {/* ★ 項目名とプルダウンを近づけ、次の項目との間を空ける。
+          従来はラベルが w-24 固定でプルダウンが w-full に伸びていたため、
+          「食事 ---- [自立]」と離れ、逆に隣の「移乗」とくっついて読みにくかった。 */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-8 gap-y-2">
         {items.map(it => (
           <div key={it} className="flex items-center gap-2">
-            <span className="text-xs text-slate-600 w-24 shrink-0">{it}</span>
-            <KKSelect value={editing[group]?.[it]} onChange={v=>updMap(group,it,v)} opts={opts}/>
+            <span className="text-xs text-slate-600 shrink-0">{it}</span>
+            <KKSelect value={editing[group]?.[it]} onChange={v=>updMap(group,it,v)} opts={opts} className="w-28"/>
           </div>
         ))}
       </div>
