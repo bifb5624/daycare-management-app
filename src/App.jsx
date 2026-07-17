@@ -20169,7 +20169,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           }}
                           onBlur={(e) => { if (item.useKeypad && _keypadOn) return; updateExercise(p.id, item.id, applyExUnits(e.target.value, item)); }}
                           style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (displayVal.length > 9 ? 8 : displayVal.length > 7 ? 9 : displayVal.length > 5 ? 10 : displayVal.length > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
-                          className={`border rounded-lg outline-none placeholder-slate-500 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
+                          className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
                       )}
                     </td>
@@ -22675,7 +22675,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 const mm = (r.date||'').match(/(\d+)月/);
                 const ry = r.year || new Date().getFullYear();
                 const pv = getPlannedExercisesForMonth(selectedPatient, ry, mm?+mm[1]:1)[selEx.id];
-                return (pv && pv !== 'ー') ? pv : '';
+                // ★ ○ は「実施した」という記録そのもの。 その月の規定値が未設定/ーでも実施の事実は消さず
+                //   ○ のまま返す(従来は '' を返しており、規定値が無い月の実施記録が
+                //   「記録なし」として分析個人から消えていた)。 規定値が数値ならその数値を採用する。
+                return (pv && pv !== 'ー') ? pv : '○';
               }
               return raw;
             };
