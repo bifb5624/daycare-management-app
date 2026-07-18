@@ -34583,6 +34583,21 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 }
 
 
+// ★ 計画書の日付欄: カレンダーで選ぶと和暦(令和○年○月○日)で保存する。 直接手入力もできる。
+//   value は和暦文字列。 内部の <input type=date> は parseJpDate で ISO に戻して表示する。
+function KKDateField({ label, value, onChange, ph }) {
+  const iso = (() => { const d = parseJpDate(value); if (!d) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+  const toReiwaStr = (i) => { if(!i) return ''; const d=new Date(i); if(isNaN(d.getTime())) return i; const r=d.getFullYear()-2018; return `令和${r}年${d.getMonth()+1}月${d.getDate()}日`; };
+  return (
+    <div>
+      {label ? <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:4}}>{label}</label> : null}
+      <div className="flex items-center gap-1.5">
+        <input value={value||''} onChange={e=>onChange(e.target.value)} placeholder={ph||'令和○年○月○日'} className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
+        <input type="date" value={iso} onChange={e=>onChange(e.target.value ? toReiwaStr(e.target.value) : '')} title="カレンダーで選ぶ" className="w-9 px-1 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none cursor-pointer shrink-0" style={{colorScheme:'light'}}/>
+      </div>
+    </div>
+  );
+}
 // 計画書フォーム用の入力フィールド (モジュールレベルで定義し、入力中のフォーカス喪失を防ぐ)
 // suggestions: 定型文の候補。クリックで現在値の末尾に追記（空なら差し込み）。
 function KKField({ label, value, onChange, rows, ph, suggestions }) {
@@ -34883,9 +34898,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様／{patient?.gender||''}／{_age(patient?.birthDate)}歳／{patient?.careLevel||''}）</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <KKField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})} ph="令和○年○月○日"/>
-                <KKField label="前回作成日" value={editing.prevDate} onChange={v=>upd({prevDate:v})} ph="（初回は空欄）"/>
-                <KKField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
+                <KKDateField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})}/>
+                <KKDateField label="前回作成日" value={editing.prevDate} onChange={v=>upd({prevDate:v})} ph="（初回は空欄）"/>
+                <KKDateField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
                 <KKField label="計画作成者" value={editing.author} onChange={v=>upd({author:v})}/>
                 <KKField label="職種" value={editing.authorJob} onChange={v=>upd({authorJob:v})}/>
                 <div/>
@@ -34989,7 +35004,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             </div>
             {/* 説明 */}
             <div className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 gap-3">
-              <KKField label="説明日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})} ph="令和○年○月○日"/>
+              <KKDateField label="説明日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})}/>
               <KKField label="説明者" value={editing.setsumeisha} onChange={v=>upd({setsumeisha:v})}/>
             </div>
           </div>
@@ -35531,10 +35546,17 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     upd({ flow: src.map(s=>({ time:s.time||'', content:s.content||'' })) });
   };
   // ★ 目標の設定日/達成予定日を「サービス提供内容①」の期間からコピーする
-  const copyGoalDates = (k)=>{
-    const s=(editing?.services||[])[0]||{};
-    if(!String(s.from||'').trim() && !String(s.to||'').trim()){ alert('サービス提供内容①の期間（○月○日〜○月○日）を先に入力してください。'); return; }
-    upd({ [k+'SetDate']: s.from||'', [k+'DueDate']: s.to||'' });
+  // ★ 長期目標の期間(設定日〜達成予定日)を、サービス提供内容①〜⑤の期間へコピーする。
+  //   計画のプログラムは目標の期間内に実施するため、目標側を正として下ろす。
+  //   和暦(令和8年3月)は「○月○日」形式に落として①〜⑤の from/to に入れる。
+  const _toMD = (jp)=>{ const d=parseJpDate(jp)||parseJpMonth(jp); return d ? `${d.getMonth()+1}月${d.getDate()}日` : String(jp||''); };
+  const copyLongPeriodToServices = ()=>{
+    const from = editing?.longSetDate, to = editing?.longDueDate;
+    if(!String(from||'').trim() && !String(to||'').trim()){ alert('長期目標の設定日・達成予定日を先に入力してください。'); return; }
+    if(!window.confirm('長期目標の期間を、サービス提供内容①〜⑤の期間にコピーします。よろしいですか？（各項目の内容は変わりません）')) return;
+    const f=_toMD(from), t=_toMD(to);
+    setEditing(e=>({ ...e, services:(e.services||[]).map(sv=>({ ...sv, from:f, to:t })) }));
+    markDirty();
   };
   const upd = (patch)=>{ setEditing(e=>({...e,...patch})); markDirty(); };
   const updProg = (i,patch)=>{ setEditing(e=>({...e, programs:e.programs.map((p,idx)=>idx===i?{...p,...patch}:p)})); markDirty(); };
@@ -35545,14 +35567,18 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const updFlow = (i,patch)=>{ setEditing(e=>({...e, flow:(e.flow||[]).map((s,idx)=>idx===i?{...s,...patch}:s)})); markDirty(); };
   const addFlow = ()=>{ setEditing(e=>({...e, flow:[...(e.flow||[]), {time:'',content:''}]})); markDirty(); };
   const delFlow = (i)=>{ setEditing(e=>({...e, flow:(e.flow||[]).filter((_,idx)=>idx!==i)})); markDirty(); };
-  const saveRecord = ()=>{
+  // ★ close=true: 保存して一覧へ戻る / close=false: 一時保存(編集画面は開いたまま)
+  //   一時保存は「画面を戻る前に消えないよう取っておく」用途。 どちらもクラウドへ保存する。
+  const saveRecord = (close=true)=>{
     if(!editing) return;
     const list=[...(appData.tsushoKeikakuRecords||[])];
     const idx=list.findIndex(r=>r.id===editing.id);
     const rec={...editing,_savedAt:Date.now()};
     if(idx>=0) list[idx]=rec; else list.push(rec);
-    onSave({...appData, tsushoKeikakuRecords:list}, {manual:true, message:'✓ 通所介護計画書を保存しました'});
-    if(dirtyRef) dirtyRef.current=false; setEditing(null);
+    onSave({...appData, tsushoKeikakuRecords:list}, {manual:true, message: close ? '✓ 通所介護計画書を保存しました' : '✓ 一時保存しました'});
+    if(dirtyRef) dirtyRef.current=false;
+    if(close) setEditing(null);
+    else setEditing(rec); // 保存済みレコードで編集を継続(以降は上書き保存になる)
   };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
   const delRecord=(id)=>{ if(!window.confirm('この計画書を削除します。よろしいですか？')) return; onSave({...appData, tsushoKeikakuRecords:(appData.tsushoKeikakuRecords||[]).filter(r=>r.id!==id)}, {manual:true, message:'削除しました'}); if(editing?.id===id) setEditing(null); };
@@ -35605,8 +35631,9 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
-          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
-          <button onClick={saveRecord} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存</button>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？（一時保存すれば残せます）')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={()=>saveRecord(false)} className="px-4 py-2 bg-white border border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-lg text-sm font-bold active:scale-95" title="編集画面を開いたまま保存します">一時保存</button>
+          <button onClick={()=>saveRecord(true)} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存して閉じる</button>
         </>}
         {printRec && <button onClick={()=>onShowPrintPreview('通所介護計画書','A4','tk-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">印刷/PDF</button>}
       </div>
@@ -35624,9 +35651,9 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様／{patient?.gender||''}／{_age(patient?.birthDate)}歳／{patient?.careLevel||''}）<span className="ml-2 font-normal text-[11px] text-slate-400">氏名・生年月日・要介護度は利用者マスタから自動</span></div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <KKField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})} ph="令和○年○月○日"/>
-                <KKField label="前回作成日" value={editing.prevDate} onChange={v=>upd({prevDate:v})} ph="（初回は空欄）"/>
-                <KKField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
+                <KKDateField label="作成日" value={editing.createdDate} onChange={v=>upd({createdDate:v})}/>
+                <KKDateField label="前回作成日" value={editing.prevDate} onChange={v=>upd({prevDate:v})} ph="（初回は空欄）"/>
+                <KKDateField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 mb-1">計画作成者</label>
                   <input value={editing.author||''} onChange={e=>upd({author:e.target.value})} list="tk-staff-names" placeholder="職員を選択／入力" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
@@ -35679,9 +35706,9 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                 <div key={k} className="mb-3 last:mb-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="text-xs font-bold text-slate-600 w-16">{t}</span>
-                    <input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/>
-                    <input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-44"/>
-                    <button onClick={()=>copyGoalDates(k)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap">①の期間をコピー</button>
+                    <div className="flex items-center gap-1"><input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-36"/><input type="date" value={(()=>{const d=parseJpDate(editing[k+'SetDate'])||parseJpMonth(editing[k+'SetDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;upd({[k+'SetDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/></div>
+                    <div className="flex items-center gap-1"><input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/><input type="date" value={(()=>{const d=parseJpDate(editing[k+'DueDate'])||parseJpMonth(editing[k+'DueDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;upd({[k+'DueDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/></div>
+                    {k==='long' && <button onClick={copyLongPeriodToServices} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap">期間を①〜⑤へコピー</button>}
                     <span className="text-[11px] text-slate-400 ml-1">達成度</span>
                     {TK_ACHIEVE.map(o=>(
                       <button key={o} onClick={()=>upd({[k+'Achieve']: editing[k+'Achieve']===o?'':o})} className={`px-2.5 py-1 rounded border text-xs font-bold ${editing[k+'Achieve']===o?'bg-emerald-500 text-white border-emerald-500':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{o}</button>
@@ -35699,9 +35726,11 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                   <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-base font-bold text-blue-700">{TK_MARU[i]}</span>
-                      <input value={sv.from||''} onChange={e=>updSvc(i,{from:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-24"/>
+                      <input value={sv.from||''} onChange={e=>updSvc(i,{from:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-20"/>
+                      <input type="date" value={(()=>{const d=parseJpDate(sv.from);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;updSvc(i,{from:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/>
                       <span className="text-xs text-slate-400">〜</span>
-                      <input value={sv.to||''} onChange={e=>updSvc(i,{to:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-24"/>
+                      <input value={sv.to||''} onChange={e=>updSvc(i,{to:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-20"/>
+                      <input type="date" value={(()=>{const d=parseJpDate(sv.to);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;updSvc(i,{to:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/>
                     </div>
                     <KKField label="目的とケアの提供方針・内容" value={sv.content} onChange={v=>updSvc(i,{content:v})} rows={2}/>
                     <div className="grid md:grid-cols-3 gap-3 mt-2">
@@ -35773,7 +35802,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <label className="text-xs font-bold text-slate-600">実施後の変化（総括）</label>
-                  <input value={editing.saihyokaDate||''} onChange={e=>upd({saihyokaDate:e.target.value})} placeholder="再評価日(令和○年○月○日)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-56"/>
+                  <div className="flex items-center gap-1"><input value={editing.saihyokaDate||''} onChange={e=>upd({saihyokaDate:e.target.value})} placeholder="再評価日(令和○年○月○日)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-44"/><input type="date" value={(()=>{const d=parseJpDate(editing.saihyokaDate);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;upd({saihyokaDate:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダーで選ぶ" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/></div>
                 </div>
                 <KKField label="" value={editing.soukatsu} onChange={v=>upd({soukatsu:v})} rows={3}/>
               </div>
@@ -35787,7 +35816,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                   {editing.setsumeisha && !_staffOpts.includes(editing.setsumeisha) && <option value={editing.setsumeisha}>{editing.setsumeisha}</option>}
                 </select>
               </div>
-              <KKField label="説明・同意日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})} ph="令和○年○月○日"/>
+              <KKDateField label="説明・同意日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})}/>
             </div>
           </div>
         ) : (
