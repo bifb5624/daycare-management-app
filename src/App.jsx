@@ -39707,7 +39707,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         <div className="mt-2">
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">有効期間（負担割合証は通常1年。開始日を入れると1年後を自動設定）</label>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <input type="date" value={patient.costBurdenFrom||''} onChange={e=>{ const v=e.target.value; const patch={costBurdenFrom:v}; if(v && !patient.costBurdenTo){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); patch.costBurdenTo=d.toISOString().slice(0,10); } saveMaster(patch); }} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <input type="date" value={patient.costBurdenFrom||''} onChange={e=>{ const v=e.target.value; const patch={costBurdenFrom:v}; if(v){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); patch.costBurdenTo=d.toISOString().slice(0,10); } saveMaster(patch); }} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
                             <span className="text-slate-400">〜</span>
                             <input type="date" value={patient.costBurdenTo||''} onChange={e=>saveMaster({costBurdenTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
                           </div>
