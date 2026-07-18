@@ -34793,15 +34793,17 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const addProg = () => { setEditing(e => ({ ...e, programs: [...e.programs, blankProgram()] })); markDirty(); };
   const delProg = (i) => { setEditing(e => ({ ...e, programs: e.programs.filter((_,idx)=>idx!==i) })); markDirty(); };
 
-  const saveRecord = () => {
+  // ★ close=true: 保存して一覧へ戻る / close=false: 一時保存(編集画面は開いたまま。 画面を戻る前に消えないよう取っておく)
+  const saveRecord = (close=true) => {
     if (!editing) return;
     const list = [...(appData.kinouKeikakuRecords||[])];
     const idx = list.findIndex(r => r.id === editing.id);
     const rec = { ...editing, _savedAt: Date.now() };
     if (idx >= 0) list[idx] = rec; else list.push(rec);
-    onSave({ ...appData, kinouKeikakuRecords: list }, { manual:true, message:'✓ 個別機能訓練計画書を保存しました' });
+    onSave({ ...appData, kinouKeikakuRecords: list }, { manual:true, message: close ? '✓ 個別機能訓練計画書を保存しました' : '✓ 一時保存しました' });
     if (dirtyRef) dirtyRef.current = false;
-    setEditing(null);
+    if (close) setEditing(null);
+    else setEditing(rec); // 保存済みレコードで編集を継続(以降は上書き保存)
   };
   React.useEffect(() => { if (!saveFnRef) return; saveFnRef.current = () => { if (editing) saveRecord(); }; });
 
@@ -34862,8 +34864,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
-          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
-          <button onClick={saveRecord} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存</button>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？（一時保存すれば残せます）')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={()=>saveRecord(false)} className="px-4 py-2 bg-white border border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-lg text-sm font-bold active:scale-95" title="編集画面を開いたまま保存します">一時保存</button>
+          <button onClick={()=>saveRecord(true)} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存して閉じる</button>
         </>}
         {printRec && <button onClick={()=>onShowPrintPreview('個別機能訓練計画書','A4','kk-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">印刷/PDF</button>}
       </div>
@@ -34933,9 +34936,9 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
               <div className="text-sm font-bold text-blue-700 mb-3">健康状態・経過</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                 <KKField label="病名" value={editing.byomei} onChange={v=>upd({byomei:v})}/>
-                <KKField label="発症日・受傷日" value={editing.hasshoDate} onChange={v=>upd({hasshoDate:v})}/>
-                <KKField label="直近の入院日" value={editing.nyuinDate} onChange={v=>upd({nyuinDate:v})}/>
-                <KKField label="直近の退院日" value={editing.taiinDate} onChange={v=>upd({taiinDate:v})}/>
+                <KKDateField label="発症日・受傷日" value={editing.hasshoDate} onChange={v=>upd({hasshoDate:v})}/>
+                <KKDateField label="直近の入院日" value={editing.nyuinDate} onChange={v=>upd({nyuinDate:v})}/>
+                <KKDateField label="直近の退院日" value={editing.taiinDate} onChange={v=>upd({taiinDate:v})}/>
               </div>
               <div className="grid md:grid-cols-1 gap-3">
                 <KKField label="治療経過（手術がある場合は手術日・術式等）" value={editing.chiryoKeika} onChange={v=>upd({chiryoKeika:v})} rows={2}/>
@@ -35177,7 +35180,7 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const newRecord = () => ({ id:`sk_${pid}_${Date.now()}`, patientId:pid, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10)), recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:patient?.ryui||'', bikou:'' });
   const upd = (patch) => { setEditing(e=>({...e,...patch})); markDirty(); };
   const updMap = (group,key,val) => { setEditing(e=>({...e,[group]:{...(e[group]||{}),[key]:val}})); markDirty(); };
-  const saveRecord = () => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message:'✓ 生活機能チェックシートを保存しました'}); if(dirtyRef)dirtyRef.current=false; setEditing(null); };
+  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message: close?'✓ 生活機能チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
   const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,seikatsuKinouRecords:(appData.seikatsuKinouRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
   const dupRecord = (r) => setEditing({...r, id:`sk_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
@@ -35210,8 +35213,9 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
-          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef)dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
-          <button onClick={saveRecord} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存</button>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？（一時保存すれば残せます）')) return; if(dirtyRef)dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={()=>saveRecord(false)} className="px-4 py-2 bg-white border border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-lg text-sm font-bold active:scale-95" title="編集画面を開いたまま保存します">一時保存</button>
+          <button onClick={()=>saveRecord(true)} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存して閉じる</button>
         </>}
         {printRec && <button onClick={()=>onShowPrintPreview('生活機能チェックシート','A4','sk-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">印刷/PDF</button>}
       </div>
@@ -35221,7 +35225,7 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様）</div>
               <div className="grid grid-cols-2 gap-3">
-                <KKField label="作成日" value={editing.recordDate} onChange={v=>upd({recordDate:v})} ph="令和○年○月○日"/>
+                <KKDateField label="作成日" value={editing.recordDate} onChange={v=>upd({recordDate:v})}/>
                 <KKField label="記入者" value={editing.recorder} onChange={v=>upd({recorder:v})}/>
               </div>
             </div>
@@ -35301,7 +35305,7 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const toggleCustom = (i,key) => { setEditing(e=>({...e, custom:e.custom.map((c,idx)=>idx===i?{...c,[key]:!c[key]}:c)})); markDirty(); };
   const addCustom = () => { if(!newItem.trim()) return; setEditing(e=>({...e, custom:[...(e.custom||[]), {name:newItem.trim()}]})); setNewItem(''); markDirty(); };
   const delCustom = (i) => { setEditing(e=>({...e, custom:e.custom.filter((_,idx)=>idx!==i)})); markDirty(); };
-  const saveRecord = () => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message:'✓ 興味・関心チェックシートを保存しました'}); if(dirtyRef)dirtyRef.current=false; setEditing(null); };
+  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message: close?'✓ 興味・関心チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
   const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,kyomiKanshinRecords:(appData.kyomiKanshinRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
   const dupRecord = (r) => setEditing({...r, id:`ki_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
@@ -35328,8 +35332,9 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
-          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef)dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
-          <button onClick={saveRecord} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存</button>
+          <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？（一時保存すれば残せます）')) return; if(dirtyRef)dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          <button onClick={()=>saveRecord(false)} className="px-4 py-2 bg-white border border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-lg text-sm font-bold active:scale-95" title="編集画面を開いたまま保存します">一時保存</button>
+          <button onClick={()=>saveRecord(true)} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存して閉じる</button>
         </>}
         {printRec && <button onClick={()=>onShowPrintPreview('興味・関心チェックシート','A4','ki-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">印刷/PDF</button>}
       </div>
@@ -35337,7 +35342,7 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : editing ? (
           <div className="max-w-3xl mx-auto space-y-4">
             <div className="bg-white rounded-xl border border-slate-200 p-4 grid grid-cols-2 gap-3">
-              <KKField label="作成日" value={editing.recordDate} onChange={v=>upd({recordDate:v})} ph="令和○年○月○日"/>
+              <KKDateField label="作成日" value={editing.recordDate} onChange={v=>upd({recordDate:v})}/>
               <KKField label="記入者" value={editing.recorder} onChange={v=>upd({recorder:v})}/>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4">
