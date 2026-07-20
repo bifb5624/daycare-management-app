@@ -16562,6 +16562,7 @@ export default function App() {
     }
     try { localStorage.setItem(lastStoreKey, newStoreId); } catch {}
 
+    let _pullSkipCount = 0;
     const checkAndPull = async () => {
       try {
         const row = await supabaseLoadStateForStore(newStoreId);
@@ -16616,6 +16617,7 @@ export default function App() {
           const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 2500;
           if (intentionalWindow || (since < 1500 && !_tooLongSinceApply)) {
             // 編集中 → pull せず再試行を次の interval に任せる
+            if ((_pullSkipCount = (_pullSkipCount + 1) % 10) === 0) syncLog('pull-skip', { since });
             return;
           }
           syncLog('pull', { since });
@@ -16738,6 +16740,8 @@ export default function App() {
         // ★ 通信エラー (529 Overloaded 等)。 BLANK 初期化も push も一切せず (データ消失防止)、
         //   storeTransitionRef は true のまま = push 封鎖を維持して数秒後に素早く再試行。
         console.warn('[supabase] pull/reset-check failed (will retry)', e);
+        // ★ 通信/RLSエラーで pull が落ちると診断ログに何も出ず「止まって見える」ため必ず記録する
+        syncLog('pull-error', { err: String((e && e.message) || e).slice(0, 120) });
         if (pendingPullForStoreRef.current === newStoreId) {
           setTimeout(() => { checkAndPull(); }, 3000);
         }
@@ -16745,6 +16749,10 @@ export default function App() {
     };
     checkAndPull(); // 即時1回
     const timer = setInterval(checkAndPull, 4000); // ★ 4秒ごと (Realtime未有効時の保険。反映を速く)
+    // ★ 生存確認: これが途切れていたら「ブラウザがタブを休止させている/画面が固まっている」と判別できる
+    const heartbeat = setInterval(() => {
+      syncLog('alive', { vis: document.visibilityState, online: navigator.onLine });
+    }, 30000);
     // ★ Realtime購読: 同じ店舗の app_state が変わった瞬間に即 pull (1〜2秒で反映)。
     //   他店舗の変更では通知は来ない(店舗IDでフィルタ)。 Supabase側でRealtime有効化すると動作。
     const stopRealtime = supabaseSubscribeStoreRealtime(newStoreId, () => {
@@ -16756,7 +16764,7 @@ export default function App() {
     const onWakePull = () => { if (document.visibilityState !== 'hidden') { try { checkAndPull(); } catch {} } };
     document.addEventListener('visibilitychange', onWakePull);
     window.addEventListener('focus', onWakePull);
-    return () => { clearInterval(timer); try { stopRealtime && stopRealtime(); } catch {} document.removeEventListener('visibilitychange', onWakePull); window.removeEventListener('focus', onWakePull); };
+    return () => { clearInterval(timer); clearInterval(heartbeat); try { stopRealtime && stopRealtime(); } catch {} document.removeEventListener('visibilitychange', onWakePull); window.removeEventListener('focus', onWakePull); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId]);
 
