@@ -36,6 +36,8 @@ import {
   pendingOps,
   pendingCount,
   queueRecordDiff,
+  diffRecordRows,
+  upsertTicketRows,
   flushOps,
   fetchOpsSince,
   fetchAllOpsSince,
@@ -17493,6 +17495,11 @@ export default function App() {
           // ★ 直前の状態は appData(この呼び出し時点ではまだ更新前)。 上の try 内の `prev` は
           //   スコープ外なのでここでは使えない(参照するとReferenceErrorで差分が作られなくなる)。
           const _prevRecs = (appData && appData.ticketRecords) || [];
+          // 【移行フェーズ1】専用テーブルへも同時に書き込む(読み取りは従来どおり=動作は変わらない)
+          try {
+            const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
+            if (_rows.length) upsertTicketRows(staffSession.storeId, _rows);
+          } catch (e) { console.warn('[ticket_records] 差分作成に失敗', e); }
           const _n = queueRecordDiff(_prevRecs, newData.ticketRecords, 'ticketRecords');
           if (_n > 0) {
             syncLog('ops-queued', { n: _n, pending: pendingCount() });
