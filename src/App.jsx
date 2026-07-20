@@ -21086,8 +21086,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         return true;
       })
       .sort((a,b)=>{
-        const m1=a.date.match(/(\d+)月/),m2=b.date.match(/(\d+)月/);
-        const d1=a.date.match(/(\d+)日/),d2=b.date.match(/(\d+)日/);
+        const _ad=(a&&a.date)||'', _bd=(b&&b.date)||'';
+        const m1=_ad.match(/(\d+)月/),m2=_bd.match(/(\d+)月/);
+        const d1=_ad.match(/(\d+)日/),d2=_bd.match(/(\d+)日/);
         const mv=parseInt(m1?.[1]||0,10)-parseInt(m2?.[1]||0,10);
         return mv!==0?mv:parseInt(d1?.[1]||0,10)-parseInt(d2?.[1]||0,10);
       });
@@ -21169,7 +21170,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const allDates = records.map(r=>r.date).sort();
   const fmtYM = d => { const my=d.match(/(\d+)年(\d+)月/); if(my) return `${my[1]}年${my[2]}月`; const mo=d.match(/(\d+)月/); return mo?`${mo[1]}月`:d; };
   const fmtISO = s => { const [y,m]=s.split('-'); return `${y}年${parseInt(m)}月`; };
-  const monthNums = records.map(r=>{const m=r.date.match(/(\d+)月/);return m?parseInt(m[1]):null;}).filter(Boolean);
+  const monthNums = records.map(r=>{const m=r&&r.date?r.date.match(/(\d+)月/):null;return m?parseInt(m[1]):null;}).filter(Boolean);
   const minM = monthNums.length?Math.min(...monthNums):null;
   const maxM = monthNums.length?Math.max(...monthNums):null;
   const rangeLabel = period==='custom' ? `${fmtISO(customFrom)}〜${fmtISO(customTo)}`
@@ -23132,7 +23133,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             }).filter(d=>d.val!==null);
 
             const monthlyEx = monthlyData.map(d=>{
-              const recs=validRecs.filter(r=>{const mm=r.date.match(/(\d+)月/);return mm&&+mm[1]===d.month;});
+              const recs=validRecs.filter(r=>{const mm=r&&r.date?r.date.match(/(\d+)月/):null;return mm&&+mm[1]===d.month;});
               const nums=recs.map(r=>toNum(_exMonthVal(r))).filter(v=>v!==null);
               const dens=recs.map(r=>toDen(_exMonthVal(r))).filter(v=>v!==null);
               return {month:d.month,avg:nums.length?nums.reduce((a,b)=>a+b,0)/nums.length:null,max:nums.length?Math.max(...nums):null,min:nums.length?Math.min(...nums):null,denAvg:dens.length?dens.reduce((a,b)=>a+b,0)/dens.length:null,count:nums.length,hasData:nums.length>0};
