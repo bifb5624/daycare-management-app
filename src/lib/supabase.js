@@ -35,6 +35,9 @@ export function syncLog(ev, detail) {
 }
 export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
 export function clearSyncLog() { try { localStorage.removeItem(_SYNCLOG_KEY); } catch {} }
+// ★ 操作ログ方式へ移行済みのキー。 巨大JSON側では読み取り専用(スナップショット)として扱い、
+//   マージも上書きも行わない。 syncOps.js の OPLOG_ENABLED を false に戻すときは、ここも空にする。
+export const OPLOG_FROZEN_KEYS = new Set(['ticketRecords']);
 const _CLOCK_KEY = 'tsumugiClockOffset';
 let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
 // 同期用の現在時刻。 _savedAt / _fieldTs / _updatedAt は必ずこれを使う。
@@ -719,6 +722,10 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // ★ 提供記録・日誌はフィールド単位でマージ (別端末で違う項目を入力しても消えない)。 他はid単位。
     const FIELD_MERGE_KEYS = new Set(['ticketRecords','dailyLogs']);
     ARRAY_KEYS.forEach(k => {
+      // ★ 操作ログ方式へ移行済みのデータは、巨大JSON側では一切書き換えない(スナップショットとして凍結)。
+      //   ここで書き換えると、操作ログと巨大JSONが同じデータを奪い合い、以前と同じ消失事故になる。
+      //   実効状態 = このスナップショット + __snapRevision より新しい操作ログ。
+      if (OPLOG_FROZEN_KEYS.has(k)) { merged[k] = Array.isArray(cloud[k]) ? cloud[k] : (Array.isArray(localData[k]) ? localData[k] : []); return; }
       const tomb = mergedTomb[k] || {};
       const arr = FIELD_MERGE_KEYS.has(k) ? mergeByIdFieldLevel(localData[k], cloud[k]) : mergeById(localData[k], cloud[k]);
       merged[k] = arr.filter(r => !(r && r.id != null && tomb[String(r.id)]));
@@ -944,7 +951,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     }
     // ★ ticketRecords は「患者+日付」で必ず1件に正規化。 旧ランダムid×新決定idの重複や、
     //   空欄の記録が入力済みの記録を上書きするのを防ぐ。 データが多い方(同点なら新しい方)を残す。
-    if (Array.isArray(merged.ticketRecords)) {
+    // ★ 操作ログ方式に移行済みの場合、この正規化はスナップショットを書き換えてしまうので行わない。
+    if (!OPLOG_FROZEN_KEYS.has('ticketRecords') && Array.isArray(merged.ticketRecords)) {
       const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
       const FIELDS = ['temp_AM','temp_PM','bpUpSt_AM','bpUpSt_PM','bpDnSt_AM','bpDnSt_PM','plSt_AM','plSt_PM','bpUpEn_AM','bpUpEn_PM','bpDnEn_AM','bpDnEn_PM','plEn_AM','plEn_PM','massage','tokki','kibunArrival','kibunDeparture','actualTime'];
       const score = (r) => { let s=0; FIELDS.forEach(f=>{ if(r && r[f]) s++; }); if(r && r.exercises && Object.keys(r.exercises).length) s+=Object.keys(r.exercises).length; if(r && r.status && r.status!=='出席') s+=1; return s; };

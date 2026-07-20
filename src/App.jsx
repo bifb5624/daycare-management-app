@@ -26,6 +26,21 @@ import {
   syncLog,
   getSyncLog,
   clearSyncLog,
+} from './lib/supabase';
+import {
+  OPLOG_ENABLED,
+  restorePendingOps,
+  pendingOps,
+  pendingCount,
+  queueRecordDiff,
+  flushOps,
+  fetchOpsSince,
+  fetchAllOpsSince,
+  subscribeOps,
+  applyOps,
+  senderId as opSenderId,
+} from './lib/syncOps';
+import {
   supabaseLoadStateForStore,
   supabaseStaffLogin,
   supabaseStaffChangePassword,
@@ -16413,6 +16428,91 @@ export default function App() {
     return () => clearInterval(t);
   }, [staffSession?.storeId]);
 
+  // =========================================================
+  // ★ 操作ログ同期 (提供記録)
+  //   巨大JSONの pull/push とは独立して動く。 流れ:
+  //     ① 前回終了時に送れなかった操作をキューから復元して再送
+  //     ② スナップショット(巨大JSON)より新しい操作をまとめて取得し、状態へ畳み込む
+  //     ③ 以後は Realtime で他端末の操作を受け取り、変わった項目だけを反映
+  //   ★ 適用時は必ず「受信した操作 + 自分の未送信操作」の順で畳み込む(リベース)。
+  //     これを怠ると、他端末の更新を受け取った瞬間に自分の入力途中が消える。
+  // =========================================================
+  const opsRevisionRef = React.useRef(0);   // 最後に取り込んだリビジョン
+  const opsReadyRef = React.useRef(false);
+  // 非同期処理から最新の appData を参照するための鏡 (state を依存に入れると購読が張り直されるため)
+  const appDataRef = React.useRef(appData);
+  appDataRef.current = appData;
+  useEffect(() => {
+    if (!OPLOG_ENABLED || !isSupabaseEnabled || !staffSession?.storeId) return;
+    const storeId = staffSession.storeId;
+    let stopped = false, unsubscribe = null;
+
+    // 受信した操作を状態へ反映する (自分が送った操作は既に画面へ反映済みなので無視)
+    const applyIncoming = (ops) => {
+      if (stopped || !ops || !ops.length) return;
+      const fresh = ops.filter(o => o && Number(o.revision) > opsRevisionRef.current);
+      if (fresh.length) opsRevisionRef.current = Math.max(opsRevisionRef.current, ...fresh.map(o => Number(o.revision) || 0));
+      const others = fresh.filter(o => o.senderId !== opSenderId);
+      if (!others.length) return;
+      syncLog('ops-recv', { n: others.length, rev: opsRevisionRef.current });
+      applyingRemoteRef.current = true;   // pull 由来と同じ扱い = 巨大JSONを押し戻さない
+      setAppData(prevState => applyOps(prevState, others.concat(pendingOps())));
+    };
+
+    const boot = async () => {
+      // 巨大JSON(スナップショット)の読み込み完了を待つ。 空の状態に操作を当てると壊れるため。
+      for (let i = 0; i < 120 && !stopped; i++) {
+        if (dataLoadedForStoreRef.current === storeId) break;
+        await new Promise(r => setTimeout(r, 500));
+      }
+      if (stopped) return;
+      await restorePendingOps();
+      if (pendingCount() > 0) {
+        syncLog('ops-restore', { pending: pendingCount() });
+        flushOps(storeId);   // 前回送れなかった分をまず再送
+      }
+      try {
+        const since = Number(appDataRef.current?.__snapRevision) || 0;
+        opsRevisionRef.current = since;
+        const ops = await fetchAllOpsSince(storeId, since);
+        syncLog('ops-initial', { n: ops.length, since });
+        applyIncoming(ops);
+        opsReadyRef.current = true;
+      } catch (e) {
+        console.warn('[oplog] 初回取得に失敗', e);
+        syncLog('ops-initial-error', { err: String((e && e.message) || e) });
+      }
+      if (stopped) return;
+      unsubscribe = subscribeOps(storeId, applyIncoming);
+    };
+    boot();
+
+    // 保険: Realtime が届かない環境でも 5 秒ごとに差分を取りに行く。 未送信があれば再送も行う。
+    const timer = setInterval(async () => {
+      if (stopped || !opsReadyRef.current) return;
+      try {
+        if (pendingCount() > 0) await flushOps(storeId);
+        const ops = await fetchOpsSince(storeId, opsRevisionRef.current);
+        if (ops.length) applyIncoming(ops);
+      } catch (e) { /* 次回に任せる */ }
+    }, 5000);
+
+    // 復帰・オンライン復旧の瞬間に必ず再送する (iOS のサスペンド対策)
+    const onWake = () => { if (document.visibilityState !== 'hidden') { try { flushOps(storeId); } catch {} } };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('online', onWake);
+    window.addEventListener('focus', onWake);
+
+    return () => {
+      stopped = true; clearInterval(timer);
+      try { unsubscribe && unsubscribe(); } catch {}
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('online', onWake);
+      window.removeEventListener('focus', onWake);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [staffSession?.storeId]);
+
   // 起動時 + 店舗切替え時に Supabase から最新 state を pull + リセット検知ポーリング
   useEffect(() => {
     if (!isSupabaseEnabled || !staffSession?.storeId) return;
@@ -16523,7 +16623,12 @@ export default function App() {
           // ★ 毎回のpullで: 端末内の「クラウドより新しい提供記録」を保持する(pull は丸ごと置換なので、
           //   push が一時的に失敗している間に空のクラウドを受信すると入力が消える=空白バグを防ぐ)。
           //   patient+日付+年 で突き合わせ、_savedAt が新しい方を採用。 墓石(削除済み)は復活させない。
-          if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          // ★ 操作ログ方式に移行済みの場合、提供記録の実体は操作ログが持つ。 巨大JSON側の
+          //   ticketRecords はスナップショット(凍結)なので、ここで手元の値を混ぜてはいけない。
+          //   代わりに「手元の状態をそのまま保つ」= クラウドのスナップショットで上書きしない。
+          if (OPLOG_ENABLED && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+            merged.ticketRecords = prev.ticketRecords;
+          } else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
               const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
@@ -17284,6 +17389,20 @@ export default function App() {
         && _storeMatch
         && (_hasRealData || options.allowEmpty);
       syncLog('save', { manual: !!options.manual, silent: !!options.silent, canPush: !!_canPush, recs: (newData.ticketRecords||[]).length });
+      // ★ 操作ログ方式: 提供記録の「変わった項目だけ」を操作としてキューへ積み、即送信する。
+      //   巨大JSONの往復とは独立に動くので、こちらが通れば入力は必ず残る。
+      if (OPLOG_ENABLED && _canPush) {
+        try {
+          const _n = queueRecordDiff(prev.ticketRecords, newData.ticketRecords, 'ticketRecords');
+          if (_n > 0) {
+            syncLog('ops-queued', { n: _n, pending: pendingCount() });
+            flushOps(staffSession.storeId).then(r => {
+              if (r && r.ok) { if (r.acked) syncLog('ops-acked', { n: r.acked, rev: r.maxRevision }); }
+              else syncLog('ops-send-fail', { pending: pendingCount(), err: r && r.error });
+            });
+          }
+        } catch (e) { console.warn('[oplog] 差分の作成に失敗', e); syncLog('ops-diff-error', { err: String(e && e.message || e) }); }
+      }
       if (_canPush) {
         // ★ 保存結果を監視: 失敗(CASリトライ上限=他端末が更新中／通信不良)なら明示通知 (静かに消えるのを防ぐ)。
         //   ★ 入力は既にローカル状態＋localStorageに反映済み=下書きは消えない。 再保存で再度CASを試みる。
