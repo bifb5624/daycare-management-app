@@ -21,6 +21,8 @@ import {
   supabaseSubscribeStoreRealtime,
   supabaseSyncStateForStore,
   supabaseMergeAndSyncStateForStore,
+  syncNow,
+  syncHealth,
   supabaseLoadStateForStore,
   supabaseStaffLogin,
   supabaseStaffChangePassword,
@@ -11006,7 +11008,7 @@ function ScheduleView({ appData, onSave }) {
     if (!modal.title || !modal.title.trim()) { alert('予定のタイトルを入力してください'); return; }
     if (!modal.date) { alert('日付を選んでください'); return; }
     const evId = modal.id || `ev_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-    const ev = { ...modal, id: evId, title: modal.title.trim(), _savedAt: Date.now() };
+    const ev = { ...modal, id: evId, title: modal.title.trim(), _savedAt: syncNow() };
     const list = modal.id ? events.map(e=>e.id===modal.id?ev:e) : [...events, ev];
     // ★ お知らせ配信: 利用者を選び「お知らせとして配信」ON → その利用者(ご家族)＋担当ケアマネの閲覧画面のお知らせに掲載
     const annId = `schednews_${evId}`;
@@ -11072,13 +11074,13 @@ function ScheduleView({ appData, onSave }) {
     if (!fromDate) return;
     if (fromDate <= e.date) { del(e.id); return; }
     if (!window.confirm(`${e.title}\n${fromDate} 以降の繰り返しを削除します。よろしいですか？`)) return;
-    save(events.map(x=>x.id===e.id?{...x, repeatUntil:prevDayStr(fromDate), _savedAt:Date.now()}:x), '✓ 指定日以降の繰り返しを削除しました');
+    save(events.map(x=>x.id===e.id?{...x, repeatUntil:prevDayStr(fromDate), _savedAt:syncNow()}:x), '✓ 指定日以降の繰り返しを削除しました');
   };
   const addMonthsToDate = (dstr, months) => { if(!dstr) return ''; const [y,m,d]=dstr.split('-').map(Number); const dt=new Date(y,m-1+months,d); return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`; };
   const evOf = (dstr) => events.filter(e=>occursOn(e,dstr)).map(e=> e.date===dstr ? e : {...e, date:dstr, _occ:true, _baseId:e.id}).sort((a,b)=>String(a.start||'99').localeCompare(String(b.start||'99')));
   const editEvent = (e) => { const be = e._occ ? (events.find(x=>x.id===e._baseId)||e) : e; setModal({...be}); };
   const delEvent = (e) => { del(e._occ ? e._baseId : e.id); };
-  const moveEvent = (e, toDstr) => { if(!e||!toDstr) return; const id=e._occ?e._baseId:e.id; const base=events.find(x=>x.id===id); if(!base||base.date===toDstr) return; save(events.map(x=>x.id===id?{...base,date:toDstr,_savedAt:Date.now()}:x), '✓ 予定を移動しました'); };
+  const moveEvent = (e, toDstr) => { if(!e||!toDstr) return; const id=e._occ?e._baseId:e.id; const base=events.find(x=>x.id===id); if(!base||base.date===toDstr) return; save(events.map(x=>x.id===id?{...base,date:toDstr,_savedAt:syncNow()}:x), '✓ 予定を移動しました'); };
   // 誕生日・認定有効期間終了(介護保険/認定が切れる) を日付ごとに判定
   const activePatients = (appData.patients||[]).filter(p=>p.status!=='退所' && (p.name||'').trim());
   const birthdaysOn = (dstr) => { const md=dstr.slice(5); return activePatients.filter(p=>{ const b=p.birthDate; return b && b.length>=10 && b.slice(5)===md; }).map(p=>({name:p.name, age: (()=>{ const [y,m,d]=dstr.split('-').map(Number); const [by]=String(p.birthDate).split('-').map(Number); let a=y-by; const bm=Number(String(p.birthDate).slice(5,7)); return a; })(), birthDate:p.birthDate})); };
@@ -16359,6 +16361,21 @@ export default function App() {
     }
   }, [appData, staffSession?.storeId]);
 
+  // ★ 同期停止の検知: 「ローカル編集があったのに、その後クラウド保存が一度も成功していない」状態が
+  //   20秒以上続いたら画面に警告を出す。 これが無いと iPad で入力し続けているのに他端末へ届いておらず、
+  //   再読み込みで入力が消える、という事故に気づけない。
+  useEffect(() => {
+    if (!isSupabaseEnabled || !staffSession?.storeId) return;
+    const t = setInterval(() => {
+      const edited = lastLocalEditRef.current || 0;
+      if (!edited) { setSyncStalled(0); return; }
+      const okAfter = (syncHealth.lastOkAt || 0) >= edited - 500;
+      const age = Date.now() - edited;
+      setSyncStalled(!okAfter && age > 20000 ? Math.round(age / 1000) : 0);
+    }, 5000);
+    return () => clearInterval(t);
+  }, [staffSession?.storeId]);
+
   // 起動時 + 店舗切替え時に Supabase から最新 state を pull + リセット検知ポーリング
   useEffect(() => {
     if (!isSupabaseEnabled || !staffSession?.storeId) return;
@@ -16722,6 +16739,9 @@ export default function App() {
   const [showToast, setShowToast] = useState(false);
   // ★ toast 表示文言 (自動保存時は非表示・手動保存時のみ表示)
   const [toastMsg, setToastMsg] = useState('保存されました');
+  // ★ 同期が止まっていることを必ず画面に出す。 「入力しているのにクラウドへ届いていない」状態が
+  //   無表示のまま続くと、他端末に反映されないまま作業を続けて再読み込みで入力を失う。
+  const [syncStalled, setSyncStalled] = useState(0); // 0=正常 / >0=未同期の秒数
   const [printPreviewContent, setPrintPreviewContent] = useState(null);
   useEffect(()=>{
     const handler = (e) => setPrintPreviewContent(e.detail);
@@ -17071,7 +17091,7 @@ export default function App() {
           const old = prevMap.get(String(p.id));
           if (old && old === p) return p; // 参照同一 = 未変更 → 時刻据え置き
           changed = true;
-          const _now = Date.now();
+          const _now = syncNow();
           const _fts = { ...(p._fieldTs || {}) };
           _PT_FL.forEach(k => { let ch; try { ch = JSON.stringify(p[k]) !== JSON.stringify(old ? old[k] : undefined); } catch { ch = true; } if (ch) _fts[k] = _now; });
           return { ...p, _savedAt: _now, _fieldTs: _fts }; // 新規/変更 → 最新時刻 + 変更項目の _fieldTs
@@ -17084,7 +17104,7 @@ export default function App() {
       if (newData.monthlyShifts && newData.monthlyShifts !== prev.monthlyShifts) {
         const _prevMs = prev.monthlyShifts || {}, _newMs = newData.monthlyShifts || {};
         const _ts = { ...(newData._msTs || {}) };
-        const _now = Date.now();
+        const _now = syncNow();
         const _mks = new Set([...Object.keys(_prevMs), ...Object.keys(_newMs)]);
         _mks.forEach(mk => {
           const pm = _prevMs[mk] || {}, nm = _newMs[mk] || {};
@@ -17102,7 +17122,7 @@ export default function App() {
       if (newData.workSchedule && newData.workSchedule !== prev.workSchedule) {
         const _prevWs = prev.workSchedule || {}, _newWs = newData.workSchedule || {};
         const _ts = { ...(newData._wsTs || {}) };
-        const _now = Date.now();
+        const _now = syncNow();
         const _mks = new Set([...Object.keys(_prevWs), ...Object.keys(_newWs)]);
         _mks.forEach(mk => {
           const pm = _prevWs[mk] || {}, nm = _newWs[mk] || {};
@@ -17127,7 +17147,7 @@ export default function App() {
       //   古い端末の自動コピー等が他端末の入力済みの送迎を上書きしうる。
       if (newData.diaryLogs && newData.diaryLogs !== prev.diaryLogs && typeof newData.diaryLogs === 'object') {
         const _pl = prev.diaryLogs || {}, _nl = newData.diaryLogs || {};
-        const _outL = { ..._nl }; let _lch = false; const _lnow = Date.now();
+        const _outL = { ..._nl }; let _lch = false; const _lnow = syncNow();
         Object.keys(_nl).forEach(k => {
           const nv = _nl[k], pv = _pl[k];
           if (!nv || typeof nv !== 'object' || pv === nv) return; // 参照同一 = 未変更
@@ -17146,7 +17166,7 @@ export default function App() {
       // ★ その他の記録配列も「変更されたレコードだけ」に _savedAt を刻む(参照が変わった=編集された物だけ)。
       //   マージ(mergeById)は _savedAt の新しい方を採用するので、体力測定・モニタリング・スケジュール・計画書・
       //   お知らせ 等も、古い端末の保存で新しい入力が巻き戻らなくなる(全データに時刻を付ける一括対応)。
-      const _now2 = Date.now();
+      const _now2 = syncNow();
       // ★ 提供記録/日誌は「フィールド単位マージ」対象。 変更した項目だけ _fieldTs=now を刻む(空にした=意図的削除も含む)。
       //   これで「意図的に空にした→反映」「触っていない空欄→他端末の入力を消さない(バイタル復活の事故防止)」を両立。
       const _FIELD_TS_KEYS = new Set(['ticketRecords','dailyLogs']);
@@ -17901,6 +17921,15 @@ export default function App() {
       {showToast && ReactDOM.createPortal(
         <div style={{position:'fixed',top:24,right:32,zIndex:99999}} className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl flex items-center animate-bounce">
           <CheckCircle2 className="text-emerald-400 mr-2" />{toastMsg}
+        </div>,
+        document.body
+      )}
+      {/* ★ 同期停止の警告 (未同期のまま作業を続けて入力を失うのを防ぐ)。 押すと即座に再同期を試みる。 */}
+      {syncStalled > 0 && ReactDOM.createPortal(
+        <div style={{position:'fixed',left:'50%',top:12,transform:'translateX(-50%)',zIndex:2000001,background:'#b91c1c',color:'white',padding:'8px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:10,maxWidth:'94vw'}}>
+          <span style={{fontSize:13,fontWeight:'bold'}}>⚠ クラウドに保存できていません（{syncStalled}秒未同期）。この端末には残っています</span>
+          <button onClick={()=>{ try { supabaseMergeAndSyncStateForStore(staffSession.storeId, appData); } catch {} }}
+            style={{background:'white',color:'#b91c1c',border:'none',borderRadius:8,padding:'5px 12px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ再送</button>
         </div>,
         document.body
       )}
@@ -18902,7 +18931,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
     // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
     const others = (appData.ticketRecords||[]).filter(r => !(r && recMatchesDateYear(r, _dateStr, _yr)));
-    const restored = snap.recs.map(r => ({ ...r, _savedAt: Date.now() })); // 復元＝最新として保存(他端末にも反映)
+    const restored = snap.recs.map(r => ({ ...r, _savedAt: syncNow() })); // 復元＝最新として保存(他端末にも反映)
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
     setRestoreModal(false);
   };
@@ -19034,8 +19063,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _yr = _sd.getFullYear();
       const _recs = [...(appData.ticketRecords||[])];
       const _ridx = _recs.findIndex(r => r.patientId === targetPatientId && recMatchesDateYear(r, _dateLabel, _yr));
-      if (_ridx >= 0) _recs[_ridx] = { ..._recs[_ridx], status: '休止', tokki: reason || _recs[_ridx].tokki || '休止', _savedAt: Date.now() };
-      else _recs.push({ id: `tr_${targetPatientId}_${_yr}_${_sd.getMonth()+1}_${_sd.getDate()}`, patientId: targetPatientId, date: _dateLabel, year: _yr, status: '休止', tokki: reason || '休止', _savedAt: Date.now() });
+      if (_ridx >= 0) _recs[_ridx] = { ..._recs[_ridx], status: '休止', tokki: reason || _recs[_ridx].tokki || '休止', _savedAt: syncNow() };
+      else _recs.push({ id: `tr_${targetPatientId}_${_yr}_${_sd.getMonth()+1}_${_sd.getDate()}`, patientId: targetPatientId, date: _dateLabel, year: _yr, status: '休止', tokki: reason || '休止', _savedAt: syncNow() });
       onSave({ ...appData, patients: updatedPatients, ticketRecords: _recs }, { manual: true, message: '✓ 休止に設定しました' });
       // 画面上の localPatients も即時反映
       setLocalPatients(prev => prev.map(p => p.id===id ? {...p, status: '休止', tokki: reason||'休止'} : p));
@@ -19101,7 +19130,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         temp:'',bpUpSt:'',bpDnSt:'',plSt:'',bpUpEn:'',bpDnEn:'',plEn:'',
         massage:'',exercises:{},actualTime:'',
         kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false,
-        _savedAt: Date.now()
+        _savedAt: syncNow()
       };
       if (existIdx>=0) updatedRecords[existIdx]=destRecord; else updatedRecords.push(destRecord);
       // ★ 振替先(別日)の記録を保留に積む → 保存時に確実に反映(別日なので当日分の書き込みでは保存されないため)
@@ -19374,7 +19403,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               const _hasData = !!(newRecord.temp_AM||newRecord.temp_PM||newRecord.bpUpSt_AM||newRecord.bpUpSt_PM||newRecord.bpDnSt_AM||newRecord.bpDnSt_PM||newRecord.plSt_AM||newRecord.plSt_PM||newRecord.bpUpEn_AM||newRecord.bpUpEn_PM||newRecord.bpDnEn_AM||newRecord.bpDnEn_PM||newRecord.plEn_AM||newRecord.plEn_PM||newRecord.massage||(newRecord.exercises&&Object.keys(newRecord.exercises).length)||newRecord.tokki||newRecord.kibunArrival||newRecord.kibunDeparture||newRecord.actualTime) || (newRecord.status && newRecord.status!=='出席');
               const _cmpRec = (o)=>JSON.stringify({...o, id:undefined, _savedAt:undefined, recorder:undefined});
               newRecord._savedAt = existing
-                ? (_cmpRec(existing)!==_cmpRec(newRecord) ? Date.now() : (Number(existing._savedAt)||0))
+                ? (_cmpRec(existing)!==_cmpRec(newRecord) ? syncNow() : (Number(existing._savedAt)||0))
                 : (_hasData ? Date.now() : 0);
               if (recordIndex >= 0) updatedTicketRecords[recordIndex] = newRecord;
               else updatedTicketRecords.push(newRecord);
@@ -19393,7 +19422,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           // 変更検知: 元の record と JSON 文字列で差分があれば recorder 上書き
           const changed = !original || JSON.stringify({...original, recorder:undefined,_savedAt:undefined}) !== JSON.stringify({...r, recorder:undefined,_savedAt:undefined});
           // ★ 変更された記録は _savedAt を更新 (複数端末マージ用)
-          _mergedById.set(r.id, changed ? { ...r, ...(_activeRec ? {recorder:_activeRec} : {}), _savedAt: Date.now() } : r);
+          _mergedById.set(r.id, changed ? { ...r, ...(_activeRec ? {recorder:_activeRec} : {}), _savedAt: syncNow() } : r);
         });
         updatedTicketRecords = [..._mergedById.values()];
       }
@@ -26226,7 +26255,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
 
   // ★ 次回情報を即 appData.ticketRecords に反映して保存 (記録が無い利用者は作成)。 _savedAt を付けて同期で正しく優先。
   const persistOverride = (recordId, patch) => {
-      const now = Date.now();
+      const now = syncNow();
       let recs = [...(appData.ticketRecords || [])];
       const idx = recs.findIndex(r => String(r.id) === String(recordId));
       if (idx >= 0) {
@@ -26251,7 +26280,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   };
 
   const saveAllOverrides = () => {
-      const now = Date.now();
+      const now = syncNow();
       let recs = [...(appData.ticketRecords || [])];
       const base = _ovBaseRef.current || {};
       let _changed = 0;
@@ -27161,9 +27190,9 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
     const existing = records.find(r => r.patientId === selectedPatientId && r.date === date);
     let newRecords;
     if (existing) {
-      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder, _savedAt: Date.now() } : r);
+      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder, _savedAt: syncNow() } : r);
     } else {
-      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName, _savedAt: Date.now() }];
+      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName, _savedAt: syncNow() }];
     }
     markClean(); onSave({ ...appData, fitnessRecords: newRecords });
     setValues({});
@@ -27177,9 +27206,9 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
     const existing = records.find(r => r.patientId === selectedPatientId && r.date === date);
     let newRecords;
     if (existing) {
-      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder, _savedAt: Date.now() } : r);
+      newRecords = records.map(r => r.id === existing.id ? { ...r, values: { ...r.values, ...values }, recorder: recorderName || r.recorder, _savedAt: syncNow() } : r);
     } else {
-      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName, _savedAt: Date.now() }];
+      newRecords = [...records, { id: Date.now(), patientId: selectedPatientId, date, values, recorder: recorderName, _savedAt: syncNow() }];
     }
     markClean(); onSave({ ...appData, fitnessRecords: newRecords });
   };
@@ -28691,7 +28720,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const srcYear = srcDateObj.getFullYear(); // ★ 年対応
     const destYear = destDateObj.getFullYear();
     // ★ _savedAt を必ず更新 = クラウドマージで「古い出席記録が新しい欠席/振替を上書き」して戻る不具合を防ぐ
-    const _furiNow = Date.now();
+    const _furiNow = syncNow();
     const srcIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, srcLabel, srcYear));
     if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear, _savedAt: _furiNow };
     else ur.push({ id: Date.now() + Math.random(), patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki, _savedAt: _furiNow });
@@ -29961,7 +29990,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 if (on && nm && !mgrKeys.has(`${on}|${nm}`)) { mgrKeys.add(`${on}|${nm}`); mgrs.push({ office:on, name:nm, phone:p.cmPhone||'', phoneDirect:p.cmPhone||'', fax:p.cmFax||'' }); }
               });
               // ★ 取込で追加したケアマネ事業所/担当者が別端末の設定保存で消えないよう、更新時刻を刻む(新しい方優先マージ用)。
-              _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs, _updatedAt: Date.now() };
+              _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs, _updatedAt: syncNow() };
             }
             onSave({...appData, patients: existing, systemSettings: _nextSettings, patientIdSeq: Math.max(maxId, Number(appData.patientIdSeq)||0)});
             setCsvModal({isOpen:false, mode:null, importText:'', error:''});
@@ -31167,7 +31196,7 @@ function AdminSettingsSection({ appData, onSave }) {
   const [outRole, setOutRole] = React.useState('介護職員'); // 完全譲渡後、現管理者の職種
   const ROLE_OPTIONS = ['管理者','生活相談員','機能訓練指導員','看護師','介護職員'];
   const [del, setDel] = React.useState({memberId:'',from:'',until:''});
-  const saveSS = (patch, msg) => onSave({...appData, systemSettings:{...ss, ...patch, _updatedAt:Date.now()}}, {manual:true, message: msg||'✓ 保存しました'});
+  const saveSS = (patch, msg) => onSave({...appData, systemSettings:{...ss, ...patch, _updatedAt:syncNow()}}, {manual:true, message: msg||'✓ 保存しました'});
   const changePw = async () => {
     setPw(p=>({...p,err:'',ok:''}));
     if(!pw.n1 || pw.n1.length<4){ setPw(p=>({...p,err:'新しいパスワードは4文字以上にしてください'})); return; }
@@ -31277,7 +31306,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   }, [navFocus]);
   // ★ systemSettings の参照 & 部分更新ヘルパー (テンキー表示ON/OFF 等の即時保存に使用)
   const ss = appData.systemSettings || {};
-  const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch, _updatedAt: Date.now() } }, { manual:true, message: msg || '✓ 保存しました' });
+  const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch, _updatedAt: syncNow() } }, { manual:true, message: msg || '✓ 保存しました' });
   // ★ 一括削除(管理者用): 選択中の利用者ID / ケアマネ事業所名
   const [bulkDelPatients, setBulkDelPatients] = useState(() => new Set());
   const [bulkDelStatus, setBulkDelStatus] = useState('all'); // 一括削除の状態絞り込み: all/利用中/休止/退所
@@ -31286,7 +31315,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const toggleAddon = (key) => {
     const cur = appData.systemSettings?.addons || {};
     const next = { ...cur, [key]: !cur[key] };
-    onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), addons: next, _updatedAt: Date.now() } }, { manual:true, message: next[key] ? '✓ アドオンを有効にしました' : 'アドオンを無効にしました' });
+    onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), addons: next, _updatedAt: syncNow() } }, { manual:true, message: next[key] ? '✓ アドオンを有効にしました' : 'アドオンを無効にしました' });
   };
   const [holidayStart, setHolidayStart] = useState("");
   const [holidayEnd, setHolidayEnd] = useState("");
@@ -31529,7 +31558,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     // 事業所情報: 全項目が空(=未同期の既定)なら appData 側を維持
     const _fiHasAny = !!(_facilityInfo && Object.keys(_facilityInfo).some(k => String(_facilityInfo[k] ?? '').trim()));
     const _fiSafe = _fiHasAny ? _facilityInfo : (_ss0.facilityInfo || _facilityInfo);
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: Date.now(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (_ss0.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (_ss0.careManagers||[]), facilityInfo: _fiSafe, exerciseItems: _keepArr(exerciseItems, _ss0.exerciseItems), exerciseItemsHistory: _keepArr(exerciseItemsHistory, _ss0.exerciseItemsHistory), individualExerciseItems: _keepArr(individualExerciseItems, _ss0.individualExerciseItems), exerciseQuickButtons: _keepArr(exerciseQuickButtons, _ss0.exerciseQuickButtons), anthropicApiKey: _keepStr(anthropicApiKey, _ss0.anthropicApiKey), serviceItems: _keepArr(serviceItems, _ss0.serviceItems) } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: syncNow(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (_ss0.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (_ss0.careManagers||[]), facilityInfo: _fiSafe, exerciseItems: _keepArr(exerciseItems, _ss0.exerciseItems), exerciseItemsHistory: _keepArr(exerciseItemsHistory, _ss0.exerciseItemsHistory), individualExerciseItems: _keepArr(individualExerciseItems, _ss0.individualExerciseItems), exerciseQuickButtons: _keepArr(exerciseQuickButtons, _ss0.exerciseQuickButtons), anthropicApiKey: _keepStr(anthropicApiKey, _ss0.anthropicApiKey), serviceItems: _keepArr(serviceItems, _ss0.serviceItems) } }, { manual: true, message: '✓ 各種設定を保存しました' });
     // ★ 保存したので未保存フラグを解除し、未保存判定の基準も現在の内容に取り直す
     if (dirtyRef) dirtyRef.current = false;
     _dirtyBaseRef.current = null;
@@ -32855,7 +32884,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         //   確認ダイアログを閉じてUIを更新してから実行するため setTimeout で1tick遅延。
                         setTimeout(() => {
                           try {
-                            const now = Date.now();
+                            const now = syncNow();
                             const d = { ...appData };
                             const _FTKEYS = new Set(['ticketRecords','dailyLogs']);
                             ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(k => { if (Array.isArray(d[k])) d[k] = d[k].map(r => { if(!(r && r.id!=null)) return r;
@@ -32922,7 +32951,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                             if (!window.confirm(`検出した ${strayScan.length} 件の記録を削除し、クラウド・全端末に反映します。\n\nこの操作は取り消せません。実行しますか?`)) return;
                             const ids = strayScan.map(s=>s.id);
                             const idSet = new Set(ids.map(String));
-                            const now = Date.now();
+                            const now = syncNow();
                             const tomb = { ...(appData.deletedIds||{}) };
                             const m = { ...(tomb.ticketRecords||{}) };
                             ids.forEach(id=>{ if(id!=null) m[String(id)] = now; });
@@ -33446,7 +33475,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   };
   const saveLog = () => {
     // ★ _savedAt を付与 (端末間マージで新しい方を採用するため)
-    const _logToSave = { ...localLog, _savedAt: Date.now() };
+    const _logToSave = { ...localLog, _savedAt: syncNow() };
     const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: _logToSave }};
     if (pendingStaff) {
       next.diarySettings = { ..._baseDs, staff: pendingStaff };
@@ -34841,7 +34870,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     if (!editing) return;
     const list = [...(appData.kinouKeikakuRecords||[])];
     const idx = list.findIndex(r => r.id === editing.id);
-    const rec = { ...editing, _savedAt: Date.now() };
+    const rec = { ...editing, _savedAt: syncNow() };
     if (idx >= 0) list[idx] = rec; else list.push(rec);
     onSave({ ...appData, kinouKeikakuRecords: list }, { manual:true, message: close ? '✓ 個別機能訓練計画書を保存しました' : '✓ 一時保存しました' });
     if (dirtyRef) dirtyRef.current = false;
@@ -35223,7 +35252,7 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const newRecord = () => ({ id:`sk_${pid}_${Date.now()}`, patientId:pid, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10)), recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:patient?.ryui||'', bikou:'' });
   const upd = (patch) => { setEditing(e=>({...e,...patch})); markDirty(); };
   const updMap = (group,key,val) => { setEditing(e=>({...e,[group]:{...(e[group]||{}),[key]:val}})); markDirty(); };
-  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message: close?'✓ 生活機能チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
+  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:syncNow()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message: close?'✓ 生活機能チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
   const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,seikatsuKinouRecords:(appData.seikatsuKinouRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
   const dupRecord = (r) => setEditing({...r, id:`sk_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
@@ -35348,7 +35377,7 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const toggleCustom = (i,key) => { setEditing(e=>({...e, custom:e.custom.map((c,idx)=>idx===i?{...c,[key]:!c[key]}:c)})); markDirty(); };
   const addCustom = () => { if(!newItem.trim()) return; setEditing(e=>({...e, custom:[...(e.custom||[]), {name:newItem.trim()}]})); setNewItem(''); markDirty(); };
   const delCustom = (i) => { setEditing(e=>({...e, custom:e.custom.filter((_,idx)=>idx!==i)})); markDirty(); };
-  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:Date.now()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message: close?'✓ 興味・関心チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
+  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:syncNow()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message: close?'✓ 興味・関心チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
   const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,kyomiKanshinRecords:(appData.kyomiKanshinRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
   const dupRecord = (r) => setEditing({...r, id:`ki_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
@@ -35621,7 +35650,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     if(!editing) return;
     const list=[...(appData.tsushoKeikakuRecords||[])];
     const idx=list.findIndex(r=>r.id===editing.id);
-    const rec={...editing,_savedAt:Date.now()};
+    const rec={...editing,_savedAt:syncNow()};
     if(idx>=0) list[idx]=rec; else list.push(rec);
     onSave({...appData, tsushoKeikakuRecords:list}, {manual:true, message: close ? '✓ 通所介護計画書を保存しました' : '✓ 一時保存しました'});
     if(dirtyRef) dirtyRef.current=false;
@@ -36130,7 +36159,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   };
   const save = () => {
     if (!editing) return;
-    const rec = { ...editing, total: barthelTotal(editing.items), _savedAt: Date.now() };
+    const rec = { ...editing, total: barthelTotal(editing.items), _savedAt: syncNow() };
     const list = [...(appData.adlRecords||[])];
     const i = list.findIndex(r=>r.id===rec.id);
     if (i>=0) list[i]=rec; else list.push(rec);

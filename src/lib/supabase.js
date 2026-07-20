@@ -11,6 +11,48 @@ export const supabase = (url && key) ? createClient(url, key, {
 
 export const isSupabaseEnabled = !!supabase;
 
+// =========================================================
+// ★ 同期用の単調時計 (Lamport clock)
+//   同期のマージは全て「_savedAt / _fieldTs が新しい方を採用」で決めている。 ところが各端末の
+//   Date.now() は端末の時計そのもので、PC と iPad で数十秒〜数分ズレることがある。
+//   時計が遅れている端末は、進んでいる端末が書いた値に「永久に勝てない」→ 入力しても保存が
+//   マージで捨てられ、画面上は同期が止まったように見え、再読み込みで入力が消える。
+//   → クラウドに最大時刻(__clock)を1つ持たせ、読むたびに自分の時計をそれ以上へ進める。
+//     これで「クラウドで見た最新より必ず新しい」時刻を刻めるので、時計ズレでは負けなくなる。
+// ★ 同期の健全性。 「保存したのにクラウドへ届いていない」状態が画面に出ないまま続くのを防ぐ。
+//   lastOkAt: 最後にクラウド保存が成功した時刻 / lastFailAt: 最後に失敗した時刻
+export const syncHealth = { lastOkAt: 0, lastFailAt: 0, lastError: '' };
+const _CLOCK_KEY = 'tsumugiClockOffset';
+let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
+// 同期用の現在時刻。 _savedAt / _fieldTs / _updatedAt は必ずこれを使う。
+export function syncNow() { return Date.now() + _clockOffset; }
+// ★ __clock 導入前のデータ対策: 記録に既に刻まれている最大時刻を拾う (時計が進んだ端末が書いた
+//   未来の _savedAt に、遅れた端末が永久に勝てない状態を初回から解消するため)。
+export function maxRecordClock(data) {
+  let m = Number(data && data.__clock) || 0;
+  if (!data) return m;
+  ['ticketRecords','dailyLogs'].forEach(k => {
+    const arr = data[k];
+    if (!Array.isArray(arr)) return;
+    for (let i = 0; i < arr.length; i++) { const t = Number(arr[i] && arr[i]._savedAt) || 0; if (t > m) m = t; }
+  });
+  return m;
+}
+// クラウドで観測した最大時刻を取り込む (自分より進んでいたらオフセットを引き上げる)。
+export function observeRemoteClock(t) {
+  const rt = Number(t) || 0;
+  if (!rt) return;
+  // ★ 明らかに壊れた時刻(400日以上先)は取り込まない。 端末の時計が大きく狂ったまま書き込まれた
+  //   データに全端末が引きずられて、以後ずっと未来の時刻を刻み続けるのを防ぐ。
+  const need = rt - Date.now() + 1;
+  if (need > 400 * 86400000) { console.warn('[sync] 異常な同期時刻を無視しました', new Date(rt).toISOString()); return; }
+  if (need > _clockOffset) {
+    _clockOffset = need;
+    try { localStorage.setItem(_CLOCK_KEY, String(_clockOffset)); } catch {}
+    console.warn('[sync] 端末の時計がクラウドより遅れていたため同期時刻を補正しました (+' + Math.round(need/1000) + '秒)');
+  }
+}
+
 // 簡易ハッシュ (SHA-256 + 固定ソルト)
 // 本格運用では Argon2/bcrypt が望ましいが、ブラウザ完結のため SHA-256 + ソルト
 export async function hashPassword(password) {
@@ -353,8 +395,12 @@ async function supabaseCasUpdate(key, mutate, opts = {}) {
       await _casBackoff(attempt); continue;
     }
     const base = Number(row.version) || 0;
+    // ★ クラウドが持つ最大同期時刻を取り込んでから mutate する (時計が遅れた端末でも必ず勝てるようにする)
+    observeRemoteClock(row.data && row.data.__clock ? row.data.__clock : maxRecordClock(row.data));
     const next = mutate(row.data || null);
     if (next == null) return { ok: true, version: base, noop: true };
+    // ★ 書き込むデータに「この時点での最大同期時刻」を刻む (次に読む端末がこれ以上へ時計を進める)
+    try { next.__clock = Math.max(Number(row.data && row.data.__clock) || 0, syncNow()); } catch {}
     // ② 原子的CAS: WHERE key AND version=base の1行だけ更新(version+1)。 返り行で成否判定。
     const { data: upd, error: updErr } = await supabase
       .from('app_state').update({ data: next, version: base + 1 })
@@ -898,9 +944,14 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     }
     return sanitizeForSync(merged);
     }); // supabaseCasUpdate の mutate 終わり
-    return !!(_casRes && _casRes.ok);
+    const _ok = !!(_casRes && _casRes.ok);
+    if (_ok) syncHealth.lastOkAt = Date.now();
+    else { syncHealth.lastFailAt = Date.now(); syncHealth.lastError = (_casRes && _casRes.reason) || 'unknown'; }
+    return _ok;
   } catch (e) {
     console.warn('[supabase] mergeAndSync exception', e);
+    syncHealth.lastFailAt = Date.now();
+    syncHealth.lastError = String((e && e.message) || e);
     return false;
   }
 }
@@ -920,6 +971,8 @@ export async function supabaseLoadStateForStore(storeId) {
     console.warn('[supabase] loadStateForStore error', error);
     throw new Error('loadStateForStore failed: ' + (error.message || error.code || 'unknown'));
   }
+  // ★ pull でもクラウドの最大同期時刻を取り込む (編集を始める前に自分の時計を追いつかせる)
+  try { const d = data && data.data; observeRemoteClock(d && d.__clock ? d.__clock : maxRecordClock(d)); } catch {}
   return data; // 行が無ければ null (= 真の新規店舗)。 それ以外は { data, updated_at }
 }
 
@@ -1345,8 +1398,9 @@ export async function supabaseMarkDocUpdatesRead(storeId, patientId, side = 'cm'
 export async function supabaseSetStoreAddon(storeId, key, value) {
   if (!supabase || !storeId || !key) return false;
   try {
-    const now = Date.now();
     const res = await supabaseCasUpdate(storeId, (cloud) => {
+      // ★ クラウドの時刻を取り込んだ後に刻む (CAS再試行のたびに最新化)
+      const now = syncNow();
       const data = cloud || {};
       const ss = data.systemSettings || {};
       const nextAddons = { ...(ss.addons || {}), [key]: !!value };
