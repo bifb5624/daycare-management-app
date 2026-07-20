@@ -16491,15 +16491,21 @@ export default function App() {
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
               const map = new Map();
               (Array.isArray(merged.ticketRecords) ? merged.ticketRecords : []).forEach(r => { if (r) map.set(keyOf(r), r); });
-              let _preserved = 0;
+              let _preserved = 0, _missing = 0;
               prev.ticketRecords.forEach(r => {
                 if (!r) return;
                 if (r.id != null && tomb[String(r.id)]) return; // 削除済みは復活させない
                 const k = keyOf(r), ex = map.get(k);
-                if (!ex) { map.set(k, r); _preserved++; return; }
-                if ((Number(r._savedAt)||0) > (Number(ex._savedAt)||0)) { map.set(k, r); _preserved++; } // 端末内が新しければ保持
+                // ★ クラウドに存在しない = push が届いていない記録。 これだけが「再送すべきもの」。
+                if (!ex) { map.set(k, r); _preserved++; _missing++; return; }
+                if ((Number(r._savedAt)||0) > (Number(ex._savedAt)||0)) { map.set(k, r); _preserved++; } // 端末内が新しければ表示は保持
               });
-              if (_preserved > 0) { merged.ticketRecords = [...map.values()]; _mergedForPush = merged; }
+              // ★ 再送(push)するのは「クラウドに無い記録があるとき」だけにする。
+              //   以前は『端末内の方が新しい』だけで丸ごと押し戻していたため、時計が進んだ端末が
+              //   他端末の入力をクラウドから消し戻す(=同期が止まって見える)ループになっていた。
+              //   クラウドにもある記録の新旧判定は、項目単位マージを行う保存経路に任せる。
+              if (_preserved > 0) merged.ticketRecords = [...map.values()];
+              if (_missing > 0) _mergedForPush = merged;
             } catch (e) { console.warn('[firstload merge] ticketRecords failed', e); }
           }
           // ★ 設定オブジェクトも pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に

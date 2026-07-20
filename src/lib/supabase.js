@@ -681,6 +681,8 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   try {
     // ★ 楽観ロック(CAS)経由: 「最新取得 → マージ → version一致でDB原子的更新」。 競合(返り行0)は自動で再取得・再マージ・再試行。
     //   読めない(通信/RLSエラー)は supabaseCasUpdate 内で throw → 下の catch で保存中止(既存データを守る)。
+    // ★ 通常保存は端末が増えるほど競合しやすい(自動保存1.2秒＋4秒ポーリング)。 既定5回だと
+    //   混み合った時に「上限到達=保存失敗」になりやすいので、この経路だけ再試行を厚くする。
     const _casRes = await supabaseCasUpdate(storeId, (cloud) => {
     // クラウドが空(=新規店舗) ならそのまま(初回作成)
     if (!cloud || Object.keys(cloud).length === 0) {
@@ -943,7 +945,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       merged.ticketRecords = [...best.values()];
     }
     return sanitizeForSync(merged);
-    }); // supabaseCasUpdate の mutate 終わり
+    }, { maxRetries: 8 }); // supabaseCasUpdate の mutate 終わり
     const _ok = !!(_casRes && _casRes.ok);
     if (_ok) syncHealth.lastOkAt = Date.now();
     else { syncHealth.lastFailAt = Date.now(); syncHealth.lastError = (_casRes && _casRes.reason) || 'unknown'; }
