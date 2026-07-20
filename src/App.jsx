@@ -16688,7 +16688,19 @@ export default function App() {
           //   ticketRecords はスナップショット(凍結)なので、ここで手元の値を混ぜてはいけない。
           //   代わりに「手元の状態をそのまま保つ」= クラウドのスナップショットで上書きしない。
           if (OPLOG_APPLY && (oplogState.readable || oplogState.writable) && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
-            merged.ticketRecords = prev.ticketRecords;
+            // ★ 確定(compact_sync_ops)が実行されると、本体データに操作ログが取り込まれ __snapRevision が進む。
+            //   その場合はクラウドの確定済みデータを土台として受け入れ、取り込み済みリビジョンを進める。
+            //   (これが無いと、確定後に本体を無視し続けて他端末の確定内容を受け取れなくなる)
+            const _snapRev = Number(merged.__snapRevision) || 0;
+            if (_snapRev > (opsRevisionRef.current || 0) && Array.isArray(merged.ticketRecords)) {
+              opsRevisionRef.current = _snapRev;
+              syncLog('snapshot-adopted', { rev: _snapRev, recs: merged.ticketRecords.length });
+              // 確定より後の自分の未送信操作は、その上に載せ直す(リベース)
+              const _pend = pendingOps();
+              if (_pend.length) merged.ticketRecords = applyOps({ ticketRecords: merged.ticketRecords }, _pend, { now: syncNow() }).ticketRecords;
+            } else {
+              merged.ticketRecords = prev.ticketRecords;
+            }
           } else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
               const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
