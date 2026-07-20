@@ -22,6 +22,19 @@ export const isSupabaseEnabled = !!supabase;
 // ★ 同期の健全性。 「保存したのにクラウドへ届いていない」状態が画面に出ないまま続くのを防ぐ。
 //   lastOkAt: 最後にクラウド保存が成功した時刻 / lastFailAt: 最後に失敗した時刻
 export const syncHealth = { lastOkAt: 0, lastFailAt: 0, lastError: '' };
+
+// ★ 同期の診断ログ (直近120件のリングバッファ)。 iPad ではコンソールが見られないため localStorage に残し、
+//   ?syncdebug=1 で開いた時に画面から確認できるようにする。 原因調査用で通常運用には影響しない。
+const _SYNCLOG_KEY = 'tsumugiSyncLog';
+export function syncLog(ev, detail) {
+  try {
+    const arr = JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]');
+    arr.push({ t: new Date().toISOString().slice(11, 23), ev, d: detail || null });
+    localStorage.setItem(_SYNCLOG_KEY, JSON.stringify(arr.slice(-120)));
+  } catch {}
+}
+export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
+export function clearSyncLog() { try { localStorage.removeItem(_SYNCLOG_KEY); } catch {} }
 const _CLOCK_KEY = 'tsumugiClockOffset';
 let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
 // 同期用の現在時刻。 _savedAt / _fieldTs / _updatedAt は必ずこれを使う。
@@ -50,6 +63,7 @@ export function observeRemoteClock(t) {
     _clockOffset = need;
     try { localStorage.setItem(_CLOCK_KEY, String(_clockOffset)); } catch {}
     console.warn('[sync] 端末の時計がクラウドより遅れていたため同期時刻を補正しました (+' + Math.round(need/1000) + '秒)');
+    syncLog('clock-adjust', { sec: Math.round(need/1000) });
   }
 }
 
@@ -408,6 +422,7 @@ async function supabaseCasUpdate(key, mutate, opts = {}) {
     if (updErr) throw new Error('cas update failed: ' + (updErr.message || updErr.code || 'unknown'));
     if (upd && upd.length > 0) return { ok: true, data: next, version: base + 1 };
     // ③ 0件=競合(他端末が先に version を進めた) → バックオフして再取得・再mutate・再試行
+    syncLog('cas-conflict', { attempt, base });
     await _casBackoff(attempt);
   }
   return { ok: false, reason: 'conflict-retries-exhausted' };
@@ -947,13 +962,14 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     return sanitizeForSync(merged);
     }, { maxRetries: 8 }); // supabaseCasUpdate の mutate 終わり
     const _ok = !!(_casRes && _casRes.ok);
-    if (_ok) syncHealth.lastOkAt = Date.now();
-    else { syncHealth.lastFailAt = Date.now(); syncHealth.lastError = (_casRes && _casRes.reason) || 'unknown'; }
+    if (_ok) { syncHealth.lastOkAt = Date.now(); syncLog('push-ok', { v: _casRes.version }); }
+    else { syncHealth.lastFailAt = Date.now(); syncHealth.lastError = (_casRes && _casRes.reason) || 'unknown'; syncLog('push-fail', { reason: syncHealth.lastError }); }
     return _ok;
   } catch (e) {
     console.warn('[supabase] mergeAndSync exception', e);
     syncHealth.lastFailAt = Date.now();
     syncHealth.lastError = String((e && e.message) || e);
+    syncLog('push-error', { err: syncHealth.lastError });
     return false;
   }
 }

@@ -23,6 +23,9 @@ import {
   supabaseMergeAndSyncStateForStore,
   syncNow,
   syncHealth,
+  syncLog,
+  getSyncLog,
+  clearSyncLog,
   supabaseLoadStateForStore,
   supabaseStaffLogin,
   supabaseStaffChangePassword,
@@ -1049,6 +1052,37 @@ const buildPrimaryContact = (p) => {
 // ★ ケアマネ由来の連絡先は緊急連絡先(家族)には出さない。 事業所名/事業所電話/FAX を持つ or 続柄がケアマネ系。
 const isCmContact = (c) => !!(c && (c.cmOffice || c.officePhone || c.officeFax || /ケアマネ|介護支援|居宅/.test(String(c.relation||''))));
 const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c))) ]; };
+// ★ 同期の診断パネル (?syncdebug=1 のときだけ表示)。 iPad ではコンソールが見られないため、
+//   保存/受信/競合/失敗の履歴を画面で確認できるようにする。 通常運用では一切描画されない。
+function SyncDebugPanel() {
+  const on = (() => { try { return new URLSearchParams(window.location.search).get('syncdebug') === '1'; } catch { return false; } })();
+  const [log, setLog] = React.useState([]);
+  React.useEffect(() => {
+    if (!on) return;
+    const t = setInterval(() => setLog(getSyncLog().slice(-40).reverse()), 1000);
+    return () => clearInterval(t);
+  }, [on]);
+  if (!on) return null;
+  const color = (ev) => ev.startsWith('push-ok') ? '#22c55e' : (ev.includes('fail') || ev.includes('error') || ev === 'stall') ? '#f87171'
+    : ev === 'cas-conflict' ? '#fbbf24' : ev === 'clock-adjust' ? '#a78bfa' : '#94a3b8';
+  return ReactDOM.createPortal(
+    <div style={{position:'fixed',right:8,bottom:8,width:340,maxHeight:'46vh',overflow:'auto',zIndex:2000002,
+      background:'rgba(15,23,42,0.95)',color:'#e2e8f0',borderRadius:10,padding:'8px 10px',fontSize:11,
+      fontFamily:'ui-monospace,Menlo,monospace',boxShadow:'0 8px 30px rgba(0,0,0,0.5)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+        <b style={{fontSize:12}}>同期ログ</b>
+        <span style={{color:'#94a3b8'}}>{log.length}件</span>
+        <button onClick={()=>{ clearSyncLog(); setLog([]); }}
+          style={{marginLeft:'auto',background:'#334155',color:'#e2e8f0',border:'none',borderRadius:6,padding:'3px 8px',fontSize:11,cursor:'pointer'}}>消去</button>
+      </div>
+      {log.map((r,i)=>(
+        <div key={i} style={{whiteSpace:'pre-wrap',wordBreak:'break-all',lineHeight:1.4}}>
+          <span style={{color:'#64748b'}}>{r.t}</span> <span style={{color:color(r.ev),fontWeight:'bold'}}>{r.ev}</span>
+          {r.d ? ' ' + JSON.stringify(r.d) : ''}
+        </div>
+      ))}
+    </div>, document.body);
+}
 // ★ 家族・ケアマネの外部操作を事業所へ通知するための docUpdates エントリを患者に追加(union-mergeで同期)。
 //   by='family'|'caremanager' / readOffice=false(事業所が未確認) / readCm=true(操作者本人)
 const appendDocUpdate = (patient, by, byName, items) => {
@@ -16361,9 +16395,8 @@ export default function App() {
     }
   }, [appData, staffSession?.storeId]);
 
-  // ★ 同期停止の検知: 「ローカル編集があったのに、その後クラウド保存が一度も成功していない」状態が
-  //   20秒以上続いたら画面に警告を出す。 これが無いと iPad で入力し続けているのに他端末へ届いておらず、
-  //   再読み込みで入力が消える、という事故に気づけない。
+  // ★ 同期停止の検知。 画面には出さず(誤検知で鬱陶しいため)、診断ログにだけ残す。
+  //   ?syncdebug=1 を付けて開くと画面右下に直近のログを表示できる。
   useEffect(() => {
     if (!isSupabaseEnabled || !staffSession?.storeId) return;
     const t = setInterval(() => {
@@ -16371,7 +16404,11 @@ export default function App() {
       if (!edited) { setSyncStalled(0); return; }
       const okAfter = (syncHealth.lastOkAt || 0) >= edited - 500;
       const age = Date.now() - edited;
-      setSyncStalled(!okAfter && age > 20000 ? Math.round(age / 1000) : 0);
+      const stalled = !okAfter && age > 20000 ? Math.round(age / 1000) : 0;
+      setSyncStalled(prev => {
+        if (stalled && !prev) syncLog('stall', { sec: stalled, err: syncHealth.lastError });
+        return stalled;
+      });
     }, 5000);
     return () => clearInterval(t);
   }, [staffSession?.storeId]);
@@ -16462,6 +16499,7 @@ export default function App() {
             // 編集中 → pull せず再試行を次の interval に任せる
             return;
           }
+          syncLog('pull', { since });
         }
         // ★ クラウド側に変化が無ければ setAppData しない (アプリ全体データの再生成を避け、
         //   長時間表示によるメモリ肥大→クラッシュ を防止)。 forcePull / 初回は必ず反映。
@@ -16506,6 +16544,7 @@ export default function App() {
               //   クラウドにもある記録の新旧判定は、項目単位マージを行う保存経路に任せる。
               if (_preserved > 0) merged.ticketRecords = [...map.values()];
               if (_missing > 0) _mergedForPush = merged;
+              if (_preserved > 0) syncLog('pull-preserve', { preserved: _preserved, missing: _missing });
             } catch (e) { console.warn('[firstload merge] ticketRecords failed', e); }
           }
           // ★ 設定オブジェクトも pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に
@@ -17244,6 +17283,7 @@ export default function App() {
         && dataLoadedForStoreRef.current === staffSession.storeId
         && _storeMatch
         && (_hasRealData || options.allowEmpty);
+      syncLog('save', { manual: !!options.manual, silent: !!options.silent, canPush: !!_canPush, recs: (newData.ticketRecords||[]).length });
       if (_canPush) {
         // ★ 保存結果を監視: 失敗(CASリトライ上限=他端末が更新中／通信不良)なら明示通知 (静かに消えるのを防ぐ)。
         //   ★ 入力は既にローカル状態＋localStorageに反映済み=下書きは消えない。 再保存で再度CASを試みる。
@@ -17930,15 +17970,8 @@ export default function App() {
         </div>,
         document.body
       )}
-      {/* ★ 同期停止の警告 (未同期のまま作業を続けて入力を失うのを防ぐ)。 押すと即座に再同期を試みる。 */}
-      {syncStalled > 0 && ReactDOM.createPortal(
-        <div style={{position:'fixed',left:'50%',top:12,transform:'translateX(-50%)',zIndex:2000001,background:'#b91c1c',color:'white',padding:'8px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:10,maxWidth:'94vw'}}>
-          <span style={{fontSize:13,fontWeight:'bold'}}>⚠ クラウドに保存できていません（{syncStalled}秒未同期）。この端末には残っています</span>
-          <button onClick={()=>{ try { supabaseMergeAndSyncStateForStore(staffSession.storeId, appData); } catch {} }}
-            style={{background:'white',color:'#b91c1c',border:'none',borderRadius:8,padding:'5px 12px',fontSize:12,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ再送</button>
-        </div>,
-        document.body
-      )}
+      {/* ★ 同期の診断パネル。 URL に ?syncdebug=1 を付けた時だけ表示 (原因調査用)。 */}
+      <SyncDebugPanel />
       {/* ★ 新バージョン通知バナー (安全時は自動更新するが、すぐ更新したい場合の手動ボタンも出す) */}
       {updateAvailable && ReactDOM.createPortal(
         <div style={{position:'fixed',left:'50%',bottom:20,transform:'translateX(-50%)',zIndex:2000000,background:'#0f172a',color:'white',padding:'10px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:12,maxWidth:'92vw'}}>
