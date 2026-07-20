@@ -35,9 +35,11 @@ export function syncLog(ev, detail) {
 }
 export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
 export function clearSyncLog() { try { localStorage.removeItem(_SYNCLOG_KEY); } catch {} }
-// ★ 操作ログ方式へ移行済みのキー。 巨大JSON側では読み取り専用(スナップショット)として扱い、
-//   マージも上書きも行わない。 syncOps.js の OPLOG_ENABLED を false に戻すときは、ここも空にする。
-export const OPLOG_FROZEN_KEYS = new Set(['ticketRecords']);
+// ★ 操作ログ方式へ移行済みのキー。 巨大JSON側では読み取り専用(スナップショット)として扱う。
+//   【段階導入】まずは「操作ログへの送信」だけを本番で走らせ、巨大JSON方式は従来どおり残す(二重の保険)。
+//     ここを空にしている間は、操作ログが万一動かなくても従来どおり保存されるので入力が失われない。
+//     送信が安定して動くことをログで確認できたら 'ticketRecords' を入れて凍結し、切替を完了する。
+export const OPLOG_FROZEN_KEYS = new Set([]);
 const _CLOCK_KEY = 'tsumugiClockOffset';
 let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
 // 同期用の現在時刻。 _savedAt / _fieldTs / _updatedAt は必ずこれを使う。

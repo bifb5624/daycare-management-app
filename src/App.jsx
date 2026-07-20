@@ -29,6 +29,7 @@ import {
 } from './lib/supabase';
 import {
   OPLOG_ENABLED,
+  OPLOG_APPLY,
   restorePendingOps,
   pendingOps,
   pendingCount,
@@ -16454,6 +16455,8 @@ export default function App() {
       if (fresh.length) opsRevisionRef.current = Math.max(opsRevisionRef.current, ...fresh.map(o => Number(o.revision) || 0));
       const others = fresh.filter(o => o.senderId !== opSenderId);
       if (!others.length) return;
+      // 段階導入の第1段(送信のみ)では、受信内容は記録だけして画面へは反映しない。
+      if (!OPLOG_APPLY) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
       syncLog('ops-recv', { n: others.length, rev: opsRevisionRef.current });
       applyingRemoteRef.current = true;   // pull 由来と同じ扱い = 巨大JSONを押し戻さない
       setAppData(prevState => applyOps(prevState, others.concat(pendingOps())));
@@ -16626,7 +16629,7 @@ export default function App() {
           // ★ 操作ログ方式に移行済みの場合、提供記録の実体は操作ログが持つ。 巨大JSON側の
           //   ticketRecords はスナップショット(凍結)なので、ここで手元の値を混ぜてはいけない。
           //   代わりに「手元の状態をそのまま保つ」= クラウドのスナップショットで上書きしない。
-          if (OPLOG_ENABLED && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          if (OPLOG_APPLY && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             merged.ticketRecords = prev.ticketRecords;
           } else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
@@ -17393,7 +17396,10 @@ export default function App() {
       //   巨大JSONの往復とは独立に動くので、こちらが通れば入力は必ず残る。
       if (OPLOG_ENABLED && _canPush) {
         try {
-          const _n = queueRecordDiff(prev.ticketRecords, newData.ticketRecords, 'ticketRecords');
+          // ★ 直前の状態は appData(この呼び出し時点ではまだ更新前)。 上の try 内の `prev` は
+          //   スコープ外なのでここでは使えない(参照するとReferenceErrorで差分が作られなくなる)。
+          const _prevRecs = (appData && appData.ticketRecords) || [];
+          const _n = queueRecordDiff(_prevRecs, newData.ticketRecords, 'ticketRecords');
           if (_n > 0) {
             syncLog('ops-queued', { n: _n, pending: pendingCount() });
             flushOps(staffSession.storeId).then(r => {
