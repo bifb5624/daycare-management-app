@@ -970,7 +970,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       merged.ticketRecords = [...best.values()];
     }
     return sanitizeForSync(merged);
-    }, { maxRetries: 8 }); // supabaseCasUpdate の mutate 終わり
+    }, { maxRetries: 12 }); // supabaseCasUpdate の mutate 終わり (2台同時編集の競合に耐えるため厚め)
     const _ok = !!(_casRes && _casRes.ok);
     if (_ok) { syncHealth.lastOkAt = Date.now(); syncLog('push-ok', { v: _casRes.version }); }
     else { syncHealth.lastFailAt = Date.now(); syncHealth.lastError = (_casRes && _casRes.reason) || 'unknown'; syncLog('push-fail', { reason: syncHealth.lastError }); }

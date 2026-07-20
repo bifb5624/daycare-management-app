@@ -16597,8 +16597,11 @@ export default function App() {
           //   常に新しく、pull を永久にスキップして「他端末の更新を受信できない」状態になる。
           //   最後の反映から15秒以上経っていたら、編集中でも強制的に受信する(自動保存済みの編集は
           //   RecordView側のバッファ保護で消えない)。 意図的な全削除の20秒ガードは維持。
-          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 8000;
-          if (intentionalWindow || (since < 5000 && !_tooLongSinceApply)) {
+          // ★ 反映を速くする: 受信を止めるのは「直前1.5秒以内に編集した」時だけにし、
+          //   2.5秒以上受信していなければ編集中でも必ず受信する。
+          //   (入力途中の欄は各画面の編集中ガードが守るので、ここを短くしても入力は消えない)
+          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 2500;
+          if (intentionalWindow || (since < 1500 && !_tooLongSinceApply)) {
             // 編集中 → pull せず再試行を次の interval に任せる
             return;
           }
@@ -16609,7 +16612,7 @@ export default function App() {
         //   ただし updated_at 判定の取りこぼし対策として、一定時間(10秒)反映が無ければ強制的に反映する
         //   (これが無いと「他端末の更新が自動で反映されず、再読み込みしないと出ない」不具合が起きる)。
         const _sig = row.updated_at || null;
-        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 8000;
+        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 2500;
         if (!forcePull && !_stale && _sig && lastAppliedSigRef.current === _sig) {
           dataLoadedForStoreRef.current = newStoreId;
           storeTransitionRef.current = false;
@@ -17412,10 +17415,29 @@ export default function App() {
       if (_canPush) {
         // ★ 保存結果を監視: 失敗(CASリトライ上限=他端末が更新中／通信不良)なら明示通知 (静かに消えるのを防ぐ)。
         //   ★ 入力は既にローカル状態＋localStorageに反映済み=下書きは消えない。 再保存で再度CASを試みる。
-        Promise.resolve()
-          .then(() => supabaseMergeAndSyncStateForStore(staffSession.storeId, newData))
-          .then(ok => { if (ok === false) { setToastMsg('⚠ 同期に失敗しました（他端末が更新中／通信不良の可能性）。入力は保持しています。もう一度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),6000); } })
-          .catch(e => { console.warn('[supabase] immediate save failed', e); setToastMsg('⚠ 同期に失敗しました。入力は保持しています。通信を確認して再度保存してください'); setShowToast(true); setTimeout(()=>setShowToast(false),6000); });
+        // ★ 2台で同時に編集していると、書き込み権の奪い合い(CAS競合)で1回目が落ちることがある。
+        //   以前はその都度「同期に失敗しました」と出していたが、実際は少し待てば通ることが多い。
+        //   → 失敗したら自動で最大2回やり直し、それでも駄目なときだけ通知する。
+        const _retryPush = async () => {
+          for (let i = 0; i < 3; i++) {
+            try {
+              const ok = await supabaseMergeAndSyncStateForStore(staffSession.storeId, newData);
+              if (ok !== false) return true;
+            } catch (e) { console.warn('[supabase] immediate save failed', e); }
+            if (i < 2) {
+              syncLog('push-retry', { attempt: i + 1 });
+              await new Promise(r => setTimeout(r, 700 + Math.random() * 800 + i * 700));
+            }
+          }
+          return false;
+        };
+        _retryPush().then(ok => {
+          if (!ok) {
+            syncLog('push-give-up', {});
+            setToastMsg('⚠ 同期に失敗しました（通信不良の可能性）。入力は端末に保持しています。通信を確認して、もう一度保存してください');
+            setShowToast(true); setTimeout(()=>setShowToast(false),6000);
+          }
+        });
         if (!options.silent) {
           setToastMsg(options.message || '保存されました');
           setShowToast(true);
