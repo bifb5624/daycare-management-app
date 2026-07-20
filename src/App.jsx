@@ -10876,7 +10876,15 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
           if (!all.length) return null;
           return (
             <Card style={{borderColor:'#c7d2fe'}}>
-              <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span></div>
+              <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span>
+                {/* ★ まとめて既読にする(未読が残っているときだけ表示) */}
+                {all.some(x => !isRead(x.id)) && (
+                  <button onClick={()=>{ all.forEach(x => { if (!isRead(x.id)) markRead(x.id); }); }}
+                    style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:8,padding:'4px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>
+                    すべて既読にする
+                  </button>
+                )}
+              </div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {all.map(a=>{ const _r=isRead(a.id); return (
                   <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a.m.emoji} ${a.m.label}`,badgeColor:a.m.color,date:a.date,title:a.title,body:a.body})}
@@ -16733,6 +16741,20 @@ export default function App() {
               });
             } catch (e) { console.warn('[pull preserve] settings failed', e); }
           }
+          // ★ お知らせの既読(noticeReads)は pull で巻き戻さない。 pull は丸ごと置換なので、
+          //   既読にした直後(push完了前)に受信すると未読へ戻ってしまう
+          //   (「既読を押してすぐ閉じると既読にならない」症状の原因)。 両者の和集合を採る。
+          if (prev && prev._sbStoreId === newStoreId && (prev.noticeReads || merged.noticeReads)) {
+            try {
+              const lo = prev.noticeReads || {}, co = merged.noticeReads || {};
+              const out = {};
+              new Set([...Object.keys(lo), ...Object.keys(co)]).forEach(k => {
+                const a = Array.isArray(lo[k]) ? lo[k] : [], b = Array.isArray(co[k]) ? co[k] : [];
+                out[k] = [...new Set([...b.map(String), ...a.map(String)])].slice(-1000);
+              });
+              merged.noticeReads = out;
+            } catch (e) { console.warn('[pull preserve] noticeReads failed', e); }
+          }
           // ★ 書類(保険証/負担割合証/お薬手帳/その他)の削除を pull で復活させない。
           //   pull は patients も丸ごと置換するため、push が完了する前の4秒ポーリングで
           //   墓石ごと消えて削除済みの書類が戻る(1回目の×で消えず、2回目で消える症状の原因)。
@@ -20559,17 +20581,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const prev1 = prevRecords[0]?.massage || "";
                       const prev2 = prevRecords[1]?.massage || "";
                       const staffList = appData?.systemSettings?.massageStaff || appSettings.massageStaff;
-                      const showHints = !isAbsent && !p.massage && (prev1 || prev2);
+                      const showHints = !isAbsent && !isPause && !p.massage && (prev1 || prev2);
                       return (
                         <div style={{position:'relative',width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:0}}>
-                          {!isAbsent && !!p.massage && !p.done && (
+                          {!isAbsent && !isPause && !!p.massage && !p.done && (
                             <button onClick={()=>updateRecord(p.id,'done',true)}
                               style={{width:'100%',zIndex:10,fontSize:8,fontWeight:'bold',background:'rgba(255,237,213,0.95)',color:'#c2410c',border:'1px solid #fdba74',borderRadius:3,padding:'0 1px',lineHeight:1.4,cursor:'pointer',textAlign:'center',flexShrink:0}}
                               className="hover:bg-orange-200 active:scale-95">
                               ✓ 実施
                             </button>
                           )}
-                          {!isAbsent && !p.massage && (
+                          {!isAbsent && !isPause && !p.massage && (
                             <button onClick={(e)=>{ e.stopPropagation();
                               if (massageHist && massageHist.pid===pid) { setMassageHist(null); return; }
                               const btn=e.currentTarget; const r0=btn.getBoundingClientRect();
