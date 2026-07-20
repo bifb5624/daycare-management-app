@@ -16461,14 +16461,18 @@ export default function App() {
       if (!OPLOG_APPLY || !(oplogState.readable || oplogState.writable)) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
       syncLog('ops-recv', { n: others.length, rev: opsRevisionRef.current });
       applyingRemoteRef.current = true;   // pull 由来と同じ扱い = 巨大JSONを押し戻さない
-      setAppData(prevState => applyOps(prevState, others.concat(pendingOps())));
+      setAppData(prevState => applyOps(prevState, others.concat(pendingOps()), { now: syncNow() }));
     };
 
     const boot = async () => {
+      // ★ 操作ログの取得は巨大JSONの読込を待たずに先に始める(再読み込み直後に古い内容が
+      //   数秒表示される「一瞬データが消えたように見える」現象を短くするため)
+      const since0 = Number(appDataRef.current?.__snapRevision) || 0;
+      const prefetch = fetchAllOpsSince(storeId, since0).catch(() => null);
       // 巨大JSON(スナップショット)の読み込み完了を待つ。 空の状態に操作を当てると壊れるため。
-      for (let i = 0; i < 120 && !stopped; i++) {
+      for (let i = 0; i < 600 && !stopped; i++) {
         if (dataLoadedForStoreRef.current === storeId) break;
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 100));
       }
       if (stopped) return;
       await restorePendingOps();
@@ -16477,9 +16481,9 @@ export default function App() {
         flushOps(storeId);   // 前回送れなかった分をまず再送
       }
       try {
-        const since = Number(appDataRef.current?.__snapRevision) || 0;
+        const since = since0;
         opsRevisionRef.current = since;
-        const ops = await fetchAllOpsSince(storeId, since);
+        const ops = (await prefetch) || (await fetchAllOpsSince(storeId, since));
         // ★ 読み取り成功 = 受信した操作を反映してよい(適用の前に立てる)
         oplogState.readable = true;
         // ★ この店舗に操作ログが既にある = 既に操作ログ方式へ移行済み。
@@ -16488,9 +16492,11 @@ export default function App() {
         syncLog('ops-initial', { n: ops.length, since, readable: true, mode: oplogState.writable ? 'oplog' : 'legacy' });
         applyIncoming(ops);
         opsReadyRef.current = true;
+        setOpsLoading(false);
       } catch (e) {
         console.warn('[oplog] 初回取得に失敗', e);
         syncLog('ops-initial-error', { err: String((e && e.message) || e) });
+        setOpsLoading(false);
       }
       if (stopped) return;
       unsubscribe = subscribeOps(storeId, applyIncoming);
@@ -16905,6 +16911,10 @@ export default function App() {
   // ★ 同期が止まっていることを必ず画面に出す。 「入力しているのにクラウドへ届いていない」状態が
   //   無表示のまま続くと、他端末に反映されないまま作業を続けて再読み込みで入力を失う。
   const [syncStalled, setSyncStalled] = useState(0); // 0=正常 / >0=未同期の秒数
+  // ★ 再読み込み直後、操作ログの反映が終わるまでは「読込中」を出す。
+  //   これが無いと、古いスナップショットが数秒表示され「入力が消えた?」と誤解させてしまう。
+  const [opsLoading, setOpsLoading] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setOpsLoading(false), 8000); return () => clearTimeout(t); }, []);
   const [printPreviewContent, setPrintPreviewContent] = useState(null);
   useEffect(()=>{
     const handler = (e) => setPrintPreviewContent(e.detail);
@@ -18124,6 +18134,15 @@ export default function App() {
         </div>,
         document.body
       )}
+      {/* ★ 再読み込み直後の「一瞬データが消えたように見える」を防ぐ読込中オーバーレイ。
+          操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。 */}
+      {opsLoading && OPLOG_ENABLED && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
+        <div style={{position:'fixed',inset:0,zIndex:2000003,background:'rgba(255,255,255,0.92)',
+          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14}}>
+          <div style={{width:46,height:46,border:'5px solid #d7e3c4',borderTopColor:'#7daa3d',borderRadius:'50%',animation:'tsumugiSpin 0.9s linear infinite'}}/>
+          <div style={{fontSize:15,fontWeight:'bold',color:'#475569'}}>最新のデータを取得しています…</div>
+          <style>{`@keyframes tsumugiSpin{to{transform:rotate(360deg)}}`}</style>
+        </div>, document.body)}
       {/* ★ 同期の診断パネル。 URL に ?syncdebug=1 を付けた時だけ表示 (原因調査用)。 */}
       <SyncDebugPanel />
       {/* ★ 新バージョン通知バナー (安全時は自動更新するが、すぐ更新したい場合の手動ボタンも出す) */}
