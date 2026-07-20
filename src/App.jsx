@@ -1089,13 +1089,13 @@ function SyncDebugPanel() {
       fontFamily:'ui-monospace,Menlo,monospace',boxShadow:'0 8px 30px rgba(0,0,0,0.5)'}}>
       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
         <b style={{fontSize:12}}>同期ログ</b>
-        <span style={{color:'#94a3b8'}}>{log.length}件</span>
+        <span style={{color:'#94a3b8'}}>#{log[0]?.n ?? 0} / 端末時刻 {new Date().toLocaleTimeString('ja-JP')}</span>
         <button onClick={()=>{ clearSyncLog(); setLog([]); }}
           style={{marginLeft:'auto',background:'#334155',color:'#e2e8f0',border:'none',borderRadius:6,padding:'3px 8px',fontSize:11,cursor:'pointer'}}>消去</button>
       </div>
       {log.map((r,i)=>(
         <div key={i} style={{whiteSpace:'pre-wrap',wordBreak:'break-all',lineHeight:1.4}}>
-          <span style={{color:'#64748b'}}>{r.t}</span> <span style={{color:color(r.ev),fontWeight:'bold'}}>{r.ev}</span>
+          <span style={{color:'#64748b'}}>{r.t}</span> <span style={{color:'#475569'}}>#{r.n}</span> <span style={{color:color(r.ev),fontWeight:'bold'}}>{r.ev}</span>
           {r.d ? ' ' + JSON.stringify(r.d) : ''}
         </div>
       ))}
@@ -16469,9 +16469,16 @@ export default function App() {
       //   数秒表示される「一瞬データが消えたように見える」現象を短くするため)
       const since0 = Number(appDataRef.current?.__snapRevision) || 0;
       const prefetch = fetchAllOpsSince(storeId, since0).catch(() => null);
-      // 巨大JSON(スナップショット)の読み込み完了を待つ。 空の状態に操作を当てると壊れるため。
+      // ★ 待つのは「土台となる状態が手元にあるか」だけでよい。
+      //   端末に前回の状態(localStorage由来)が残っていれば、数MBの全体データの受信を待たずに
+      //   その場で操作ログを当てられる = 再読み込み後すぐ最新が表示される。
+      //   (全体データは後から届くが、提供記録は凍結済みなので表示を乱さない)
+      const hasLocalBase = () => {
+        const a = appDataRef.current;
+        return !!(a && a._sbStoreId === storeId && Array.isArray(a.ticketRecords));
+      };
       for (let i = 0; i < 600 && !stopped; i++) {
-        if (dataLoadedForStoreRef.current === storeId) break;
+        if (dataLoadedForStoreRef.current === storeId || hasLocalBase()) break;
         await new Promise(r => setTimeout(r, 100));
       }
       if (stopped) return;

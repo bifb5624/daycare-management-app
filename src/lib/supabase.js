@@ -29,7 +29,11 @@ const _SYNCLOG_KEY = 'tsumugiSyncLog';
 export function syncLog(ev, detail) {
   try {
     const arr = JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]');
-    arr.push({ t: new Date().toISOString().slice(11, 23), ev, d: detail || null });
+    // ★ 端末のローカル時刻 + 連番。 連番が増えていれば「動いているが時計がずれている」、
+    //   増えていなければ「本当に止まっている」と一目で区別できる。
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0'), ss = String(d.getSeconds()).padStart(2,'0');
+    arr.push({ t: `${hh}:${mm}:${ss}`, n: (arr.length ? (Number(arr[arr.length-1].n)||0) + 1 : 1), ev, d: detail || null });
     localStorage.setItem(_SYNCLOG_KEY, JSON.stringify(arr.slice(-120)));
   } catch {}
 }
