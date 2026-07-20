@@ -1054,6 +1054,49 @@ const appendDocUpdate = (patient, by, byName, items) => {
   const log = Array.isArray(patient?.docUpdates) ? patient.docUpdates : [];
   return [...log, { id: `du_${now}_${Math.round(Math.random()*1e6)}`, at: now, by, byName: byName || '', items: [...new Set(items)], readOffice: false, readCm: true }].slice(-50);
 };
+// ★ フェイスシートの項目名(通知の「どこを変更したか」表示に使う)。 キーは faceSheet のフィールド名。
+const FS_FIELD_LABELS = {
+  receptionDate:'受付日', receptionMethod:'受付方法', receptionMethodOther:'受付方法', receptionStaff:'受付者', receptionStaffOther:'受付者',
+  creator:'作成者', creatorOther:'作成者', createdDate:'作成日',
+  fax:'FAX', householdType:'世帯区分', householdTypeOther:'世帯区分',
+  familyMembers:'家族構成', genogram:'ジェノグラム', keyPerson:'キーパーソン',
+  benefitLimit:'区分支給限度額', otherWelfare:'その他の社会保障制度',
+  chronicDiseases:'主治医・かかりつけ医', medicalInstitution:'医療機関', medicalContact:'医療機関の連絡先',
+  kiou:'既往歴・現病歴', medication:'服薬状況', allergies:'アレルギー・感染症',
+  adlLevel:'障害高齢者の日常生活自立度', dementiaLevel:'認知症高齢者の日常生活自立度',
+  lifeHistory:'通所の経緯', currentSituation:'現在の状況', otherServices:'他サービス・社会資源', needs:'本人・家族の主訴・意向',
+  floorPlan:'自宅の見取り図', pickupRoute:'送迎経路', pickupNotes:'送迎時の留意点', hobby:'趣味・嗜好', personality:'性格・個別情報',
+  genogramFiles:'ジェノグラム(添付)', floorPlanFiles:'自宅見取り図(添付)', pickupRouteFiles:'送迎経路(添付)',
+  faceSheetFiles:'フェイスシート原本(添付)', labeledFiles:'添付ファイル',
+};
+// ★ 旧/新フェイスシートを比較して「変更された項目名」の配列を返す(最大8件+「ほかN件」)。
+//   updatedAt/updatedBy など内部メタは無視。 添付は件数の増減のみを見る。
+const FS_DIFF_IGNORE = new Set(['updatedAt','updatedBy','version','_attachCounts']);
+const diffFaceSheetFields = (prev, next, maxLabels = 8) => {
+  const a = prev && typeof prev === 'object' ? prev : {};
+  const b = next && typeof next === 'object' ? next : {};
+  const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])];
+  const labels = [];
+  for (const k of keys) {
+    if (FS_DIFF_IGNORE.has(k) || k.startsWith('_')) continue;
+    const va = a[k], vb = b[k];
+    let changed;
+    if (Array.isArray(va) || Array.isArray(vb)) changed = (Array.isArray(va)?va.length:0) !== (Array.isArray(vb)?vb.length:0);
+    else if (typeof va === 'object' || typeof vb === 'object') changed = JSON.stringify(va ?? null) !== JSON.stringify(vb ?? null);
+    else changed = String(va ?? '') !== String(vb ?? '');
+    if (!changed) continue;
+    const label = FS_FIELD_LABELS[k];
+    if (label && !labels.includes(label)) labels.push(label);
+  }
+  if (!labels.length) return [];
+  if (labels.length <= maxLabels) return labels;
+  return [...labels.slice(0, maxLabels), `ほか${labels.length - maxLabels}項目`];
+};
+// ★ 通知用の1行文字列。 変更点が特定できないときは従来どおり「フェイスシート」。
+const faceSheetUpdateItems = (prev, next) => {
+  const d = diffFaceSheetFields(prev, next);
+  return d.length ? [`フェイスシート（${d.join('・')}）`] : ['フェイスシート'];
+};
 // ★ 同名は上書き(upsert)。 name(前後空白/全半角無視)で照合し、既存があれば新しい非空値で更新、無ければ追加。
 const upsertContactByName = (list, contact) => {
   const norm = (s) => (s||'').normalize('NFKC').replace(/[\s　]/g,'').trim();
@@ -14031,7 +14074,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, faceSheetFiles, labeledFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy:_by, source:'caremanager', snapshot }].slice(-20);
-            const newPatient = { ...patient, kiou: (fsData.kiou ?? patient.kiou ?? ''), docUpdates: appendDocUpdate(patient, 'caremanager', _by, ['フェイスシートの編集']), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+            const newPatient = { ...patient, kiou: (fsData.kiou ?? patient.kiou ?? ''), docUpdates: appendDocUpdate(patient, 'caremanager', _by, (()=>{ const d = diffFaceSheetFields(pf.faceSheet || {}, newFs); return d.length ? [`フェイスシートの編集（${d.join('・')}）`] : ['フェイスシートの編集']; })()), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
             try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
             setData(updated);
@@ -39169,6 +39212,11 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
         np.costBurdenHistory = appendValueHistory(patient.costBurdenHistory, patient.costBurden, _v, _f, _t, patient.costBurdenFrom);
       }
     }
+    // ★ 介護保険証(要介護度/認定期間)・負担割合証の内容が変わったらケアマネにのみ新着通知(readCm:false)
+    const _cmItems = [];
+    if (np.careLevelHistory) _cmItems.push(`介護保険証を更新（要介護度: ${patient.careLevel||'－'} → ${np.careLevel ?? patient.careLevel ?? '－'}）`);
+    if (np.costBurdenHistory) _cmItems.push(`負担割合証を更新（${patient.costBurden||'－'} → ${np.costBurden ?? patient.costBurden ?? '－'}）`);
+    if (_cmItems.length) np.docUpdates = withOfficeDocUpdate(_cmItems);
     savePatientTop(np, { manual:true, message:'✓ 利用者マスタに反映しました' });
   };
 
@@ -40261,7 +40309,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
             // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
-            savePatientTop({ docUpdates: withOfficeDocUpdate(['フェイスシート']), ...(contactPatch||{}), kiou: (newFs.kiou||''), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
+            savePatientTop({ docUpdates: withOfficeDocUpdate(faceSheetUpdateItems(faceSheet, newFs)), ...(contactPatch||{}), kiou: (newFs.kiou||''), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
