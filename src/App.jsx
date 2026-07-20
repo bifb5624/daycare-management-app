@@ -18130,7 +18130,25 @@ export default function App() {
       {updateAvailable && ReactDOM.createPortal(
         <div style={{position:'fixed',left:'50%',bottom:20,transform:'translateX(-50%)',zIndex:2000000,background:'#0f172a',color:'white',padding:'10px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:12,maxWidth:'92vw'}}>
           <span style={{fontSize:13,fontWeight:'bold'}}>🔄 新しいバージョンがあります</span>
-          <button onClick={()=>{ try{ window.location.reload(); }catch{} }} style={{background:'#7daa3d',color:'white',border:'none',borderRadius:8,padding:'6px 14px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ更新</button>
+          {/* ★ 単なる reload だとブラウザのキャッシュから古いプログラムが読み直されることがあり、
+              「押しても更新されない/しばらく経ってから反映」という症状になる。
+              キャッシュとService Workerを消してから、URLに印を付けて確実に取り直す。 */}
+          <button onClick={async ()=>{
+            try {
+              if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }
+            } catch {}
+            try {
+              if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                const rs = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(rs.map(r=>r.unregister()));
+              }
+            } catch {}
+            try {
+              const u = new URL(window.location.href);
+              u.searchParams.set('_v', String(Date.now()));
+              window.location.replace(u.toString());
+            } catch { try { window.location.reload(); } catch {} }
+          }} style={{background:'#7daa3d',color:'white',border:'none',borderRadius:8,padding:'6px 14px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ更新</button>
         </div>,
         document.body
       )}
