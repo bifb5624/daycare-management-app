@@ -989,6 +989,20 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       });
       merged.ticketRecords = [...best.values()];
     }
+    // ★ お知らせの既読(スタッフ単位)は「和集合」で統合する。 どちらの端末で既読にしても
+    //   既読のまま残り、片方の端末の古い状態で未読に戻らないようにする。
+    {
+      const lo = localData.noticeReads, co = cloud.noticeReads;
+      if (lo || co) {
+        const out = {};
+        new Set([...Object.keys(lo || {}), ...Object.keys(co || {})]).forEach(k => {
+          const a = Array.isArray(lo && lo[k]) ? lo[k] : [];
+          const b = Array.isArray(co && co[k]) ? co[k] : [];
+          out[k] = [...new Set([...b.map(String), ...a.map(String)])].slice(-1000);
+        });
+        merged.noticeReads = out;
+      }
+    }
     return sanitizeForSync(merged);
     }, { maxRetries: 12 }); // supabaseCasUpdate の mutate 終わり (2台同時編集の競合に耐えるため厚め)
     const _ok = !!(_casRes && _casRes.ok);

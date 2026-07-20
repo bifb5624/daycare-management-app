@@ -16300,18 +16300,43 @@ export default function App() {
   const visibleNotices = systemNotices.filter(n => !dismissedNoticeIds.includes(n.id));
   // ★ ホームお知らせ等の既読(スタッフ単位・端末ローカル)。 サイドバーの新着バッジと DashboardView で共有する。
   const _noticeStaffKey = (activeRecorder?.name ? normalizeName(activeRecorder.name).trim() : '') || '_';
-  const [noticeReadMap, setNoticeReadMap] = React.useState(()=>{ try { return JSON.parse(localStorage.getItem('tsumugiNoticeReads')||'{}'); } catch { return {}; } });
-  const isNoticeRead = React.useCallback((id) => (noticeReadMap[_noticeStaffKey]||[]).includes(String(id)), [noticeReadMap, _noticeStaffKey]);
+  // ★ 既読はクラウド(appData.noticeReads)で全端末共有する。 スタッフ単位なので、PCで既読にすれば
+  //   同じスタッフで開いた iPad でも既読になる。 端末ローカルの旧データは初回に取り込む(移行)。
+  const noticeReadMap = appData.noticeReads || {};
+  const isNoticeRead = React.useCallback((id) => {
+    const arr = (appData.noticeReads || {})[_noticeStaffKey] || [];
+    return arr.includes(String(id));
+  }, [appData.noticeReads, _noticeStaffKey]);
   const markNoticeRead = React.useCallback((id) => {
-    if (id==null) return;
-    setNoticeReadMap(prev => {
-      const arr = prev[_noticeStaffKey]||[];
-      if (arr.includes(String(id))) return prev;
-      const next = { ...prev, [_noticeStaffKey]: [...arr, String(id)].slice(-1000) };
-      try { localStorage.setItem('tsumugiNoticeReads', JSON.stringify(next)); } catch {}
-      return next;
+    if (id == null) return;
+    setAppData(prev => {
+      const map = prev.noticeReads || {};
+      const arr = map[_noticeStaffKey] || [];
+      if (arr.includes(String(id))) return prev;   // 変化なし → 保存もしない
+      return { ...prev, noticeReads: { ...map, [_noticeStaffKey]: [...arr, String(id)].slice(-1000) } };
     });
   }, [_noticeStaffKey]);
+  // 旧データ(端末ローカル)を一度だけクラウドへ移行する
+  const _noticeMigratedRef = React.useRef(false);
+  useEffect(() => {
+    if (_noticeMigratedRef.current) return;
+    if (!appData || !appData._sbStoreId) return;
+    _noticeMigratedRef.current = true;
+    let old = null;
+    try { old = JSON.parse(localStorage.getItem('tsumugiNoticeReads') || 'null'); } catch {}
+    if (!old || typeof old !== 'object') return;
+    setAppData(prev => {
+      const map = { ...(prev.noticeReads || {}) };
+      let changed = false;
+      Object.keys(old).forEach(k => {
+        const merged = [...new Set([...(map[k] || []), ...(Array.isArray(old[k]) ? old[k].map(String) : [])])].slice(-1000);
+        if (merged.length !== (map[k] || []).length) { map[k] = merged; changed = true; }
+      });
+      if (!changed) return prev;
+      return { ...prev, noticeReads: map };
+    });
+    try { localStorage.removeItem('tsumugiNoticeReads'); } catch {}
+  }, [appData?._sbStoreId]);
   // ★ #3 サイドバー「ホーム」の新着バッジ数 = 本日のスケジュール(未読) + 家族・ケアマネ更新(未読) + 運営お知らせ(未読)。
   //   事業所からのお知らせは既読管理しない(投稿したら表示のみ)ためカウントに含めない。
   const _homeUnreadCount = React.useMemo(() => {
