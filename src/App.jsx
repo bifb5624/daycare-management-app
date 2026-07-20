@@ -24,6 +24,7 @@ import {
   syncNow,
   syncHealth,
   syncLog,
+  oplogState,
   getSyncLog,
   clearSyncLog,
 } from './lib/supabase';
@@ -16455,8 +16456,8 @@ export default function App() {
       if (fresh.length) opsRevisionRef.current = Math.max(opsRevisionRef.current, ...fresh.map(o => Number(o.revision) || 0));
       const others = fresh.filter(o => o.senderId !== opSenderId);
       if (!others.length) return;
-      // 段階導入の第1段(送信のみ)では、受信内容は記録だけして画面へは反映しない。
-      if (!OPLOG_APPLY) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
+      // 操作ログの読み取りに成功していない端末では反映しない(従来方式のまま動かす)。
+      if (!OPLOG_APPLY || !oplogState.readable) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
       syncLog('ops-recv', { n: others.length, rev: opsRevisionRef.current });
       applyingRemoteRef.current = true;   // pull 由来と同じ扱い = 巨大JSONを押し戻さない
       setAppData(prevState => applyOps(prevState, others.concat(pendingOps())));
@@ -16478,7 +16479,9 @@ export default function App() {
         const since = Number(appDataRef.current?.__snapRevision) || 0;
         opsRevisionRef.current = since;
         const ops = await fetchAllOpsSince(storeId, since);
-        syncLog('ops-initial', { n: ops.length, since });
+        // ★ 読み取り成功 = 受信した操作を反映してよい(適用の前に立てる)
+        oplogState.readable = true;
+        syncLog('ops-initial', { n: ops.length, since, readable: true });
         applyIncoming(ops);
         opsReadyRef.current = true;
       } catch (e) {
@@ -16632,7 +16635,7 @@ export default function App() {
           // ★ 操作ログ方式に移行済みの場合、提供記録の実体は操作ログが持つ。 巨大JSON側の
           //   ticketRecords はスナップショット(凍結)なので、ここで手元の値を混ぜてはいけない。
           //   代わりに「手元の状態をそのまま保つ」= クラウドのスナップショットで上書きしない。
-          if (OPLOG_APPLY && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          if (OPLOG_APPLY && oplogState.readable && oplogState.writable && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             merged.ticketRecords = prev.ticketRecords;
           } else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
@@ -20737,33 +20740,33 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           // ★ zIndex は全画面オーバーレイ(9999)より上に。 全画面時に気分モーダルが裏に隠れて反応しないのを防ぐ
           <div className="fixed inset-0 flex flex-col bg-white" style={{zIndex:10000}}>
             <div className="flex items-center justify-between px-6 py-4 bg-slate-100 border-b border-slate-200">
-              <div className="text-slate-800 font-bold text-lg">{currentRec?.name && <span className="text-blue-700">{currentRec.name} さん｜</span>}{timing==='arrival'?'通所時の気分':'帰宅時の気分'}{kibunStep==='reason'&&` — ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.emoji} ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.label}`}</div>
-              <button onClick={closeKibunModal} className="text-slate-400 hover:text-slate-700 text-2xl font-bold px-2">✕</button>
+              <div className="text-slate-800 font-bold text-2xl">{currentRec?.name && <span className="text-blue-700">{currentRec.name} さん｜</span>}{timing==='arrival'?'通所時の気分':'帰宅時の気分'}{kibunStep==='reason'&&` — ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.emoji} ${KIBUN_MOODS.find(m=>m.key===kibunTempMood)?.label}`}</div>
+              <button onClick={closeKibunModal} className="text-slate-400 hover:text-slate-700 text-4xl font-bold px-4 py-1">✕</button>
             </div>
             {kibunStep === 'mood' ? (
               <div className="flex-1 flex flex-col items-center justify-center gap-6 p-6">
                 <div className="text-center mb-2">
-                  {currentRec?.name && <div className="text-blue-700 text-2xl font-bold">{currentRec.name} さん</div>}
-                  <div className="text-slate-700 text-xl font-bold mt-1">{timing==='arrival'?'通所時の気分を選んでください':'帰宅時の気分を選んでください'}</div>
+                  {currentRec?.name && <div className="text-blue-700 text-4xl font-bold">{currentRec.name} さん</div>}
+                  <div className="text-slate-700 text-3xl font-bold mt-2">{timing==='arrival'?'通所時の気分を選んでください':'帰宅時の気分を選んでください'}</div>
                 </div>
-                <div className="grid grid-cols-5 gap-4 w-full max-w-2xl">
+                <div className="grid grid-cols-5 gap-5 w-full max-w-5xl">
                   {KIBUN_MOODS.map(mood => (
                     <button key={mood.key} onClick={() => { setKibunTempMood(mood.key); setKibunStep('reason'); }}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-2xl border-2 border-transparent hover:border-slate-400 transition-all active:scale-95 shadow-md ${mood.color}`}>
-                      <span className="text-6xl leading-none">{mood.emoji}</span>
-                      <span className={`font-bold text-base ${mood.textColor}`}>{mood.label}</span>
+                      className={`flex flex-col items-center gap-3 px-3 py-7 rounded-3xl border-4 border-transparent hover:border-slate-500 transition-all active:scale-95 shadow-lg ${mood.color}`}>
+                      <span className="leading-none" style={{fontSize:'5.5rem'}}>{mood.emoji}</span>
+                      <span className={`font-bold text-3xl ${mood.textColor}`}>{mood.label}</span>
                     </button>
                   ))}
                 </div>
                 {currentRec?.[moodKey] && (
                   <button onClick={() => { updateRecord(recId, moodKey, ''); updateRecord(recId, reasonKey, ''); closeKibunModal(); }}
-                    className="mt-4 px-6 py-2 bg-slate-200 text-slate-600 rounded-full text-sm font-bold hover:bg-slate-300">記録をクリア</button>
+                    className="mt-6 px-8 py-4 bg-slate-200 text-slate-700 rounded-full text-xl font-bold hover:bg-slate-300">記録をクリア</button>
                 )}
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-start gap-4 p-6 overflow-y-auto">
-                <div className="text-slate-600 text-sm font-bold">理由を選んでください（複数選択可）</div>
-                <div className="grid grid-cols-2 gap-3 w-full max-w-lg">
+                <div className="text-slate-700 text-2xl font-bold mb-1">理由を選んでください（複数選択可）</div>
+                <div className="grid grid-cols-2 gap-4 w-full max-w-3xl">
                   {getKibunReasons(timing, kibunTempMood).map(reason => {
                     const cur = currentRec?.[reasonKey] || '';
                     const selected = cur.split('・').includes(reason);
@@ -20772,14 +20775,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         const parts = cur ? cur.split('・') : [];
                         const np = parts.includes(reason) ? parts.filter(r=>r!==reason) : [...parts, reason];
                         updateRecord(recId, reasonKey, np.join('・'));
-                      }} className={`py-3 px-4 rounded-xl text-sm font-bold border-2 transition-all ${selected ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-400'}`}>
+                      }} className={`py-6 px-5 rounded-2xl text-2xl font-bold border-4 transition-all active:scale-95 ${selected ? 'bg-emerald-600 text-white border-emerald-700 shadow-lg' : 'bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-500'}`}>
+                        {selected && <span className="mr-2">✓</span>}
                         {reason}
                       </button>
                     );
                   })}
                 </div>
-                <div className="w-full max-w-lg mt-2">
-                  <div className="text-slate-500 text-xs font-bold mb-1">その他（自由入力）</div>
+                <div className="w-full max-w-3xl mt-3">
+                  <div className="text-slate-600 text-xl font-bold mb-2">その他（自由入力）</div>
                   <input type="text"
                     value={(() => { const cur = currentRec?.[reasonKey]||''; const known = getKibunReasons(timing, kibunTempMood); return cur.split('・').filter(r=>r&&!known.includes(r)).join('・'); })()}
                     onChange={e => {
@@ -20788,12 +20792,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const sel = cur.split('・').filter(r=>r&&known.includes(r));
                       updateRecord(recId, reasonKey, [...sel, ...(e.target.value?[e.target.value]:[])].join('・'));
                     }}
-                    placeholder="自由に入力..." className="w-full px-4 py-3 rounded-xl bg-slate-100 text-slate-800 border border-slate-300 outline-none text-sm" />
+                    placeholder="自由に入力..." className="w-full px-5 py-5 rounded-2xl bg-slate-100 text-slate-800 border-2 border-slate-300 outline-none text-2xl" />
                 </div>
-                <div className="flex gap-3 mt-4">
-                  <button onClick={() => setKibunStep('mood')} className="px-6 py-2 bg-slate-200 text-slate-600 rounded-full text-sm font-bold hover:bg-slate-300">← 戻る</button>
+                <div className="flex gap-5 mt-6 pb-6">
+                  <button onClick={() => setKibunStep('mood')} className="px-10 py-5 bg-slate-200 text-slate-700 rounded-full text-2xl font-bold hover:bg-slate-300 active:scale-95">← 戻る</button>
                   <button onClick={() => { updateRecord(recId, moodKey, kibunTempMood); closeKibunModal(); }}
-                    className="px-8 py-2 bg-emerald-500 text-white rounded-full text-sm font-bold hover:bg-emerald-600">決定</button>
+                    className="px-16 py-5 bg-emerald-500 text-white rounded-full text-2xl font-bold hover:bg-emerald-600 shadow-lg active:scale-95">決定</button>
                 </div>
               </div>
             )}
