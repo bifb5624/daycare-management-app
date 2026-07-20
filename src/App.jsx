@@ -25,6 +25,7 @@ import {
   syncHealth,
   syncLog,
   oplogState,
+  markOplogWritable,
   getSyncLog,
   clearSyncLog,
 } from './lib/supabase';
@@ -16457,7 +16458,7 @@ export default function App() {
       const others = fresh.filter(o => o.senderId !== opSenderId);
       if (!others.length) return;
       // 操作ログの読み取りに成功していない端末では反映しない(従来方式のまま動かす)。
-      if (!OPLOG_APPLY || !oplogState.readable) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
+      if (!OPLOG_APPLY || !(oplogState.readable || oplogState.writable)) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
       syncLog('ops-recv', { n: others.length, rev: opsRevisionRef.current });
       applyingRemoteRef.current = true;   // pull 由来と同じ扱い = 巨大JSONを押し戻さない
       setAppData(prevState => applyOps(prevState, others.concat(pendingOps())));
@@ -16481,7 +16482,10 @@ export default function App() {
         const ops = await fetchAllOpsSince(storeId, since);
         // ★ 読み取り成功 = 受信した操作を反映してよい(適用の前に立てる)
         oplogState.readable = true;
-        syncLog('ops-initial', { n: ops.length, since, readable: true });
+        // ★ この店舗に操作ログが既にある = 既に操作ログ方式へ移行済み。
+        //   送信成功を待たずにモードを確定させる(待つ間に旧方式の受信が古い値で上書きしてしまうため)
+        if (ops.length > 0) markOplogWritable();
+        syncLog('ops-initial', { n: ops.length, since, readable: true, mode: oplogState.writable ? 'oplog' : 'legacy' });
         applyIncoming(ops);
         opsReadyRef.current = true;
       } catch (e) {
@@ -16635,7 +16639,7 @@ export default function App() {
           // ★ 操作ログ方式に移行済みの場合、提供記録の実体は操作ログが持つ。 巨大JSON側の
           //   ticketRecords はスナップショット(凍結)なので、ここで手元の値を混ぜてはいけない。
           //   代わりに「手元の状態をそのまま保つ」= クラウドのスナップショットで上書きしない。
-          if (OPLOG_APPLY && oplogState.readable && oplogState.writable && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          if (OPLOG_APPLY && (oplogState.readable || oplogState.writable) && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             merged.ticketRecords = prev.ticketRecords;
           } else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {

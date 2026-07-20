@@ -43,7 +43,18 @@ export const OPLOG_FROZEN_KEYS = new Set(['ticketRecords']);
 //   操作ログが動かない環境でも保存先が無くなることは原理的に起きない。
 //     writable : 送信が1回でも成功した(サーバーが採番を返した) → 凍結してよい
 //     readable : 操作ログの読み取りに成功した → 受信した操作を画面へ反映してよい
-export const oplogState = { writable: false, readable: false };
+export const oplogState = {
+  // 起動直後から正しいモードで動けるよう、一度切り替わった事実は端末に残す。
+  // (これが無いと、再読み込み直後の数秒だけ旧方式で動き、操作ログで復元した値が
+  //  クラウドの古いスナップショットで上書きされて消える)
+  writable: (() => { try { return localStorage.getItem('tsumugiOplogMode') === '1'; } catch { return false; } })(),
+  readable: false,
+};
+export function markOplogWritable() {
+  if (oplogState.writable) return;
+  oplogState.writable = true;
+  try { localStorage.setItem('tsumugiOplogMode', '1'); } catch {}
+}
 export const isOplogFrozen = (key) => oplogState.writable && OPLOG_FROZEN_KEYS.has(key);
 const _CLOCK_KEY = 'tsumugiClockOffset';
 let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
