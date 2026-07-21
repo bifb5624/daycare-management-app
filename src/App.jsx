@@ -20984,17 +20984,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 try { sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({ patientId: _pid, tab: 'cat_1' })); } catch {}
                 navigateTo && navigateTo('master', _pid);
               };
-              // ★ 体力測定は施設の対象設定(fitnessTargets)に合わせて表示 (未設定=全員表示)
-              const _ftargets = appData.systemSettings?.fitnessTargets;
-              const _showFit = !_ftargets ? true : (_ftargets.length > 0 && _ftargets.includes(patientInfoModal.careLevel||''));
               const _navs = [
                 { view:'master',        label:'利用者マスタ',     icon:<Users size={16}/> },
                 { view:'__file',        label:'個人ファイル',     icon:<BookOpen size={16}/>, onClick:_goFile },
                 { view:'ticket',        label:'サービス提供記録', icon:<FileText size={16}/> },
-                { view:'print',         label:'連絡帳',           icon:<Printer size={16}/> },
+                { view:'fitness',       label:'体力測定',         icon:<Activity size={16}/> },
                 { view:'dash_personal', label:'分析（個人）',     icon:<BarChart3 size={16}/> },
                 { view:'monitoring',    label:'モニタリング',     icon:<ClipboardList size={16}/> },
-                ...(_showFit ? [{ view:'fitness', label:'体力測定', icon:<Activity size={16}/> }] : []),
               ];
               return (
                 <div className="grid grid-cols-3 gap-2 mb-4">
