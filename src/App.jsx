@@ -17168,11 +17168,11 @@ export default function App() {
         if (latest && latest !== _selfAssetsRef.current && !stopped) setUpdateAvailable(true);
       } catch {}
     };
-    const t = setInterval(check, 5 * 60 * 1000); // 5分ごと
+    const t = setInterval(check, 60 * 1000); // ★ 1分ごと (端末間で更新バナーの出るタイミングを揃える)
     const onFocus = () => { if (document.visibilityState !== 'hidden') check(); };
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
-    const first = setTimeout(check, 20000);
+    const first = setTimeout(check, 5000); // 起動5秒後に初回チェック
     return () => { stopped = true; clearInterval(t); clearTimeout(first); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
   }, []);
   useEffect(() => {
@@ -18492,13 +18492,16 @@ export default function App() {
                   if (!pr.length) return null;
                   return _addC(new Date(pr[0].date), p);
                 };
-                // 当日出席者
+                // 当日出席者。 ★ AM/PM 表示に合わせて、その時間帯に来る利用者だけを数える
                 const _dateStr = selectedDate;
                 const _d = new Date(_dateStr);
+                const _dDow = _d.getDay();
+                const _badgeMatchAmpm = (p) => { if(!sharedAmpm || sharedAmpm==='1日') return true; const sch = p?.scheduleAmPm?.[_dDow]||''; return sch===sharedAmpm || sch==='1日'; };
                 const _presentIds = new Set((appData.ticketRecords||[]).filter(r=>{
                   const mm=r.date.match(/(\d+)月(\d+)日/);
                   if(!mm) return false;
-                  return parseInt(mm[1])===_d.getMonth()+1 && parseInt(mm[2])===_d.getDate() && r.status==='出席';
+                  if(!(parseInt(mm[1])===_d.getMonth()+1 && parseInt(mm[2])===_d.getDate() && r.status==='出席')) return false;
+                  return _badgeMatchAmpm((appData.patients||[]).find(pp=>pp.id===r.patientId));
                 }).map(r=>r.patientId));
                 // 体力測定が当月以内の対象者
                 const _fitnessBadge = (appData.patients||[]).filter(p=>{
