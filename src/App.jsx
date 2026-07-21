@@ -16506,22 +16506,55 @@ export default function App() {
       });
     };
 
+    // 端末に残っている記録(localStorage + 現stateのメモリ)を集める。 テーブルに無い/端末内が新しい
+    // 記録を救出＆テーブルへ補完するために使う(移行過渡期に今朝の入力が消えて見えるのを防ぐ)。
+    const _localRecs = () => {
+      const out = new Map();
+      const add = (arr) => { (Array.isArray(arr) ? arr : []).forEach(r => { if (r && r.id != null) {
+        const ex = out.get(String(r.id));
+        if (!ex || (Number(r._savedAt)||0) >= (Number(ex._savedAt)||0)) out.set(String(r.id), r);
+      } }); };
+      add(appDataRef.current && appDataRef.current.ticketRecords);
+      try { const ls = JSON.parse(localStorage.getItem('daycareAppData_v3') || 'null'); if (ls && ls._sbStoreId === storeId) add(ls.ticketRecords); } catch {}
+      return [...out.values()];
+    };
+
     const boot = async () => {
       try {
         const rows = await fetchTicketRecords(storeId);
         if (stopped) return;
         oplogState.readable = true;
         markOplogWritable();
+        // ★ 端末に在ってテーブルに無い/古い記録をテーブルへ補完(今朝の入力を救出)。 変更項目だけ送るのではなく
+        //   欠けている行/項目を埋めるため、非空項目をまとめて upsert(既存の非空はサーバー側で保持される)。
+        try {
+          const _tblById = new Map(rows.map(r => [String(r.id), r]));
+          const _fix = [];
+          _localRecs().forEach(lr => {
+            const ex = _tblById.get(String(lr.id));
+            if (ex && !((Number(lr._savedAt)||0) > (Number(ex._savedAt)||0))) return; // テーブルが同等以上なら触らない
+            const data = {}; Object.keys(lr).forEach(k => { if (k === 'id' || (typeof k==='string'&&k.startsWith('_'))) return; if (lr[k] !== undefined && lr[k] !== '') data[k] = lr[k]; });
+            if (Object.keys(data).length) _fix.push({ id: String(lr.id), patientId: lr.patientId ?? null, recDate: (function(r){ const m=/^tr_\d+_(\d{4})_(\d{1,2})_(\d{1,2})$/.exec(String(r.id||'')); if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`; return null; })(lr), data });
+          });
+          if (_fix.length) { upsertTicketRows(storeId, _fix); syncLog('table-backfill', { n: _fix.length }); }
+        } catch (e) { console.warn('[ticket_records] 補完に失敗', e); }
         _lastTblSyncRef.current = rows.reduce((m, r) => { const t = r._savedAt ? new Date(r._savedAt).toISOString() : null; return (t && (!m || t > m)) ? t : m; }, null);
         setAppData(prev => {
           applyingRemoteRef.current = true;
           // ★ テーブルを土台にしつつ、端末に「まだテーブルへ届いていない/端末内が新しい」記録があれば残す
           //   (保存直後にリロードした等で、push が完了する前でも入力を失わない)
           const map = new Map(rows.map(r => [String(r.id), r]));
-          (Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).forEach(lr => {
+          // 現state と localStorage の両方から、テーブルに無い/端末内が新しい記録を保持
+          _localRecs().forEach(lr => {
             if (!lr || lr.id == null) return;
             const ex = map.get(String(lr.id));
-            if (!ex || (Number(lr._savedAt) || 0) > (Number(ex._savedAt) || 0)) map.set(String(lr.id), lr);
+            if (!ex) { map.set(String(lr.id), lr); return; }
+            // 行としては新しい方を土台にしつつ、項目は「非空を優先」で統合(片方の空欄で消さない)
+            const base = (Number(lr._savedAt)||0) > (Number(ex._savedAt)||0) ? lr : ex;
+            const other = base === lr ? ex : lr;
+            const merged = { ...other, ...base };
+            Object.keys(other).forEach(k => { if ((merged[k] === undefined || merged[k] === '') && other[k] !== undefined && other[k] !== '') merged[k] = other[k]; });
+            map.set(String(lr.id), merged);
           });
           return { ...prev, ticketRecords: [...map.values()] };
         });
