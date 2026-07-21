@@ -16527,7 +16527,7 @@ export default function App() {
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length });
+        syncLog('table-initial', { n: rows.length, ex: rows[0] ? { pid: rows[0].patientId, d: rows[0].date, y: rows[0].year } : null });
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
         syncLog('table-initial-error', { err: String((e && e.message) || e).slice(0, 120) });
