@@ -16172,6 +16172,10 @@ export default function App() {
     } catch { return false; }
   }, []);
   // ★ スタッフセッション (家族モード以外で必要)
+  // ★ この端末の名前(端末ごと・localStorage)。 「最終更新した端末」を表示するために使う。
+  //   機種名はブラウザから取得できないため、利用者が手動で付ける(例: 受付iPad / 事務所PC)。
+  const [deviceName, setDeviceName] = useState(() => { try { return localStorage.getItem('tsumugiDeviceName') || ''; } catch { return ''; } });
+  const updateDeviceName = React.useCallback((v) => { setDeviceName(v); try { localStorage.setItem('tsumugiDeviceName', v); } catch {} }, []);
   const [staffSession, setStaffSession] = useState(() => {
     try {
       const saved = sessionStorage.getItem('tsumugiStaffSession');
@@ -17477,6 +17481,10 @@ export default function App() {
       if (newData.generalFaxDraft && newData.generalFaxDraft !== prev.generalFaxDraft) {
         newData = { ...newData, generalFaxDraft: { ...newData.generalFaxDraft, _updatedAt: _now2 } };
       }
+      // ★ 実データを保存する時だけ「最終更新した端末・時刻」を記録する(全端末で共有・表示用)。
+      if (options.manual || options.silent) {
+        newData = { ...newData, _lastSync: { device: (deviceName || '名称未設定の端末'), at: syncNow() } };
+      }
     } catch (e) { /* 失敗しても保存自体は続行 */ }
     setAppData(newData);
     // ★ 手動保存ボタン (options.manual) / 自動保存 (options.silent) は即時クラウド保存する。
@@ -18580,6 +18588,25 @@ export default function App() {
                  currentView === 'settings' ? '各種設定' : 'システム画面'}
               </h1>
             </div>
+            {/* ★ 最終更新した端末・時刻 (全端末で共有・表示用)。 狭い画面では非表示。 */}
+            {(() => {
+              const ls = appData._lastSync;
+              if (!ls || !ls.at) return null;
+              const at = new Date(ls.at);
+              if (isNaN(at.getTime())) return null;
+              const atStr = at.toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+              const thisName = (deviceName || '名称未設定の端末');
+              const isSelf = ls.device === thisName;
+              return (
+                <div
+                  className="hidden md:flex items-center gap-1.5 shrink-0 mr-3 text-[11px] text-slate-400 whitespace-nowrap cursor-pointer hover:text-slate-600"
+                  title={isSelf ? 'この端末で最後に更新しました（最新です）' : `最新の更新は「${ls.device || '名称未設定の端末'}」で行われました。この端末にも反映されています。設定＞システムで端末名を変更できます。`}
+                  onClick={() => navigateTo && navigateTo('settings', null, 'device')}>
+                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${isSelf ? 'bg-emerald-400' : 'bg-blue-400'}`}></span>
+                  <span>最終更新: {ls.device || '名称未設定の端末'} · {atStr}</span>
+                </div>
+              );
+            })()}
             {/* ジャンプナビをヘッダー右側に配置。 ★ 狭い画面(スマホ/iPad縦)ではタイトルと重なるため非表示(サイドバーで移動可)。 横長(lg〜)のみ表示 */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
               <div className="hidden lg:flex items-center shrink-0">
@@ -18629,7 +18656,7 @@ export default function App() {
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
              currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} /> :
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
-             currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} /> :
+             currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} deviceName={deviceName} updateDeviceName={updateDeviceName} lastSync={appData._lastSync} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'diary' ? <DailyLogView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} dirtyRef={diaryDirtyRef} saveFnRef={diarySaveFnRef} /> :
              currentView === 'absence_fax' ? <AbsenceFaxView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={absenceDirtyRef} saveFnRef={absenceSaveFnRef} /> :
@@ -31696,16 +31723,31 @@ function AdminSettingsSection({ appData, onSave }) {
   );
 }
 
-function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin, navFocus, onFocusHandled }) {
+function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin, navFocus, onFocusHandled, deviceName, updateDeviceName, lastSync }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const [activeTab, setActiveTab] = useState('facility');
+  // ★ この端末の名前(端末ごと・localStorage)。 下書き→保存で updateDeviceName を呼ぶ。
+  const [deviceNameDraft, setDeviceNameDraft] = useState(deviceName || '');
+  const [deviceNameSaved, setDeviceNameSaved] = useState(false);
+  React.useEffect(() => { setDeviceNameDraft(deviceName || ''); }, [deviceName]);
   const holidaySectionRef = React.useRef(null);
+  const deviceSectionRef = React.useRef(null);
   // ★ 提供記録入力の「休業」からジャンプしてきたら、事業所情報タブ→施設休業日へスクロール。
   React.useEffect(() => {
     if (navFocus !== 'holidays') return;
     setActiveTab('facility');
     const t = setTimeout(() => {
       try { holidaySectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+      onFocusHandled && onFocusHandled();
+    }, 250);
+    return () => clearTimeout(t);
+  }, [navFocus]);
+  // ★ ヘッダーの「最終更新」から飛んできたら、システムタブ→端末名の設定へスクロール。
+  React.useEffect(() => {
+    if (navFocus !== 'device') return;
+    setActiveTab('system');
+    const t = setTimeout(() => {
+      try { deviceSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
       onFocusHandled && onFocusHandled();
     }, 250);
     return () => clearTimeout(t);
@@ -33131,6 +33173,46 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
 
           {/* システム */}
           {activeTab === 'system' && (<>
+            <div ref={deviceSectionRef}>
+            <SectionCard title="この端末の名前・最終更新">
+              <p className="text-xs text-slate-500 mb-3">この端末（iPad・PC 等）に名前を付けておくと、記録を保存したときに「どの端末で最後に更新したか」が全端末に表示されます。名前はこの端末だけに保存され、他の端末には送信されません。</p>
+              <label className="block text-sm font-bold text-slate-600 mb-1.5">端末名</label>
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <input
+                  value={deviceNameDraft}
+                  onChange={e => { setDeviceNameDraft(e.target.value); setDeviceNameSaved(false); }}
+                  placeholder="例: 事務所PC / iPad（相談員） / 送迎iPhone"
+                  maxLength={30}
+                  className="flex-1 px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none focus:border-blue-400"/>
+                <button
+                  type="button"
+                  onClick={() => { updateDeviceName && updateDeviceName(deviceNameDraft.trim()); setDeviceNameSaved(true); }}
+                  disabled={deviceNameDraft.trim() === (deviceName || '')}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm disabled:opacity-40 active:scale-95 whitespace-nowrap">
+                  保存
+                </button>
+              </div>
+              {deviceNameSaved && <p className="text-xs font-bold text-emerald-600 mt-1.5">✓ この端末の名前を「{deviceName || '名称未設定の端末'}」に設定しました</p>}
+              {(() => {
+                if (!lastSync || !lastSync.at) return (
+                  <div className="mt-4 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-xs text-slate-500">まだ更新記録がありません。記録を保存すると、ここに最終更新の端末と時刻が表示されます。</div>
+                );
+                const at = new Date(lastSync.at);
+                const atStr = isNaN(at.getTime()) ? '-' : at.toLocaleString('ja-JP', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+                const thisName = (deviceName || '名称未設定の端末');
+                const isSelf = lastSync.device === thisName;
+                return (
+                  <div className={`mt-4 rounded-xl px-4 py-3 border ${isSelf ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'}`}>
+                    <div className="text-xs font-bold text-slate-500 mb-0.5">最終更新</div>
+                    <div className="text-sm font-bold text-slate-800">{lastSync.device || '名称未設定の端末'} <span className="text-slate-400 font-normal">/ {atStr}</span></div>
+                    <div className={`text-[11px] mt-1 ${isSelf ? 'text-emerald-700' : 'text-blue-700'}`}>
+                      {isSelf ? '✓ この端末で最後に更新しました（この端末の内容が最新です）' : `最新の更新は別の端末「${lastSync.device || '名称未設定の端末'}」で行われました。この端末にも自動で反映されます。`}
+                    </div>
+                  </div>
+                );
+              })()}
+            </SectionCard>
+            </div>
             <SectionCard title="操作マニュアル・ご利用ガイド">
               <p className="text-xs text-slate-500 mb-3">各マニュアルは新しいタブで開きます（印刷・PDF保存も可能）。ご家族・ケアマネ用は、そのURLをそのままお渡しいただけます。</p>
               <div className="grid sm:grid-cols-3 gap-3">
