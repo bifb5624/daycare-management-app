@@ -33790,8 +33790,30 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const prevPids = _pidsForDate(`${_d.getMonth()+1}月${_d.getDate()}日`, _d.getDay());
           // ★ 当週(コピー先)で欠席/休止/休業の人は、その人の車(送迎)を表示しない → 対応付けから除外
           const _absentNow = new Set((appData.ticketRecords||[]).filter(r=>r.date===dateStr && (r.status==='欠席'||r.status==='休業'||r.status==='休止')).map(r=>r.patientId));
-          const curRowByPid = {}; curPids.forEach((pid,i)=>{ if(_absentNow.has(pid)) return; if(curRowByPid[pid]==null) curRowByPid[pid]=i; });
-          const remapRow = (obj)=>{ const out={}; Object.keys(obj||{}).forEach(k=>{ const mm=k.match(/^(\d+)(_.+)?$/); if(!mm){ out[k]=obj[k]; return; } const pr=+mm[1]; const suf=mm[2]||''; const pid=prevPids[pr]; const cr=pid!=null?curRowByPid[pid]:undefined; if(cr==null) return; out[cr+suf]=obj[k]; }); return out; };
+          // ★ 送迎キーは「利用者ID」で統一する(手動保存・表示もID基準)。 先週のキーが行番号なら
+          //   prevPids[行番号]→利用者ID に解決し、今週のキーは常に利用者IDで書く。
+          //   これで先週と今週で並び順が違っても、車は必ず本人に付く(別人へのズレを防止)。
+          const _prevPidSet = new Set(prevPids.filter(x=>x!=null).map(String));
+          const _curPidSet = new Set(curPids.filter(x=>x!=null).map(String));
+          const _resolvePrevPid = (numKey) => {
+            const s = String(numKey);
+            if (_prevPidSet.has(s)) return s;            // 既に利用者IDキー
+            const pid = prevPids[+numKey];                // 行番号→利用者ID
+            return pid != null ? String(pid) : null;
+          };
+          const remapRow = (obj)=>{
+            const out={};
+            Object.keys(obj||{}).forEach(k=>{
+              const mm=k.match(/^(\d+)(_.+)?$/);
+              if(!mm){ out[k]=obj[k]; return; }
+              const pid=_resolvePrevPid(mm[1]); const suf=mm[2]||'';
+              if(pid==null) return;
+              if(!_curPidSet.has(pid)) return;            // 今週いない人はコピーしない
+              if(_absentNow.has(+pid)) return;            // 今週欠席/休止の人はコピーしない
+              out[pid+suf]=obj[k];                         // ★今週のキーは常に利用者ID基準
+            });
+            return out;
+          };
           SOUGEI_FIELDS.forEach(f => {
             if (!prevLog[f]) return;
             if (f==='pick'||f==='drop'||f==='pick_walk'||f==='drop_walk') loaded[f] = remapRow(prevLog[f]);
