@@ -16506,61 +16506,29 @@ export default function App() {
       });
     };
 
-    // 端末に残っている記録(localStorage + 現stateのメモリ)を集める。 テーブルに無い/端末内が新しい
-    // 記録を救出＆テーブルへ補完するために使う(移行過渡期に今朝の入力が消えて見えるのを防ぐ)。
-    const _localRecs = () => {
-      const out = new Map();
-      const add = (arr) => { (Array.isArray(arr) ? arr : []).forEach(r => { if (r && r.id != null) {
-        const ex = out.get(String(r.id));
-        if (!ex || (Number(r._savedAt)||0) >= (Number(ex._savedAt)||0)) out.set(String(r.id), r);
-      } }); };
-      add(appDataRef.current && appDataRef.current.ticketRecords);
-      try { const ls = JSON.parse(localStorage.getItem('daycareAppData_v3') || 'null'); if (ls && ls._sbStoreId === storeId) add(ls.ticketRecords); } catch {}
-      return [...out.values()];
-    };
-
     const boot = async () => {
       try {
         const rows = await fetchTicketRecords(storeId);
         if (stopped) return;
         oplogState.readable = true;
         markOplogWritable();
-        // ★ 端末に在ってテーブルに無い/古い記録をテーブルへ補完(今朝の入力を救出)。 変更項目だけ送るのではなく
-        //   欠けている行/項目を埋めるため、非空項目をまとめて upsert(既存の非空はサーバー側で保持される)。
-        try {
-          const _tblById = new Map(rows.map(r => [String(r.id), r]));
-          const _fix = [];
-          _localRecs().forEach(lr => {
-            const ex = _tblById.get(String(lr.id));
-            if (ex && !((Number(lr._savedAt)||0) > (Number(ex._savedAt)||0))) return; // テーブルが同等以上なら触らない
-            const data = {}; Object.keys(lr).forEach(k => { if (k === 'id' || (typeof k==='string'&&k.startsWith('_'))) return; if (lr[k] !== undefined && lr[k] !== '') data[k] = lr[k]; });
-            if (Object.keys(data).length) _fix.push({ id: String(lr.id), patientId: lr.patientId ?? null, recDate: (function(r){ const m=/^tr_\d+_(\d{4})_(\d{1,2})_(\d{1,2})$/.exec(String(r.id||'')); if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`; return null; })(lr), data });
-          });
-          if (_fix.length) { upsertTicketRows(storeId, _fix); syncLog('table-backfill', { n: _fix.length }); }
-        } catch (e) { console.warn('[ticket_records] 補完に失敗', e); }
         _lastTblSyncRef.current = rows.reduce((m, r) => { const t = r._savedAt ? new Date(r._savedAt).toISOString() : null; return (t && (!m || t > m)) ? t : m; }, null);
         setAppData(prev => {
           applyingRemoteRef.current = true;
-          // ★ テーブルを土台にしつつ、端末に「まだテーブルへ届いていない/端末内が新しい」記録があれば残す
-          //   (保存直後にリロードした等で、push が完了する前でも入力を失わない)
+          // ★ テーブルが唯一の正。 ただし「ごく最近この端末で保存し、まだテーブルへ反映されていない行」
+          //   だけは楽観的に保持する(保存直後リロードで自分の入力が一瞬消えないように)。
           const map = new Map(rows.map(r => [String(r.id), r]));
-          // 現state と localStorage の両方から、テーブルに無い/端末内が新しい記録を保持
-          _localRecs().forEach(lr => {
+          const _cut = Date.now() - 15000;   // 直近15秒に保存した行のみ保護
+          (Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).forEach(lr => {
             if (!lr || lr.id == null) return;
             const ex = map.get(String(lr.id));
-            if (!ex) { map.set(String(lr.id), lr); return; }
-            // 行としては新しい方を土台にしつつ、項目は「非空を優先」で統合(片方の空欄で消さない)
-            const base = (Number(lr._savedAt)||0) > (Number(ex._savedAt)||0) ? lr : ex;
-            const other = base === lr ? ex : lr;
-            const merged = { ...other, ...base };
-            Object.keys(other).forEach(k => { if ((merged[k] === undefined || merged[k] === '') && other[k] !== undefined && other[k] !== '') merged[k] = other[k]; });
-            map.set(String(lr.id), merged);
+            if ((Number(lr._savedAt) || 0) > _cut && (!ex || (Number(lr._savedAt) || 0) > (Number(ex._savedAt) || 0))) map.set(String(lr.id), lr);
           });
           return { ...prev, ticketRecords: [...map.values()] };
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length, ex: rows[0] ? { pid: rows[0].patientId, d: rows[0].date, y: rows[0].year } : null });
+        syncLog('table-initial', { n: rows.length });
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
         syncLog('table-initial-error', { err: String((e && e.message) || e).slice(0, 120) });
@@ -16708,49 +16676,11 @@ export default function App() {
         let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
-          // ★ 毎回のpullで: 端末内の「クラウドより新しい提供記録」を保持する(pull は丸ごと置換なので、
-          //   push が一時的に失敗している間に空のクラウドを受信すると入力が消える=空白バグを防ぐ)。
-          //   patient+日付+年 で突き合わせ、_savedAt が新しい方を採用。 墓石(削除済み)は復活させない。
-          // ★ 操作ログ方式に移行済みの場合、提供記録の実体は操作ログが持つ。 巨大JSON側の
-          //   ticketRecords はスナップショット(凍結)なので、ここで手元の値を混ぜてはいけない。
-          //   代わりに「手元の状態をそのまま保つ」= クラウドのスナップショットで上書きしない。
-          if (OPLOG_APPLY && (oplogState.readable || oplogState.writable) && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
-            // ★ 確定(compact_sync_ops)が実行されると、本体データに操作ログが取り込まれ __snapRevision が進む。
-            //   その場合はクラウドの確定済みデータを土台として受け入れ、取り込み済みリビジョンを進める。
-            //   (これが無いと、確定後に本体を無視し続けて他端末の確定内容を受け取れなくなる)
-            const _snapRev = Number(merged.__snapRevision) || 0;
-            if (_snapRev > (opsRevisionRef.current || 0) && Array.isArray(merged.ticketRecords)) {
-              opsRevisionRef.current = _snapRev;
-              syncLog('snapshot-adopted', { rev: _snapRev, recs: merged.ticketRecords.length });
-              // 確定より後の自分の未送信操作は、その上に載せ直す(リベース)
-              const _pend = pendingOps();
-              if (_pend.length) merged.ticketRecords = applyOps({ ticketRecords: merged.ticketRecords }, _pend, { now: syncNow() }).ticketRecords;
-            } else {
-              merged.ticketRecords = prev.ticketRecords;
-            }
-          } else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
-            try {
-              const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
-              const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
-              const map = new Map();
-              (Array.isArray(merged.ticketRecords) ? merged.ticketRecords : []).forEach(r => { if (r) map.set(keyOf(r), r); });
-              let _preserved = 0, _missing = 0;
-              prev.ticketRecords.forEach(r => {
-                if (!r) return;
-                if (r.id != null && tomb[String(r.id)]) return; // 削除済みは復活させない
-                const k = keyOf(r), ex = map.get(k);
-                // ★ クラウドに存在しない = push が届いていない記録。 これだけが「再送すべきもの」。
-                if (!ex) { map.set(k, r); _preserved++; _missing++; return; }
-                if ((Number(r._savedAt)||0) > (Number(ex._savedAt)||0)) { map.set(k, r); _preserved++; } // 端末内が新しければ表示は保持
-              });
-              // ★ 再送(push)するのは「クラウドに無い記録があるとき」だけにする。
-              //   以前は『端末内の方が新しい』だけで丸ごと押し戻していたため、時計が進んだ端末が
-              //   他端末の入力をクラウドから消し戻す(=同期が止まって見える)ループになっていた。
-              //   クラウドにもある記録の新旧判定は、項目単位マージを行う保存経路に任せる。
-              if (_preserved > 0) merged.ticketRecords = [...map.values()];
-              if (_missing > 0) _mergedForPush = merged;
-              if (_preserved > 0) syncLog('pull-preserve', { preserved: _preserved, missing: _missing });
-            } catch (e) { console.warn('[firstload merge] ticketRecords failed', e); }
+          // ★★ 提供記録(ticketRecords)は ticket_records テーブルが唯一の正。
+          //   巨大JSON(app_state)の pull では一切触らない = クラウドの古い ticketRecords で
+          //   手元(テーブル由来)を上書きしない。 これが今日の綱引き・データ消失の根本対策。
+          if (prev && prev._sbStoreId === newStoreId) {
+            merged.ticketRecords = Array.isArray(prev.ticketRecords) ? prev.ticketRecords : [];
           }
           // ★★ 提供記録以外の記録配列(体力測定・モニタリング・日誌・計画書・スケジュール等)も
           //   pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に受信が走ると、
@@ -17538,23 +17468,17 @@ export default function App() {
         && _storeMatch
         && (_hasRealData || options.allowEmpty);
       syncLog('save', { manual: !!options.manual, silent: !!options.silent, canPush: !!_canPush, recs: (newData.ticketRecords||[]).length });
-      // ★ 操作ログ方式: 提供記録の「変わった項目だけ」を操作としてキューへ積み、即送信する。
-      //   巨大JSONの往復とは独立に動くので、こちらが通れば入力は必ず残る。
-      if (OPLOG_ENABLED && _canPush) {
+      // ★ 提供記録は ticket_records テーブルが唯一の保存先。 変更した項目だけを送る
+      //   (触っていない項目は送らない=他端末の値を消さない)。 削除はテーブルからも消す。
+      if (_canPush) {
         try {
-          // ★ 直前の状態は appData(この呼び出し時点ではまだ更新前)。 上の try 内の `prev` は
-          //   スコープ外なのでここでは使えない(参照するとReferenceErrorで差分が作られなくなる)。
           const _prevRecs = (appData && appData.ticketRecords) || [];
-          // ★ 提供記録は ticket_records テーブルへ書き込む(変更項目だけ)。 これが正の保存先。
-          try {
-            const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
-            if (_rows.length) upsertTicketRows(staffSession.storeId, _rows);
-            // 削除された記録(振替取り消し等)はテーブルからも消す
-            const _nextIds = new Set((newData.ticketRecords || []).map(r => r && r.id != null ? String(r.id) : null));
-            const _removed = (_prevRecs || []).filter(r => r && r.id != null && !_nextIds.has(String(r.id))).map(r => String(r.id));
-            if (_removed.length) deleteTicketRecords(staffSession.storeId, _removed);
-          } catch (e) { console.warn('[ticket_records] 書き込みに失敗', e); }
-        } catch (e) { console.warn('[oplog] 差分の作成に失敗', e); syncLog('ops-diff-error', { err: String(e && e.message || e) }); }
+          const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
+          if (_rows.length) upsertTicketRows(staffSession.storeId, _rows);
+          const _nextIds = new Set((newData.ticketRecords || []).map(r => r && r.id != null ? String(r.id) : null));
+          const _removed = (_prevRecs || []).filter(r => r && r.id != null && !_nextIds.has(String(r.id))).map(r => String(r.id));
+          if (_removed.length) deleteTicketRecords(staffSession.storeId, _removed);
+        } catch (e) { console.warn('[ticket_records] 書き込みに失敗', e); syncLog('rows-write-error', { err: String(e && e.message || e).slice(0,120) }); }
       }
       if (_canPush) {
         // ★ 保存結果を監視: 失敗(CASリトライ上限=他端末が更新中／通信不良)なら明示通知 (静かに消えるのを防ぐ)。
