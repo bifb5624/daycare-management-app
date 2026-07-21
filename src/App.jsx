@@ -16494,7 +16494,7 @@ export default function App() {
         items.forEach(({ rec, deleted, updated_at }) => {
           const id = String(rec.id);
           if (updated_at && (!_lastTblSyncRef.current || updated_at > _lastTblSyncRef.current)) _lastTblSyncRef.current = updated_at;
-          if (deleted) { if (map.delete(id)) changed = true; return; }
+          if (deleted) return;   // ★ 削除は当面反映しない(データ消失防止)。 誤削除が全端末へ伝播するのを止める
           const ex = map.get(id);
           // 端末内が新しい(=保存直後で Realtime がまだ返っていない)場合は保持
           if (ex && (Number(ex._savedAt) || 0) > (Number(rec._savedAt) || 0)) return;
@@ -17475,9 +17475,8 @@ export default function App() {
           const _prevRecs = (appData && appData.ticketRecords) || [];
           const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
           if (_rows.length) upsertTicketRows(staffSession.storeId, _rows);
-          const _nextIds = new Set((newData.ticketRecords || []).map(r => r && r.id != null ? String(r.id) : null));
-          const _removed = (_prevRecs || []).filter(r => r && r.id != null && !_nextIds.has(String(r.id))).map(r => String(r.id));
-          if (_removed.length) deleteTicketRecords(staffSession.storeId, _removed);
+          // ★ 削除は当面行わない(データ消失防止)。 保存時に appData.ticketRecords が部分的だと
+          //   『newDataに無い=削除』と誤判定し、他日の記録まで消してしまう事故を防ぐ。
         } catch (e) { console.warn('[ticket_records] 書き込みに失敗', e); syncLog('rows-write-error', { err: String(e && e.message || e).slice(0,120) }); }
       }
       if (_canPush) {
