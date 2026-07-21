@@ -16656,8 +16656,8 @@ export default function App() {
           // ★ 反映を速くする: 受信を止めるのは「直前1.5秒以内に編集した」時だけにし、
           //   2.5秒以上受信していなければ編集中でも必ず受信する。
           //   (入力途中の欄は各画面の編集中ガードが守るので、ここを短くしても入力は消えない)
-          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 2500;
-          if (intentionalWindow || (since < 1500 && !_tooLongSinceApply)) {
+          const _tooLongSinceApply = (Date.now() - (lastAppliedAtRef.current || 0)) > 4000;
+          if (intentionalWindow || (since < 3000 && !_tooLongSinceApply)) {
             // 編集中 → pull せず再試行を次の interval に任せる
             if ((_pullSkipCount = (_pullSkipCount + 1) % 10) === 0) syncLog('pull-skip', { since });
             return;
@@ -16669,7 +16669,7 @@ export default function App() {
         //   ただし updated_at 判定の取りこぼし対策として、一定時間(10秒)反映が無ければ強制的に反映する
         //   (これが無いと「他端末の更新が自動で反映されず、再読み込みしないと出ない」不具合が起きる)。
         const _sig = row.updated_at || null;
-        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 2500;
+        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 4000;
         if (!forcePull && !_stale && _sig && lastAppliedSigRef.current === _sig) {
           dataLoadedForStoreRef.current = newStoreId;
           storeTransitionRef.current = false;
@@ -16726,6 +16726,31 @@ export default function App() {
               if (_missing > 0) _mergedForPush = merged;
               if (_preserved > 0) syncLog('pull-preserve', { preserved: _preserved, missing: _missing });
             } catch (e) { console.warn('[firstload merge] ticketRecords failed', e); }
+          }
+          // ★★ 提供記録以外の記録配列(体力測定・モニタリング・日誌・計画書・スケジュール等)も
+          //   pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に受信が走ると、
+          //   まだクラウドに無い/端末内が新しい記録が古いクラウド値で消える
+          //   (体力測定を保存→一瞬出て消える、の原因)。 id 単位で「端末内が新しい/クラウドに無い」を保持。
+          if (prev && prev._sbStoreId === newStoreId) {
+            const _RK = ['fitnessRecords','monitoringRecords','dailyLogs','initialReports','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory'];
+            _RK.forEach(_key => {
+              const _prevArr = prev[_key];
+              if (!Array.isArray(_prevArr) || !_prevArr.length) return;
+              try {
+                const _tomb = (merged.deletedIds && merged.deletedIds[_key]) || {};
+                const _map = new Map();
+                (Array.isArray(merged[_key]) ? merged[_key] : []).forEach(r => { if (r && r.id != null) _map.set(String(r.id), r); });
+                let _kept = 0;
+                _prevArr.forEach(r => {
+                  if (!r || r.id == null) return;
+                  if (_tomb[String(r.id)]) return;                 // 削除済みは復活させない
+                  const _ex = _map.get(String(r.id));
+                  if (!_ex) { _map.set(String(r.id), r); _kept++; return; }       // クラウドに無い=push未達 → 保持
+                  if ((Number(r._savedAt)||0) > (Number(_ex._savedAt)||0)) { _map.set(String(r.id), r); _kept++; } // 端末内が新しい → 保持
+                });
+                if (_kept > 0) { merged[_key] = [..._map.values()]; _mergedForPush = merged; syncLog('pull-preserve', { key: _key, kept: _kept }); }
+              } catch (e) { console.warn('[pull preserve] ' + _key + ' failed', e); }
+            });
           }
           // ★ 設定オブジェクトも pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に
           //   4秒ポーリングが走ると、まだクラウドに無いローカルの変更が古いクラウド値で消える。
@@ -18234,6 +18259,18 @@ export default function App() {
               「押しても更新されない/しばらく経ってから反映」という症状になる。
               キャッシュとService Workerを消してから、URLに印を付けて確実に取り直す。 */}
           <button onClick={async ()=>{
+            // ★ リロードで入力が消えないよう、先に未保存を確実にクラウドへ送り切る。
+            try {
+              const ae = document.activeElement; if (ae && typeof ae.blur === 'function') ae.blur();  // 入力欄を確定
+            } catch {}
+            try {
+              // 直近の appData を即時クラウド保存(debounce待ちを飛ばす)＋操作ログの未送信を送り切る
+              if (isSupabaseEnabled && staffSession?.storeId) {
+                await supabaseMergeAndSyncStateForStore(staffSession.storeId, appDataRef.current || appData);
+                try { await flushOps(staffSession.storeId); } catch {}
+              }
+            } catch (e) { console.warn('[update] 保存に失敗、リロードを中止', e);
+              setToastMsg('⚠ 保存に失敗しました。通信を確認してから更新してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); return; }
             try {
               if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }
             } catch {}
