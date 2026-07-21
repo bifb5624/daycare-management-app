@@ -20978,11 +20978,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             {(() => {
               const _pid = patientInfoModal.id;
               const _go = (view) => { setPatientInfoModal(null); navigateTo && navigateTo(view, _pid); };
+              // ★ 個人ファイルを直接開く: マスタ画面が起動時に読む sessionStorage 経由でファイルを開かせる
+              const _goFile = () => {
+                setPatientInfoModal(null);
+                try { sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({ patientId: _pid, tab: 'cat_1' })); } catch {}
+                navigateTo && navigateTo('master', _pid);
+              };
               // ★ 体力測定は施設の対象設定(fitnessTargets)に合わせて表示 (未設定=全員表示)
               const _ftargets = appData.systemSettings?.fitnessTargets;
               const _showFit = !_ftargets ? true : (_ftargets.length > 0 && _ftargets.includes(patientInfoModal.careLevel||''));
               const _navs = [
                 { view:'master',        label:'利用者マスタ',     icon:<Users size={16}/> },
+                { view:'__file',        label:'個人ファイル',     icon:<BookOpen size={16}/>, onClick:_goFile },
                 { view:'ticket',        label:'サービス提供記録', icon:<FileText size={16}/> },
                 { view:'print',         label:'連絡帳',           icon:<Printer size={16}/> },
                 { view:'dash_personal', label:'分析（個人）',     icon:<BarChart3 size={16}/> },
@@ -20992,7 +20999,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               return (
                 <div className="grid grid-cols-3 gap-2 mb-4">
                   {_navs.map(n => (
-                    <button key={n.view} onClick={()=>_go(n.view)}
+                    <button key={n.view} onClick={()=> n.onClick ? n.onClick() : _go(n.view)}
                       className="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-600 hover:text-blue-600 active:scale-95 transition-all">
                       {n.icon}<span className="text-[11px] font-bold">{n.label}</span>
                     </button>
