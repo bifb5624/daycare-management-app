@@ -38,6 +38,11 @@ import {
   queueRecordDiff,
   diffRecordRows,
   upsertTicketRows,
+  deleteTicketRecords,
+  TABLE_ENABLED,
+  fetchTicketRecords,
+  fetchTicketRecordsSince,
+  subscribeTicketRecords,
   flushOps,
   fetchOpsSince,
   fetchAllOpsSince,
@@ -16467,105 +16472,92 @@ export default function App() {
   }, [staffSession?.storeId]);
 
   // =========================================================
-  // ★ 操作ログ同期 (提供記録)
-  //   巨大JSONの pull/push とは独立して動く。 流れ:
-  //     ① 前回終了時に送れなかった操作をキューから復元して再送
-  //     ② スナップショット(巨大JSON)より新しい操作をまとめて取得し、状態へ畳み込む
-  //     ③ 以後は Realtime で他端末の操作を受け取り、変わった項目だけを反映
-  //   ★ 適用時は必ず「受信した操作 + 自分の未送信操作」の順で畳み込む(リベース)。
-  //     これを怠ると、他端末の更新を受け取った瞬間に自分の入力途中が消える。
-  // =========================================================
-  const opsRevisionRef = React.useRef(0);   // 最後に取り込んだリビジョン
+  // ★ 提供記録の同期 = ticket_records テーブル(1記録=1行)を唯一の正として読む。
+  //   端末の時計は使わず、順序も更新時刻もサーバー(updated_at)。 起動時に全行取得 → Realtime で差分受信。
+  //   テーブルが読めた端末だけが oplogState を切り替える(読めなければ従来方式のまま=安全なフォールバック)。
+  const opsRevisionRef = React.useRef(0);
   const opsReadyRef = React.useRef(false);
-  // 非同期処理から最新の appData を参照するための鏡 (state を依存に入れると購読が張り直されるため)
   const appDataRef = React.useRef(appData);
   appDataRef.current = appData;
+  const _lastTblSyncRef = React.useRef(null);   // 最後に取り込んだ updated_at
   useEffect(() => {
-    if (!OPLOG_ENABLED || !isSupabaseEnabled || !staffSession?.storeId) return;
+    if (!TABLE_ENABLED || !isSupabaseEnabled || !staffSession?.storeId) return;
     const storeId = staffSession.storeId;
     let stopped = false, unsubscribe = null;
 
-    // 受信した操作を状態へ反映する (自分が送った操作は既に画面へ反映済みなので無視)
-    const applyIncoming = (ops) => {
-      if (stopped || !ops || !ops.length) return;
-      const fresh = ops.filter(o => o && Number(o.revision) > opsRevisionRef.current);
-      if (fresh.length) opsRevisionRef.current = Math.max(opsRevisionRef.current, ...fresh.map(o => Number(o.revision) || 0));
-      const others = fresh.filter(o => o.senderId !== opSenderId);
-      if (!others.length) return;
-      // 操作ログの読み取りに成功していない端末では反映しない(従来方式のまま動かす)。
-      if (!OPLOG_APPLY || !(oplogState.readable || oplogState.writable)) { syncLog('ops-recv-skip', { n: others.length, rev: opsRevisionRef.current }); return; }
-      syncLog('ops-recv', { n: others.length, rev: opsRevisionRef.current });
-      applyingRemoteRef.current = true;   // pull 由来と同じ扱い = 巨大JSONを押し戻さない
-      setAppData(prevState => applyOps(prevState, others.concat(pendingOps()), { now: syncNow() }));
+    // テーブルの行を appData.ticketRecords へ反映する。 手元が新しい(未送信の編集)ものは消さない。
+    const applyRows = (items) => {
+      if (stopped || !items || !items.length) return;
+      setAppData(prev => {
+        const map = new Map((Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).map(r => [String(r.id), r]));
+        let changed = false;
+        items.forEach(({ rec, deleted, updated_at }) => {
+          const id = String(rec.id);
+          if (updated_at && (!_lastTblSyncRef.current || updated_at > _lastTblSyncRef.current)) _lastTblSyncRef.current = updated_at;
+          if (deleted) { if (map.delete(id)) changed = true; return; }
+          const ex = map.get(id);
+          // 端末内が新しい(=保存直後で Realtime がまだ返っていない)場合は保持
+          if (ex && (Number(ex._savedAt) || 0) > (Number(rec._savedAt) || 0)) return;
+          map.set(id, rec); changed = true;
+        });
+        if (!changed) return prev;
+        applyingRemoteRef.current = true;   // pull 由来と同じ = 巨大JSONへ押し戻さない
+        return { ...prev, ticketRecords: [...map.values()] };
+      });
     };
 
     const boot = async () => {
-      // ★ 操作ログの取得は巨大JSONの読込を待たずに先に始める(再読み込み直後に古い内容が
-      //   数秒表示される「一瞬データが消えたように見える」現象を短くするため)
-      const since0 = Number(appDataRef.current?.__snapRevision) || 0;
-      const prefetch = fetchAllOpsSince(storeId, since0).catch(() => null);
-      // ★ 待つのは「土台となる状態が手元にあるか」だけでよい。
-      //   端末に前回の状態(localStorage由来)が残っていれば、数MBの全体データの受信を待たずに
-      //   その場で操作ログを当てられる = 再読み込み後すぐ最新が表示される。
-      //   (全体データは後から届くが、提供記録は凍結済みなので表示を乱さない)
-      const hasLocalBase = () => {
-        const a = appDataRef.current;
-        return !!(a && a._sbStoreId === storeId && Array.isArray(a.ticketRecords));
-      };
-      for (let i = 0; i < 600 && !stopped; i++) {
-        if (dataLoadedForStoreRef.current === storeId || hasLocalBase()) break;
-        await new Promise(r => setTimeout(r, 100));
-      }
-      if (stopped) return;
-      await restorePendingOps();
-      if (pendingCount() > 0) {
-        syncLog('ops-restore', { pending: pendingCount() });
-        flushOps(storeId);   // 前回送れなかった分をまず再送
-      }
       try {
-        const since = since0;
-        opsRevisionRef.current = since;
-        const ops = (await prefetch) || (await fetchAllOpsSince(storeId, since));
-        // ★ 読み取り成功 = 受信した操作を反映してよい(適用の前に立てる)
+        const rows = await fetchTicketRecords(storeId);
+        if (stopped) return;
         oplogState.readable = true;
-        // ★ この店舗に操作ログが既にある = 既に操作ログ方式へ移行済み。
-        //   送信成功を待たずにモードを確定させる(待つ間に旧方式の受信が古い値で上書きしてしまうため)
-        if (ops.length > 0) markOplogWritable();
-        syncLog('ops-initial', { n: ops.length, since, readable: true, mode: oplogState.writable ? 'oplog' : 'legacy' });
-        applyIncoming(ops);
+        markOplogWritable();
+        _lastTblSyncRef.current = rows.reduce((m, r) => { const t = r._savedAt ? new Date(r._savedAt).toISOString() : null; return (t && (!m || t > m)) ? t : m; }, null);
+        setAppData(prev => {
+          applyingRemoteRef.current = true;
+          // ★ テーブルを土台にしつつ、端末に「まだテーブルへ届いていない/端末内が新しい」記録があれば残す
+          //   (保存直後にリロードした等で、push が完了する前でも入力を失わない)
+          const map = new Map(rows.map(r => [String(r.id), r]));
+          (Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).forEach(lr => {
+            if (!lr || lr.id == null) return;
+            const ex = map.get(String(lr.id));
+            if (!ex || (Number(lr._savedAt) || 0) > (Number(ex._savedAt) || 0)) map.set(String(lr.id), lr);
+          });
+          return { ...prev, ticketRecords: [...map.values()] };
+        });
         opsReadyRef.current = true;
         setOpsLoading(false);
+        syncLog('table-initial', { n: rows.length });
       } catch (e) {
-        console.warn('[oplog] 初回取得に失敗', e);
-        syncLog('ops-initial-error', { err: String((e && e.message) || e) });
+        console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
+        syncLog('table-initial-error', { err: String((e && e.message) || e).slice(0, 120) });
         setOpsLoading(false);
       }
       if (stopped) return;
-      unsubscribe = subscribeOps(storeId, applyIncoming);
+      unsubscribe = subscribeTicketRecords(storeId, applyRows);
     };
     boot();
 
-    // 保険: Realtime が届かない環境でも 5 秒ごとに差分を取りに行く。 未送信があれば再送も行う。
+    // 保険: Realtime が届かない環境でも 6 秒ごとに差分を取りに行く
     const timer = setInterval(async () => {
       if (stopped || !opsReadyRef.current) return;
       try {
-        if (pendingCount() > 0) await flushOps(storeId);
-        const ops = await fetchOpsSince(storeId, opsRevisionRef.current);
-        if (ops.length) applyIncoming(ops);
+        const since = _lastTblSyncRef.current || new Date(Date.now() - 60000).toISOString();
+        const items = await fetchTicketRecordsSince(storeId, since);
+        if (items.length) applyRows(items);
       } catch (e) { /* 次回に任せる */ }
-    }, 5000);
+    }, 6000);
 
-    // 復帰・オンライン復旧の瞬間に必ず再送する (iOS のサスペンド対策)
-    const onWake = () => { if (document.visibilityState !== 'hidden') { try { flushOps(storeId); } catch {} } };
+    const onWake = () => { if (document.visibilityState !== 'hidden' && opsReadyRef.current) {
+      (async () => { try { const items = await fetchTicketRecordsSince(storeId, _lastTblSyncRef.current || new Date(Date.now()-60000).toISOString()); if (items.length) applyRows(items); } catch {} })();
+    } };
     document.addEventListener('visibilitychange', onWake);
-    window.addEventListener('online', onWake);
     window.addEventListener('focus', onWake);
 
     return () => {
       stopped = true; clearInterval(timer);
       try { unsubscribe && unsubscribe(); } catch {}
       document.removeEventListener('visibilitychange', onWake);
-      window.removeEventListener('online', onWake);
       window.removeEventListener('focus', onWake);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -17520,19 +17512,15 @@ export default function App() {
           // ★ 直前の状態は appData(この呼び出し時点ではまだ更新前)。 上の try 内の `prev` は
           //   スコープ外なのでここでは使えない(参照するとReferenceErrorで差分が作られなくなる)。
           const _prevRecs = (appData && appData.ticketRecords) || [];
-          // 【移行フェーズ1】専用テーブルへも同時に書き込む(読み取りは従来どおり=動作は変わらない)
+          // ★ 提供記録は ticket_records テーブルへ書き込む(変更項目だけ)。 これが正の保存先。
           try {
             const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
             if (_rows.length) upsertTicketRows(staffSession.storeId, _rows);
-          } catch (e) { console.warn('[ticket_records] 差分作成に失敗', e); }
-          const _n = queueRecordDiff(_prevRecs, newData.ticketRecords, 'ticketRecords');
-          if (_n > 0) {
-            syncLog('ops-queued', { n: _n, pending: pendingCount() });
-            flushOps(staffSession.storeId).then(r => {
-              if (r && r.ok) { if (r.acked) syncLog('ops-acked', { n: r.acked, rev: r.maxRevision }); }
-              else syncLog('ops-send-fail', { pending: pendingCount(), err: r && r.error });
-            });
-          }
+            // 削除された記録(振替取り消し等)はテーブルからも消す
+            const _nextIds = new Set((newData.ticketRecords || []).map(r => r && r.id != null ? String(r.id) : null));
+            const _removed = (_prevRecs || []).filter(r => r && r.id != null && !_nextIds.has(String(r.id))).map(r => String(r.id));
+            if (_removed.length) deleteTicketRecords(staffSession.storeId, _removed);
+          } catch (e) { console.warn('[ticket_records] 書き込みに失敗', e); }
         } catch (e) { console.warn('[oplog] 差分の作成に失敗', e); syncLog('ops-diff-error', { err: String(e && e.message || e) }); }
       }
       if (_canPush) {
