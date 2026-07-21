@@ -16692,11 +16692,26 @@ export default function App() {
         let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
-          // ★★ 提供記録(ticketRecords)は ticket_records テーブルが唯一の正。
-          //   巨大JSON(app_state)の pull では一切触らない = クラウドの古い ticketRecords で
-          //   手元(テーブル由来)を上書きしない。 これが今日の綱引き・データ消失の根本対策。
-          if (prev && prev._sbStoreId === newStoreId) {
-            merged.ticketRecords = Array.isArray(prev.ticketRecords) ? prev.ticketRecords : [];
+          // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/
+          //   端末内が新しい(=まだpushされていない)記録」を保持して消えないようにする。
+          //   墓石(削除済み)は復活させない。 patient+日付+年 で突き合わせ。
+          if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+            try {
+              const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
+              const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
+              const map = new Map();
+              (Array.isArray(merged.ticketRecords) ? merged.ticketRecords : []).forEach(r => { if (r) map.set(keyOf(r), r); });
+              let _preserved = 0, _missing = 0;
+              prev.ticketRecords.forEach(r => {
+                if (!r) return;
+                if (r.id != null && tomb[String(r.id)]) return;
+                const k = keyOf(r), ex = map.get(k);
+                if (!ex) { map.set(k, r); _preserved++; _missing++; return; }
+                if ((Number(r._savedAt)||0) > (Number(ex._savedAt)||0)) { map.set(k, r); _preserved++; }
+              });
+              if (_preserved > 0) merged.ticketRecords = [...map.values()];
+              if (_missing > 0) _mergedForPush = merged;
+            } catch (e) { console.warn('[pull merge] ticketRecords failed', e); }
           }
           // ★★ 提供記録以外の記録配列(体力測定・モニタリング・日誌・計画書・スケジュール等)も
           //   pull で保持する。 pull は丸ごと置換なので、保存(push)が完了する前に受信が走ると、
@@ -16985,7 +17000,7 @@ export default function App() {
   const [syncStalled, setSyncStalled] = useState(0); // 0=正常 / >0=未同期の秒数
   // ★ 再読み込み直後、操作ログの反映が終わるまでは「読込中」を出す。
   //   これが無いと、古いスナップショットが数秒表示され「入力が消えた?」と誤解させてしまう。
-  const [opsLoading, setOpsLoading] = useState(true);
+  const [opsLoading, setOpsLoading] = useState(TABLE_ENABLED);   // 巨大JSON方式では読込中オーバーレイを出さない
   useEffect(() => { const t = setTimeout(() => setOpsLoading(false), 8000); return () => clearTimeout(t); }, []);
   const [printPreviewContent, setPrintPreviewContent] = useState(null);
   useEffect(()=>{
@@ -17484,9 +17499,9 @@ export default function App() {
         && _storeMatch
         && (_hasRealData || options.allowEmpty);
       syncLog('save', { manual: !!options.manual, silent: !!options.silent, canPush: !!_canPush, recs: (newData.ticketRecords||[]).length });
-      // ★ 提供記録は ticket_records テーブルが唯一の保存先。 変更した項目だけを送る
-      //   (触っていない項目は送らない=他端末の値を消さない)。 削除はテーブルからも消す。
-      if (_canPush) {
+      // ★ テーブル方式のときだけ ticket_records へ書き込む。 巨大JSON方式(TABLE_ENABLED=false)では
+      //   下の mergeAndSyncStateForStore が提供記録も含めて保存するので、ここは何もしない。
+      if (TABLE_ENABLED && _canPush) {
         try {
           const _prevRecs = (appData && appData.ticketRecords) || [];
           const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
