@@ -27879,6 +27879,69 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
 
 // === MasterView (利用者マスタ管理) ===
 // === 日付範囲ピッカー ===
+// ★ 和暦でも西暦でも入力できる日付欄。 行政書類(保険証・負担割合証)向け。
+//   ・カレンダー(西暦)でも選べる  ・元号＋年＋月＋日 のプルダウン(和暦)でも選べる
+//   ・下に「令和○年○月○日」を常に表示して確認できる
+//   value/onChange は ISO文字列 'YYYY-MM-DD'。
+// 改元日で正確に判定する(base=元年の前年, from=元号の開始日ISO)
+const WK_ERAS = [
+  { name: '令和', base: 2018, from: '2019-05-01' },
+  { name: '平成', base: 1988, from: '1989-01-08' },
+  { name: '昭和', base: 1925, from: '1926-12-25' },
+];
+function isoToWareki(iso) {
+  if (!iso) return null;
+  const d = new Date(iso); if (isNaN(d.getTime())) return null;
+  const key = iso.slice(0, 10);
+  const y = d.getFullYear();
+  const era = WK_ERAS.find(e => key >= e.from) || WK_ERAS[WK_ERAS.length - 1];
+  return { era: era.name, ey: y - era.base, y, m: d.getMonth() + 1, day: d.getDate() };
+}
+function warekiLabel(iso) {
+  const w = isoToWareki(iso);
+  return w ? `${w.era}${w.ey}年${w.m}月${w.day}日` : '';
+}
+function WarekiDateInput({ value, onChange, disabled }) {
+  const w = isoToWareki(value);
+  const setPart = (patch) => {
+    const cur = w || { era: '令和', ey: new Date().getFullYear() - 2018, m: new Date().getMonth() + 1, day: 1 };
+    const next = { ...cur, ...patch };
+    const eraDef = WK_ERAS.find(e => e.name === next.era) || WK_ERAS[0];
+    const year = eraDef.base + Number(next.ey || 1);
+    const dim = new Date(year, Number(next.m), 0).getDate();
+    const day = Math.min(Number(next.day || 1), dim);
+    const iso = `${year}-${String(Number(next.m)).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    onChange(iso);
+  };
+  const selCls = "px-1.5 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:bg-slate-100";
+  return (
+    <span className="inline-flex flex-col gap-1">
+      <span className="inline-flex items-center gap-1 flex-wrap">
+        {/* 西暦カレンダー */}
+        <input type="date" value={value||''} disabled={disabled} onChange={e=>onChange(e.target.value)}
+          className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:bg-slate-100" style={{maxWidth:150}}/>
+        <span className="text-[10px] text-slate-400">または和暦→</span>
+        {/* 和暦プルダウン */}
+        <select value={w?.era||'令和'} disabled={disabled} onChange={e=>setPart({era:e.target.value})} className={selCls}>
+          {WK_ERAS.map(e=><option key={e.name} value={e.name}>{e.name}</option>)}
+        </select>
+        <select value={w?.ey||''} disabled={disabled} onChange={e=>setPart({ey:e.target.value})} className={selCls}>
+          <option value="">年</option>{Array.from({length:64},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <span className="text-[11px] text-slate-500">年</span>
+        <select value={w?.m||''} disabled={disabled} onChange={e=>setPart({m:e.target.value})} className={selCls}>
+          <option value="">月</option>{Array.from({length:12},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <span className="text-[11px] text-slate-500">月</span>
+        <select value={w?.day||''} disabled={disabled} onChange={e=>setPart({day:e.target.value})} className={selCls}>
+          <option value="">日</option>{Array.from({length:31},(_,i)=>i+1).map(n=><option key={n} value={n}>{n}</option>)}
+        </select>
+        <span className="text-[11px] text-slate-500">日</span>
+      </span>
+      {w && <span className="text-[11px] font-bold text-blue-700">{warekiLabel(value)}</span>}
+    </span>
+  );
+}
 function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disabled }) {
   const [open, setOpen] = React.useState(false);
   const [inFrom, setInFrom] = React.useState(fromValue||'');
@@ -40106,9 +40169,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         <div>
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">認定有効期間</label>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <input type="date" value={patient.careLevelFrom||''} onChange={e=>saveMaster({careLevelFrom:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <WarekiDateInput value={patient.careLevelFrom||''} onChange={v=>saveMaster({careLevelFrom:v})}/>
                             <span className="text-slate-400">〜</span>
-                            <input type="date" value={patient.careLevelTo||''} onChange={e=>saveMaster({careLevelTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <WarekiDateInput value={patient.careLevelTo||''} onChange={v=>saveMaster({careLevelTo:v})}/>
                           </div>
                           <div className="flex items-center gap-1 flex-wrap mt-1">
                             <span className="text-[10px] font-bold text-slate-400">期間を自動設定</span>
@@ -40129,9 +40192,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         <div className="mt-2">
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">有効期間（負担割合証は通常1年。開始日を入れると1年後を自動設定）</label>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <input type="date" value={patient.costBurdenFrom||''} onChange={e=>{ const v=e.target.value; const patch={costBurdenFrom:v}; if(v){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); patch.costBurdenTo=d.toISOString().slice(0,10); } saveMaster(patch); }} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <WarekiDateInput value={patient.costBurdenFrom||''} onChange={v=>{ const patch={costBurdenFrom:v}; if(v){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); patch.costBurdenTo=d.toISOString().slice(0,10); } saveMaster(patch); }}/>
                             <span className="text-slate-400">〜</span>
-                            <input type="date" value={patient.costBurdenTo||''} onChange={e=>saveMaster({costBurdenTo:e.target.value})} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                            <WarekiDateInput value={patient.costBurdenTo||''} onChange={v=>saveMaster({costBurdenTo:v})}/>
                           </div>
                         </div>
                         <ValueHistoryList title="負担割合の変更履歴" hist={patient.costBurdenHistory} onChangeHist={(nh)=>savePatientTop({costBurdenHistory:nh},{manual:true,message:'✓ 履歴を更新しました'})} valueOptions={['70%','80%','90%']} />
