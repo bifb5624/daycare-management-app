@@ -27634,12 +27634,21 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
               };
               const isFirst = (p) => records.filter(r=>r.patientId===p.id && _hasFitVals(r)).length === 0;
               const now2 = new Date(); now2.setHours(0,0,0,0);
-              // 当日出席者IDセット
+              // 当日出席者IDセット。 ★ AM/PM 選択時は、その時間帯に該当する利用者だけを「当日出席」にする
+              //   (AM表示なら午前に来る人、PM表示なら午後に来る人。 提供記録入力と同じ基準=利用者の基本利用日)
               const _sd = selectedDate ? new Date(selectedDate) : now2;
+              const _sdDow = _sd.getDay();
+              const _matchAmpm = (p) => {
+                if(!sharedAmpm || sharedAmpm==='1日') return true;
+                const sch = p?.scheduleAmPm?.[_sdDow] || '';
+                return sch===sharedAmpm || sch==='1日';
+              };
               const todayPresentIds = new Set((appData.ticketRecords||[]).filter(r=>{
                 const mm=r.date.match(/(\d+)月(\d+)日/);
                 if(!mm) return false;
-                return parseInt(mm[1])===_sd.getMonth()+1 && parseInt(mm[2])===_sd.getDate() && r.status==='出席';
+                if(!(parseInt(mm[1])===_sd.getMonth()+1 && parseInt(mm[2])===_sd.getDate() && r.status==='出席')) return false;
+                const _p = (appData.patients||[]).find(pp=>pp.id===r.patientId);
+                return _matchAmpm(_p);
               }).map(r=>r.patientId));
               const withDue = filtered.map(p=>({ p, due: getNextDue(p), present: todayPresentIds.has(p.id) }));
               const overdue = withDue.filter(({due})=>due&&due<now2).sort((a,b)=>a.due-b.due);
