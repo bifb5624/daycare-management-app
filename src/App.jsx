@@ -16485,7 +16485,19 @@ export default function App() {
     const storeId = staffSession.storeId;
     let stopped = false, unsubscribe = null;
 
-    // テーブルの行を appData.ticketRecords へ反映する。 手元が新しい(未送信の編集)ものは消さない。
+    // ★ 非空優先マージ: 受信した行(テーブル)の「入っている項目だけ」を手元へ反映する。
+    //   テーブルの空項目で手元の入力を消さない。 exercises 等のオブジェクトはキー単位で同様に統合。
+    const _mergeNonEmpty = (base, incoming) => {
+      const out = { ...(base || {}) };
+      Object.keys(incoming || {}).forEach(k => {
+        if (k === 'id' || k === '_savedAt' || k === '_fieldTs') return;
+        const iv = incoming[k];
+        if (iv && typeof iv === 'object' && !Array.isArray(iv)) out[k] = _mergeNonEmpty(out[k] || {}, iv);
+        else if (iv !== undefined && iv !== '') out[k] = iv;
+      });
+      return out;
+    };
+    // テーブルの行を appData.ticketRecords へ反映する。 手元の入力は空で消さない(非空優先マージ)。
     const applyRows = (items) => {
       if (stopped || !items || !items.length) return;
       setAppData(prev => {
@@ -16496,9 +16508,11 @@ export default function App() {
           if (updated_at && (!_lastTblSyncRef.current || updated_at > _lastTblSyncRef.current)) _lastTblSyncRef.current = updated_at;
           if (deleted) return;   // ★ 削除は当面反映しない(データ消失防止)。 誤削除が全端末へ伝播するのを止める
           const ex = map.get(id);
-          // 端末内が新しい(=保存直後で Realtime がまだ返っていない)場合は保持
-          if (ex && (Number(ex._savedAt) || 0) > (Number(rec._savedAt) || 0)) return;
-          map.set(id, rec); changed = true;
+          if (!ex) { map.set(id, rec); changed = true; return; }
+          const m = _mergeNonEmpty(ex, rec);
+          m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(rec._savedAt) || 0);
+          let differs; try { differs = JSON.stringify(m) !== JSON.stringify(ex); } catch { differs = true; }
+          if (differs) { map.set(id, m); changed = true; }
         });
         if (!changed) return prev;
         applyingRemoteRef.current = true;   // pull 由来と同じ = 巨大JSONへ押し戻さない
@@ -16515,14 +16529,16 @@ export default function App() {
         _lastTblSyncRef.current = rows.reduce((m, r) => { const t = r._savedAt ? new Date(r._savedAt).toISOString() : null; return (t && (!m || t > m)) ? t : m; }, null);
         setAppData(prev => {
           applyingRemoteRef.current = true;
-          // ★ テーブルが唯一の正。 ただし「ごく最近この端末で保存し、まだテーブルへ反映されていない行」
-          //   だけは楽観的に保持する(保存直後リロードで自分の入力が一瞬消えないように)。
+          // ★ テーブルを土台にしつつ、手元(localStorage由来)の記録も非空優先で統合する。
+          //   どちらの非空も残す = テーブルの部分データで手元を消さない、手元の古い空でテーブルを消さない。
           const map = new Map(rows.map(r => [String(r.id), r]));
-          const _cut = Date.now() - 15000;   // 直近15秒に保存した行のみ保護
           (Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).forEach(lr => {
             if (!lr || lr.id == null) return;
             const ex = map.get(String(lr.id));
-            if ((Number(lr._savedAt) || 0) > _cut && (!ex || (Number(lr._savedAt) || 0) > (Number(ex._savedAt) || 0))) map.set(String(lr.id), lr);
+            if (!ex) { map.set(String(lr.id), lr); return; }
+            const m = _mergeNonEmpty(ex, lr);      // 手元(lr)の非空を優先で上書き
+            m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(lr._savedAt) || 0);
+            map.set(String(lr.id), m);
           });
           return { ...prev, ticketRecords: [...map.values()] };
         });
