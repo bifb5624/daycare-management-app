@@ -19282,7 +19282,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (!snap || !Array.isArray(snap.recs)) return;
     // ★ 復元は全端末へ「最新」として反映される。 他端末の新しい入力を誤って消さないよう確認する。
     const _when = snap.t ? new Date(snap.t).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-    if (!window.confirm(`【元に戻す】\nこの端末に保存された${_when?`（${_when} 時点の）`:''}記録を、全端末に「最新」として反映します。\n\n他の端末で入力した、これより新しい内容がある場合は上書きされます。\n復元してよろしいですか？`)) return;
+    // ★ 現在クラウド上の「最終更新した端末・時刻」(_lastSync)を注意書きに出す。 復元で上書きされる相手が誰かを明示する。
+    const _ls = appData._lastSync;
+    const _lsWhen = (_ls && _ls.at && !isNaN(new Date(_ls.at).getTime())) ? new Date(_ls.at).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const _lsDevice = (_ls && _ls.device) || '';
+    const _thisName = (deviceName || 'この端末');
+    // このスナップショットより後に、別の端末が更新している場合は強めに警告する。
+    const _newerElsewhere = !!(_ls && _ls.at && snap.t && _ls.at > snap.t && _lsDevice && _lsDevice !== (deviceName || '名称未設定の端末'));
+    let _msg = `【元に戻す】\nこの端末${deviceName?`（${deviceName}）`:''}に保存された${_when?`（${_when} 時点の）`:''}記録を、全端末に「最新」として反映します。\n`;
+    if (_lsWhen) _msg += `\n現在の最新: 「${_lsDevice || '名称未設定の端末'}」が ${_lsWhen} に更新\n`;
+    if (_newerElsewhere) _msg += `\n⚠ この履歴（${_when}）より新しい更新が別の端末「${_lsDevice}」にあります。\n復元すると、その新しい内容が上書きされます。\n`;
+    _msg += `\n他の端末で入力した、これより新しい内容がある場合は上書きされます。\n復元してよろしいですか？`;
+    if (!window.confirm(_msg)) return;
     const dObj = new Date(selectedDate);
     const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
     // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
