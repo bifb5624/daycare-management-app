@@ -19253,6 +19253,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   };
   const _restoreRecSnap = (snap) => {
     if (!snap || !Array.isArray(snap.recs)) return;
+    // ★ 復元は全端末へ「最新」として反映される。 他端末の新しい入力を誤って消さないよう確認する。
+    const _when = snap.t ? new Date(snap.t).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    if (!window.confirm(`【元に戻す】\nこの端末に保存された${_when?`（${_when} 時点の）`:''}記録を、全端末に「最新」として反映します。\n\n他の端末で入力した、これより新しい内容がある場合は上書きされます。\n復元してよろしいですか？`)) return;
     const dObj = new Date(selectedDate);
     const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
     // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
