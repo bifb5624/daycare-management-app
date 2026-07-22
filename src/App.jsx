@@ -28258,6 +28258,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [newPatientKanaLast, setNewPatientKanaLast] = useState('');
   const [newPatientKanaFirst, setNewPatientKanaFirst] = useState('');
   const [careLevelModal, setCareLevelModal] = useState(null); // {newValue, from, to, note, isCostBurden}
+  // ★ 介護度 適用期間の編集下書き。 null=保存値をそのまま表示。 カレンダーで編集すると下書きに溜め、
+  //   「この期間で保存」を押したときだけ commitLP で保存する(選択即保存を避ける)。
+  const [careLevelPeriodDraft, setCareLevelPeriodDraft] = useState(null); // {from,to} | null
+  React.useEffect(() => { setCareLevelPeriodDraft(null); }, [localPatient?.id]);
   const [cmChangeModal, setCmChangeModal] = useState(null); // {office, name, from, note}
   const [editHistModal, setEditHistModal] = useState(null); // {type, idx, entry}
   const [deleteHistConfirm, setDeleteHistConfirm] = useState(null); // {type, idx}
@@ -29434,7 +29438,21 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {/* 介護度 適用期間 (横幅広めなので独立行) */}
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度 適用期間</label>
-                  <div style={{maxWidth:380}}><DateRangePicker fromValue={localPatient.careLevelFrom||''} toValue={localPatient.careLevelTo||''} onFromChange={v=>updateLP('careLevelFrom',v)} onToChange={v=>updateLP('careLevelTo',v)} disabled={isOff}/></div>
+                  {/* ★ 選択即保存をやめ、下書きに溜めて「この期間で保存」を押したときだけ確定する。 */}
+                  {(() => {
+                    const _f = careLevelPeriodDraft ? careLevelPeriodDraft.from : (localPatient.careLevelFrom||'');
+                    const _t = careLevelPeriodDraft ? careLevelPeriodDraft.to : (localPatient.careLevelTo||'');
+                    return (<>
+                      <div style={{maxWidth:380}}><DateRangePicker fromValue={_f} toValue={_t} onFromChange={v=>setCareLevelPeriodDraft({from:v, to:_t})} onToChange={v=>setCareLevelPeriodDraft({from:_f, to:v})} disabled={isOff}/></div>
+                      {careLevelPeriodDraft && !isOff && (
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          <button type="button" onClick={()=>{ commitLP({ careLevelFrom: careLevelPeriodDraft.from, careLevelTo: careLevelPeriodDraft.to }, '✓ 介護度の適用期間を保存しました'); setCareLevelPeriodDraft(null); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold active:scale-95 whitespace-nowrap">この期間で保存</button>
+                          <button type="button" onClick={()=>setCareLevelPeriodDraft(null)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold whitespace-nowrap">取消</button>
+                          <span className="text-[11px] text-amber-600 font-bold">未保存（確定するまで反映されません）</span>
+                        </div>
+                      )}
+                    </>);
+                  })()}
                 </div>
               </div>
 
