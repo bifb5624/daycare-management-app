@@ -14143,7 +14143,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             const { genogramFiles, floorPlanFiles, pickupRouteFiles, faceSheetFiles, labeledFiles, ...textOnly } = newFs;
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy:_by, source:'caremanager', snapshot }].slice(-20);
-            const newPatient = { ...patient, kiou: (fsData.kiou ?? patient.kiou ?? ''), docUpdates: appendDocUpdate(patient, 'caremanager', _by, (()=>{ const d = diffFaceSheetFields(pf.faceSheet || {}, newFs); return d.length ? [`フェイスシートの編集（${d.join('・')}）`] : ['フェイスシートの編集']; })()), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
+            // ★ 一本化: ケアマネが編集しても患者本体(1箇所)へ反映(氏名・連絡先・被保険者番号・かかりつけ医・留意点 等)。
+            const _mir = (k) => (fsData[k] !== undefined ? fsData[k] : patient[k]);
+            const newPatient = { ...patient,
+              kiou: (fsData.kiou ?? patient.kiou ?? ''),
+              name:_mir('name'), kana:_mir('kana'), birthDate:_mir('birthDate'), gender:_mir('gender'), zipCode:_mir('zipCode'), address:_mir('address'), addressBuilding:_mir('addressBuilding'), phone:_mir('phone'), phoneMobile:_mir('phoneMobile'), email:_mir('email'), insuranceNo:_mir('insuranceNo'), ryui:_mir('ryui'),
+              doctor:(fsData.chronicDiseases ?? patient.doctor), medicalInstitution:(fsData.medicalInstitution ?? patient.medicalInstitution), medicalContact:(fsData.medicalContact ?? patient.medicalContact),
+              docUpdates: appendDocUpdate(patient, 'caremanager', _by, (()=>{ const d = diffFaceSheetFields(pf.faceSheet || {}, newFs); return d.length ? [`フェイスシートの編集（${d.join('・')}）`] : ['フェイスシートの編集']; })()), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
             try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
             setData(updated);
@@ -27968,11 +27974,7 @@ function WarekiDateInput({ value, onChange, disabled }) {
   return (
     <span className="inline-flex flex-col gap-1">
       <span className="inline-flex items-center gap-1 flex-wrap">
-        {/* 西暦カレンダー */}
-        <input type="date" value={value||''} disabled={disabled} onChange={e=>onChange(e.target.value)}
-          className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none disabled:bg-slate-100" style={{maxWidth:150}}/>
-        <span className="text-[10px] text-slate-400">または和暦→</span>
-        {/* 和暦プルダウン */}
+        {/* 和暦プルダウン (和暦のみ) */}
         <select value={w?.era||'令和'} disabled={disabled} onChange={e=>setPart({era:e.target.value})} className={selCls}>
           {WK_ERAS.map(e=><option key={e.name} value={e.name}>{e.name}</option>)}
         </select>
@@ -40990,7 +40992,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const snapshot = { ...textOnly, _attachCounts:{ genogram:(genogramFiles||[]).length, floorPlan:(floorPlanFiles||[]).length, pickupRoute:(pickupRouteFiles||[]).length, faceSheet:(faceSheetFiles||[]).length, labeled:(labeledFiles||[]).length } };
             const hist = [...prevHist, { version, updatedAt: now, updatedBy: _by, source:'office', snapshot }].slice(-20);
             // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
-            savePatientTop({ docUpdates: withOfficeDocUpdate(faceSheetUpdateItems(faceSheet, newFs)), ...(contactPatch||{}), kiou: (newFs.kiou||''), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||'') }, undefined, {
+            savePatientTop({ docUpdates: withOfficeDocUpdate(faceSheetUpdateItems(faceSheet, newFs)), ...(contactPatch||{}), kiou: (newFs.kiou||''), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||''),
+              // ★ 一本化: 本人基本情報・連絡先・被保険者番号・留意点も patient 本体へ反映
+              name: (newFs.name||''), kana: (newFs.kana||''), birthDate: (newFs.birthDate||''), gender: (newFs.gender||''), zipCode: (newFs.zipCode||''), address: (newFs.address||''), addressBuilding: (newFs.addressBuilding||''), phone: (newFs.phone||''), phoneMobile: (newFs.phoneMobile||''), email: (newFs.email||''), insuranceNo: (newFs.insuranceNo||''), ryui: (newFs.ryui||'') }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
@@ -41386,6 +41390,20 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     createdDate: initial?.createdDate || today,
     // ★ F1: 既往歴(基本情報から移設)。 患者の kiou を初期値にし、保存時に patient.kiou へ書き戻す。
     kiou: (initial?.kiou ?? patient?.kiou ?? ''),
+    // ★ 一本化: 本人基本情報・連絡先・被保険者番号・留意点もフェイスシートで編集し patient へ書き戻す。
+    //   patient を正とするため initial より patient を優先(古いフェイスシート値で本体を巻き戻さない)。
+    name: (patient?.name ?? initial?.name ?? ''),
+    kana: (patient?.kana ?? initial?.kana ?? ''),
+    birthDate: (patient?.birthDate ?? initial?.birthDate ?? ''),
+    gender: (patient?.gender ?? initial?.gender ?? ''),
+    zipCode: (patient?.zipCode ?? initial?.zipCode ?? ''),
+    address: (patient?.address ?? initial?.address ?? ''),
+    addressBuilding: (patient?.addressBuilding ?? initial?.addressBuilding ?? ''),
+    phone: (patient?.phone ?? initial?.phone ?? ''),
+    phoneMobile: (patient?.phoneMobile ?? initial?.phoneMobile ?? ''),
+    email: (patient?.email ?? initial?.email ?? ''),
+    insuranceNo: (patient?.insuranceNo ?? initial?.insuranceNo ?? ''),
+    ryui: (patient?.ryui ?? initial?.ryui ?? ''),
     // ② 利用者の基本情報 (基本情報から自動取得)
     fax: initial?.fax || '',
     householdType: initial?.householdType || '',
@@ -41593,14 +41611,25 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-2">② 利用者の基本情報</div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-              <div className="text-[11px] text-emerald-700 mb-2 font-bold">基本情報から自動取得</div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
-                <div><b>氏名：</b>{patient.name || '-'}</div>
-                <div><b>フリガナ：</b>{patient.kana || '-'}</div>
-                <div><b>性別：</b>{patient.gender || '-'}</div>
-                <div><b>生年月日：</b>{patient.birthDate || '-'}</div>
-                <div><b>住所：</b>{patient.address || '-'}</div>
-                <div><b>電話：</b>{patient.phone || '-'}</div>
+              <div className="text-[11px] text-emerald-700 mb-2 font-bold">利用者の基本情報（ここで編集すると利用者マスタに反映されます）</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Field label="氏名"><input value={fs.name} onChange={e=>update('name', e.target.value)} className={inputCls}/></Field>
+                <Field label="フリガナ"><input value={fs.kana} onChange={e=>update('kana', e.target.value)} className={inputCls}/></Field>
+                <Field label="性別">
+                  <select value={fs.gender} onChange={e=>update('gender', e.target.value)} className={inputCls}>
+                    <option value="">未選択</option><option value="男性">男性</option><option value="女性">女性</option>
+                  </select>
+                </Field>
+                <Field label="生年月日">
+                  <input type="date" value={fs.birthDate} onChange={e=>update('birthDate', e.target.value)} className={inputCls}/>
+                  <WarekiBirthInput iso={fs.birthDate||''} onChange={(v)=>update('birthDate', v)} />
+                </Field>
+                <Field label="郵便番号"><input value={fs.zipCode} onChange={e=>update('zipCode', e.target.value)} placeholder="000-0000" className={inputCls}/></Field>
+                <Field label="住所"><input value={fs.address} onChange={e=>update('address', e.target.value)} className={inputCls}/></Field>
+                <Field label="建物名"><input value={fs.addressBuilding} onChange={e=>update('addressBuilding', e.target.value)} className={inputCls}/></Field>
+                <Field label="電話（固定）"><input value={fs.phone} onChange={e=>update('phone', e.target.value)} placeholder="03-XXXX-XXXX" className={inputCls}/></Field>
+                <Field label="電話（携帯）"><input value={fs.phoneMobile} onChange={e=>update('phoneMobile', e.target.value)} placeholder="090-XXXX-XXXX" className={inputCls}/></Field>
+                <Field label="メールアドレス"><input type="email" value={fs.email} onChange={e=>update('email', e.target.value)} placeholder="example@xxx.com" className={inputCls}/></Field>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -41677,16 +41706,18 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
             <div className="text-sm font-bold text-amber-800 mb-2">④ 介護保険・制度情報</div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-              <div className="text-[11px] text-emerald-700 mb-2 font-bold">基本情報から自動取得</div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px]">
-                <div><b>被保険者番号：</b>{patient.insuranceNo || '-'}</div>
+              <div className="text-[11px] text-emerald-700 mb-2 font-bold">介護保険・制度情報</div>
+              <Field label="被保険者番号"><input value={fs.insuranceNo} onChange={e=>update('insuranceNo', e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" className={inputCls}/></Field>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[12px] mt-2">
                 <div><b>要介護度：</b>{patient.careLevel || '-'}</div>
-                <div><b>適用期間：</b>{patient.careLevelFrom || '-'} 〜 {patient.careLevelTo || '-'}</div>
                 <div><b>負担割合：</b>{patient.costBurden || '-'}</div>
+                <div className="col-span-2"><b>認定有効期間：</b>{patient.careLevelFrom ? `${warekiStr(patient.careLevelFrom)||patient.careLevelFrom} 〜 ${patient.careLevelTo?(warekiStr(patient.careLevelTo)||patient.careLevelTo):'（終了日なし）'}` : '-'}</div>
               </div>
+              <div className="text-[10px] text-slate-400 mt-1">※ 介護度・負担割合・認定有効期間は「保険証」「負担割合証」の欄で編集します</div>
             </div>
             <Field label="区分支給限度額"><input value={fs.benefitLimit} onChange={e=>update('benefitLimit', e.target.value)} placeholder="例: 167,650円" className={inputCls}/></Field>
             <Field label="その他の社会保障制度の利用状況"><textarea rows={2} value={fs.otherWelfare} onChange={e=>update('otherWelfare', e.target.value)} placeholder="障害福祉 / 生活保護 など" className={textareaCls}/></Field>
+            <Field label="留意点（申し送り）"><textarea rows={2} value={fs.ryui} onChange={e=>update('ryui', e.target.value)} placeholder="送迎・介助・対応上の申し送り事項など（提供記録の画面にも表示されます）" className={textareaCls}/></Field>
           </div>
           {/* ⑤ 医療・健康情報 */}
           <div className="border border-slate-200 rounded-xl p-4 bg-slate-50">
