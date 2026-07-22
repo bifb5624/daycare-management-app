@@ -29506,6 +29506,25 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                       <InfoRow label="担当者名">{localPatient.cmName}</InfoRow>
                       <InfoRow label="担当者 直通電話">{directPhone}</InfoRow>
                     </div>
+                    {/* ★ 登録されているケアマネ(アカウント)一覧: 複数のケアマネアカウントを表示 */}
+                    {(() => {
+                      const _cmAccs = (appData.familyAccounts||[]).filter(a => a && String(a.patientId)===String(localPatient.id) && (a.kind==='caremanager' || a.relation==='ケアマネージャー'));
+                      if (!_cmAccs.length) return null;
+                      return (
+                        <div className="mt-3">
+                          <div className="text-[12px] font-bold text-slate-500 mb-1.5">登録されているケアマネ（アカウント）{_cmAccs.length>1?`（${_cmAccs.length}名）`:''}</div>
+                          <div className="space-y-1.5">
+                            {_cmAccs.map(a => (
+                              <div key={a.id} className="border border-teal-200 bg-teal-50/40 rounded-lg px-3 py-2 text-sm">
+                                <div className="font-bold text-slate-700">{a.displayName||'—'}<span className="ml-2 text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded-full">ケアマネ</span></div>
+                                <div className="text-[11px] text-slate-500 break-all">{a.cmOffice||localPatient.cmOffice||''}{a.email?`・${a.email}`:''}{a.username?`・ID: ${a.username}`:''}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-1">※ アカウント発行・削除は「アカウント管理」から。上の担当（事業所・担当者）の変更は「担当を変更」から。</div>
+                        </div>
+                      );
+                    })()}
                   </div>);
                 })()}
 
