@@ -39654,12 +39654,12 @@ function MediaPreviewModal({ media, onClose }) {
   return (
     <div onClick={onClose}
       style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:10000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:8}}>
-      <button onClick={(e)=>{e.stopPropagation(); onClose();}}
-        style={{position:'absolute',top:12,right:12,background:'rgba(255,255,255,0.2)',color:'white',border:'none',borderRadius:24,width:44,height:44,fontSize:22,fontWeight:'bold',cursor:'pointer',zIndex:1}}>✕</button>
-      {url && <a href={url} download={media.name||'file'} onClick={(e)=>e.stopPropagation()}
-        style={{position:'absolute',top:12,left:12,background:'#7daa3d',color:'white',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',textDecoration:'none'}}>ダウンロード</a>}
+      <button onClick={(e)=>{e.stopPropagation(); onClose();}} aria-label="閉じる"
+        style={{position:'absolute',top:12,right:12,background:'#dc2626',color:'white',border:'2px solid white',borderRadius:24,width:46,height:46,fontSize:22,fontWeight:'bold',cursor:'pointer',zIndex:5,boxShadow:'0 2px 10px rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>✕</button>
+      {url && !isPdf && <a href={url} download={media.name||'file'} onClick={(e)=>e.stopPropagation()}
+        style={{position:'absolute',top:12,left:12,background:'#7daa3d',color:'white',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',textDecoration:'none',zIndex:5}}>ダウンロード</a>}
       {url && isPdf && <button onClick={(e)=>{e.stopPropagation(); window.open(url,'_blank','noopener');}}
-        style={{position:'absolute',top:12,left:'50%',transform:'translateX(-50%)',background:'#2563eb',color:'white',border:'none',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>別タブで開く</button>}
+        style={{position:'absolute',top:12,left:12,background:'#2563eb',color:'white',border:'none',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',cursor:'pointer',zIndex:5}}>別タブで開く</button>}
       {!url ? (
         <div style={{color:'white',fontSize:14,fontWeight:'bold'}}>読み込み中...</div>
       ) : isPdf ? (
