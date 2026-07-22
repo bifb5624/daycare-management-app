@@ -14149,7 +14149,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             const _mir = (k) => (fsData[k] !== undefined ? fsData[k] : patient[k]);
             const newPatient = { ...patient,
               kiou: (fsData.kiou ?? patient.kiou ?? ''),
-              name:_mir('name'), kana:_mir('kana'), birthDate:_mir('birthDate'), gender:_mir('gender'), zipCode:_mir('zipCode'), address:_mir('address'), addressBuilding:_mir('addressBuilding'), phone:_mir('phone'), phoneMobile:_mir('phoneMobile'), email:_mir('email'), insuranceNo:_mir('insuranceNo'), ryui:_mir('ryui'),
+              name:_mir('name'), kana:_mir('kana'), birthDate:_mir('birthDate'), gender:_mir('gender'), zipCode:_mir('zipCode'), address:_mir('address'), addressBuilding:_mir('addressBuilding'), phone:_mir('phone'), phoneMobile:_mir('phoneMobile'), email:_mir('email'), insuranceNo:_mir('insuranceNo'), ryui:_mir('ryui'), relatedParties:(Array.isArray(fsData.relatedParties)?fsData.relatedParties:(patient.relatedParties||[])),
               doctor:(fsData.chronicDiseases ?? patient.doctor), medicalInstitution:(fsData.medicalInstitution ?? patient.medicalInstitution), medicalContact:(fsData.medicalContact ?? patient.medicalContact),
               docUpdates: appendDocUpdate(patient, 'caremanager', _by, (()=>{ const d = diffFaceSheetFields(pf.faceSheet || {}, newFs); return d.length ? [`フェイスシートの編集（${d.join('・')}）`] : ['フェイスシートの編集']; })()), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
@@ -29457,35 +29457,28 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 })()}
               </div>
 
-              {/* ⑥-2 その他関係者 (訪問看護 等) — その他関係者がアカウント登録するとここに自動追加 */}
+              {/* ⑥-2 その他関係者 — 表示のみ。 編集はフェイスシートに一本化。 */}
               <div className="border-t border-slate-200 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-slate-600 flex items-center gap-1.5"><Users size={16}/>その他関係者</h3>
-                  <button disabled={isOff} onClick={()=>updateLPFields({relatedParties:[...(localPatient.relatedParties||[]), {name:'',relation:'',office:'',phone:'',fax:''}]})} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold disabled:opacity-50">＋ 関係者を追加</button>
-                </div>
-                {(localPatient.relatedParties||[]).length===0 ? (
-                  <div className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3 leading-relaxed">登録されている関係者はいません。<br/>その他関係者（訪問看護 等）が<b>アカウント登録すると、ここに自動で追加</b>されます（手動でも追加できます）。</div>
-                ) : (
-                  <div className="space-y-3">
-                    {(localPatient.relatedParties||[]).map((rp,ri)=>{
-                      const upd=(field,val)=>{const arr=[...(localPatient.relatedParties||[])];arr[ri]={...arr[ri],[field]:val};updateLPFields({relatedParties:arr});};
-                      return (
-                        <div key={ri} className="bg-slate-50 border border-slate-200 rounded-xl p-3 relative">
-                          <button disabled={isOff} onClick={()=>{if(!window.confirm('この関係者を削除しますか？'))return;const arr=(localPatient.relatedParties||[]).filter((_,i)=>i!==ri);updateLPFields({relatedParties:arr});}} className="absolute top-2 right-2 text-red-400 hover:text-red-600 disabled:opacity-40" title="削除"><Trash2 size={14}/></button>
-                          <div className="grid grid-cols-2 gap-3 mb-2">
-                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">関係者名</label><input disabled={isOff} value={rp.name||''} onChange={e=>upd('name',e.target.value)} placeholder="例: 山田 花子" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">関係（種別）</label><input disabled={isOff} value={rp.relation||''} onChange={e=>upd('relation',e.target.value)} placeholder="例: 訪問看護" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                          </div>
-                          <div className="mb-2"><label className="block text-[11px] font-bold text-slate-500 mb-1">事業所名</label><input disabled={isOff} value={rp.office||''} onChange={e=>upd('office',e.target.value)} placeholder="例: ○○訪問看護ステーション" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">電話番号</label><input disabled={isOff} value={rp.phone||''} onChange={e=>upd('phone',e.target.value)} placeholder="0312345678" inputMode="tel" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                            <div><label className="block text-[11px] font-bold text-slate-500 mb-1">FAX</label><input disabled={isOff} value={rp.fax||''} onChange={e=>upd('fax',e.target.value)} placeholder="0312345679" inputMode="tel" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                <div className="bg-white border border-slate-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                    <div className="text-[13px] font-bold text-slate-700 flex items-center gap-1.5"><Users size={15}/>その他関係者</div>
+                    {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'facesheet'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>フェイスシートで編集</button>}
                   </div>
-                )}
+                  {(localPatient.relatedParties||[]).length===0 ? (
+                    <div className="text-xs text-slate-400 border border-slate-200 rounded-lg px-3 py-3">登録されている関係者はいません（フェイスシートで追加できます。関係者がアカウント登録した場合も自動で追加されます）。</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {(localPatient.relatedParties||[]).map((rp,ri)=>(
+                        <div key={ri} className="border border-slate-200 rounded-lg overflow-hidden">
+                          <InfoRow label="関係者名">{rp.name||''}{rp.relation?`（${rp.relation}）`:''}</InfoRow>
+                          {rp.office ? <InfoRow label="事業所名">{rp.office}</InfoRow> : null}
+                          {rp.phone ? <InfoRow label="電話番号">{rp.phone}</InfoRow> : null}
+                          {rp.fax ? <InfoRow label="FAX">{rp.fax}</InfoRow> : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* ⑦ 緊急連絡先 — 表示のみ。 編集はフェイスシートに一本化。 */}
@@ -40972,7 +40965,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             // ★ ケアマネ画面へ「フェイスシート更新」の新着通知(docUpdates by=office)。 連絡先(contactPatch)＋かかりつけ医(doctor)も同時に患者へ書き戻す(双方向連携)
             savePatientTop({ docUpdates: withOfficeDocUpdate(faceSheetUpdateItems(faceSheet, newFs)), ...(contactPatch||{}), kiou: (newFs.kiou||''), doctor: (newFs.chronicDiseases||''), medicalInstitution: (newFs.medicalInstitution||''), medicalContact: (newFs.medicalContact||''),
               // ★ 一本化: 本人基本情報・連絡先・被保険者番号・留意点も patient 本体へ反映
-              name: (newFs.name||''), kana: (newFs.kana||''), birthDate: (newFs.birthDate||''), gender: (newFs.gender||''), zipCode: (newFs.zipCode||''), address: (newFs.address||''), addressBuilding: (newFs.addressBuilding||''), phone: (newFs.phone||''), phoneMobile: (newFs.phoneMobile||''), email: (newFs.email||''), insuranceNo: (newFs.insuranceNo||''), ryui: (newFs.ryui||'') }, undefined, {
+              name: (newFs.name||''), kana: (newFs.kana||''), birthDate: (newFs.birthDate||''), gender: (newFs.gender||''), zipCode: (newFs.zipCode||''), address: (newFs.address||''), addressBuilding: (newFs.addressBuilding||''), phone: (newFs.phone||''), phoneMobile: (newFs.phoneMobile||''), email: (newFs.email||''), insuranceNo: (newFs.insuranceNo||''), ryui: (newFs.ryui||''), relatedParties: (Array.isArray(newFs.relatedParties)?newFs.relatedParties:[]) }, undefined, {
               faceSheet: newFs,
               faceSheetHistory: hist,
               ...(trashAdds.length ? { trash: [...(personalFile.trash||[]), ...trashAdds] } : {}),
@@ -41382,6 +41375,7 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
     email: (patient?.email ?? initial?.email ?? ''),
     insuranceNo: (patient?.insuranceNo ?? initial?.insuranceNo ?? ''),
     ryui: (patient?.ryui ?? initial?.ryui ?? ''),
+    relatedParties: (Array.isArray(patient?.relatedParties) ? patient.relatedParties : (Array.isArray(initial?.relatedParties) ? initial.relatedParties : [])),
     // ② 利用者の基本情報 (基本情報から自動取得)
     fax: initial?.fax || '',
     householdType: initial?.householdType || '',
@@ -41678,6 +41672,29 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
             <Field label="キーパーソン (主たる介護者・意思決定者)">
               <input value={fs.keyPerson} onChange={e=>update('keyPerson', e.target.value)}
                 placeholder="例: 長男 田中一郎" className={inputCls}/>
+            </Field>
+            <Field label="その他関係者 (訪問看護・かかりつけ以外の連携先 等)">
+              <div className="space-y-2">
+                {(fs.relatedParties||[]).length===0 && <div className="text-[12px] text-slate-400">未登録。「＋関係者を追加」から追加できます（関係者がアカウント登録した場合も自動で追加されます）。</div>}
+                {(fs.relatedParties||[]).map((rp,ri)=>{
+                  const setRp=(field,val)=>{ const arr=[...(fs.relatedParties||[])]; arr[ri]={...arr[ri],[field]:val}; update('relatedParties', arr); };
+                  return (
+                    <div key={ri} className="border border-slate-200 rounded-lg p-2.5 bg-white relative">
+                      <button type="button" onClick={()=>update('relatedParties',(fs.relatedParties||[]).filter((_,i)=>i!==ri))} className="absolute top-2 right-2 text-red-400 hover:text-red-600" title="削除"><Trash2 size={14}/></button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pr-6">
+                        <input value={rp.name||''} onChange={e=>setRp('name',e.target.value)} placeholder="関係者名 (例: 山田 花子)" className={inputCls}/>
+                        <input value={rp.relation||''} onChange={e=>setRp('relation',e.target.value)} placeholder="関係・種別 (例: 訪問看護)" className={inputCls}/>
+                        <input value={rp.office||''} onChange={e=>setRp('office',e.target.value)} placeholder="事業所名" className={inputCls}/>
+                        <div className="grid grid-cols-2 gap-2">
+                          <input value={rp.phone||''} onChange={e=>setRp('phone',e.target.value)} placeholder="電話" inputMode="tel" className={inputCls}/>
+                          <input value={rp.fax||''} onChange={e=>setRp('fax',e.target.value)} placeholder="FAX" inputMode="tel" className={inputCls}/>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <button type="button" onClick={()=>update('relatedParties',[...(fs.relatedParties||[]), {name:'',relation:'',office:'',phone:'',fax:''}])} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">＋ 関係者を追加</button>
+              </div>
             </Field>
           </div>
           {/* ④ 介護保険・制度情報 */}
