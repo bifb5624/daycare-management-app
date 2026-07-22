@@ -39845,6 +39845,10 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   };
   // ★ 患者トップレベル(docInsurance/docBurden/docUpdates 等)を保存。 personalFilePatch を渡せば個人ファイルも同時更新。
   const _recName = (()=>{ try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || '事業所'; } catch { return '事業所'; } })();
+  // ★ 保険証(介護度・認定期間)/負担割合証(負担割合・有効期間)は選択即保存をやめ、下書きに溜めて「保存」で確定する。
+  const [docInsDraft, setDocInsDraft] = useState(null); // {careLevel, careLevelFrom, careLevelTo} | null
+  const [docBurDraft, setDocBurDraft] = useState(null); // {costBurden, costBurdenFrom, costBurdenTo} | null
+  React.useEffect(() => { setDocInsDraft(null); setDocBurDraft(null); }, [patient?.id]);
   const savePatientTop = (patch, opts, personalFilePatch) => {
     const np = { ...patient, ...patch };
     if (personalFilePatch) np.personalFile = { ...personalFile, ...personalFilePatch };
@@ -40393,49 +40397,75 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         ))}
                       </div>
                     )}
-                    {key === 'docInsurance' && (
+                    {key === 'docInsurance' && (() => {
+                      const cur = { careLevel: patient.careLevel||'', careLevelFrom: patient.careLevelFrom||'', careLevelTo: patient.careLevelTo||'' };
+                      const d = docInsDraft || cur;
+                      const dirty = !!docInsDraft && (d.careLevel!==cur.careLevel || d.careLevelFrom!==cur.careLevelFrom || d.careLevelTo!==cur.careLevelTo);
+                      const upd = (patch) => setDocInsDraft({ ...d, ...patch });
+                      return (
                       <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200 space-y-2">
-                        <div className="text-[11px] font-bold text-slate-500">保険証の内容（入力すると利用者マスタに自動反映）</div>
+                        <div className="text-[11px] font-bold text-slate-500">保険証の内容（選んで「保存」を押すと利用者マスタに反映）</div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">介護度</label>
-                          <select value={patient.careLevel||''} onChange={e=>saveMaster({careLevel:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+                          <select value={d.careLevel} onChange={e=>upd({careLevel:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
                             <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v=><option key={v} value={v}>{v}</option>)}
                           </select>
                         </div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">認定有効期間</label>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <WarekiDateInput value={patient.careLevelFrom||''} onChange={v=>saveMaster({careLevelFrom:v})}/>
+                            <WarekiDateInput value={d.careLevelFrom} onChange={v=>upd({careLevelFrom:v})}/>
                             <span className="text-slate-400">〜</span>
-                            <WarekiDateInput value={patient.careLevelTo||''} onChange={v=>saveMaster({careLevelTo:v})}/>
+                            <WarekiDateInput value={d.careLevelTo} onChange={v=>upd({careLevelTo:v})}/>
                           </div>
                           <div className="flex items-center gap-1 flex-wrap mt-1">
                             <span className="text-[10px] font-bold text-slate-400">期間を自動設定</span>
                             {[1,2,3,4,5].map(yr=>(
-                              <button key={yr} type="button" onClick={()=>{ const base=patient.careLevelFrom||new Date().toISOString().slice(0,10); const d=new Date(base); d.setFullYear(d.getFullYear()+yr); d.setDate(d.getDate()-1); saveMaster({careLevelFrom:base, careLevelTo:d.toISOString().slice(0,10)}); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 hover:bg-blue-100">{yr}年</button>
+                              <button key={yr} type="button" onClick={()=>{ const base=d.careLevelFrom||new Date().toISOString().slice(0,10); const dd=new Date(base); dd.setFullYear(dd.getFullYear()+yr); dd.setDate(dd.getDate()-1); upd({careLevelFrom:base, careLevelTo:dd.toISOString().slice(0,10)}); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded px-2 py-0.5 hover:bg-blue-100">{yr}年</button>
                             ))}
                           </div>
                         </div>
+                        {dirty && (
+                          <div className="flex items-center gap-2 flex-wrap pt-1">
+                            <button type="button" onClick={()=>{ saveMaster(docInsDraft); setDocInsDraft(null); }} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold active:scale-95">保存</button>
+                            <button type="button" onClick={()=>setDocInsDraft(null)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">取消</button>
+                            <span className="text-[11px] text-amber-600 font-bold">未保存（「保存」で確定）</span>
+                          </div>
+                        )}
                         <ValueHistoryList title="介護度の変更履歴" hist={patient.careLevelHistory} onChangeHist={(nh)=>savePatientTop({careLevelHistory:nh},{manual:true,message:'✓ 履歴を更新しました'})} valueOptions={['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5']} />
                       </div>
-                    )}
-                    {key === 'docBurden' && (
+                      );
+                    })()}
+                    {key === 'docBurden' && (() => {
+                      const cur = { costBurden: patient.costBurden||'', costBurdenFrom: patient.costBurdenFrom||'', costBurdenTo: patient.costBurdenTo||'' };
+                      const d = docBurDraft || cur;
+                      const dirty = !!docBurDraft && (d.costBurden!==cur.costBurden || d.costBurdenFrom!==cur.costBurdenFrom || d.costBurdenTo!==cur.costBurdenTo);
+                      const upd = (patch) => setDocBurDraft({ ...d, ...patch });
+                      return (
                       <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
-                        <label className="block text-[11px] font-bold text-slate-500 mb-0.5">負担割合（入力すると利用者マスタに自動反映）</label>
-                        <select value={patient.costBurden||''} onChange={e=>saveMaster({costBurden:e.target.value, costBurdenFrom:patient.costBurdenFrom, costBurdenTo:patient.costBurdenTo})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+                        <label className="block text-[11px] font-bold text-slate-500 mb-0.5">負担割合（選んで「保存」を押すと利用者マスタに反映）</label>
+                        <select value={d.costBurden} onChange={e=>upd({costBurden:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
                           <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
                         </select>
                         <div className="mt-2">
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">有効期間（負担割合証は通常1年。開始日を入れると1年後を自動設定）</label>
                           <div className="flex items-center gap-1 flex-wrap">
-                            <WarekiDateInput value={patient.costBurdenFrom||''} onChange={v=>{ const patch={costBurdenFrom:v}; if(v){ const d=new Date(v); d.setFullYear(d.getFullYear()+1); d.setDate(d.getDate()-1); patch.costBurdenTo=d.toISOString().slice(0,10); } saveMaster(patch); }}/>
+                            <WarekiDateInput value={d.costBurdenFrom} onChange={v=>{ const patch={costBurdenFrom:v}; if(v){ const dd=new Date(v); dd.setFullYear(dd.getFullYear()+1); dd.setDate(dd.getDate()-1); patch.costBurdenTo=dd.toISOString().slice(0,10); } upd(patch); }}/>
                             <span className="text-slate-400">〜</span>
-                            <WarekiDateInput value={patient.costBurdenTo||''} onChange={v=>saveMaster({costBurdenTo:v})}/>
+                            <WarekiDateInput value={d.costBurdenTo} onChange={v=>upd({costBurdenTo:v})}/>
                           </div>
                         </div>
+                        {dirty && (
+                          <div className="flex items-center gap-2 flex-wrap mt-2">
+                            <button type="button" onClick={()=>{ saveMaster(docBurDraft); setDocBurDraft(null); }} className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold active:scale-95">保存</button>
+                            <button type="button" onClick={()=>setDocBurDraft(null)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">取消</button>
+                            <span className="text-[11px] text-amber-600 font-bold">未保存（「保存」で確定）</span>
+                          </div>
+                        )}
                         <ValueHistoryList title="負担割合の変更履歴" hist={patient.costBurdenHistory} onChangeHist={(nh)=>savePatientTop({costBurdenHistory:nh},{manual:true,message:'✓ 履歴を更新しました'})} valueOptions={['70%','80%','90%']} />
                       </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 );
               })}
