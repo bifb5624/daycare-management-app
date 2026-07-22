@@ -39970,10 +39970,15 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     (personalFile.meetings||[]).forEach(m=>push(`mtg_${m.id}`, (m.date||''), '当事業所', `サービス担当者会議${m.location?`（${m.location}）`:''}`));
     (patient.cmHistory||[]).forEach((h,i)=>push(`cm_${h.from||i}`, h.from, 'ケアマネ', `担当ケアマネ変更：${h.office||''} ${h.name||''}`.trim()));
     (patient.careLevelHistory||[]).forEach((h,i)=>push(`cl_${h.from||i}`, h.from, 'ケアマネ', `介護度変更：${h.value||''}`));
+    (patient.costBurdenHistory||[]).forEach((h,i)=>push(`cb_${h.from||i}`, h.from, 'ケアマネ', `負担割合変更：${h.value||''}`));
     (patient.serviceChanges||[]).forEach(c=>push(`sc_${c.id||c.date}`, c.date, '当事業所', `サービス内容変更：${c.text||''}`));
     (patient.changeLog||[]).forEach((c,i)=>push(`chg_${c.date}_${i}`, c.date, '当事業所', `${c.label||''}変更：${c.oldValue||''}→${c.newValue||''}`));
     (patient.pauseHistory||[]).forEach((p,i)=>push(`pause_${p.fromDate||i}`, p.fromDate, 'ご家族/ケアマネ', `利用休止：${p.reason||''}`));
     (appData.initialReports||[]).filter(r=>r.patientId===patient.id).forEach(r=>push(`ir_${r.firstDate||r.id}`, (r.firstDate||r.sentAt), '当事業所', '初回ご利用報告'));
+    // ★ フェイスシート・利用者情報・保険証写真・アセスメント等の更新通知(docUpdates)も経過に記録。
+    (patient.docUpdates||[]).forEach(u=>{ if(!u||!u.id) return; const _from = u.by==='caremanager'?'ケアマネ':(u.by==='family'?'ご家族':'当事業所'); const _c = Array.isArray(u.items)?u.items.join('・'):(u.items||'更新'); push(`du_${u.id}`, (u.at||'').slice(0,10), _from, _c); });
+    // ★ 家族・関係者アカウントの発行を記録。
+    (appData.familyAccounts||[]).filter(a=>a && String(a.patientId)===String(patient.id)).forEach(a=>push(`acc_${a.id}`, (a.createdAt||''), '当事業所', `アカウント発行：${a.displayName||a.username||''}${(a.kind==='caremanager'||a.relation==='ケアマネージャー')?'（ケアマネ）':(a.relation?`（${a.relation}）`:'')}`));
     return out;
   };
   // 表示用: 自動行(上書き反映) + 手動行 をマージ(削除済みは除外)
