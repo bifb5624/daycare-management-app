@@ -12890,7 +12890,10 @@ function FamilyView() {
                     setSignupForm(f=>({...f, error:'招待の有効期限が切れています。事業所にお問い合わせください'})); return;
                   }
                   // 3. ID重複チェック
-                  const exists = (latest.familyAccounts||[]).some(a => (a.username||'').toLowerCase() === uname.toLowerCase());
+                  //   ★ Supabase有効時は上のSupabase判定を唯一の正とする。 ローカル(latest)は他端末での削除が届かず
+                  //     古い場合があり、削除済みIDの再利用時に「事前は使える→登録でNG」の矛盾が起きるため、
+                  //     ローカルのみの重複拒否は Supabase無効時に限定する。
+                  const exists = !isSupabaseEnabled && (latest.familyAccounts||[]).some(a => (a.username||'').toLowerCase() === uname.toLowerCase());
                   if (exists) { setSignupForm(f=>({...f, error:'このIDは既に使用されています'})); return; }
                   // 3-2. メールアドレス重複チェック
                   // メール重複は許容 (夫婦の子・複数利用者担当ケアマネ等のため)
