@@ -12234,6 +12234,57 @@ class ViewErrorBoundary extends React.Component {
   }
 }
 
+// ★ ログイン画面のヘルプ (高齢者向け): ホーム画面への追加手順 / ログインできない時のQ&A。
+//   iOSは仕様上ワンタップ追加ができないため、分かりやすい手順を図解文で案内する。
+function LoginHelpModal({ kind, onClose }) {
+  const ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '');
+  const isIOS = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && typeof document !== 'undefined' && 'ontouchend' in document);
+  const isAndroid = /Android/.test(ua);
+  const step = { display:'flex', gap:10, alignItems:'flex-start', marginBottom:10 };
+  const num = { flexShrink:0, width:24, height:24, borderRadius:'50%', background:'#7daa3d', color:'white', fontWeight:'bold', fontSize:13, display:'flex', alignItems:'center', justifyContent:'center' };
+  const Q = ({ q, a }) => (
+    <div style={{marginBottom:14}}>
+      <div style={{fontWeight:'bold',color:'#3d5021',fontSize:14,marginBottom:4}}>Q. {q}</div>
+      <div style={{fontSize:13.5,color:'#475569',lineHeight:1.8}}>{a}</div>
+    </div>
+  );
+  return (
+    <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.72)',zIndex:100001,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'96vw',maxHeight:'90vh',overflow:'auto',padding:'20px 22px',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,gap:8}}>
+          <div style={{fontSize:17,fontWeight:'bold',color:'#3d5021'}}>{kind==='home' ? '📱 ホーム画面に追加する方法' : '❓ ログインできない時（よくある質問）'}</div>
+          <button onClick={onClose} aria-label="閉じる" style={{flexShrink:0,background:'#f1f5f9',border:'none',borderRadius:20,width:38,height:38,fontSize:18,fontWeight:'bold',color:'#475569',cursor:'pointer'}}>✕</button>
+        </div>
+        {kind === 'home' ? (
+          <div style={{fontSize:14,color:'#334155'}}>
+            <div style={{background:'#f0f7e6',border:'1px solid #cfe3a8',borderRadius:12,padding:'10px 12px',marginBottom:14,fontSize:13.5,lineHeight:1.7}}>ホーム画面にアイコンを置いておくと、次回から<b>アイコンをタップするだけ</b>で開けます。</div>
+            {(isIOS || (!isIOS && !isAndroid)) && (<div style={{marginBottom:16}}>
+              <div style={{fontWeight:'bold',color:'#0e7490',marginBottom:8}}>iPhone / iPad（Safari）の場合</div>
+              <div style={step}><div style={num}>1</div><div>画面下（またはアドレスバー横）の<b>「共有」ボタン（□に↑の絵）</b>を押します。</div></div>
+              <div style={step}><div style={num}>2</div><div>メニューを下にスクロールし、<b>「ホーム画面に追加」</b>を押します。</div></div>
+              <div style={step}><div style={num}>3</div><div>右上の<b>「追加」</b>を押すと、ホーム画面にアイコンができます。</div></div>
+            </div>)}
+            {(isAndroid || (!isIOS && !isAndroid)) && (<div>
+              <div style={{fontWeight:'bold',color:'#0e7490',marginBottom:8}}>Android（Chrome）の場合</div>
+              <div style={step}><div style={num}>1</div><div>右上の<b>「︙」(点3つのメニュー)</b>を押します。</div></div>
+              <div style={step}><div style={num}>2</div><div><b>「ホーム画面に追加」</b>（または「アプリをインストール」）を押します。</div></div>
+              <div style={step}><div style={num}>3</div><div><b>「追加」</b>を押すと、ホーム画面にアイコンができます。</div></div>
+            </div>)}
+          </div>
+        ) : (
+          <div>
+            <Q q="ログインできません" a={<>ログインIDとパスワードは、事業所からお渡しした紙またはメールをご確認ください。<b>英字・数字は半角</b>で入力してください（大文字・小文字も区別されます）。</>} />
+            <Q q="パスワードを忘れました" a={<>ログイン画面の<b>「パスワードを忘れた」</b>から再設定できます。うまくいかない場合は事業所へご連絡ください。</>} />
+            <Q q="画面が真っ白／エラーが出る・表示されない" a={<>まず画面を<b>再読み込み</b>してください。iPhone / iPad で直らない場合は、<b>設定 → Safari → 履歴とWebサイトデータを消去</b>してから開き直すか、Safariの<b>プライベートモード</b>でお試しください。</>} />
+            <Q q="QRコードが読み取れません" a={<>カメラアプリでQRにかざすと開けます。読み取れない場合は、事業所からお伝えしたURLをブラウザに直接入力してください。</>} />
+            <Q q="それでも解決しないとき" a={<>お手数ですが事業所、またはサポート（support@ones-style.co.jp）までご連絡ください。</>} />
+          </div>
+        )}
+        <button onClick={onClose} style={{width:'100%',marginTop:8,padding:'12px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:14,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+      </div>
+    </div>
+  );
+}
 // === 家族用閲覧 - ログイン → 利用者ごとの画面 ===
 function FamilyView() {
   // データを localStorage から読み出し (写真は別キーに分離保存される場合があるのでマージ)
@@ -12260,6 +12311,7 @@ function FamilyView() {
   // ★ 事業所管理者プレビュー: 管理者ID/PWでログインすると、ご家族/ケアマネ画面をデモ確認できる
   const [adminPreview, setAdminPreview] = useState(null); // null | { storeName }
   const [reconsentBusy, setReconsentBusy] = useState(false); // 再同意ゲートの保存中
+  const [helpModal, setHelpModal] = useState(null); // ログイン画面のヘルプ: null | 'home' | 'qa'
   // ★ 家族側の店舗 ID (ログイン後に判明) → 店舗ごとの app_state を pull するため
   //   最優先は sessionStorage の familyAuthStoreId (ログイン時に必ず保存される)
   //   data.familyAccounts は遅れて反映されるので、 これだけだと「データ取得中」ループになる
@@ -13328,11 +13380,17 @@ function FamilyView() {
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
           )}
-          <div style={{textAlign:'center',marginTop:20,fontSize:11,color:'rgba(255,255,255,0.85)'}}>
+          {/* ★ 高齢者にも分かりやすいヘルプ: ホーム画面追加の手順 / ログインできない時のQ&A */}
+          <div style={{display:'flex',gap:10,justifyContent:'center',marginTop:18,flexWrap:'wrap'}}>
+            <button type="button" onClick={()=>setHelpModal('home')} style={{background:'rgba(255,255,255,0.95)',color:'#3d5021',border:'none',borderRadius:12,padding:'11px 16px',fontSize:14,fontWeight:'bold',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>📱 ホーム画面に追加する方法</button>
+            <button type="button" onClick={()=>setHelpModal('qa')} style={{background:'rgba(255,255,255,0.95)',color:'#3d5021',border:'none',borderRadius:12,padding:'11px 16px',fontSize:14,fontWeight:'bold',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>❓ ログインできない時</button>
+          </div>
+          <div style={{textAlign:'center',marginTop:16,fontSize:11,color:'rgba(255,255,255,0.85)'}}>
             お困りの場合はサポートまでお問い合わせください<br/>
             <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'inherit',textDecoration:'underline'}}>support@ones-style.co.jp</a>
           </div>
         </div>
+        {helpModal && <LoginHelpModal kind={helpModal} onClose={()=>setHelpModal(null)} />}
       </div>
     );
   }
@@ -13366,7 +13424,9 @@ function FamilyView() {
   const _effFamPol = getEffectivePolicy('family', data.systemSettings);
   // 同意済みの版: DB(consents)優先。 端末ローカルにも記録し、DBにconsents列が無い環境でも毎回聞かないようにする。
   const _localFamConsentV = (()=>{ try { return (JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}')||{})[String(authAccId)] || ''; } catch { return ''; } })();
-  const _famConsented = String(_famAcc?.consents?.version || _famAcc?.consents?.termsVersion || _localFamConsentV || '0');
+  // ★ 端末単位でも「同意済みの版」を記録し、同じ版なら二度と出さない(=1回だけ)。 アカウント違い/DB未反映でも毎回出ないように。
+  const _globalFamConsentV = (()=>{ try { return localStorage.getItem('tsumugiFamilyConsentV') || ''; } catch { return ''; } })();
+  const _famConsented = String(_famAcc?.consents?.version || _famAcc?.consents?.termsVersion || _localFamConsentV || _globalFamConsentV || '0');
   if (!_isPreviewAcc && _famAcc && _famConsented !== String(_effFamPol.version) && _effFamPol.notify?.login !== false) {
     const _famFacility = data.systemSettings?.facilityInfo?.name || facility.name || '当事業所';
     const _famTel = data.systemSettings?.facilityInfo?.phone || facility.phone || '';
@@ -13382,7 +13442,7 @@ function FamilyView() {
         const upd = { ...data, familyAccounts: (data.familyAccounts||[]).map(a => String(a.id)===String(authAccId) ? { ...a, consents:_consents } : a) };
         try { localStorage.setItem('daycareAppData_v3', JSON.stringify(upd)); } catch {}
         // ★ 端末ローカルにも同意版を記録(DBにconsents列が無くても毎回聞かないように)
-        try { const _m = JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}'); _m[String(authAccId)] = _v; localStorage.setItem('tsumugiFamilyConsent', JSON.stringify(_m)); } catch {}
+        try { const _m = JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}'); _m[String(authAccId)] = _v; localStorage.setItem('tsumugiFamilyConsent', JSON.stringify(_m)); localStorage.setItem('tsumugiFamilyConsentV', String(_v)); } catch {}
         setData(upd);
         try { await supabaseUpdateFamilyAccount?.(authAccId, { consents:_consents }); } catch(e) { console.warn('[consent] update failed', e); }
         setReconsentBusy(false);
@@ -13623,6 +13683,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [cmFaceSheetSaving, setCmFaceSheetSaving] = useState(false);
   const [cmDocsOpen, setCmDocsOpen] = useState(false); // ★ ケアマネ: 保険証・負担割合証・アセスメント
   const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
+  const [termsOpen, setTermsOpen] = useState(false); // ログイン後に利用規約・プライバシーポリシーを閲覧
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
   const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
@@ -14074,6 +14135,22 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           不具合・ご意見を運営に報告
         </button>
       </div>
+      {/* ★ 利用規約・プライバシーポリシー(ログイン後にいつでも確認できる) */}
+      <div style={{maxWidth:720,margin:'0 auto',padding:'0 16px 6px',display:'flex',justifyContent:'center'}}>
+        <button onClick={()=>setTermsOpen(true)} style={{background:'transparent',color:'#64748b',border:'none',fontSize:11,fontWeight:'bold',cursor:'pointer',textDecoration:'underline'}}>利用規約・プライバシーポリシー</button>
+      </div>
+      {termsOpen && (()=>{ const _pol = getEffectivePolicy('family', data.systemSettings); return (
+        <div onClick={()=>setTermsOpen(false)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.72)',zIndex:100001,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:580,maxWidth:'96vw',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+            <div style={{padding:'16px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+              <div><div style={{fontSize:16,fontWeight:'bold',color:'#166534'}}>利用規約・プライバシーポリシー</div><div style={{fontSize:10,color:'#65a30d',fontWeight:'bold',marginTop:4}}>第{_pol.version}版{_pol.date?`（${String(_pol.date).replace(/-/g,'/')}改定）`:''}</div></div>
+              <button onClick={()=>setTermsOpen(false)} aria-label="閉じる" style={{flexShrink:0,background:'#f1f5f9',border:'none',borderRadius:20,width:38,height:38,fontSize:18,fontWeight:'bold',color:'#475569',cursor:'pointer'}}>✕</button>
+            </div>
+            <div style={{flex:1,overflow:'auto',padding:'14px 18px',fontSize:12,color:'#334155',lineHeight:1.8,whiteSpace:'pre-wrap'}}>{renderPolicyText(_pol.text, facility.name||'当事業所', facility.phone||'')}</div>
+            <div style={{padding:'12px 18px',borderTop:'1px solid #e2e8f0'}}><button onClick={()=>setTermsOpen(false)} style={{width:'100%',padding:'12px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:14,fontWeight:'bold',cursor:'pointer'}}>閉じる</button></div>
+          </div>
+        </div>
+      ); })()}
       <div style={{textAlign:'center',padding:'14px 16px 32px',fontSize:10,color:'#94a3b8'}}>
         {facility.name||''} {facility.phone?`／${facility.phone}`:''}<br/>
         このページは {patient.name} 様のご家族専用です
