@@ -29403,45 +29403,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">被保険者番号</label>
                   <input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" style={{width:190}} className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/>
                 </div>
-                {/* 介護度 + 負担割合 (文字数に合わせた幅で横並び) */}
-                <div className="flex flex-wrap gap-4 items-start">
-                  <div style={{width:160}}>
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度</label>
-                    <select disabled={isOff} value={localPatient.careLevel||""} onChange={e=>{
-                      const newVal = e.target.value;
-                      if (!newVal || newVal === localPatient.careLevel) return;
-                      const today = new Date().toISOString().split('T')[0];
-                      setCareLevelModal({ newValue: newVal, from: today, to: '' });
-                    }} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                      <option value="">未選択</option>{['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'].map(v=><option key={v} value={v}>{v}</option>)}
-                    </select>
+                {/* ★ 介護度・負担割合・認定有効期間 は「表示のみ」。 編集は個人ファイル(保険証・負担割合証)に一本化し、
+                    同じ項目を複数箇所で編集する混乱・巻き戻りを防ぐ。 「個人ファイルで編集」で該当箇所へジャンプ。 */}
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                    <div className="text-[12px] font-bold text-slate-500">介護度・負担割合・認定有効期間</div>
+                    {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'insurance'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>個人ファイルで編集</button>}
                   </div>
-                  <div style={{width:170}}>
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">負担割合</label>
-                    {/* ★ 即保存を避け、確定ボタン付きモーダル(適用期間も指定)で保存する。 プルダウンを選んだだけでは保存されない。 */}
-                    <select disabled={isOff} value={localPatient.costBurden||''} onChange={e=>{
-                      const newVal = e.target.value;
-                      if (!newVal || newVal === localPatient.costBurden) return;
-                      const today = new Date().toISOString().split('T')[0];
-                      setCareLevelModal({ isCostBurden: true, newValue: newVal, from: today, to: '' });
-                    }} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                      <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
-                    </select>
-                    {/* 履歴は「変更履歴」タブで確認 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">介護度</span><span className="font-bold text-slate-700">{localPatient.careLevel||'—'}</span></div>
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合</span><span className="font-bold text-slate-700">{localPatient.costBurden||'—'}</span></div>
+                    <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">認定有効期間</span><span className="font-bold text-slate-700">{localPatient.careLevelFrom ? `${localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo||'（終了日なし）'}` : '未設定'}</span></div>
                   </div>
-                </div>
-                {/* 介護度 適用期間 (横幅広めなので独立行) */}
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度 適用期間</label>
-                  {/* ★ ポップアップ(介護度・期間を選択→保存)で確定する方式。 直接編集による選択即保存を避け、操作を分かりやすくする。 */}
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <div className="text-sm font-bold text-slate-700">
-                      {localPatient.careLevelFrom ? `${localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo||'（終了日なし）'}` : <span className="text-slate-400">未設定</span>}
-                    </div>
-                    {!isOff && (
-                      <button type="button" onClick={()=>setCareLevelModal({ periodOnly:true, newValue: localPatient.careLevel||'', from: localPatient.careLevelFrom || new Date().toISOString().split('T')[0], to: localPatient.careLevelTo||'' })} className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95">適用期間を変更</button>
-                    )}
-                  </div>
+                  <div className="text-[11px] text-slate-400 mt-2">※ 変更は「個人ファイルで編集」から（保険証の写真も同じ場所で管理できます）</div>
                 </div>
               </div>
 
@@ -30595,6 +30569,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           patient={personalFileModal.patient}
           appData={appData}
           initialTab={personalFileModal.initialTab}
+          focusSection={personalFileModal.focus}
           onSave={(updated)=>{ onSave(updated); }}
           onClose={()=>setPersonalFileModal(null)}
           navigateTo={navigateTo}
@@ -39819,7 +39794,7 @@ function OfficeAssessmentCard({ patientId, assessment, onSaveAssessment }) {
   );
 }
 
-function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange, initialTab }) {
+function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, navigateTo, onPatientChange, initialTab, focusSection }) {
   // ★ 個人ファイルを開いている間はクラウドポーリング(4秒)を止める。 pull は patients を丸ごと置換するため、
   //   書類の削除や添付の保存(push)が完了する前に pull が走ると、その操作が古いクラウド値で消える。
   //   (フェイスシートのモーダルと同じ扱い。 閉じたら解除)
@@ -39846,9 +39821,16 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   // ★ 患者トップレベル(docInsurance/docBurden/docUpdates 等)を保存。 personalFilePatch を渡せば個人ファイルも同時更新。
   const _recName = (()=>{ try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || '事業所'; } catch { return '事業所'; } })();
   // ★ 保険証(介護度・認定期間)/負担割合証(負担割合・有効期間)は選択即保存をやめ、下書きに溜めて「保存」で確定する。
-  const [docInsDraft, setDocInsDraft] = useState(null); // {careLevel, careLevelFrom, careLevelTo} | null
+  const [docInsDraft, setDocInsDraft] = useState(null); // {careLevel, careLevelFrom, careLevelTo, insuranceNo} | null
   const [docBurDraft, setDocBurDraft] = useState(null); // {costBurden, costBurdenFrom, costBurdenTo} | null
   React.useEffect(() => { setDocInsDraft(null); setDocBurDraft(null); }, [patient?.id]);
+  // ★ マスタ基本情報の「個人ファイルで編集」から飛んできたとき、保険証セクションへスクロールする。
+  const insuranceSecRef = React.useRef(null);
+  React.useEffect(() => {
+    if (focusSection !== 'insurance') return;
+    const t = setTimeout(() => { try { insuranceSecRef.current?.scrollIntoView({ behavior:'smooth', block:'start' }); } catch {} }, 300);
+    return () => clearTimeout(t);
+  }, [focusSection]);
   const savePatientTop = (patch, opts, personalFilePatch) => {
     const np = { ...patient, ...patch };
     if (personalFilePatch) np.personalFile = { ...personalFile, ...personalFilePatch };
@@ -40403,7 +40385,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       const dirty = !!docInsDraft && (d.careLevel!==cur.careLevel || d.careLevelFrom!==cur.careLevelFrom || d.careLevelTo!==cur.careLevelTo);
                       const upd = (patch) => setDocInsDraft({ ...d, ...patch });
                       return (
-                      <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200 space-y-2">
+                      <div ref={insuranceSecRef} className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200 space-y-2">
                         <div className="text-[11px] font-bold text-slate-500">保険証の内容（選んで「保存」を押すと利用者マスタに反映）</div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">介護度</label>
