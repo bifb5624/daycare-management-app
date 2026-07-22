@@ -33597,9 +33597,25 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
               <DataExportSection appData={appData} />
             </SectionCard>
             {/* 一括削除 (管理者用) — 利用者 / ケアマネ事業所 */}
-            {isAdmin && (() => {
+            {(() => {
+              // ★ 一括削除は「管理者のみ」。 従来 isAdmin(=manager含む)で出していたため管理者以外でも消せた。
+              //   ログイン情報カード等と同じ canAdmin(管理者パスワード認証済み / super_admin / 管理者未設定) に統一する。
+              if (!canAdmin) return (
+                <SectionCard title="一括削除（管理者用）">
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-center">
+                    <div className="text-sm font-bold text-amber-800 mb-1">管理者のみ表示・操作できます</div>
+                    <div className="text-xs text-amber-700 mb-3">サイドバーの「スタッフ切替」で管理者を選択してください{_adminAuth?.passwordHash?'（管理者パスワードの認証が必要です）':''}。</div>
+                    {_adminAuth?.passwordHash && <button type="button" onClick={()=>setShowSettingsAdminGate(true)} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm">管理者として認証</button>}
+                  </div>
+                </SectionCard>
+              );
               const patients = [...(appData.patients||[])].sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja'));
               const offices = (appData.systemSettings?.cmOffices||[]);
+              // ★ 重複候補: 氏名(空白無視)が同じ利用者が2件以上。 記録件数も出して「どれを残し・どれを消すか」を判断できるようにする。
+              const _norm = (s)=>String(s||'').replace(/[\s　]/g,'').trim();
+              const _nameCount = {}; patients.forEach(p=>{ const k=_norm(p.name); if(k) _nameCount[k]=(_nameCount[k]||0)+1; });
+              const _isDup = (p)=>{ const k=_norm(p.name); return !!(k && _nameCount[k]>1); };
+              const _recCount = (pid)=>{ const a=appData; const c=(key)=>(a[key]||[]).filter(r=>r&&r.patientId===pid).length; let n=c('ticketRecords')+c('dailyLogs')+c('monitoringRecords')+c('fitnessRecords')+c('initialReports'); Object.values(a.monthlyShifts||{}).forEach(m=>{if(m&&m[pid])n+=Object.keys(m[pid]).length;}); return n; };
               const togglePat = (id) => setBulkDelPatients(prev => { const n=new Set(prev); n.has(id)?n.delete(id):n.add(id); return n; });
               const toggleOff = (name) => setBulkDelOffices(prev => { const n=new Set(prev); n.has(name)?n.delete(name):n.add(name); return n; });
               const doDeletePatients = () => {
@@ -33630,7 +33646,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   {/* 利用者 */}
                   {(() => {
                   const _pStatus = (p) => (p.status==='退所' ? '退所' : p.status==='休止' ? '休止' : '利用中');
-                  const filteredPatients = bulkDelStatus==='all' ? patients : patients.filter(p=>_pStatus(p)===bulkDelStatus);
+                  const filteredPatients = bulkDelStatus==='all' ? patients : bulkDelStatus==='重複' ? patients.filter(_isDup) : patients.filter(p=>_pStatus(p)===bulkDelStatus);
                   return (
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -33645,16 +33661,26 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     {/* ★ 状態で絞り込み */}
                     <div className="flex items-center gap-1.5 mb-2 flex-wrap">
                       <span className="text-[11px] font-bold text-slate-500">状態:</span>
-                      {[['all','全て'],['利用中','利用中'],['休止','一時停止'],['退所','利用停止']].map(([v,l])=>(
-                        <button key={v} type="button" onClick={()=>setBulkDelStatus(v)} className={`text-xs font-bold px-3 py-1 rounded-full border ${bulkDelStatus===v?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{l}（{v==='all'?patients.length:patients.filter(p=>_pStatus(p)===v).length}）</button>
-                      ))}
+                      {[['all','全て'],['利用中','利用中'],['休止','一時停止'],['退所','利用停止'],['重複','重複候補']].map(([v,l])=>{
+                        const _cnt = v==='all'?patients.length : v==='重複'?patients.filter(_isDup).length : patients.filter(p=>_pStatus(p)===v).length;
+                        return (
+                        <button key={v} type="button" onClick={()=>setBulkDelStatus(v)} className={`text-xs font-bold px-3 py-1 rounded-full border ${bulkDelStatus===v?(v==='重複'?'bg-amber-600 text-white border-amber-600':'bg-slate-700 text-white border-slate-700'):(v==='重複'?'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50')}`}>{l}（{_cnt}）</button>
+                        );
+                      })}
                     </div>
+                    {bulkDelStatus==='重複' && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2 text-[11px] text-amber-800 font-bold leading-relaxed">
+                        氏名が同じ利用者（重複候補）だけを表示しています。各行の「記録◯件」を見て、<b>記録0件の重複だけを選んで削除</b>してください。<br/>
+                        ※ 両方に記録がある場合は削除すると記録が消えます。その場合は<b>利用者マスタ管理の「重複」統合</b>（記録を1人へ引き継ぎ）をご利用ください。
+                      </div>
+                    )}
                     <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
                       {filteredPatients.length===0 ? <div className="text-xs text-slate-400 p-3">該当する利用者がいません</div> : filteredPatients.map(p=>(
                         <label key={p.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer">
                           <input type="checkbox" checked={bulkDelPatients.has(p.id)} onChange={()=>togglePat(p.id)} className="w-4 h-4" style={{accentColor:'#dc2626'}}/>
-                          <span className={`text-sm font-bold flex-1 ${(p.name||'').trim()?'text-slate-700':'text-amber-600 italic'}`}>{(p.name||'').trim() || `（氏名なし・ID:${p.id}）`}</span>
-                          <span className="text-[11px] text-slate-400">{_pStatus(p)}{p.careLevel?`・${p.careLevel}`:''}</span>
+                          <span className={`text-sm font-bold flex-1 ${(p.name||'').trim()?'text-slate-700':'text-amber-600 italic'}`}>{(p.name||'').trim() || `（氏名なし・ID:${p.id}）`}{_isDup(p) && <span className="ml-2 text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">重複</span>}</span>
+                          {(() => { const _n=_recCount(p.id); return <span className={`text-[11px] whitespace-nowrap ${_n>0?'text-slate-500 font-bold':'text-slate-300'}`}>記録{_n}件</span>; })()}
+                          <span className="text-[11px] text-slate-400 whitespace-nowrap">{_pStatus(p)}{p.careLevel?`・${p.careLevel}`:''}</span>
                         </label>
                       ))}
                     </div>
