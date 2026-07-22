@@ -1857,7 +1857,7 @@ function ValueHistoryList({ title, hist, onChangeHist, valueOptions }) {
   const [editIdx, setEditIdx] = React.useState(null); // list 内の実インデックス
   const [draft, setDraft] = React.useState(null);
   if (!list.length) return null;
-  const fmt = (s) => { if (!s) return '?'; const d = new Date(s); return isNaN(d) ? s : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+  const fmt = (s) => { if (!s) return '?'; const w = warekiStr(s); if (w) return w; const d = new Date(s); return isNaN(d) ? s : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
   const today = new Date().toISOString().split('T')[0];
   const editable = typeof onChangeHist === 'function';
   const sorted = list.map((h, realIdx) => ({ h, realIdx })).sort((a, b) => String(b.h.from || '').localeCompare(String(a.h.from || '')));
@@ -29413,7 +29413,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                     <div><span className="text-slate-400 text-[12px] font-bold mr-2">介護度</span><span className="font-bold text-slate-700">{localPatient.careLevel||'—'}</span></div>
                     <div><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合</span><span className="font-bold text-slate-700">{localPatient.costBurden||'—'}</span></div>
-                    <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">認定有効期間</span><span className="font-bold text-slate-700">{localPatient.careLevelFrom ? `${localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo||'（終了日なし）'}` : '未設定'}</span></div>
+                    <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">認定有効期間</span><span className="font-bold text-slate-700">{localPatient.careLevelFrom ? `${warekiStr(localPatient.careLevelFrom)||localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo?(warekiStr(localPatient.careLevelTo)||localPatient.careLevelTo):'（終了日なし）'}` : '未設定'}</span></div>
+                    {localPatient.costBurdenFrom && <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合の有効期間</span><span className="font-bold text-slate-700">{`${warekiStr(localPatient.costBurdenFrom)||localPatient.costBurdenFrom} 〜 ${localPatient.costBurdenTo?(warekiStr(localPatient.costBurdenTo)||localPatient.costBurdenTo):'（終了日なし）'}`}</span></div>}
                   </div>
                   <div className="text-[11px] text-slate-400 mt-2">※ 変更は「個人ファイルで編集」から（保険証の写真も同じ場所で管理できます）</div>
                 </div>
