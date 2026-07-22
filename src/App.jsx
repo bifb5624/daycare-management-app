@@ -29383,9 +29383,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   <div className="border border-slate-200 rounded-lg overflow-hidden">
                     <InfoRow label="被保険者番号">{localPatient.insuranceNo}</InfoRow>
                     <InfoRow label="介護度">{localPatient.careLevel}</InfoRow>
+                    <InfoRow label="介護度の認定有効期間">{localPatient.careLevelFrom ? `${warekiStr(localPatient.careLevelFrom)||localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo?(warekiStr(localPatient.careLevelTo)||localPatient.careLevelTo):'（終了日なし）'}` : ''}</InfoRow>
                     <InfoRow label="負担割合">{localPatient.costBurden}</InfoRow>
-                    <InfoRow label="認定有効期間">{localPatient.careLevelFrom ? `${warekiStr(localPatient.careLevelFrom)||localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo?(warekiStr(localPatient.careLevelTo)||localPatient.careLevelTo):'（終了日なし）'}` : ''}</InfoRow>
-                    {localPatient.costBurdenFrom && <InfoRow label="負担割合の有効期間">{`${warekiStr(localPatient.costBurdenFrom)||localPatient.costBurdenFrom} 〜 ${localPatient.costBurdenTo?(warekiStr(localPatient.costBurdenTo)||localPatient.costBurdenTo):'（終了日なし）'}`}</InfoRow>}
+                    <InfoRow label="負担割合の有効期間">{localPatient.costBurdenFrom ? `${warekiStr(localPatient.costBurdenFrom)||localPatient.costBurdenFrom} 〜 ${localPatient.costBurdenTo?(warekiStr(localPatient.costBurdenTo)||localPatient.costBurdenTo):'（終了日なし）'}` : ''}</InfoRow>
                   </div>
                   <div className="text-[11px] text-slate-400 mt-2">※ 介護度・負担割合・認定期間は「保険証」「負担割合証」、被保険者番号は「フェイスシート」で編集します（いずれも個人ファイル内）</div>
                 </div>
@@ -29417,27 +29417,15 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   const directPhone = _cm?.phoneDirect || '';
                   const _lbl = (t)=><label className="block text-sm font-bold text-slate-600 mb-1.5">{t}</label>;
                   const _ro = (v)=><div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm font-bold text-slate-700">{v||'ー'}</div>;
-                  return (<div className="space-y-3">
-                    {/* 事業所: 名 → 電話 → FAX */}
-                    <div className="flex flex-wrap gap-4 items-start">
-                      <div style={{width:240}}>{_lbl('事業所名')}
-                        <select disabled={isOff} value={localPatient.cmOffice||''} onChange={e=>{const office=e.target.value;const offices=appData.systemSettings?.cmOffices||[];const officeData=offices.find(o=>o.name===office);const u={...localPatient,cmOffice:office,cmName:'',cmPhone:'',cmFax:officeData?.fax||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                          <option value="">未選択</option>{(appData.systemSettings?.cmOffices||[]).map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
-                          {localPatient.cmOffice && !(appData.systemSettings?.cmOffices||[]).some(o=>o.name===localPatient.cmOffice) && <option value={localPatient.cmOffice}>{localPatient.cmOffice}（未登録）</option>}
-                        </select>
-                      </div>
-                      <div style={{width:170}}>{_lbl('事業所電話')}{_ro(officePhone)}</div>
-                      <div style={{width:170}}>{_lbl('FAX')}{_ro(localPatient.cmFax)}</div>
-                    </div>
-                    {/* 担当者: 名 → 直通電話 */}
-                    <div className="flex flex-wrap gap-4 items-start">
-                      <div style={{width:240}}>{_lbl('担当者名')}
-                        <select disabled={isOff||!localPatient.cmOffice} value={localPatient.cmName||''} onChange={e=>{const name=e.target.value;const cms=appData.systemSettings?.careManagers||[];const found=cms.find(c=>c.office===localPatient.cmOffice&&c.name===name);const u={...localPatient,cmName:name,cmPhone:found?.phone||''};setLocalPatient(u);onSave({...appData,patients:appData.patients.map(p=>p.id===u.id?withLatestFiles(u):p)});}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                          <option value="">未選択</option>{(appData.systemSettings?.careManagers||[]).filter(c=>c.office===localPatient.cmOffice).slice().sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja')).map((c,i)=><option key={i} value={c.name}>{c.name}</option>)}
-                          {localPatient.cmName && !(appData.systemSettings?.careManagers||[]).some(c=>c.office===localPatient.cmOffice&&c.name===localPatient.cmName) && <option value={localPatient.cmName}>{localPatient.cmName}（未登録）</option>}
-                        </select>
-                      </div>
-                      <div style={{width:170}}>{_lbl('担当者 直通電話')}{_ro(directPhone)}</div>
+                  return (
+                  <div>
+                    {!isOff && <div className="flex justify-end mb-2"><button type="button" onClick={()=>setCmChangeModal({office: localPatient.cmOffice||'', name: localPatient.cmName||'', from: new Date().toISOString().split('T')[0], note:''})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95">担当を変更</button></div>}
+                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                      <InfoRow label="事業所名">{localPatient.cmOffice}</InfoRow>
+                      <InfoRow label="事業所電話">{officePhone}</InfoRow>
+                      <InfoRow label="FAX">{localPatient.cmFax}</InfoRow>
+                      <InfoRow label="担当者名">{localPatient.cmName}</InfoRow>
+                      <InfoRow label="担当者 直通電話">{directPhone}</InfoRow>
                     </div>
                   </div>);
                 })()}
@@ -29498,8 +29486,34 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 )}
               </div>
 
-              {/* ⑦ 緊急連絡先 — 縦並びレイアウト */}
+              {/* ⑦ 緊急連絡先 — 表示のみ。 編集はフェイスシートに一本化。 */}
               <div className="border-t border-slate-200 pt-4">
+                {(() => {
+                  const _contacts = getAllContacts(localPatient);
+                  return (
+                  <div className="bg-white border border-slate-200 rounded-xl p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                      <div className="text-[13px] font-bold text-slate-700 flex items-center gap-1.5"><Users size={15}/>緊急連絡先</div>
+                      {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'facesheet'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>フェイスシートで編集</button>}
+                    </div>
+                    {_contacts.length===0 ? <div className="text-xs text-slate-400 border border-slate-200 rounded-lg px-3 py-3">緊急連絡先は未登録です（フェイスシートで登録できます）。</div> : (
+                      <div className="space-y-2">
+                        {_contacts.map((c,ci)=>(
+                          <div key={ci} className="border border-slate-200 rounded-lg overflow-hidden">
+                            <InfoRow label={ci===0?'氏名':`氏名（${ci+1}人目）`}>{c.name||''}{c.relation?`（${c.relation}）`:''}</InfoRow>
+                            {c.phone ? <InfoRow label="電話（固定）">{formatJpPhone(c.phone)}</InfoRow> : null}
+                            {c.phoneMobile ? <InfoRow label="電話（携帯）">{formatJpPhone(c.phoneMobile)}</InfoRow> : null}
+                            {c.email ? <InfoRow label="メール">{c.email}</InfoRow> : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  );
+                })()}
+              </div>
+              {/* ⑦-旧 緊急連絡先の編集UI(フェイスシートへ移行済み・非表示) */}
+              <div className="hidden">
                 <h3 className="text-sm font-bold text-slate-600 mb-3 flex items-center gap-1.5"><Users size={16}/>緊急連絡先 (主要)</h3>
                 {/* ★ 紫サマリーは廃止。 家族・関係者が登録した情報は下の各欄に自動反映される */}
                 {/* ★ C4: 広い編集パネルで各欄が横に伸びすぎないよう最大幅を制限 */}
