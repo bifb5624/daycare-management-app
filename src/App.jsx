@@ -12224,7 +12224,7 @@ class ViewErrorBoundary extends React.Component {
             <div style={{fontSize:44,marginBottom:12}}>😢</div>
             <h1 style={{fontSize:17,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>表示中に問題が発生しました</h1>
             <p style={{fontSize:13,color:'#64748b',lineHeight:1.8,marginBottom:16}}>お手数ですが再読み込みしてください。<br/>繰り返す場合は事業所へお知らせください。</p>
-            <div style={{fontSize:10,color:'#cbd5e1',marginBottom:14,wordBreak:'break-all'}}>{String(this.state.err?.message||this.state.err||'')}</div>
+            <div style={{fontSize:12,color:'#b91c1c',background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'8px 10px',marginBottom:14,wordBreak:'break-all',textAlign:'left',lineHeight:1.6,maxHeight:160,overflowY:'auto'}}>{String(this.state.err?.stack || this.state.err?.message || this.state.err || '')}</div>
             <button onClick={()=>{ try { this.setState({err:null}); } catch {}; window.location.reload(); }} style={{padding:'10px 22px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>再読み込み</button>
           </div>
         </div>
@@ -30854,8 +30854,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                             const printBg = isCm ? 'bg-teal-100 hover:bg-teal-200 text-teal-700' : 'bg-violet-100 hover:bg-violet-200 text-violet-700';
                             return (
                               <div key={acc.id} className={`border ${accentBorder} rounded-xl p-3`}>
-                                <div className="grid grid-cols-12 gap-2 items-center">
-                                  <div className="col-span-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:items-center">
+                                  <div className="sm:col-span-4">
                                     <div className="text-[10px] font-bold text-slate-400">名前・続柄</div>
                                     <div className="px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs text-slate-700 truncate">
                                       {isPrim && (
@@ -30870,24 +30870,24 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                     {accPhone && <div className="text-[10px] text-slate-500 truncate">{accPhone}</div>}
                                     {isCm && officeByAcc(acc) && <div className="text-[10px] text-teal-600 font-bold truncate">{officeByAcc(acc)}</div>}
                                   </div>
-                                  <div className="col-span-4">
+                                  <div className="sm:col-span-3">
                                     <div className="text-[10px] font-bold text-slate-400">ログインID</div>
                                     <input value={acc.username} disabled={!isEditing} onChange={e=>updateField(acc.id,'username',toHalfWidth(e.target.value))} className={`w-full px-2 py-1 border rounded text-xs font-mono outline-none ${isEditing?'bg-white border-slate-300 focus:border-blue-400':'bg-slate-50 border-slate-100 text-slate-600 cursor-not-allowed'}`}/>
                                   </div>
-                                  <div className="col-span-3">
+                                  <div className="sm:col-span-2">
                                     <div className="text-[10px] font-bold text-slate-400">パスワード <span className="text-slate-300 font-normal">(本人のみ)</span></div>
                                     <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-100 text-slate-400" title="ご家族本人がログイン画面の「パスワードを忘れた」から再設定できます">
                                       {acc.password ? '••••••••' : '—'}
                                     </div>
                                   </div>
-                                  <div className="col-span-1 flex flex-col gap-1">
+                                  <div className="sm:col-span-3 flex flex-row flex-wrap gap-1.5 sm:justify-end">
                                     {isEditing ? (
-                                      <button disabled={accountEditSaving} onClick={()=>confirmAccountEdit(acc, (u)=>updateField(acc.id,'username',u))} className="px-1.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-[10px] font-bold disabled:opacity-50" title="編集を確定 (ログインIDの変更を保存)">{accountEditSaving?'…':'✓'}</button>
+                                      <button disabled={accountEditSaving} onClick={()=>confirmAccountEdit(acc, (u)=>updateField(acc.id,'username',u))} className="px-2.5 py-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded text-[11px] font-bold disabled:opacity-50 whitespace-nowrap" title="編集を確定 (ログインIDの変更を保存)">{accountEditSaving?'…':'✓ 確定'}</button>
                                     ) : (
-                                      <button onClick={()=>{setAccountEditId(acc.id); setAccountEditOrig({username: acc.username});}} className="px-1.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[10px] font-bold" title="ログインID を編集"></button>
+                                      <button onClick={()=>{setAccountEditId(acc.id); setAccountEditOrig({username: acc.username});}} className="px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap" title="ログインID を編集">ID編集</button>
                                     )}
-                                    <button onClick={()=>printSheet(acc)} className={`px-1.5 py-1 ${printBg} rounded text-[10px] font-bold`} title="ログイン情報シート印刷"></button>
-                                    <button onClick={()=>removeAccount(acc.id)} className="px-1.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[10px] font-bold" title="削除">✕</button>
+                                    <button onClick={()=>printSheet(acc)} className={`px-2.5 py-1 ${printBg} rounded text-[11px] font-bold whitespace-nowrap`} title="ログイン情報シート印刷">印刷</button>
+                                    <button onClick={()=>removeAccount(acc.id)} className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[11px] font-bold whitespace-nowrap" title="削除">削除</button>
                                   </div>
                                 </div>
                                 {acc.createdAt && <div className="text-[9px] text-slate-400 mt-1">発行日: {acc.createdAt}{acc.lastLogin && <span className="ml-2 text-emerald-600 font-bold">最終ログイン: {new Date(acc.lastLogin).toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>}{!acc.lastLogin && <span className="ml-2 text-slate-300">最終ログイン: 未ログイン</span>}{isEditing && <span className="ml-2 text-blue-500 font-bold">編集モード中 - ✓ を押して確定</span>}</div>}
