@@ -29349,114 +29349,51 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const ns = _splitSG(localPatient.name);
                 const ks = _splitSG(localPatient.kana);
                 return (
-                <div className="space-y-3">
-                  {/* 氏名 行 */}
-                  <div>
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">氏名 (姓 / 名)</label>
-                    <div className="flex flex-wrap gap-2">
-                      <input disabled={isOff} value={ns.sn} style={{width:150}}
-                        onChange={e=>updateLP('name',_joinSG(e.target.value.replace(/[\s　]/g,''),ns.gn))}
-                        placeholder="姓 (例: 山田)"
-                        className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                      <input disabled={isOff} value={ns.gn} style={{width:150}}
-                        onChange={e=>updateLP('name',_joinSG(ns.sn,e.target.value.replace(/[\s　]/g,'')))}
-                        placeholder="名 (例: 太郎)"
-                        className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                    </div>
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                    <div className="text-[12px] font-bold text-slate-500">氏名・フリガナ・性別・生年月日</div>
+                    {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'facesheet'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>フェイスシートで編集</button>}
                   </div>
-                  {/* フリガナ 行 */}
-                  <div>
-                    <label className="block text-sm font-bold text-slate-600 mb-1.5">フリガナ (姓 / 名)</label>
-                    <div className="flex flex-wrap gap-2">
-                      <KanaInput disabled={isOff} value={ks.sn}
-                        onChangeText={v=>updateLP('kana',_joinSG(v.replace(/[\s　]/g,''),ks.gn))}
-                        placeholder="ヤマダ"
-                        className="w-[150px] px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                      <KanaInput disabled={isOff} value={ks.gn}
-                        onChangeText={v=>updateLP('kana',_joinSG(ks.sn,v.replace(/[\s　]/g,'')))}
-                        placeholder="タロウ"
-                        className="w-[150px] px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm text-slate-600 font-bold outline-none disabled:opacity-60 focus:border-blue-400"/>
-                    </div>
-                  </div>
-                  {/* 性別 + 生年月日 行 (文字数に合わせた幅で横並び) */}
-                  <div className="flex flex-wrap gap-4 items-start">
-                    <div style={{width:120}}>
-                      <label className="block text-sm font-bold text-slate-600 mb-1.5">性別</label>
-                      <select disabled={isOff} value={localPatient.gender||""} onChange={e=>updateLP('gender',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
-                        <option value="">未選択</option><option value="男性">男性</option><option value="女性">女性</option>
-                      </select>
-                    </div>
-                    <div style={{width:340}}>
-                      <label className="block text-sm font-bold text-slate-600 mb-1.5">生年月日</label>
-                      <input type="date" disabled={isOff} value={localPatient.birthDate||''} onChange={e=>updateLP('birthDate',e.target.value)} style={{maxWidth:190}} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
-                      {/* ★ 和暦でも入力可能 (西暦と自動連動)。 1行に収める(改行させない) */}
-                      <WarekiBirthInput iso={localPatient.birthDate||''} disabled={isOff} onChange={(v)=>updateLP('birthDate', v)} />
-                      {localPatient.birthDate && <div className="text-[12px] text-slate-500 font-bold mt-1">{(()=>{const d=new Date(localPatient.birthDate);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;})()}{warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}　<span className="text-blue-600 text-[14px]">{calcAge(localPatient.birthDate)}歳</span></div>}
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">氏名</span><span className="font-bold text-slate-700">{localPatient.name||'—'}</span></div>
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">フリガナ</span><span className="font-bold text-slate-700">{localPatient.kana||'—'}</span></div>
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">性別</span><span className="font-bold text-slate-700">{localPatient.gender||'—'}</span></div>
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">生年月日</span><span className="font-bold text-slate-700">{localPatient.birthDate ? `${localPatient.birthDate}${warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}${calcAge(localPatient.birthDate)!=null?` ${calcAge(localPatient.birthDate)}歳`:''}` : '—'}</span></div>
                   </div>
                 </div>
                 );
               })()}
 
-              {/* ③ 介護保険関連 — 縦並びレイアウト (関連項目はペアで横並び) */}
+              {/* ③ 介護保険関連 — 表示のみ。 編集は個人ファイル(保険証・負担割合証／被保険者番号はフェイスシート)に一本化。 */}
               <div className="space-y-3">
-                {/* 被保険者番号 (単独行) */}
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1.5">被保険者番号</label>
-                  <input disabled={isOff} value={localPatient.insuranceNo||''} onChange={e=>updateLP('insuranceNo',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} inputMode="numeric" maxLength={10} placeholder="0000000000" style={{width:190}} className="px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400 tracking-widest"/>
-                </div>
-                {/* ★ 介護度・負担割合・認定有効期間 は「表示のみ」。 編集は個人ファイル(保険証・負担割合証)に一本化し、
-                    同じ項目を複数箇所で編集する混乱・巻き戻りを防ぐ。 「個人ファイルで編集」で該当箇所へジャンプ。 */}
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                    <div className="text-[12px] font-bold text-slate-500">介護度・負担割合・認定有効期間</div>
+                    <div className="text-[12px] font-bold text-slate-500">介護保険</div>
                     {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'insurance'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>個人ファイルで編集</button>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">被保険者番号</span><span className="font-bold text-slate-700">{localPatient.insuranceNo||'—'}</span></div>
                     <div><span className="text-slate-400 text-[12px] font-bold mr-2">介護度</span><span className="font-bold text-slate-700">{localPatient.careLevel||'—'}</span></div>
                     <div><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合</span><span className="font-bold text-slate-700">{localPatient.costBurden||'—'}</span></div>
                     <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">認定有効期間</span><span className="font-bold text-slate-700">{localPatient.careLevelFrom ? `${warekiStr(localPatient.careLevelFrom)||localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo?(warekiStr(localPatient.careLevelTo)||localPatient.careLevelTo):'（終了日なし）'}` : '未設定'}</span></div>
                     {localPatient.costBurdenFrom && <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合の有効期間</span><span className="font-bold text-slate-700">{`${warekiStr(localPatient.costBurdenFrom)||localPatient.costBurdenFrom} 〜 ${localPatient.costBurdenTo?(warekiStr(localPatient.costBurdenTo)||localPatient.costBurdenTo):'（終了日なし）'}`}</span></div>}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-2">※ 変更は「個人ファイルで編集」から（保険証の写真も同じ場所で管理できます）</div>
+                  <div className="text-[11px] text-slate-400 mt-2">※ 介護度・負担割合・認定期間は「保険証」「負担割合証」、被保険者番号は「フェイスシート」で編集します（いずれも個人ファイル内）</div>
                 </div>
               </div>
 
-              {/* ④ 住所（郵便番号・自動補完・建物名） — 縦並びレイアウト */}
-              <div>
-                <label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label>
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-[12px] font-bold text-slate-500 mb-0.5">郵便番号（ハイフンなしで入力）</label>
-                    <div className="flex gap-2 items-center">
-                      <input disabled={isOff} value={localPatient.zipCode||''} onChange={e=>{const raw=e.target.value.replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[^0-9]/g,'').slice(0,7);const fmt=raw.length>3?raw.slice(0,3)+'-'+raw.slice(3):raw;updateLP('zipCode',fmt);}}
-                        placeholder="1350011" maxLength={8} inputMode="numeric" style={{width:200}}
-                        className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 tracking-widest"/>
-                      <button type="button" disabled={isOff} onClick={async ()=>{
-                        const result = await lookupZipAddress(localPatient.zipCode);
-                        if (result?.full) updateLP('address', result.full);
-                        else alert('住所が見つかりませんでした。郵便番号をご確認ください。');
-                      }} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold whitespace-nowrap shadow active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed">
-                        住所検索
-                      </button>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-bold text-slate-500 mb-0.5">住所</label>
-                    <input disabled={isOff} value={localPatient.address||''} onChange={e=>updateLP('address',e.target.value)} placeholder="例: 東京都江東区扇橋1-1-1" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-bold text-slate-500 mb-0.5">建物名・部屋番号</label>
-                    <input disabled={isOff} value={localPatient.addressBuilding||''} onChange={e=>updateLP('addressBuilding',e.target.value)} placeholder="例: メイゾン白子101" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60"/>
-                  </div>
+              {/* ④⑤ 住所・連絡先 — 表示のみ。 編集はフェイスシートに一本化。 */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                  <div className="text-[12px] font-bold text-slate-500">住所・連絡先</div>
+                  {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'facesheet'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>フェイスシートで編集</button>}
                 </div>
-              </div>
-
-              {/* ⑤ 電話固定・携帯・メアド横並び */}
-              <div className="grid grid-cols-3 gap-4">
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（固定）</label><input type="tel" inputMode="numeric" disabled={isOff} value={localPatient.phone||''} onChange={e=>updateLP('phone',formatJpPhone(e.target.value))} placeholder="03-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（携帯）</label><input type="tel" inputMode="numeric" disabled={isOff} value={localPatient.phoneMobile||''} onChange={e=>updateLP('phoneMobile',formatJpPhone(e.target.value))} placeholder="090-XXXX-XXXX" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
-                <div><label className="block text-sm font-bold text-slate-600 mb-1.5">メールアドレス</label><input type="email" disabled={isOff} value={localPatient.email||''} onChange={e=>updateLP('email',e.target.value.replace(/[Ａ-Ｚａ-ｚ０-９＠．]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)))} placeholder="taro@example.com" className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold outline-none disabled:opacity-60 focus:border-blue-400"/></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                  <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">住所</span><span className="font-bold text-slate-700">{localPatient.zipCode?`〒${localPatient.zipCode} `:''}{localPatient.address||'—'}{localPatient.addressBuilding?` ${localPatient.addressBuilding}`:''}</span></div>
+                  <div><span className="text-slate-400 text-[12px] font-bold mr-2">電話（固定）</span><span className="font-bold text-slate-700">{localPatient.phone||'—'}</span></div>
+                  <div><span className="text-slate-400 text-[12px] font-bold mr-2">電話（携帯）</span><span className="font-bold text-slate-700">{localPatient.phoneMobile||'—'}</span></div>
+                  <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">メール</span><span className="font-bold text-slate-700 break-all">{localPatient.email||'—'}</span></div>
+                </div>
               </div>
 
               {/* ★ F1: 既往歴の編集はフェイスシートへ移設。 ここでは表示のみ(個人ファイル→フェイスシートで編集)。 */}
@@ -40150,6 +40087,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const [faceSheetChoice, setFaceSheetChoice] = useState(false);
   const [faceSheetAttachFocus, setFaceSheetAttachFocus] = useState(false);
   const [pdfPreviewFaceSheet, setPdfPreviewFaceSheet] = useState(false);
+  // ★ マスタ基本情報の「フェイスシートで編集」から飛んできたら、フェイスシート入力フォームを自動で開く。
+  React.useEffect(() => { if (focusSection === 'facesheet') { setActiveCat('cat_1'); setFaceSheetAttachFocus(false); setShowFaceSheetForm(true); } }, [focusSection]);
   // ★ 任意の月を指定して提供記録を作成/ダウンロードするための選択月 (既定: 先月)
   const [snapMonth, setSnapMonth] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1);
