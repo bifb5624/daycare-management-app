@@ -14356,7 +14356,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       if (!window.confirm('この保存した内容は事業所側にも変更されてしまいます。 よろしいでしょうか?')) return;
                       setPatientForm(p=>({...p, saving:true, savedMsg:''}));
                       // ★ 変更された項目名を通知に含める(ホームの「更新内容」に具体的な項目が出るように)。
-                      const _fieldLabels = { phone:'電話番号', email:'メールアドレス', doctor:'かかりつけ医', medicalInstitution:'医療機関名', medicalContact:'医療機関の連絡先', address:'住所', kiou:'既往歴', ryui:'留意点', name:'お名前', kana:'フリガナ' };
+                      const _fieldLabels = { name:'お名前', kana:'フリガナ', birthDate:'生年月日', gender:'性別', careLevel:'介護度', hihokenNum:'被保険者番号', phone:'電話番号', email:'メールアドレス', doctor:'かかりつけ医', medicalInstitution:'医療機関名', medicalContact:'医療機関の連絡先', address:'住所', kiou:'既往歴', ryui:'留意点' };
                       const _changedLabels = Object.keys(_fieldLabels).filter(k => String(patient?.[k] ?? '') !== String(patientForm[k] ?? '')).map(k => _fieldLabels[k]);
                       const _docItems = _changedLabels.length
                         ? [`利用者情報の編集（${_changedLabels.slice(0,8).join('・')}${_changedLabels.length>8?` ほか${_changedLabels.length-8}項目`:''}）`]
