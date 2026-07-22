@@ -13470,9 +13470,11 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {list.map(d => {
             const isNew = !origIns.current.has(String(d.id)) && !origBur.current.has(String(d.id)) && !origAsmt.current.has(String(d.id));
+            // ★ 事業所アップロードのPDFは type='application/pdf'、ケアマネアップロードは 'pdf'。 名前も見て堅牢に判定。
+            const _isPdf = (d.type||'').includes('pdf') || /\.pdf$/i.test(d.name||'');
             return (
               <div key={d.id} style={{ position: 'relative', width: 88 }}>
-                {d.type === 'pdf' ? (
+                {_isPdf ? (
                   <div onClick={() => setPreview({ file: d, name: d.name, type: 'pdf' })} style={{ width: 88, height: 88, borderRadius: 8, border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: '#b91c1c', background: '#fef2f2', cursor: 'pointer', textAlign: 'center', padding: 4 }}>PDF</div>
                 ) : (
                   <StoredImage file={d} alt={d.name} style={{ width: 88, height: 88, objectFit: 'cover', borderRadius: 8, border: '1px solid #cbd5e1', cursor: 'pointer' }} onClick={() => setPreview({ file: d, name: d.name, type: 'image' })} />
@@ -39643,7 +39645,19 @@ function StoredFileLink({ file, className, children }) {
 // 写真/PDF 全画面プレビュー (署名URL対応)。 media = { file?, url?, name, type }
 function MediaPreviewModal({ media, onClose }) {
   const signed = useSignedUrl(media?.file);
-  const url = signed || media?.url || '';
+  const rawUrl = signed || media?.url || '';
+  // ★ PDF判定を堅牢化 (type='pdf' / 'application/pdf' / .pdf名 いずれも)。
+  const isPdf = media?.type === 'pdf'
+    || ((media?.file?.type||'')+'').includes('pdf')
+    || /\.pdf(\?|$)/i.test(media?.file?.name || media?.file?.url || media?.name || '');
+  // ★ data: URI のPDFはブラウザが iframe/別タブでブロックするため、Blob URL に変換して表示・オープンする。
+  const [pdfBlobUrl, setPdfBlobUrl] = useState('');
+  useEffect(() => {
+    if (!isPdf || !rawUrl.startsWith('data:')) { setPdfBlobUrl(''); return; }
+    let u = ''; try { const [meta, b64] = rawUrl.split(','); const mime = (meta.match(/data:([^;]+)/)||[])[1] || 'application/pdf'; const bin = atob(b64); const arr = new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i); u = URL.createObjectURL(new Blob([arr], { type: mime })); setPdfBlobUrl(u); } catch { setPdfBlobUrl(''); }
+    return () => { if (u) URL.revokeObjectURL(u); };
+  }, [isPdf, rawUrl]);
+  const url = (isPdf && rawUrl.startsWith('data:')) ? pdfBlobUrl : rawUrl;
   return (
     <div onClick={onClose}
       style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.92)',zIndex:10000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:8}}>
@@ -39651,9 +39665,11 @@ function MediaPreviewModal({ media, onClose }) {
         style={{position:'absolute',top:12,right:12,background:'rgba(255,255,255,0.2)',color:'white',border:'none',borderRadius:24,width:44,height:44,fontSize:22,fontWeight:'bold',cursor:'pointer',zIndex:1}}>✕</button>
       {url && <a href={url} download={media.name||'file'} onClick={(e)=>e.stopPropagation()}
         style={{position:'absolute',top:12,left:12,background:'#7daa3d',color:'white',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',textDecoration:'none'}}>ダウンロード</a>}
+      {url && isPdf && <button onClick={(e)=>{e.stopPropagation(); window.open(url,'_blank','noopener');}}
+        style={{position:'absolute',top:12,left:'50%',transform:'translateX(-50%)',background:'#2563eb',color:'white',border:'none',padding:'8px 14px',borderRadius:20,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>別タブで開く</button>}
       {!url ? (
         <div style={{color:'white',fontSize:14,fontWeight:'bold'}}>読み込み中...</div>
-      ) : media.type === 'pdf' ? (
+      ) : isPdf ? (
         <iframe src={url} title="PDF" style={{width:'100%',height:'100%',maxWidth:'95vw',maxHeight:'90vh',border:'none',background:'white',borderRadius:8}}/>
       ) : (
         <img src={url} alt={media.name||''} onClick={(e)=>e.stopPropagation()}
