@@ -28141,6 +28141,15 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
 function LabelInput({ label, disabled, value, onChange, onBlur, onFocus, type = "text", placeholder = "", width }) {
   return (<div style={width ? { width } : undefined}><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} onBlur={onBlur} onFocus={onFocus} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 }
+// ★ 表示専用の項目行(ラベル=左・色つき / 値=右)。 基本情報の閲覧を表形式で見やすくする。
+function InfoRow({ label, children }) {
+  return (
+    <div className="flex border-b border-slate-100 last:border-b-0">
+      <div className="w-28 sm:w-36 shrink-0 bg-slate-50 px-3 py-2 text-[12px] font-bold text-slate-500 flex items-center leading-snug">{label}</div>
+      <div className="flex-1 px-3 py-2 text-sm font-bold text-slate-800 break-words min-w-0 flex items-center">{(children===''||children==null)?<span className="text-slate-300">—</span>:children}</div>
+    </div>
+  );
+}
 function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef, navFocus, onFocusHandled }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
   const scheduleSectionRef = React.useRef(null);
@@ -29349,16 +29358,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 const ns = _splitSG(localPatient.name);
                 const ks = _splitSG(localPatient.kana);
                 return (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="bg-white border border-slate-200 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                    <div className="text-[12px] font-bold text-slate-500">氏名・フリガナ・性別・生年月日</div>
+                    <div className="text-[13px] font-bold text-slate-700">氏名・フリガナ・性別・生年月日</div>
                     {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'facesheet'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>フェイスシートで編集</button>}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">氏名</span><span className="font-bold text-slate-700">{localPatient.name||'—'}</span></div>
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">フリガナ</span><span className="font-bold text-slate-700">{localPatient.kana||'—'}</span></div>
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">性別</span><span className="font-bold text-slate-700">{localPatient.gender||'—'}</span></div>
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">生年月日</span><span className="font-bold text-slate-700">{localPatient.birthDate ? `${localPatient.birthDate}${warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}${calcAge(localPatient.birthDate)!=null?` ${calcAge(localPatient.birthDate)}歳`:''}` : '—'}</span></div>
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <InfoRow label="氏名">{localPatient.name}</InfoRow>
+                    <InfoRow label="フリガナ">{localPatient.kana}</InfoRow>
+                    <InfoRow label="性別">{localPatient.gender}</InfoRow>
+                    <InfoRow label="生年月日">{localPatient.birthDate ? `${localPatient.birthDate}${warekiStr(localPatient.birthDate)?`（${warekiStr(localPatient.birthDate)}）`:''}${calcAge(localPatient.birthDate)!=null?`　${calcAge(localPatient.birthDate)}歳`:''}` : ''}</InfoRow>
                   </div>
                 </div>
                 );
@@ -29366,33 +29375,33 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
               {/* ③ 介護保険関連 — 表示のみ。 編集は個人ファイル(保険証・負担割合証／被保険者番号はフェイスシート)に一本化。 */}
               <div className="space-y-3">
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <div className="bg-white border border-slate-200 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                    <div className="text-[12px] font-bold text-slate-500">介護保険</div>
+                    <div className="text-[13px] font-bold text-slate-700">介護保険</div>
                     {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'insurance'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>個人ファイルで編集</button>}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">被保険者番号</span><span className="font-bold text-slate-700">{localPatient.insuranceNo||'—'}</span></div>
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">介護度</span><span className="font-bold text-slate-700">{localPatient.careLevel||'—'}</span></div>
-                    <div><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合</span><span className="font-bold text-slate-700">{localPatient.costBurden||'—'}</span></div>
-                    <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">認定有効期間</span><span className="font-bold text-slate-700">{localPatient.careLevelFrom ? `${warekiStr(localPatient.careLevelFrom)||localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo?(warekiStr(localPatient.careLevelTo)||localPatient.careLevelTo):'（終了日なし）'}` : '未設定'}</span></div>
-                    {localPatient.costBurdenFrom && <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">負担割合の有効期間</span><span className="font-bold text-slate-700">{`${warekiStr(localPatient.costBurdenFrom)||localPatient.costBurdenFrom} 〜 ${localPatient.costBurdenTo?(warekiStr(localPatient.costBurdenTo)||localPatient.costBurdenTo):'（終了日なし）'}`}</span></div>}
+                  <div className="border border-slate-200 rounded-lg overflow-hidden">
+                    <InfoRow label="被保険者番号">{localPatient.insuranceNo}</InfoRow>
+                    <InfoRow label="介護度">{localPatient.careLevel}</InfoRow>
+                    <InfoRow label="負担割合">{localPatient.costBurden}</InfoRow>
+                    <InfoRow label="認定有効期間">{localPatient.careLevelFrom ? `${warekiStr(localPatient.careLevelFrom)||localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo?(warekiStr(localPatient.careLevelTo)||localPatient.careLevelTo):'（終了日なし）'}` : ''}</InfoRow>
+                    {localPatient.costBurdenFrom && <InfoRow label="負担割合の有効期間">{`${warekiStr(localPatient.costBurdenFrom)||localPatient.costBurdenFrom} 〜 ${localPatient.costBurdenTo?(warekiStr(localPatient.costBurdenTo)||localPatient.costBurdenTo):'（終了日なし）'}`}</InfoRow>}
                   </div>
                   <div className="text-[11px] text-slate-400 mt-2">※ 介護度・負担割合・認定期間は「保険証」「負担割合証」、被保険者番号は「フェイスシート」で編集します（いずれも個人ファイル内）</div>
                 </div>
               </div>
 
               {/* ④⑤ 住所・連絡先 — 表示のみ。 編集はフェイスシートに一本化。 */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <div className="bg-white border border-slate-200 rounded-xl p-3">
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                  <div className="text-[12px] font-bold text-slate-500">住所・連絡先</div>
+                  <div className="text-[13px] font-bold text-slate-700">住所・連絡先</div>
                   {!isOff && <button type="button" onClick={()=>setPersonalFileModal({patient:localPatient, initialTab:'cat_1', focus:'facesheet'})} className="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95 flex items-center gap-1"><BookOpen size={13}/>フェイスシートで編集</button>}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                  <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">住所</span><span className="font-bold text-slate-700">{localPatient.zipCode?`〒${localPatient.zipCode} `:''}{localPatient.address||'—'}{localPatient.addressBuilding?` ${localPatient.addressBuilding}`:''}</span></div>
-                  <div><span className="text-slate-400 text-[12px] font-bold mr-2">電話（固定）</span><span className="font-bold text-slate-700">{localPatient.phone||'—'}</span></div>
-                  <div><span className="text-slate-400 text-[12px] font-bold mr-2">電話（携帯）</span><span className="font-bold text-slate-700">{localPatient.phoneMobile||'—'}</span></div>
-                  <div className="sm:col-span-2"><span className="text-slate-400 text-[12px] font-bold mr-2">メール</span><span className="font-bold text-slate-700 break-all">{localPatient.email||'—'}</span></div>
+                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                  <InfoRow label="住所">{(localPatient.zipCode||localPatient.address||localPatient.addressBuilding) ? `${localPatient.zipCode?`〒${localPatient.zipCode} `:''}${localPatient.address||''}${localPatient.addressBuilding?` ${localPatient.addressBuilding}`:''}` : ''}</InfoRow>
+                  <InfoRow label="電話（固定）">{localPatient.phone}</InfoRow>
+                  <InfoRow label="電話（携帯）">{localPatient.phoneMobile}</InfoRow>
+                  <InfoRow label="メール">{localPatient.email}</InfoRow>
                 </div>
               </div>
 
