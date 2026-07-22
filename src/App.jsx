@@ -28257,11 +28257,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [newPatientFirst, setNewPatientFirst] = useState('');
   const [newPatientKanaLast, setNewPatientKanaLast] = useState('');
   const [newPatientKanaFirst, setNewPatientKanaFirst] = useState('');
-  const [careLevelModal, setCareLevelModal] = useState(null); // {newValue, from, to, note, isCostBurden}
-  // ★ 介護度 適用期間の編集下書き。 null=保存値をそのまま表示。 カレンダーで編集すると下書きに溜め、
-  //   「この期間で保存」を押したときだけ commitLP で保存する(選択即保存を避ける)。
-  const [careLevelPeriodDraft, setCareLevelPeriodDraft] = useState(null); // {from,to} | null
-  React.useEffect(() => { setCareLevelPeriodDraft(null); }, [localPatient?.id]);
+  const [careLevelModal, setCareLevelModal] = useState(null); // {newValue, from, to, note, isCostBurden, periodOnly}
   const [cmChangeModal, setCmChangeModal] = useState(null); // {office, name, from, note}
   const [editHistModal, setEditHistModal] = useState(null); // {type, idx, entry}
   const [deleteHistConfirm, setDeleteHistConfirm] = useState(null); // {type, idx}
@@ -29225,7 +29221,6 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div className="flex items-center gap-1">
                 <button onClick={()=>{setNewPatientName('');setNewPatientModal(true);}} className="flex items-center gap-1 px-2 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0"><Plus size={13}/>新規</button>
                 <button onClick={()=>setCsvModal({isOpen:true, mode:null, importText:'', error:''})} title="CSV入出力" className="flex items-center gap-1 px-2 py-1.5 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0">CSV</button>
-                <button onClick={()=>setMergeModal({open:true})} title="重複している利用者を統合（記録は引き継ぎ）" className="flex items-center gap-1 px-2 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[12px] font-bold shadow active:scale-95 whitespace-nowrap shrink-0">重複</button>
                 <button onClick={() => { if (isMobileView) setMobileRosterOpen(false); else setIsSidebarCollapsed(true); }} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg" title={isMobileView ? '閉じる' : '名簿を折りたたむ'}><ChevronLeft size={18} /></button>
               </div>
             </div>
@@ -29438,21 +29433,15 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {/* 介護度 適用期間 (横幅広めなので独立行) */}
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">介護度 適用期間</label>
-                  {/* ★ 選択即保存をやめ、下書きに溜めて「この期間で保存」を押したときだけ確定する。 */}
-                  {(() => {
-                    const _f = careLevelPeriodDraft ? careLevelPeriodDraft.from : (localPatient.careLevelFrom||'');
-                    const _t = careLevelPeriodDraft ? careLevelPeriodDraft.to : (localPatient.careLevelTo||'');
-                    return (<>
-                      <div style={{maxWidth:380}}><DateRangePicker fromValue={_f} toValue={_t} onFromChange={v=>setCareLevelPeriodDraft({from:v, to:_t})} onToChange={v=>setCareLevelPeriodDraft({from:_f, to:v})} disabled={isOff}/></div>
-                      {careLevelPeriodDraft && !isOff && (
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <button type="button" onClick={()=>{ commitLP({ careLevelFrom: careLevelPeriodDraft.from, careLevelTo: careLevelPeriodDraft.to }, '✓ 介護度の適用期間を保存しました'); setCareLevelPeriodDraft(null); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold active:scale-95 whitespace-nowrap">この期間で保存</button>
-                          <button type="button" onClick={()=>setCareLevelPeriodDraft(null)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-bold whitespace-nowrap">取消</button>
-                          <span className="text-[11px] text-amber-600 font-bold">未保存（確定するまで反映されません）</span>
-                        </div>
-                      )}
-                    </>);
-                  })()}
+                  {/* ★ ポップアップ(介護度・期間を選択→保存)で確定する方式。 直接編集による選択即保存を避け、操作を分かりやすくする。 */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="text-sm font-bold text-slate-700">
+                      {localPatient.careLevelFrom ? `${localPatient.careLevelFrom} 〜 ${localPatient.careLevelTo||'（終了日なし）'}` : <span className="text-slate-400">未設定</span>}
+                    </div>
+                    {!isOff && (
+                      <button type="button" onClick={()=>setCareLevelModal({ periodOnly:true, newValue: localPatient.careLevel||'', from: localPatient.careLevelFrom || new Date().toISOString().split('T')[0], to: localPatient.careLevelTo||'' })} className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-bold whitespace-nowrap active:scale-95">適用期間を変更</button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -31154,7 +31143,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="text-base font-bold text-slate-800 mb-1 text-center">
-              {careLevelModal.isCostBurden ? '負担割合の変更' : '介護度の変更'}
+              {careLevelModal.periodOnly ? '介護度 適用期間の変更' : careLevelModal.isCostBurden ? '負担割合の変更' : '介護度の変更'}
             </h3>
             {!careLevelModal.isCostBurden && (
               <div className="mb-3">
@@ -31194,13 +31183,22 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none focus:border-blue-400"/>
               </div>
             </div>
-            {careLevelModal.from > new Date().toISOString().split('T')[0] && (
+            {!careLevelModal.periodOnly && careLevelModal.from > new Date().toISOString().split('T')[0] && (
               <p className="text-[11px] text-blue-600 font-bold mb-3 bg-blue-50 rounded-lg px-3 py-2">⏰ 開始日になったら自動的に適用されます</p>
             )}
             <div className="flex gap-3">
               <button onClick={()=>setCareLevelModal(null)} className="flex-1 py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">キャンセル</button>
-              <button disabled={!careLevelModal.from||!careLevelModal.newValue||(!careLevelModal.isCostBurden && !careLevelModal.to)} onClick={()=>{
+              <button disabled={!careLevelModal.from||!careLevelModal.newValue||(!careLevelModal.isCostBurden && !careLevelModal.periodOnly && !careLevelModal.to)} onClick={()=>{
                 if (!localPatient) return;
+                if (careLevelModal.periodOnly) {
+                  // ★ 適用期間の訂正: 介護度の値はそのまま、期間だけ更新(履歴は増やさない)。 値も変えていれば併せて反映。
+                  const upd = { ...localPatient, careLevelFrom: careLevelModal.from, careLevelTo: careLevelModal.to||'', ...(careLevelModal.newValue && careLevelModal.newValue !== localPatient.careLevel ? { careLevel: careLevelModal.newValue } : {}) };
+                  setLocalPatient(upd);
+                  if (dirtyRef) dirtyRef.current = false;
+                  onSave({ ...appData, patients: appData.patients.map(p=>p.id===upd.id?withLatestFiles(upd):p) }, { manual:true, message:'✓ 介護度の適用期間を保存しました' });
+                  setCareLevelModal(null);
+                  return;
+                }
                 const today = new Date().toISOString().split('T')[0];
                 const isCB = careLevelModal.isCostBurden;
                 const histKey = isCB ? 'costBurdenHistory' : 'careLevelHistory';
@@ -31235,7 +31233,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 }
                 setCareLevelModal(null);
               }} className="flex-1 py-2.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 shadow-lg active:scale-95">
-                {careLevelModal.from > new Date().toISOString().split('T')[0] ? '予定として保存' : '確定'}
+                {careLevelModal.periodOnly ? '保存' : (careLevelModal.from > new Date().toISOString().split('T')[0] ? '予定として保存' : '確定')}
               </button>
             </div>
           </div>
@@ -33671,7 +33669,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     {bulkDelStatus==='重複' && (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2 text-[11px] text-amber-800 font-bold leading-relaxed">
                         氏名が同じ利用者（重複候補）だけを表示しています。各行の「記録◯件」を見て、<b>記録0件の重複だけを選んで削除</b>してください。<br/>
-                        ※ 両方に記録がある場合は削除すると記録が消えます。その場合は<b>利用者マスタ管理の「重複」統合</b>（記録を1人へ引き継ぎ）をご利用ください。
+                        ※ 記録のある方は残してください。両方に記録がある場合、削除するとその記録は消えます（元に戻せません）。
                       </div>
                     )}
                     <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
