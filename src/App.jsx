@@ -31800,8 +31800,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const saveSS = (patch, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), ...patch, _updatedAt: syncNow() } }, { manual:true, message: msg || '✓ 保存しました' });
   // ★ 一括削除(管理者用): 選択中の利用者ID / ケアマネ事業所名
   const [bulkDelPatients, setBulkDelPatients] = useState(() => new Set());
-  const [bulkDelStatus, setBulkDelStatus] = useState('all'); // 一括削除の状態絞り込み: all/利用中/休止/退所
+  const [bulkDelStatus, setBulkDelStatus] = useState('all'); // 一括削除の状態絞り込み: all/利用中/休止/退所/重複
   const [bulkDelOffices, setBulkDelOffices] = useState(() => new Set());
+  const [dupMergeKeep, setDupMergeKeep] = useState({}); // 重複統合で「残す」利用者ID {正規化名: keepId}
   // ★ アドオン (本部のみ ON/OFF)。 即時保存。
   const toggleAddon = (key) => {
     const cur = appData.systemSettings?.addons || {};
@@ -33638,6 +33639,25 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), cmOffices: nextOffices, careManagers: nextManagers } }, { manual:true, message:`✓ ${nm.length}件のケアマネ事業所を削除しました`, allowEmpty:true });
                 setBulkDelOffices(new Set());
               };
+              // ★ 重複利用者の統合: dropIds の全記録を keepId へ付け替え、keep の空欄を drop から補完し、drop を削除。
+              //   (利用者マスタの統合と同じロジック。 記録を失わずに1人へまとめる)
+              const performMergeS = (keepId, dropIds) => {
+                const drops = new Set(dropIds);
+                const keep = (appData.patients||[]).find(p=>p.id===keepId);
+                if (!keep) return;
+                const dropPats = (appData.patients||[]).filter(p=>drops.has(p.id));
+                const isEmpty = (v)=> v===undefined||v===null||v===''||(Array.isArray(v)&&v.length===0);
+                const mergedKeep = { ...keep };
+                dropPats.forEach(dp=>{ Object.keys(dp).forEach(k=>{ if(k==='id')return; if(isEmpty(mergedKeep[k]) && !isEmpty(dp[k])) mergedKeep[k]=dp[k]; }); });
+                const REPOINT = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','familyInvites','familyAccounts','absences','notices'];
+                const next = { ...appData };
+                REPOINT.forEach(key=>{ if(!Array.isArray(next[key]))return; next[key]=next[key].map(r=>(r&&drops.has(r.patientId))?{...r,patientId:keepId}:r); });
+                const ms = { ...(next.monthlyShifts||{}) };
+                Object.keys(ms).forEach(mKey=>{ const month={...(ms[mKey]||{})}; let changed=false; dropIds.forEach(did=>{ if(month[did]){ month[keepId]={...(month[did]||{}),...(month[keepId]||{})}; delete month[did]; changed=true; } }); if(changed) ms[mKey]=month; });
+                next.monthlyShifts = ms;
+                next.patients = (appData.patients||[]).filter(p=>!drops.has(p.id)).map(p=>p.id===keepId?mergedKeep:p);
+                onSave(next, { manual:true, message:'✓ 重複を統合しました', allowEmpty:true });
+              };
               return (
                 <SectionCard title="一括削除（管理者用）">
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-xs text-red-700 font-bold">⚠ ここでの削除は<b>元に戻せません</b>。チェックを付けて「選択した◯件を削除」を押すと、まとめて削除できます（1件ずつの削除も可）。この機能は<b>管理者のみ</b>に表示されます。</div>
@@ -33649,12 +33669,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   <div className="mb-6">
                     <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                       <div className="text-sm font-bold text-slate-700">利用者（{filteredPatients.length}名{bulkDelStatus!=='all'?` / 全${patients.length}名`:''}）</div>
+                      {bulkDelStatus!=='重複' && (
                       <div className="flex items-center gap-2 flex-wrap">
                         <button type="button" onClick={()=>setBulkDelPatients(new Set(filteredPatients.filter(p=>!(p.name||'').trim()).map(p=>p.id)))} className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-2 py-1 rounded" title="氏名が空の利用者だけを選択(CSVの空行対策)">氏名が空を選択</button>
                         <button type="button" onClick={()=>setBulkDelPatients(new Set(filteredPatients.map(p=>p.id)))} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">{bulkDelStatus==='all'?'全選択':'表示中を全選択'}</button>
                         <button type="button" onClick={()=>setBulkDelPatients(new Set())} className="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">全解除</button>
                         <button type="button" onClick={doDeletePatients} disabled={!bulkDelPatients.size} className="text-xs font-bold text-white bg-red-600 hover:bg-red-700 disabled:opacity-40 px-3 py-1 rounded">選択した{bulkDelPatients.size||''}件を削除</button>
                       </div>
+                      )}
                     </div>
                     {/* ★ 状態で絞り込み */}
                     <div className="flex items-center gap-1.5 mb-2 flex-wrap">
@@ -33666,12 +33688,49 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         );
                       })}
                     </div>
-                    {bulkDelStatus==='重複' && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-2 text-[11px] text-amber-800 font-bold leading-relaxed">
-                        氏名が同じ利用者（重複候補）だけを表示しています。各行の「記録◯件」を見て、<b>記録0件の重複だけを選んで削除</b>してください。<br/>
-                        ※ 記録のある方は残してください。両方に記録がある場合、削除するとその記録は消えます（元に戻せません）。
-                      </div>
-                    )}
+                    {bulkDelStatus==='重複' ? (() => {
+                      // ★ 同名(空白無視)でグループ化し、グループごとに「残す1人」を選んで統合する。
+                      const groups = {};
+                      filteredPatients.forEach(p=>{ const k=_norm(p.name); (groups[k]=groups[k]||[]).push(p); });
+                      const groupList = Object.entries(groups);
+                      return (<>
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-3 text-[11px] text-amber-800 font-bold leading-relaxed">
+                          氏名が同じ利用者（重複候補）です。<b>残す1人を選んで「統合」</b>すると、他の重複の記録（提供記録・シフト等）はすべて残す人へ引き継がれ、重複は削除されます（記録は失われません）。<br/>
+                          ※ 別人が同姓同名なだけの場合は統合しないでください。
+                        </div>
+                        {groupList.length===0 ? <div className="text-xs text-slate-400 p-3 border border-slate-200 rounded-xl">重複候補はありません</div> : (
+                          <div className="space-y-3">
+                            {groupList.map(([k, ps])=>{
+                              const sorted=[...ps].sort((a,b)=>_recCount(b.id)-_recCount(a.id));
+                              const keepId = (dupMergeKeep[k] && ps.some(p=>p.id===dupMergeKeep[k])) ? dupMergeKeep[k] : sorted[0].id;
+                              const dropIds = ps.filter(p=>p.id!==keepId).map(p=>p.id);
+                              const keepP = ps.find(p=>p.id===keepId);
+                              return (
+                                <div key={k} className="border border-amber-200 bg-amber-50/40 rounded-xl p-3">
+                                  <div className="text-sm font-bold text-slate-700 mb-2">{(ps[0].name||'').trim()||'（氏名なし）'} <span className="text-[11px] text-amber-700">／ {ps.length}件の重複</span></div>
+                                  <div className="space-y-1.5 mb-2.5">
+                                    {ps.map(p=>(
+                                      <label key={p.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                                        <input type="radio" name={`dupkeep_${k}`} checked={keepId===p.id} onChange={()=>setDupMergeKeep(prev=>({...prev,[k]:p.id}))} className="w-4 h-4" style={{accentColor:'#059669'}}/>
+                                        <span className="font-bold text-slate-700">{(p.name||'').trim()||`（ID:${p.id}）`}</span>
+                                        <span className="text-[11px] text-slate-500 whitespace-nowrap">記録{_recCount(p.id)}件・{_pStatus(p)}{p.careLevel?`・${p.careLevel}`:''}</span>
+                                        {keepId===p.id && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded-full whitespace-nowrap">残す</span>}
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <button type="button" onClick={()=>{
+                                    if(!dropIds.length){ alert('統合先(残す人)以外の重複がありません'); return; }
+                                    if(!window.confirm(`「${(keepP?.name||'').trim()}」に統合します。\n\n他の ${dropIds.length}件 の記録（提供記録・シフト・写真など）はすべて「${(keepP?.name||'').trim()}」へ引き継がれ、重複していた ${dropIds.length}件 は削除されます。\n\n統合してよろしいですか？`)) return;
+                                    performMergeS(keepId, dropIds);
+                                    setDupMergeKeep(prev=>{ const n={...prev}; delete n[k]; return n; });
+                                  }} className="text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 rounded active:scale-95">「残す」に統合（記録を引き継ぐ）</button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>);
+                    })() : (
                     <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 max-h-64 overflow-y-auto">
                       {filteredPatients.length===0 ? <div className="text-xs text-slate-400 p-3">該当する利用者がいません</div> : filteredPatients.map(p=>(
                         <label key={p.id} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer">
@@ -33682,6 +33741,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         </label>
                       ))}
                     </div>
+                    )}
                   </div>
                   ); })()}
                   {/* ケアマネ事業所 */}
