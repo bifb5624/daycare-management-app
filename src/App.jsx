@@ -14267,6 +14267,12 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                       // ★ 保存前に確認ダイアログ
                       if (!window.confirm('この保存した内容は事業所側にも変更されてしまいます。 よろしいでしょうか?')) return;
                       setPatientForm(p=>({...p, saving:true, savedMsg:''}));
+                      // ★ 変更された項目名を通知に含める(ホームの「更新内容」に具体的な項目が出るように)。
+                      const _fieldLabels = { phone:'電話番号', email:'メールアドレス', doctor:'かかりつけ医', medicalInstitution:'医療機関名', medicalContact:'医療機関の連絡先', address:'住所', kiou:'既往歴', ryui:'留意点', name:'お名前', kana:'フリガナ' };
+                      const _changedLabels = Object.keys(_fieldLabels).filter(k => String(patient?.[k] ?? '') !== String(patientForm[k] ?? '')).map(k => _fieldLabels[k]);
+                      const _docItems = _changedLabels.length
+                        ? [`利用者情報の編集（${_changedLabels.slice(0,8).join('・')}${_changedLabels.length>8?` ほか${_changedLabels.length-8}項目`:''}）`]
+                        : ['利用者情報の編集'];
                       const updatedPatient = {
                         ...patient,
                         name: patientForm.name,
@@ -14284,7 +14290,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         kiou: patientForm.kiou,
                         ryui: patientForm.ryui,
                         // ★ 事業所へ通知
-                        docUpdates: appendDocUpdate(patient, (loggedAcc?.kind==='caremanager'?'caremanager':'family'), (loggedAcc?.displayName||''), ['利用者情報の編集']),
+                        docUpdates: appendDocUpdate(patient, (loggedAcc?.kind==='caremanager'?'caremanager':'family'), (loggedAcc?.displayName||''), _docItems),
                         // ★ 医療情報(かかりつけ医/医療機関/連絡先)はフェイスシートにも同期(双方向)
                         personalFile: { ...(patient.personalFile||{}), faceSheet: { ...((patient.personalFile||{}).faceSheet||{}), chronicDiseases: patientForm.doctor, medicalInstitution: patientForm.medicalInstitution, medicalContact: patientForm.medicalContact } },
                       };
@@ -18649,7 +18655,7 @@ export default function App() {
             {/* ★ 連絡帳(print)は高さの flex 配分でレイアウトするため、zoom + height:% だと iPad Safari で
                 高さが解決できず運動テーブル(flex:1 1 0)が潰れて切れる(サイドバーを開くと縮率が下がり顕在化)。
                 ホーム(dashboard)と同様に zoom 縮小の対象外にし、等倍＋スクロールで表示する。 */}
-            <div style={isMobileLayout ? {width:'100%',minWidth:0} : (currentView==='dashboard' || currentView==='print') ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : 1, width: contentScale<1 ? `${100/contentScale}%` : '100%', height: contentScale<1 ? `${100/contentScale}%` : '100%'}}>
+            <div style={isMobileLayout ? {width:'100%',minWidth:0} : (currentView==='dashboard' || currentView==='print' || currentView==='master') ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : 1, width: contentScale<1 ? `${100/contentScale}%` : '100%', height: contentScale<1 ? `${100/contentScale}%` : '100%'}}>
             {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} isNoticeRead={isNoticeRead} markNoticeRead={markNoticeRead} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
@@ -19300,6 +19306,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     const others = (appData.ticketRecords||[]).filter(r => !(r && recMatchesDateYear(r, _dateStr, _yr)));
     const restored = snap.recs.map(r => ({ ...r, _savedAt: syncNow() })); // 復元＝最新として保存(他端末にも反映)
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
+    // ★ 復元は「編集中(dirty)」でも必ず画面へ反映させる。 dirtyRef を落とさないと、
+    //   再seedエフェクトのガード(!_dateChanged && dirtyRef)で localPatients が作り直されず、
+    //   データは復元されているのに画面が復元前のまま(=「戻したのに変わらない」)になる。
+    if (dirtyRef) dirtyRef.current = false;
     setRestoreModal(false);
   };
   // ★ 直前スナップショットとの差分で「どの利用者を編集したか」を返す
@@ -29409,7 +29419,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   </div>
                   <div style={{width:170}}>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">負担割合</label>
-                    <select disabled={isOff} value={localPatient.costBurden||''} onChange={e=>updateLP('costBurden',e.target.value)} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
+                    {/* ★ 即保存を避け、確定ボタン付きモーダル(適用期間も指定)で保存する。 プルダウンを選んだだけでは保存されない。 */}
+                    <select disabled={isOff} value={localPatient.costBurden||''} onChange={e=>{
+                      const newVal = e.target.value;
+                      if (!newVal || newVal === localPatient.costBurden) return;
+                      const today = new Date().toISOString().split('T')[0];
+                      setCareLevelModal({ isCostBurden: true, newValue: newVal, from: today, to: '' });
+                    }} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60">
                       <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
                     </select>
                     {/* 履歴は「変更履歴」タブで確認 */}
