@@ -1076,7 +1076,7 @@ const buildPrimaryContact = (p) => {
 };
 // ★ ケアマネ由来の連絡先は緊急連絡先(家族)には出さない。 事業所名/事業所電話/FAX を持つ or 続柄がケアマネ系。
 const isCmContact = (c) => !!(c && (c.cmOffice || c.officePhone || c.officeFax || /ケアマネ|介護支援|居宅/.test(String(c.relation||''))));
-const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c))) ]; };
+const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim && !isCmContact(prim) ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c))) ]; };
 // ★ 同期の診断パネル (?syncdebug=1 のときだけ表示)。 iPad ではコンソールが見られないため、
 //   保存/受信/競合/失敗の履歴を画面で確認できるようにする。 通常運用では一切描画されない。
 function SyncDebugPanel() {
@@ -41424,13 +41424,20 @@ function FaceSheetForm({ patient, appData, initial, onSave, onClose, canEditCont
   const [contacts, setContacts] = useState(() => getAllContacts(patient).map(c => ({ name:c.name||'', relation:c.relation||'', phone:c.phone||'', phoneMobile:c.phoneMobile||'', email:c.email||'' })));
   const setContact = (i, patch) => setContacts(prev => prev.map((c,idx)=> idx===i ? {...c, ...patch} : c));
   const buildContactPatch = () => {
+    const _ecKey = c => `${(c.name||'').trim()}|${(c.relation||'').trim()}|${(c.phone||'').trim()}|${(c.phoneMobile||'').trim()}`;
     const clean = contacts.map(c=>({ name:(c.name||'').trim(), relation:(c.relation||'').trim(), phone:(c.phone||'').trim(), phoneMobile:(c.phoneMobile||'').trim(), email:(c.email||'').trim() })).filter(c=>c.name||c.phone||c.phoneMobile);
     const [first, ...rest] = clean;
     const patch = {};
+    // 主要連絡先(家族)。 全部消したら空にする。
     if (first) { const parts=first.name.split(/[\s　]+/).filter(Boolean); patch.familyName=first.name; patch.familyLastName=parts[0]||first.name; patch.familyFirstName=parts.slice(1).join(' ')||''; patch.familyRelation=first.relation; patch.familyPhone=first.phone; patch.familyPhoneMobile=first.phoneMobile; patch.familyEmail=first.email; }
-    let ec = [...(patient.emergencyContacts||[])];
-    rest.forEach(c => { ec = upsertContactByName(ec, c); });
-    patch.emergencyContacts = ec;
+    else { patch.familyName=''; patch.familyLastName=''; patch.familyFirstName=''; patch.familyKana=''; patch.familyRelation=''; patch.familyPhone=''; patch.familyPhoneMobile=''; patch.familyEmail=''; }
+    // ★ ケアマネ由来の連絡先は保持し、家族(非ケアマネ)分はフェイスシートの編集結果で置き換える(=削除を反映)。
+    const cmContacts = (patient.emergencyContacts||[]).filter(isCmContact);
+    patch.emergencyContacts = [...cmContacts, ...rest];
+    // ★ 消した家族連絡先は墓石(_deletedEC)に記録し、同期の加算マージで復活しないようにする。
+    const cleanKeys = new Set(clean.map(_ecKey));
+    const removedKeys = getAllContacts(patient).map(_ecKey).filter(k => k && k !== '|||' && !cleanKeys.has(k));
+    if (removedKeys.length) patch._deletedEC = [...new Set([...(patient._deletedEC||[]), ...removedKeys])];
     return patch;
   };
   const handleSubmit = () => { onSave(fs, removedAtts, canEditContacts ? buildContactPatch() : null); };
