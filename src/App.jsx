@@ -13449,7 +13449,7 @@ function FamilyView() {
       }}
     />;
   }
-  return <FamilyPatientView data={data} setData={setData} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} editingRef={editingRef} />;
+  return <FamilyPatientView data={data} setData={setData} patientId={authPid} accountId={authAccId} onLogout={handleLogout} onSwitchPatient={handleSwitchPatient} editingRef={editingRef} familyStoreId={familyStoreId} />;
 }
 
 // === 家族画面 - 利用者ごとのコンテンツ ===
@@ -13614,7 +13614,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
   );
 }
 
-function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient, editingRef }) {
+function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient, editingRef, familyStoreId }) {
   const [tab, setTab] = useState('news');
   // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
   const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','all'
