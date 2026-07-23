@@ -36930,6 +36930,16 @@ const lifeDownloadCsv = (filename, text) => {
   catch(e){ alert('CSVの出力に失敗しました: '+e.message); }
 };
 
+// 生活・認知機能尺度(別紙様式3)の7設問と選択肢(5→1点)。 CSV列は evaluate_1_1,1_2,2,3,4,5,6 に対応。
+const DEM_SCALE_QUESTIONS = [
+  { no:'①-1', label:'身近なものを置いた場所を覚えているか', choices:['常に覚えている','たまに(週1回程度)忘れるが考えて思い出せる','思い出せないこともあるが、きっかけがあれば思い出せる','きっかけがあってもほとんど思い出せない','忘れたこと自体を認識していない'] },
+  { no:'①-2', label:'日常的な出来事をどのくらいの期間覚えているか', choices:['1週間前のことを覚えている','数日前のことは覚えている','昨日のことは覚えている','半日前のことは覚えている','全く覚えていられない'] },
+  { no:'②', label:'現在の日付や場所等をどの程度認識できるか', choices:['年月日がわかる(±1日許容)','場所の種類がわかる','その場にいる人が誰かわかる','自分の名前はわかる','自分の名前がわからない'] },
+  { no:'③', label:'会話でどれくらい意思を伝えられるか', choices:['会話に支障がない','複雑な会話はできないが普通に会話できる','具体的な欲求は伝えられる','会話は成り立たないが発語はある','発語がなく無言'] },
+  { no:'④', label:'一人で服薬ができるか', choices:['自分で正しく服薬できる','たまに(週1回程度)服薬し忘れる','2回に1回は服薬を忘れる','常に手渡しが必要','服薬し終わるまで介助・見守りが必要'] },
+  { no:'⑤', label:'一人で着替えができるか', choices:['季節・気温に応じた服装を選び着脱衣できる','服装選びは不可だが順番・方法を理解し自分で着脱衣できる','促せば自分で着脱衣できる','着脱衣の一部を介護者が行う','着脱衣の全てを常に介護者が行う'] },
+  { no:'⑥', label:'電化製品(テレビ・エアコン等)を操作できるか', choices:['自由に操作できる','普段している操作はできる','教えてもらえれば使える','認識しているが使い方が全く分からない','何をするものか分からない'] },
+];
 function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
@@ -36940,6 +36950,15 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const today = new Date().toISOString().slice(0,10);
   const adlRecords = (appData.adlRecords||[]).filter(r => r.patientId===pid).sort((a,b)=>(b.evalDate||'').localeCompare(a.evalDate||''));
   const [editing, setEditing] = React.useState(null);
+  // ★ LIFE設定(事業所番号/保険者番号既定/サービス種類コード/施設・通所区分/CSVバージョン) = systemSettings.life に保存
+  const _life0 = appData.systemSettings?.life || {};
+  const [cfgOpen, setCfgOpen] = React.useState(false);
+  const [lifeCfg, setLifeCfg] = React.useState({ officeNumber:_life0.officeNumber||'', serviceCode:_life0.serviceCode||LIFE_SERVICE_CODE_DEFAULT, facilityOutpatientCategory:_life0.facilityOutpatientCategory||'2', insurerNo:_life0.insurerNo||'', version:_life0.version||LIFE_VERSION_DEFAULT });
+  const saveLifeCfg = () => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), life:{ ...(appData.systemSettings?.life||{}), ...lifeCfg } } }, { manual:true, message:'✓ LIFE設定を保存しました' }); setCfgOpen(false); };
+  // ★ 利用者ごとの保険者番号(6桁) = patient.insurerNo (被保険者番号=insuranceNo とは別)
+  const [pInsurer, setPInsurer] = React.useState(patient?.insurerNo||'');
+  React.useEffect(()=>{ setPInsurer(patient?.insurerNo||''); }, [pid]);
+  const savePInsurer = () => { onSave({ ...appData, patients:(appData.patients||[]).map(p=>p.id===pid?{...p, insurerNo:pInsurer}:p) }, { manual:true, message:'✓ 保険者番号を保存しました' }); };
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
   // ★ 生活機能チェック(3-2)のADLから Barthel の点数を「提案」する。 同じ10項目を二度入力しないため。
@@ -37011,10 +37030,38 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             <div className="text-[11px] text-indigo-900 opacity-70 mt-2">※ 下の <b>共通データ（ADL＝Barthel Index）</b> は、上記どの加算にも自動で反映されます。各加算の固有項目は順次追加します。</div>
           </div>
 
+          {/* LIFE設定 (事業所共通・折りたたみ) */}
+          <div className="bg-white rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-bold text-slate-700">LIFE設定（事業所共通）<span className="text-[11px] font-normal text-slate-400 ml-2">CSVの事業所番号・保険者番号・サービス種類コード・バージョン</span></div>
+              <button type="button" onClick={()=>setCfgOpen(v=>!v)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">{cfgOpen?'閉じる':'開く'}</button>
+            </div>
+            {cfgOpen && (
+              <div className="mt-3 space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">事業所番号(10桁)</label><input value={lifeCfg.officeNumber} onChange={e=>setLifeCfg(c=>({...c, officeNumber:e.target.value.replace(/\D/g,'').slice(0,10)}))} placeholder="例: 1399999999" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">保険者番号(6桁・既定)</label><input value={lifeCfg.insurerNo} onChange={e=>setLifeCfg(c=>({...c, insurerNo:e.target.value.replace(/\D/g,'').slice(0,6)}))} placeholder="市区町村により異なる" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">サービス種類コード</label><input value={lifeCfg.serviceCode} onChange={e=>setLifeCfg(c=>({...c, serviceCode:e.target.value.replace(/\D/g,'').slice(0,2)}))} placeholder="通所介護=78" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">施設・通所区分</label><input value={lifeCfg.facilityOutpatientCategory} onChange={e=>setLifeCfg(c=>({...c, facilityOutpatientCategory:e.target.value.replace(/\D/g,'').slice(0,1)}))} placeholder="通所=2" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">CSVバージョン</label><input value={lifeCfg.version} onChange={e=>setLifeCfg(c=>({...c, version:e.target.value.trim()}))} placeholder="0300 (最新仕様v0310を確認)" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                </div>
+                <div className="flex justify-end"><button type="button" onClick={saveLifeCfg} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">LIFE設定を保存</button></div>
+                <div className="text-[10px] text-slate-400 leading-relaxed">※ 事業所番号・保険者番号・サービス種類コードは参考元では空欄運用の実績もありますが、可能なら登録してください。バージョンは様式改定時にここだけ変更すれば全CSVに反映されます。</div>
+              </div>
+            )}
+          </div>
+
           {/* 共通データ: 基本情報 */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <div className="text-sm font-bold text-blue-700 mb-1">共通データ ①利用者基本情報（自動）</div>
             <div className="text-sm text-slate-700">{patient?.name} 様　／　{patient?.gender||'—'}　／　{_age(patient?.birthDate)!==''?`${_age(patient?.birthDate)}歳`:'—'}　／　{patient?.careLevel||'要介護度未設定'}</div>
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-500">被保険者番号</span><span className="text-sm font-bold text-slate-700">{patient?.insuranceNo||'（未設定）'}</span>
+              <span className="text-xs font-bold text-slate-500 ml-3">保険者番号(6桁)</span>
+              <input value={pInsurer} onChange={e=>setPInsurer(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="この利用者の保険者番号" className="px-2 py-1 bg-white border border-slate-300 rounded text-sm outline-none w-40"/>
+              <button type="button" onClick={savePInsurer} disabled={pInsurer===(patient?.insurerNo||'')} className={`px-3 py-1 rounded text-xs font-bold ${pInsurer===(patient?.insurerNo||'')?'bg-slate-100 text-slate-400':'bg-blue-600 text-white hover:bg-blue-700'}`}>保存</button>
+            </div>
+            <div className="text-[10px] text-slate-400 mt-1">※ 被保険者番号(10桁)はフェイスシートで登録。保険者番号はCSVの insurer_no に使います（利用者ごと・未設定ならLIFE設定の既定を使用）。</div>
           </div>
 
           {/* 共通データ: ADL(Barthel) */}
@@ -37082,13 +37129,19 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                     <div>
                       <div className="text-xs font-bold text-slate-500 mb-1">生活・認知機能尺度（7設問・5〜1点／別紙様式3）</div>
                       <div className="space-y-1.5">
-                        {['記憶(近時)','記憶(即時)','見当識','問題解決','社会適応','自己管理','コミュニケーション'].map((lb,i)=>{
+                        {DEM_SCALE_QUESTIONS.map((q,i)=>{
                           const cur=(sci.demScale||[])[i];
-                          const setD=(v)=>{ const arr=[...(sci.demScale||[])]; arr[i]=v; setSci('demScale', arr); };
-                          return (<div key={i} className="flex items-center gap-3 flex-wrap"><div className="w-44 text-xs text-slate-600">設問{i+1}. {lb}</div><div className="flex gap-1">{[5,4,3,2,1].map(n=>{ const on=Number(cur)===n; return <button key={n} type="button" onClick={()=>setD(n)} className={`w-8 py-1.5 rounded text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-500 border-slate-300'}`}>{n}</button>; })}</div></div>);
+                          const setD=(v)=>{ const arr=[...(sci.demScale||[])]; while(arr.length<7)arr.push(undefined); arr[i]=v; setSci('demScale', arr); };
+                          return (<div key={i} className="border border-slate-100 rounded-lg p-2">
+                            <div className="flex items-start gap-3 flex-wrap">
+                              <div className="flex-1 min-w-[180px] text-xs text-slate-700 font-bold">{q.no}. {q.label}</div>
+                              <div className="flex gap-1">{[5,4,3,2,1].map(n=>{ const on=Number(cur)===n; return <button key={n} type="button" onClick={()=>setD(n)} title={`${n}点: ${q.choices[5-n]}`} className={`w-8 py-1.5 rounded text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-500 border-slate-300'}`}>{n}</button>; })}</div>
+                            </div>
+                            {cur && <div className="text-[10px] text-slate-500 mt-1 leading-snug">{cur}点：{q.choices[5-Number(cur)]}</div>}
+                          </div>);
                         })}
                       </div>
-                      <div className="text-[10px] text-slate-400 mt-1">※ 設問文・選択肢は厚労省 別紙様式3 の正式文言に差し替え予定。</div>
+                      <div className="text-[10px] text-slate-400 mt-1">※ 別紙様式3（生活・認知機能尺度）準拠。点数ボタンにカーソルを合わせると選択肢の説明が出ます。</div>
                     </div>
                     {(() => { const setV=(v)=>{ const arr=[...(sci.vitality||[])]; arr[0]=v; setSci('vitality', arr); }; const cur=(sci.vitality||[])[0]; return (
                       <div className="flex items-center gap-3 flex-wrap"><div className="w-44 text-xs font-bold text-slate-500">Vitality Index:意思疎通</div><div className="flex gap-1">{['2','1','0'].map(n=>{ const on=String(cur)===n; return <button key={n} type="button" onClick={()=>setV(n)} className={`px-3 py-1.5 rounded text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-500 border-slate-300'}`}>{n}</button>; })}</div></div>
