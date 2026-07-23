@@ -10926,7 +10926,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
                   const pt = e.patientId ? (appData.patients||[]).find(x=>x.id===e.patientId) : null;
                   const _r = isRead(e.id); // ★ #4: タップで既読(グレー)
                   return (
-                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日',title:e.title,body:e.note,patientId:e.patientId})}
+                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日',title:e.title,body:e.note,patientId:e.patientId,isMeeting:/担当者会議|担会/.test(String(e.title||''))})}
                     style={{textAlign:'left',cursor:'pointer',width:'100%',display:'flex',alignItems:'flex-start',gap:10,background:_r?'#f8fafc':'#eef2ff',border:`1px solid ${_r?'#e2e8f0':'#c7d2fe'}`,borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px',opacity:_r?0.72:1}}>
                     <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',minWidth:88,fontVariantNumeric:'tabular-nums',paddingTop:1}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
                     <div style={{flex:1,minWidth:0}}>
@@ -11042,6 +11042,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
             <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10,lineHeight:1.4}}>{noticeDetail.title}</div>
             {noticeDetail.body && <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-wrap',lineHeight:1.75}}>{noticeDetail.body}</div>}
             <div style={{display:'flex',gap:8,marginTop:20,justifyContent:'flex-end'}}>
+              {noticeDetail.isMeeting && noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId; try{sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({patientId:pid, tab:'cat_3', focus:'meeting'}));}catch{} setNoticeDetail(null); navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>担当者会議記録を入力</button>}
               {noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId;setNoticeDetail(null);navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#4338ca',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>利用者を開く</button>}
               <button onClick={()=>setNoticeDetail(null)} style={{padding:'9px 18px',borderRadius:10,border:'1px solid #cbd5e1',background:'#f8fafc',color:'#475569',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
             </div>
@@ -20168,6 +20169,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           <button onClick={()=>setIsFullscreen(false)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">⛶ 通常表示に戻る</button>
           <button onClick={()=>setRestoreModal(true)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap" title="保存した記録を丸ごと復元">⟲ 元に戻す</button>
           <button onClick={()=>handleSaveClick(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap"><CloudUpload size={13} className="mr-1"/>保存</button>
+          <button onClick={()=>{ handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap" title="連絡帳の作成・印刷へ"><Printer size={13} className="mr-1"/>連絡帳</button>
         </div>
       )}
 
@@ -28273,7 +28275,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         sessionStorage.removeItem('tsumugiReopenPF');
         const o = JSON.parse(raw);
         const pat = (appData.patients||[]).find(p => String(p.id) === String(o.patientId));
-        if (pat) { setEditingPatientId(pat.id); onPatientChange && onPatientChange(pat.id); setPersonalFileModal({ patient: pat, initialTab: o.tab || 'cat_6' }); }
+        if (pat) { setEditingPatientId(pat.id); onPatientChange && onPatientChange(pat.id); setPersonalFileModal({ patient: pat, initialTab: o.tab || 'cat_6', focus: o.focus }); }
       }
     } catch {}
   }, []);
@@ -40416,6 +40418,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const [pdfPreviewFaceSheet, setPdfPreviewFaceSheet] = useState(false);
   // ★ マスタ基本情報の「フェイスシートで編集」から飛んできたら、フェイスシート入力フォームを自動で開く。
   React.useEffect(() => { if (focusSection === 'facesheet') { setActiveCat('cat_1'); setFaceSheetAttachFocus(false); setShowFaceSheetForm(true); } }, [focusSection]);
+  // ★ 本日のスケジュールの担当者会議から飛んできたら、ケアマネジメントタブ(cat_3)を開いて会議記録の新規入力を自動で開く。
+  React.useEffect(() => { if (focusSection === 'meeting') { setActiveCat('cat_3'); setEditingMeeting(null); setShowMeetingForm(true); } }, [focusSection]);
   // ★ 任意の月を指定して提供記録を作成/ダウンロードするための選択月 (既定: 先月)
   const [snapMonth, setSnapMonth] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1);
