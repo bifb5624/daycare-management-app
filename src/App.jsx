@@ -26068,40 +26068,28 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',height:46,maxHeight:46,minWidth:90}}>
+                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',minWidth:52}}>
                             {(() => {
+                              // ★ 気分は絵文字だけをコンパクトに表示し、理由はホバー(title)で見せる。
+                              //   理由の文字数が多いと行が縦に伸びて見づらかったのを解消(行高さを一定に保つ)。
                               const MOODS = {'excellent':'🤩','good':'😊','normal':'😐','bad':'😞','terrible':'😫'};
+                              const MLBL = {'excellent':'とても良い','good':'良い','normal':'普通','bad':'イマイチ','terrible':'とても悪い'};
                               const arr = v(r.kibunArrival);
                               const dep = v(r.kibunDeparture);
                               const arrR = v(r.kibunArrivalReason);
                               const depR = v(r.kibunDepartureReason);
                               if(!arr && !dep) return '';
-                              // ★ 行高さは固定 (41px)。 文字数が多い場合は文字サイズを縮小して全部表示
-                              //    両方ある場合 縦 20px / 行、 片方なら 41px。
-                              const lineH = (arr && dep) ? 23 : 46;
-                              const totalReasonLen = (arrR||'').length + (depR||'').length;
-                              const reasonFs = totalReasonLen > 24 ? 6 : totalReasonLen > 12 ? 7 : 8;
-                              const renderLine = (label, mood, reason) => (
-                                <div style={{display:'flex',alignItems:'center',gap:2,height:lineH,overflow:'hidden',padding:'0 2px'}}>
-                                  <span style={{fontSize:7,color:'#334155',fontWeight:'bold',flexShrink:0}}>{label}</span>
-                                  <span style={{fontSize:10,lineHeight:1,flexShrink:0}}>{MOODS[mood]||mood}</span>
-                                  {reason && (
-                                    <span style={{
-                                      fontSize:reasonFs,
-                                      color:'#1e293b',
-                                      lineHeight:1.05,
-                                      flex:1,minWidth:0,textAlign:'left',
-                                      display:'-webkit-box',
-                                      WebkitLineClamp:2,
-                                      WebkitBoxOrient:'vertical',
-                                      overflow:'hidden',
-                                      whiteSpace:'normal',
-                                      wordBreak:'break-all',
-                                    }}>{reason}</span>
-                                  )}
-                                </div>
-                              );
-                              return (<div style={{display:'flex',flexDirection:'column',height:46,overflow:'hidden',justifyContent:'center'}}>
+                              const renderLine = (label, mood, reason) => {
+                                const tip = `${label}: ${MLBL[mood]||mood}${reason?`（${reason}）`:''}`;
+                                return (
+                                  <div title={tip} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,cursor:'default'}}>
+                                    <span style={{fontSize:8,color:'#64748b',fontWeight:'bold',flexShrink:0}}>{label}</span>
+                                    <span style={{fontSize:15,lineHeight:1,flexShrink:0}}>{MOODS[mood]||mood}</span>
+                                    {reason && <span style={{fontSize:9,flexShrink:0}} title={tip}>💬</span>}
+                                  </div>
+                                );
+                              };
+                              return (<div style={{display:'flex',flexDirection:'column',justifyContent:'center',gap:3,padding:'3px 0'}}>
                                 {arr && renderLine('通', arr, arrR)}
                                 {dep && renderLine('帰', dep, depR)}
                               </div>);
@@ -32318,6 +32306,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
               {/* ★ 縦並びレイアウトに変更 (項目ごとに行を分けて見やすく) */}
               <div className="space-y-4">
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">事業所名</label><input type="text" value={facilityInfo.name} onChange={e => setFacilityInfo({...facilityInfo, name: e.target.value})} className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                {/* ★ LIFE(科学的介護)連携: CSV出力で使う事業所番号・保険者番号・サービス種類コード。 LIFE画面はここから読み込む。 */}
+                <div className="border border-cyan-200 bg-cyan-50/50 rounded-xl p-3">
+                  <div className="text-sm font-bold text-cyan-800 mb-2">LIFE連携（科学的介護）用の情報</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div><label className="block text-xs font-bold text-slate-600 mb-1">介護保険事業所番号（10桁）</label><input type="text" inputMode="numeric" value={facilityInfo.officeNumber || ""} onChange={e => setFacilityInfo({...facilityInfo, officeNumber: e.target.value.replace(/[^0-9]/g,'').slice(0,10)})} placeholder="例: 1370200001" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                    <div><label className="block text-xs font-bold text-slate-600 mb-1">保険者番号（6桁・利用者共通の既定）</label><input type="text" inputMode="numeric" value={facilityInfo.insurerNo || ""} onChange={e => setFacilityInfo({...facilityInfo, insurerNo: e.target.value.replace(/[^0-9]/g,'').slice(0,6)})} placeholder="市区町村により異なる" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                    <div><label className="block text-xs font-bold text-slate-600 mb-1">サービス種類コード</label><input type="text" inputMode="numeric" value={facilityInfo.serviceCode || ""} onChange={e => setFacilityInfo({...facilityInfo, serviceCode: e.target.value.replace(/[^0-9]/g,'').slice(0,2)})} placeholder="通所介護=78" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                    <div><label className="block text-xs font-bold text-slate-600 mb-1">CSVバージョン</label><input type="text" value={facilityInfo.lifeCsvVersion || ""} onChange={e => setFacilityInfo({...facilityInfo, lifeCsvVersion: e.target.value.trim()})} placeholder="0300（最新仕様 v0310 を確認）" className="w-full px-4 py-2.5 bg-white border border-slate-300 rounded-xl font-bold text-sm outline-none"/></div>
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-2">※ 「LIFE・加算」画面のCSV出力はここの値を使います。保険者番号は利用者ごとに異なる場合、各利用者の画面で個別に上書きできます。参考元では事業所番号等を空欄で運用した実績もありますが、可能なら登録してください。</div>
+                </div>
                 {/* ★ 管理者名: 姓・名 を分割入力 (内部の manager フィールドにも結合形式で保存して既存表示と互換) */}
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名</label>
@@ -36950,11 +36949,9 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const today = new Date().toISOString().slice(0,10);
   const adlRecords = (appData.adlRecords||[]).filter(r => r.patientId===pid).sort((a,b)=>(b.evalDate||'').localeCompare(a.evalDate||''));
   const [editing, setEditing] = React.useState(null);
-  // ★ LIFE設定(事業所番号/保険者番号既定/サービス種類コード/施設・通所区分/CSVバージョン) = systemSettings.life に保存
-  const _life0 = appData.systemSettings?.life || {};
-  const [cfgOpen, setCfgOpen] = React.useState(false);
-  const [lifeCfg, setLifeCfg] = React.useState({ officeNumber:_life0.officeNumber||'', serviceCode:_life0.serviceCode||LIFE_SERVICE_CODE_DEFAULT, facilityOutpatientCategory:_life0.facilityOutpatientCategory||'2', insurerNo:_life0.insurerNo||'', version:_life0.version||LIFE_VERSION_DEFAULT });
-  const saveLifeCfg = () => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), life:{ ...(appData.systemSettings?.life||{}), ...lifeCfg } } }, { manual:true, message:'✓ LIFE設定を保存しました' }); setCfgOpen(false); };
+  // ★ LIFE連携の事業所情報は「各種設定→事業所情報」(systemSettings.facilityInfo)から読み込む(二重管理を避ける)
+  const _fi = appData.systemSettings?.facilityInfo || {};
+  const lifeOfficeCfg = { officeNumber:_fi.officeNumber||'', insurerNo:_fi.insurerNo||'', serviceCode:_fi.serviceCode||LIFE_SERVICE_CODE_DEFAULT, facilityOutpatientCategory:_fi.facilityOutpatientCategory||'2', version:_fi.lifeCsvVersion||LIFE_VERSION_DEFAULT };
   // ★ 利用者ごとの保険者番号(6桁) = patient.insurerNo (被保険者番号=insuranceNo とは別)
   const [pInsurer, setPInsurer] = React.useState(patient?.insurerNo||'');
   React.useEffect(()=>{ setPInsurer(patient?.insurerNo||''); }, [pid]);
@@ -37030,25 +37027,16 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             <div className="text-[11px] text-indigo-900 opacity-70 mt-2">※ 下の <b>共通データ（ADL＝Barthel Index）</b> は、上記どの加算にも自動で反映されます。各加算の固有項目は順次追加します。</div>
           </div>
 
-          {/* LIFE設定 (事業所共通・折りたたみ) */}
+          {/* LIFE連携の事業所情報 (各種設定→事業所情報 から読み込み・ここは表示のみ) */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-bold text-slate-700">LIFE設定（事業所共通）<span className="text-[11px] font-normal text-slate-400 ml-2">CSVの事業所番号・保険者番号・サービス種類コード・バージョン</span></div>
-              <button type="button" onClick={()=>setCfgOpen(v=>!v)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">{cfgOpen?'閉じる':'開く'}</button>
+            <div className="text-sm font-bold text-slate-700 mb-2">LIFE連携の事業所情報 <span className="text-[11px] font-normal text-slate-400">（各種設定 → 事業所情報 で登録）</span></div>
+            <div className="flex gap-x-6 gap-y-1 flex-wrap text-xs">
+              <span className="text-slate-500">事業所番号：<b className={lifeOfficeCfg.officeNumber?'text-slate-700':'text-red-500'}>{lifeOfficeCfg.officeNumber||'未設定'}</b></span>
+              <span className="text-slate-500">保険者番号(既定)：<b className={lifeOfficeCfg.insurerNo?'text-slate-700':'text-amber-600'}>{lifeOfficeCfg.insurerNo||'未設定'}</b></span>
+              <span className="text-slate-500">サービス種類コード：<b className="text-slate-700">{lifeOfficeCfg.serviceCode||'—'}</b></span>
+              <span className="text-slate-500">CSVバージョン：<b className="text-slate-700">{lifeOfficeCfg.version||'—'}</b></span>
             </div>
-            {cfgOpen && (
-              <div className="mt-3 space-y-3">
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div><label className="block text-xs font-bold text-slate-500 mb-1">事業所番号(10桁)</label><input value={lifeCfg.officeNumber} onChange={e=>setLifeCfg(c=>({...c, officeNumber:e.target.value.replace(/\D/g,'').slice(0,10)}))} placeholder="例: 1399999999" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                  <div><label className="block text-xs font-bold text-slate-500 mb-1">保険者番号(6桁・既定)</label><input value={lifeCfg.insurerNo} onChange={e=>setLifeCfg(c=>({...c, insurerNo:e.target.value.replace(/\D/g,'').slice(0,6)}))} placeholder="市区町村により異なる" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                  <div><label className="block text-xs font-bold text-slate-500 mb-1">サービス種類コード</label><input value={lifeCfg.serviceCode} onChange={e=>setLifeCfg(c=>({...c, serviceCode:e.target.value.replace(/\D/g,'').slice(0,2)}))} placeholder="通所介護=78" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                  <div><label className="block text-xs font-bold text-slate-500 mb-1">施設・通所区分</label><input value={lifeCfg.facilityOutpatientCategory} onChange={e=>setLifeCfg(c=>({...c, facilityOutpatientCategory:e.target.value.replace(/\D/g,'').slice(0,1)}))} placeholder="通所=2" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                  <div><label className="block text-xs font-bold text-slate-500 mb-1">CSVバージョン</label><input value={lifeCfg.version} onChange={e=>setLifeCfg(c=>({...c, version:e.target.value.trim()}))} placeholder="0300 (最新仕様v0310を確認)" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                </div>
-                <div className="flex justify-end"><button type="button" onClick={saveLifeCfg} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">LIFE設定を保存</button></div>
-                <div className="text-[10px] text-slate-400 leading-relaxed">※ 事業所番号・保険者番号・サービス種類コードは参考元では空欄運用の実績もありますが、可能なら登録してください。バージョンは様式改定時にここだけ変更すれば全CSVに反映されます。</div>
-              </div>
-            )}
+            <button type="button" onClick={()=>navigateTo('settings')} className="mt-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">各種設定を開く</button>
           </div>
 
           {/* 共通データ: 基本情報 */}
@@ -37186,7 +37174,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
           {!editing && addons.kasan_kagaku && (() => {
             const latest = adlRecords[0] || null;
             const sci = latest?.science || {};
-            const st = appData.systemSettings?.life || {};
+            const st = lifeOfficeCfg;
             const ym = String((latest?.evalDate||today)).slice(0,7).replace('-','');
             const row = latest ? buildTifi2024Row(patient, latest, sci, st, ym) : null;
             const vr = latest ? validateTifi2024(patient, latest, sci, row, today) : { errors:[], warns:[] };
