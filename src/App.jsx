@@ -36917,6 +36917,52 @@ const validateTifi2024 = (patient, adlRec, sci, row, today) => {
   return { errors, warns };
 };
 
+// ADL維持等加算(AINT2024) 全23列(§6.2)。 施設・通所区分は無く、末尾に first_month/sixth_month/version。
+const LIFE_AINT2024_COLUMNS = ['care_facility_id','service_code','insurer_no','insured_no','external_system_management_number','care_level','impaired_elderly_independence_degree','dementia_elderly_independence_degree','evaluate_date','status','barthel_index_meal','barthel_transfer','barthel_index_personal_hygiene_and_adjustment','barthel_index_toilet_activity','barthel_index_bathing','barthel_index_flat_ground_walking','barthel_index_stair_movement','barthel_index_changing_clothes','barthel_index_defecation_manage','barthel_index_urination_manage','first_month','sixth_month','version'];
+const buildAint2024Row = (patient, adlRec, sci, settings, targetYm) => {
+  const s = sci || {}; const st = settings || {}; const items = adlRec?.items || {};
+  const row = {}; LIFE_AINT2024_COLUMNS.forEach(k => { row[k] = ''; });
+  row.care_facility_id = st.officeNumber || '';
+  row.service_code = st.serviceCode || '';
+  row.insurer_no = patient?.insurerNo || st.insurerNo || '';
+  row.insured_no = lifeZero10(patient?.insuranceNo);
+  row.external_system_management_number = lifeMgmtNo(patient?.insuranceNo, targetYm, 'AINT2024');
+  row.care_level = LIFE_CARELEVEL_CODE[String(patient?.careLevel||'').trim()] || '';
+  row.impaired_elderly_independence_degree = LIFE_ADL_LEVEL_CODE[normalizeAdlLevel(patient?.faceSheet?.adlLevel)] || '';
+  row.dementia_elderly_independence_degree = LIFE_DEM_LEVEL_CODE[normalizeDemLevel(patient?.faceSheet?.dementiaLevel)] || '';
+  row.evaluate_date = lifeYmd(adlRec?.evalDate);
+  row.status = LIFE_STATUS_CODE[String(s.status||'利用中')] || '';
+  const biCols = ['barthel_index_meal','barthel_transfer','barthel_index_personal_hygiene_and_adjustment','barthel_index_toilet_activity','barthel_index_bathing','barthel_index_flat_ground_walking','barthel_index_stair_movement','barthel_index_changing_clothes','barthel_index_defecation_manage','barthel_index_urination_manage'];
+  LIFE_BI_ORDER.forEach((key,idx)=>{ const pt=items[key]; row[biCols[idx]] = (pt==null||pt==='')?'':lifeBiCode(key, pt); });
+  const am = adlRec?.adlMonth || '';
+  row.first_month = am==='first'?'1':'0';
+  row.sixth_month = am==='sixth'?'1':'0';
+  row.version = st.version || LIFE_VERSION_DEFAULT;
+  return row;
+};
+const validateAint2024 = (patient, adlRec, sci, row, today) => {
+  const errors=[], warns=[];
+  if (lifeZero10(patient?.insuranceNo).length!==10) errors.push('被保険者番号(10桁)が未設定');
+  if (!row.care_level) errors.push(`要介護度がコード化できません（${patient?.careLevel||'未設定'}）`);
+  if (!row.impaired_elderly_independence_degree) errors.push('障害高齢者の日常生活自立度(フェイスシート)が未設定');
+  if (!row.dementia_elderly_independence_degree) errors.push('認知症高齢者の日常生活自立度(フェイスシート)が未設定');
+  if (!adlRec) errors.push('ADL評価(Barthel)が未作成');
+  if (!row.evaluate_date) errors.push('評価日が未設定');
+  if (row.evaluate_date && today && row.evaluate_date > lifeYmd(today)) errors.push('評価日が未来日付です');
+  if (patient?.birthDate && row.evaluate_date && lifeYmd(patient.birthDate) >= row.evaluate_date) errors.push('生年月日が評価日以降になっています');
+  const biCols=['食事','移乗','整容','トイレ','入浴','歩行','階段','更衣','排便','排尿'];
+  LIFE_BI_ORDER.forEach((key,idx)=>{ if(adlRec && (adlRec.items?.[key]==null||adlRec.items?.[key]==='')) errors.push(`ADL「${biCols[idx]}」が未評価`); });
+  if (adlRec && !adlRec.adlMonth) warns.push('対象月区分(初月/6か月後/どちらでもない)が未設定 → どちらでもない(0/0)で出力');
+  if (!row.insurer_no) warns.push('保険者番号(6桁)が未設定（参考元は空欄運用可・要確認）');
+  if (!row.care_facility_id) warns.push('事業所番号が未設定（各種設定→事業所情報で入力）');
+  return { errors, warns };
+};
+// LIFE様式の共通定義(ダッシュボード/出力を様式横断で扱う)
+const LIFE_FORMS = {
+  TIFI2024: { label:'科学的介護推進', addon:'kasan_kagaku', cols:LIFE_TIFI2024_COLUMNS, build:buildTifi2024Row, validate:validateTifi2024 },
+  AINT2024: { label:'ADL維持等', addon:'kasan_adl', cols:LIFE_AINT2024_COLUMNS, build:buildAint2024Row, validate:validateAint2024 },
+};
+
 // CSV文字列生成(RFC4180準拠・改行CR-LF)。 値にカンマ/"/改行があれば "" で囲む。
 const lifeToCsvText = (headers, rows) => {
   const esc = (v) => { const s=(v==null?'':String(v)); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
@@ -36956,28 +37002,32 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const [pInsurer, setPInsurer] = React.useState(patient?.insurerNo||'');
   React.useEffect(()=>{ setPInsurer(patient?.insurerNo||''); }, [pid]);
   const savePInsurer = () => { onSave({ ...appData, patients:(appData.patients||[]).map(p=>p.id===pid?{...p, insurerNo:pInsurer}:p) }, { manual:true, message:'✓ 保険者番号を保存しました' }); };
-  // ★ 提出ダッシュボード/まとめ出力(科学的介護推進 TIFI2024)。 提出年月はファイル名の整理用(既定=今月)
+  // ★ 提出ダッシュボード/まとめ出力(様式横断: TIFI2024/AINT2024)。 提出年月はファイル名の整理用(既定=今月)
   const [submitYm, setSubmitYm] = React.useState(today.slice(0,7));
+  const enabledForms = Object.keys(LIFE_FORMS).filter(id=>addons[LIFE_FORMS[id].addon]).map(id=>({ id, ...LIFE_FORMS[id] }));
+  const [dashFormId, setDashFormId] = React.useState(enabledForms[0]?.id || 'TIFI2024');
+  const dashForm = enabledForms.find(f=>f.id===dashFormId) || enabledForms[0] || null;
   const dashRows = React.useMemo(() => {
-    if (!addons.kasan_kagaku) return [];
+    if (!dashForm) return [];
     return patients.map(p => {
       const recs = (appData.adlRecords||[]).filter(r=>r.patientId===p.id).sort((a,b)=>(String(b.evalDate||'')).localeCompare(String(a.evalDate||'')));
       const latest = recs[0]||null;
       const sci = latest?.science||{};
       const pym = latest ? String(latest.evalDate).slice(0,7).replace('-','') : '';
-      const row = latest ? buildTifi2024Row(p, latest, sci, lifeOfficeCfg, pym) : null;
-      const vr = latest ? validateTifi2024(p, latest, sci, row, today) : { errors:['ADL評価が未作成'], warns:[] };
+      const row = latest ? dashForm.build(p, latest, sci, lifeOfficeCfg, pym) : null;
+      const vr = latest ? dashForm.validate(p, latest, sci, row, today) : { errors:['ADL評価が未作成'], warns:[] };
       return { p, latest, row, vr, status: !latest ? 'none' : (vr.errors.length ? 'error' : 'ok') };
     });
-  }, [appData.adlRecords, appData.patients, addons.kasan_kagaku, appData.systemSettings?.facilityInfo]);
-  const exportAllTifi = () => {
+  }, [appData.adlRecords, appData.patients, dashFormId, appData.systemSettings?.facilityInfo]);
+  const exportAllForm = () => {
+    if (!dashForm) return;
     const ok = dashRows.filter(d=>d.status==='ok');
     const excluded = dashRows.filter(d=>d.status!=='ok');
     if (!ok.length) { alert('提出できる利用者がいません（未評価またはエラーのため）。'); return; }
-    const msg = `提出可能 ${ok.length}名分をまとめて1つのCSVに出力します。`
+    const msg = `【${dashForm.label}】提出可能 ${ok.length}名分をまとめて1つのCSVに出力します。`
       + (excluded.length ? `\n\n除外 ${excluded.length}名（この出力には含めません）:\n` + excluded.map(d=>`・${d.p.name}（${d.status==='none'?'未評価':`エラー${d.vr.errors.length}件`}）`).join('\n') : '');
     if (!window.confirm(msg)) return;
-    lifeDownloadCsv(`TIFI2024_${submitYm.replace('-','')}.csv`, lifeToCsvText(LIFE_TIFI2024_COLUMNS, ok.map(d=>d.row)));
+    lifeDownloadCsv(`${dashForm.id}_${submitYm.replace('-','')}.csv`, lifeToCsvText(dashForm.cols, ok.map(d=>d.row)));
   };
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
@@ -37009,7 +37059,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const delRec = (id)=>{ if(!window.confirm('このADL評価を削除しますか？')) return; onSave({ ...appData, adlRecords:(appData.adlRecords||[]).filter(r=>r.id!==id) }, { manual:true, message:'削除しました' }); if(editing?.id===id) setEditing(null); };
   const enabledKasan = [
     ['kasan_kinou2','個別機能訓練加算Ⅱ','個別機能訓練計画（3-3/3-1/3-2）＋ADLをLIFEへ。'],
-    ['kasan_kagaku','科学的介護推進体制加算','ADL・IADL・口腔・栄養・認知症・既往等の総論を6ヶ月ごとにLIFEへ。'],
+    ['kasan_kagaku','科学的介護推進体制加算','ADL・IADL・口腔・栄養・認知症・既往等の総論を概ね3ヶ月ごとにLIFEへ。'],
     ['kasan_adl','ADL維持等加算','評価開始月と6ヶ月後のBarthelからADL利得を算定しLIFEへ。'],
   ].filter(([k])=>addons[k]);
   const curTotal = editing ? barthelTotal(editing.items) : (adlRecords[0]?.total ?? null);
@@ -37050,15 +37100,22 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             <div className="text-[11px] text-indigo-900 opacity-70 mt-2">※ 下の <b>共通データ（ADL＝Barthel Index）</b> は、上記どの加算にも自動で反映されます。各加算の固有項目は順次追加します。</div>
           </div>
 
-          {/* 提出ダッシュボード + まとめ出力 (科学的介護推進 TIFI2024) */}
-          {addons.kasan_kagaku && (
+          {/* 提出ダッシュボード + まとめ出力 (様式横断: TIFI2024/AINT2024) */}
+          {dashForm && (
             <div className="bg-white rounded-xl border border-purple-200 p-4">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                <div className="text-sm font-bold text-purple-700">提出ダッシュボード（科学的介護推進・TIFI2024）</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="text-sm font-bold text-purple-700">提出ダッシュボード</div>
+                  {enabledForms.length>1 ? (
+                    <select value={dashFormId} onChange={e=>setDashFormId(e.target.value)} className="px-2 py-1 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold outline-none">
+                      {enabledForms.map(f=><option key={f.id} value={f.id}>{f.label}（{f.id}）</option>)}
+                    </select>
+                  ) : <span className="text-xs font-bold text-slate-500">{dashForm.label}（{dashForm.id}）</span>}
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <label className="text-xs font-bold text-slate-500">提出年月</label>
                   <input type="month" value={submitYm} onChange={e=>setSubmitYm(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
-                  <button type="button" onClick={exportAllTifi} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">まとめてCSV出力</button>
+                  <button type="button" onClick={exportAllForm} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">まとめてCSV出力</button>
                 </div>
               </div>
               {(() => { const ok=dashRows.filter(d=>d.status==='ok').length, er=dashRows.filter(d=>d.status==='error').length, no=dashRows.filter(d=>d.status==='none').length; return (
@@ -37084,7 +37141,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   </tbody>
                 </table>
               </div>
-              <div className="text-[10px] text-slate-400 mt-2 leading-relaxed">※ 「まとめてCSV出力」は<b>提出可</b>の利用者だけを1つの {`TIFI2024_${submitYm.replace('-','')}.csv`} にまとめます（未評価・エラーは自動的に除外し確認一覧に表示）。各行の管理番号はその利用者の評価年月で採番します。行をクリックするとその利用者の入力・単票出力に切り替わります。</div>
+              <div className="text-[10px] text-slate-400 mt-2 leading-relaxed">※ 「まとめてCSV出力」は<b>提出可</b>の利用者だけを1つの {`${dashForm.id}_${submitYm.replace('-','')}.csv`} にまとめます（未評価・エラーは自動的に除外し確認一覧に表示）。各行の管理番号はその利用者の評価年月で採番します。行をクリックするとその利用者の入力・単票出力に切り替わります。{enabledForms.length>1 && '　様式は上のプルダウンで切り替えられます。'}</div>
             </div>
           )}
 
@@ -37135,7 +37192,20 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div><label className="block text-xs font-bold text-slate-500 mb-1">評価日</label><input type="date" value={editing.evalDate} onChange={e=>{setEditing(x=>({...x,evalDate:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
                   <div><label className="block text-xs font-bold text-slate-500 mb-1">評価者</label><input value={editing.evaluator} onChange={e=>{setEditing(x=>({...x,evaluator:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  {addons.kasan_adl && (
+                    <div><label className="block text-xs font-bold text-slate-500 mb-1">ADL維持等 対象月区分</label>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {[['first','初月'],['sixth','6か月後'],['','どちらでもない']].map(([val,lb])=>{ const on=(editing.adlMonth||'')===val; return (
+                          <button key={val||'none'} type="button" onClick={()=>{ setEditing(x=>({...x, adlMonth:val})); markDirty(); }} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>{lb}</button>
+                        ); })}
+                      </div>
+                    </div>
+                  )}
                 </div>
+                {addons.kasan_adl && patient?.startDate && (() => {
+                  const d=new Date(patient.startDate); const im=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; const d6=new Date(d); d6.setMonth(d6.getMonth()+6); const sm=`${d6.getFullYear()}-${String(d6.getMonth()+1).padStart(2,'0')}`;
+                  return <div className="text-[10px] text-slate-400 -mt-1">ADL維持等の目安：利用開始 {patient.startDate} → 初月 {im}／6か月後 {sm}（実際の評価月に合わせて区分を選択）</div>;
+                })()}
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
                   {BARTHEL_ITEMS.map(it=>(
                     <div key={it.key} className="flex items-center gap-3 px-3 py-2 flex-wrap">
@@ -37232,21 +37302,21 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             )}
           </div>
 
-          {!editing && addons.kasan_kagaku && (() => {
+          {!editing && enabledForms.map(f => {
             const latest = adlRecords[0] || null;
             const sci = latest?.science || {};
             const st = lifeOfficeCfg;
             const ym = String((latest?.evalDate||today)).slice(0,7).replace('-','');
-            const row = latest ? buildTifi2024Row(patient, latest, sci, st, ym) : null;
-            const vr = latest ? validateTifi2024(patient, latest, sci, row, today) : { errors:[], warns:[] };
+            const row = latest ? f.build(patient, latest, sci, st, ym) : null;
+            const vr = latest ? f.validate(patient, latest, sci, row, today) : { errors:[], warns:[] };
             const doExport = () => {
               if (vr.errors.length && !window.confirm(`未入力・エラーが ${vr.errors.length} 件あります。\nこのまま出力しますか？（不足項目は空欄で出力されます）`)) return;
-              lifeDownloadCsv(`TIFI2024_${ym}.csv`, lifeToCsvText(LIFE_TIFI2024_COLUMNS, [row]));
+              lifeDownloadCsv(`${f.id}_${ym}.csv`, lifeToCsvText(f.cols, [row]));
             };
             return (
-              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+              <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="text-sm font-bold text-purple-700">科学的介護推進体制加算 — LIFE提出CSV（TIFI2024・全{LIFE_TIFI2024_COLUMNS.length}列）</div>
+                  <div className="text-sm font-bold text-purple-700">{f.label} — LIFE提出CSV（{f.id}・全{f.cols.length}列）</div>
                   <button type="button" onClick={doExport} disabled={!latest} className={`px-4 py-2 rounded-lg text-sm font-bold shadow active:scale-95 ${latest?'bg-purple-600 hover:bg-purple-700 text-white':'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>この利用者のCSVを出力</button>
                 </div>
                 {!latest ? <div className="text-xs text-slate-400">ADL評価(Barthel)を作成するとCSVを出力できます。</div> : (<>
@@ -37255,10 +37325,10 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   {vr.warns.length>0 && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><div className="text-xs font-bold text-amber-700 mb-1">要確認（{vr.warns.length}件）</div><ul className="text-[11px] text-amber-700 list-disc pl-4 space-y-0.5">{vr.warns.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
                   {vr.errors.length===0 && <div className="text-xs font-bold text-emerald-600">✓ 必須項目は揃っています。出力できます。</div>}
                 </>)}
-                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。提出頻度は令和6年度改定で概ね3ヶ月ごと。複数利用者まとめ出力・帳票印刷・他様式(ADL維持/個別機能訓練)は今後追加します。事業所番号・保険者番号はLIFE設定で登録予定。</div>
+                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。{f.id==='TIFI2024'?'提出頻度は令和6年度改定で概ね3ヶ月ごと。':f.id==='AINT2024'?'初月と6か月後の評価を「対象月区分」で指定してください。':''}帳票印刷・他様式は順次追加します。事業所番号・保険者番号は各種設定→事業所情報で登録できます。</div>
               </div>
             );
-          })()}
+          })}
         </div>
         )}
       </div>
