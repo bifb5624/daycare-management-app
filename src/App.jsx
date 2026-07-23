@@ -36956,6 +36956,29 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const [pInsurer, setPInsurer] = React.useState(patient?.insurerNo||'');
   React.useEffect(()=>{ setPInsurer(patient?.insurerNo||''); }, [pid]);
   const savePInsurer = () => { onSave({ ...appData, patients:(appData.patients||[]).map(p=>p.id===pid?{...p, insurerNo:pInsurer}:p) }, { manual:true, message:'✓ 保険者番号を保存しました' }); };
+  // ★ 提出ダッシュボード/まとめ出力(科学的介護推進 TIFI2024)。 提出年月はファイル名の整理用(既定=今月)
+  const [submitYm, setSubmitYm] = React.useState(today.slice(0,7));
+  const dashRows = React.useMemo(() => {
+    if (!addons.kasan_kagaku) return [];
+    return patients.map(p => {
+      const recs = (appData.adlRecords||[]).filter(r=>r.patientId===p.id).sort((a,b)=>(String(b.evalDate||'')).localeCompare(String(a.evalDate||'')));
+      const latest = recs[0]||null;
+      const sci = latest?.science||{};
+      const pym = latest ? String(latest.evalDate).slice(0,7).replace('-','') : '';
+      const row = latest ? buildTifi2024Row(p, latest, sci, lifeOfficeCfg, pym) : null;
+      const vr = latest ? validateTifi2024(p, latest, sci, row, today) : { errors:['ADL評価が未作成'], warns:[] };
+      return { p, latest, row, vr, status: !latest ? 'none' : (vr.errors.length ? 'error' : 'ok') };
+    });
+  }, [appData.adlRecords, appData.patients, addons.kasan_kagaku, appData.systemSettings?.facilityInfo]);
+  const exportAllTifi = () => {
+    const ok = dashRows.filter(d=>d.status==='ok');
+    const excluded = dashRows.filter(d=>d.status!=='ok');
+    if (!ok.length) { alert('提出できる利用者がいません（未評価またはエラーのため）。'); return; }
+    const msg = `提出可能 ${ok.length}名分をまとめて1つのCSVに出力します。`
+      + (excluded.length ? `\n\n除外 ${excluded.length}名（この出力には含めません）:\n` + excluded.map(d=>`・${d.p.name}（${d.status==='none'?'未評価':`エラー${d.vr.errors.length}件`}）`).join('\n') : '');
+    if (!window.confirm(msg)) return;
+    lifeDownloadCsv(`TIFI2024_${submitYm.replace('-','')}.csv`, lifeToCsvText(LIFE_TIFI2024_COLUMNS, ok.map(d=>d.row)));
+  };
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
   // ★ 生活機能チェック(3-2)のADLから Barthel の点数を「提案」する。 同じ10項目を二度入力しないため。
@@ -37026,6 +37049,44 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             )}
             <div className="text-[11px] text-indigo-900 opacity-70 mt-2">※ 下の <b>共通データ（ADL＝Barthel Index）</b> は、上記どの加算にも自動で反映されます。各加算の固有項目は順次追加します。</div>
           </div>
+
+          {/* 提出ダッシュボード + まとめ出力 (科学的介護推進 TIFI2024) */}
+          {addons.kasan_kagaku && (
+            <div className="bg-white rounded-xl border border-purple-200 p-4">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                <div className="text-sm font-bold text-purple-700">提出ダッシュボード（科学的介護推進・TIFI2024）</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="text-xs font-bold text-slate-500">提出年月</label>
+                  <input type="month" value={submitYm} onChange={e=>setSubmitYm(e.target.value)} className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>
+                  <button type="button" onClick={exportAllTifi} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">まとめてCSV出力</button>
+                </div>
+              </div>
+              {(() => { const ok=dashRows.filter(d=>d.status==='ok').length, er=dashRows.filter(d=>d.status==='error').length, no=dashRows.filter(d=>d.status==='none').length; return (
+                <div className="flex gap-2 flex-wrap mb-2 text-xs font-bold">
+                  <span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">提出可 {ok}</span>
+                  <span className="px-2 py-1 rounded bg-red-50 text-red-700 border border-red-200">エラー {er}</span>
+                  <span className="px-2 py-1 rounded bg-slate-100 text-slate-500 border border-slate-200">未評価 {no}</span>
+                  <span className="px-2 py-1 rounded bg-slate-50 text-slate-400 border border-slate-200">対象 {dashRows.length}名</span>
+                </div>
+              ); })()}
+              <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                <table className="w-full text-xs">
+                  <thead><tr className="bg-slate-50 text-slate-500"><th className="px-2 py-1.5 text-left">利用者</th><th className="px-2 py-1.5 w-24">最新評価日</th><th className="px-2 py-1.5 w-28">状態</th><th className="px-2 py-1.5 text-left">確認事項</th></tr></thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {dashRows.length===0 ? <tr><td colSpan={4} className="px-2 py-4 text-center text-slate-400">対象の利用者がいません</td></tr> : dashRows.map(d=>(
+                      <tr key={d.p.id} className={`hover:bg-slate-50 cursor-pointer ${d.p.id===pid?'bg-purple-50':''}`} onClick={()=>{ setEditing(null); setPid(d.p.id); }}>
+                        <td className="px-2 py-1.5 font-bold text-slate-700">{d.p.name}</td>
+                        <td className="px-2 py-1.5 text-center text-slate-500">{d.latest?.evalDate||'—'}</td>
+                        <td className="px-2 py-1.5 text-center">{d.status==='ok'?<span className="text-emerald-600 font-bold">✓ 提出可</span>:d.status==='error'?<span className="text-red-600 font-bold">エラー{d.vr.errors.length}件</span>:<span className="text-slate-400 font-bold">未評価</span>}</td>
+                        <td className="px-2 py-1.5 text-[11px] text-slate-500">{d.status==='error'?d.vr.errors.slice(0,3).join(' / ')+(d.vr.errors.length>3?' …':''):d.status==='ok'&&d.vr.warns.length?<span className="text-amber-600">要確認: {d.vr.warns.join(' / ')}</span>:''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-2 leading-relaxed">※ 「まとめてCSV出力」は<b>提出可</b>の利用者だけを1つの {`TIFI2024_${submitYm.replace('-','')}.csv`} にまとめます（未評価・エラーは自動的に除外し確認一覧に表示）。各行の管理番号はその利用者の評価年月で採番します。行をクリックするとその利用者の入力・単票出力に切り替わります。</div>
+            </div>
+          )}
 
           {/* LIFE連携の事業所情報 (各種設定→事業所情報 から読み込み・ここは表示のみ) */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
