@@ -1653,7 +1653,7 @@ const ymKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0'
 //   通所介護計画書 : 短期/長期目標の達成予定日(=見直し期限)。 その1ヶ月前から予告する。
 //                    目標が未設定なら作成日から6ヶ月を目安にする。
 //   個別機能訓練   : 前回作成から3ヶ月ごと。
-//   科学的介護推進 : 直近のADL評価から6ヶ月ごと(加算ONの店舗のみ)。
+//   科学的介護推進 : 直近のADL評価から3ヶ月ごと(令和6年度改定でLIFE提出頻度が6→3ヶ月に短縮・加算ONの店舗のみ)。
 //   ADL維持等加算  : 評価開始から6ヶ月後に再評価(加算ONの店舗のみ)。
 //   いずれも「未作成」は即対象。 期限の1ヶ月前になったら一覧に出す。
 const PLAN_DUE_LEAD_DAYS = 30;
@@ -1698,7 +1698,7 @@ const computePlanDues = (appData, baseDate) => {
       .sort((a,b) => b.d - a.d)[0] || null;
     if (addons.kasan_kagaku) {
       if (!adl) push(p, 'kagaku', '科学的介護推進体制加算', today, 'life_hub', 'ADL評価が未実施');
-      else push(p, 'kagaku', '科学的介護推進体制加算', addMonths(adl.d, 6), 'life_hub', '前回評価から6ヶ月');
+      else push(p, 'kagaku', '科学的介護推進体制加算', addMonths(adl.d, 3), 'life_hub', '前回評価から3ヶ月');
     }
     if (addons.kasan_adl) {
       if (!adl) push(p, 'adl', 'ADL維持等加算', today, 'life_hub', 'ADL評価が未実施');
@@ -36807,6 +36807,127 @@ const seikatsuAdlToBarthel = (adlMap) => {
   });
   return out;
 };
+// =====================================================================================
+// LIFE 提出用CSV: コード変換表(§6.4)・様式カラム定義(§6.2)・行生成・検証・出力
+//   まるっとLIFEのExcelは複製せず、つむぎの内部データ→LIFE取込CSVへ変換する。
+//   version は設定値(既定 0300)。文字コードUTF-8(BOM無)、改行CR-LF、カンマ/"は "" で囲む。
+// =====================================================================================
+const LIFE_VERSION_DEFAULT = '0300';
+const LIFE_SERVICE_CODE_DEFAULT = '78'; // 通所介護(サービス種類コード)。設定で変更可
+// 性別 男=1 / 女=2
+const lifeGenderCode = (g) => { const s=String(g||''); if(/男/.test(s)) return '1'; if(/女/.test(s)) return '2'; return ''; };
+// 要介護度
+const LIFE_CARELEVEL_CODE = { '要支援1':'11','要支援2':'12','要介護1':'21','要介護2':'22','要介護3':'23','要介護4':'24','要介護5':'25' };
+// 障害高齢者の日常生活自立度 自立=1/J1=2/J2=3/A1=4/A2=5/B1=6/B2=7/C1=8/C2=9
+const LIFE_ADL_LEVEL_CODE = { '自立':'1','J1':'2','J2':'3','A1':'4','A2':'5','B1':'6','B2':'7','C1':'8','C2':'9' };
+// 認知症高齢者の日常生活自立度 自立=1/Ⅰ=2/Ⅱa=3/Ⅱb=4/Ⅲa=5/Ⅲb=6/Ⅳ=7/M=8
+const LIFE_DEM_LEVEL_CODE = { '自立':'1','Ⅰ':'2','Ⅱa':'3','Ⅱb':'4','Ⅲa':'5','Ⅲb':'6','Ⅳ':'7','M':'8' };
+// 評価時点 開始=1/利用中=2/終了=3
+const LIFE_STATUS_CODE = { '利用開始時':'1','開始':'1','利用中':'2','利用終了時':'3','終了':'3' };
+// Barthel Index: 点数(つむぎ保持) → LIFE段階コード。 項目ごとに段階数が違う(§6.4)。
+//   3択(食事/整容/トイレ/入浴/階段/更衣/排便/排尿) 自立=2/一部介助=1/全介助=0
+//   4択(移乗) 自立=3/監視下=2/座れるが移れない=1/全介助=0 、4択(歩行) 自立=3/歩行器等=2/車椅子操作=1/全介助=0
+//   ※整容・入浴はBarthelが2段階(自立/介助)のため 自立=2/介助=0 とする。
+const LIFE_BI_CODE = {
+  eat:      { 10:'2', 5:'1', 0:'0' },
+  transfer: { 15:'3', 10:'2', 5:'1', 0:'0' },
+  groom:    { 5:'2', 0:'0' },
+  toilet:   { 10:'2', 5:'1', 0:'0' },
+  bath:     { 5:'2', 0:'0' },
+  walk:     { 15:'3', 10:'2', 5:'1', 0:'0' },
+  stairs:   { 10:'2', 5:'1', 0:'0' },
+  dress:    { 10:'2', 5:'1', 0:'0' },
+  stool:    { 10:'2', 5:'1', 0:'0' },
+  urine:    { 10:'2', 5:'1', 0:'0' },
+};
+// BARTHEL_ITEMS と同じ並び = CSVの barthel_* 列の並び(§6.2 No.38-47)
+const LIFE_BI_ORDER = ['eat','transfer','groom','toilet','bath','walk','stairs','dress','stool','urine'];
+const lifeBiCode = (key, points) => { const m=LIFE_BI_CODE[key]; if(!m) return ''; const v=m[Number(points)]; return v==null?'':v; };
+const lifeYmd = (iso) => String(iso||'').slice(0,10).replace(/-/g,''); // YYYY-MM-DD → YYYYMMDD
+const lifeZero10 = (v) => { const s=String(v||'').replace(/\D/g,''); return s ? s.padStart(10,'0').slice(-10) : ''; };
+// 管理番号 = 被保険者番号(10桁)+評価年月(YYYYMM)+様式ID
+const lifeMgmtNo = (insuredNo, ym, formId) => { const n=lifeZero10(insuredNo); const m=String(ym||'').replace(/\D/g,'').slice(0,6); return (n && m) ? `${n}${m}${formId}` : ''; };
+
+// 科学的介護推進(TIFI2024) 全114列の物理名(§6.2 の列順どおり)
+const LIFE_TIFI2024_COLUMNS = (() => {
+  const c = ['care_facility_id','service_code','insurer_no','insured_no','external_system_management_number','facility_outpatient_category','care_level','impaired_elderly_independence_degree','dementia_elderly_independence_degree','evaluate_date','status'];
+  for (let i=1;i<=5;i++){ const p=String(i).padStart(2,'0'); c.push(`emergency_hospitalization_date_${p}`,`emergency_hospitalization_complaint_fever_${p}`,`emergency_hospitalization_complaint_fall_down_${p}`,`emergency_hospitalization_complaint_other_${p}`,`emergency_hospitalization_complaint_other_content_${p}`); }
+  c.push('family','barthel_index_meal','barthel_transfer','barthel_index_personal_hygiene_and_adjustment','barthel_index_toilet_activity','barthel_index_bathing','barthel_index_flat_ground_walking','barthel_index_stair_movement','barthel_index_changing_clothes','barthel_index_defecation_manage','barthel_index_urination_manage','departure_date','departure','height','weight','low_operating_risk_level','food_form_ingestion','is_nutrition_supply_method_enteral_nutrition','is_nutrition_supply_method_parenteral_nutrition','meal_form','thickening','dietary_intake','staple_food_intake','side_dish_intake','required_nutrients_energy','required_nutrients_protein','provided_nutrients_energy','provided_nutrients_protein','bedsore','denture','choke','stains_on_teeth','condition_of_gums','diagnosis_of_dementia_01','diagnosis_of_dementia_02','diagnosis_of_dementia_03','diagnosis_of_dementia_other','diagnosis_of_dementia_other_name','diagnosis_of_dementia_evaluate_1_1','diagnosis_of_dementia_evaluate_1_2','diagnosis_of_dementia_evaluate_2','diagnosis_of_dementia_evaluate_3','diagnosis_of_dementia_evaluate_4','diagnosis_of_dementia_evaluate_5','diagnosis_of_dementia_evaluate_6','vitality_index_01','vitality_index_02','vitality_index_03','vitality_index_04','vitality_index_05');
+  for (let i=1;i<=13;i++) c.push(`dbd13_${String(i).padStart(2,'0')}`);
+  c.push('basic_operation','walking_moving','cognitive_orientation','cognitive_communication','cognitive_mental_activity','swallowing_function','eating_assistance','excretion','bathing','oral_care','dressing','dressing_action','leisure','communication','version');
+  return c;
+})();
+const LIFE_ICF_KEYS = ['basic_operation','walking_moving','cognitive_orientation','cognitive_communication','cognitive_mental_activity','swallowing_function','eating_assistance','excretion','bathing','oral_care','dressing','dressing_action','leisure','communication'];
+
+// TIFI2024 の1行を {列名:値} で生成。 sci = 科学的介護推進の固有項目(評価レコードの science セクション)。
+const buildTifi2024Row = (patient, adlRec, sci, settings, targetYm) => {
+  const s = sci || {}; const st = settings || {}; const items = adlRec?.items || {};
+  const row = {};
+  LIFE_TIFI2024_COLUMNS.forEach(k => { row[k] = ''; });
+  row.care_facility_id = st.officeNumber || '';
+  row.service_code = st.serviceCode || '';
+  row.insurer_no = patient?.insurerNo || st.insurerNo || '';
+  row.insured_no = lifeZero10(patient?.insuranceNo);
+  row.external_system_management_number = lifeMgmtNo(patient?.insuranceNo, targetYm, 'TIFI2024');
+  row.facility_outpatient_category = st.facilityOutpatientCategory || '2';
+  row.care_level = LIFE_CARELEVEL_CODE[String(patient?.careLevel||'').trim()] || '';
+  row.impaired_elderly_independence_degree = LIFE_ADL_LEVEL_CODE[normalizeAdlLevel(patient?.faceSheet?.adlLevel)] || '';
+  row.dementia_elderly_independence_degree = LIFE_DEM_LEVEL_CODE[normalizeDemLevel(patient?.faceSheet?.dementiaLevel)] || '';
+  row.evaluate_date = lifeYmd(adlRec?.evalDate);
+  row.status = LIFE_STATUS_CODE[String(s.status||'利用中')] || '';
+  (s.emergencies||[]).slice(0,5).forEach((e,i)=>{ const p=String(i+1).padStart(2,'0'); if(!e) return; row[`emergency_hospitalization_date_${p}`]=lifeYmd(e.date); row[`emergency_hospitalization_complaint_fever_${p}`]=e.fever?'1':''; row[`emergency_hospitalization_complaint_fall_down_${p}`]=e.fall?'1':''; row[`emergency_hospitalization_complaint_other_${p}`]=e.other?'1':''; row[`emergency_hospitalization_complaint_other_content_${p}`]=e.otherContent||''; });
+  row.family = s.family || '';
+  const biCols = ['barthel_index_meal','barthel_transfer','barthel_index_personal_hygiene_and_adjustment','barthel_index_toilet_activity','barthel_index_bathing','barthel_index_flat_ground_walking','barthel_index_stair_movement','barthel_index_changing_clothes','barthel_index_defecation_manage','barthel_index_urination_manage'];
+  LIFE_BI_ORDER.forEach((key,idx)=>{ const pt=items[key]; row[biCols[idx]] = (pt==null||pt==='')?'':lifeBiCode(key, pt); });
+  row.departure_date = lifeYmd(s.departureDate); row.departure = s.departure || '';
+  row.height = s.height!=null?String(s.height):''; row.weight = s.weight!=null?String(s.weight):'';
+  row.bedsore = s.bedsore?'1':(s.bedsore===0||s.bedsore===false?'0':'');
+  ['denture','choke','stains_on_teeth','condition_of_gums'].forEach(k=>{ const v=s[k]; row[k]= v===1||v===true?'1':(v===0||v===false?'0':''); });
+  row.diagnosis_of_dementia_01 = s.dem_alzheimer?'1':''; row.diagnosis_of_dementia_02 = s.dem_vascular?'1':''; row.diagnosis_of_dementia_03 = s.dem_lewy?'1':''; row.diagnosis_of_dementia_other = s.dem_other?'1':''; row.diagnosis_of_dementia_other_name = s.dem_other_name||'';
+  const dem=['diagnosis_of_dementia_evaluate_1_1','diagnosis_of_dementia_evaluate_1_2','diagnosis_of_dementia_evaluate_2','diagnosis_of_dementia_evaluate_3','diagnosis_of_dementia_evaluate_4','diagnosis_of_dementia_evaluate_5','diagnosis_of_dementia_evaluate_6'];
+  dem.forEach((k,i)=>{ const v=(s.demScale||[])[i]; row[k]= v!=null&&v!==''?String(v):''; });
+  for (let i=0;i<5;i++){ const v=(s.vitality||[])[i]; row[`vitality_index_${String(i+1).padStart(2,'0')}`]= v!=null&&v!==''?String(v):''; }
+  for (let i=0;i<13;i++){ const v=(s.dbd13||[])[i]; row[`dbd13_${String(i+1).padStart(2,'0')}`]= v!=null&&v!==''?String(v):''; }
+  LIFE_ICF_KEYS.forEach(k=>{ const v=(s.icf||{})[k]; row[k]= v!=null&&v!==''?String(v):''; });
+  row.version = st.version || LIFE_VERSION_DEFAULT;
+  return row;
+};
+
+// TIFI2024 の必須・整合チェック(§7)。 errors=提出不可 / warns=要確認。
+const validateTifi2024 = (patient, adlRec, sci, row, today) => {
+  const errors=[], warns=[]; const s=sci||{};
+  const req=(cond,msg)=>{ if(!cond) errors.push(msg); };
+  req(lifeZero10(patient?.insuranceNo).length===10, '被保険者番号(10桁)が未設定');
+  req(!!row.care_level, `要介護度がコード化できません（${patient?.careLevel||'未設定'}）`);
+  req(!!row.impaired_elderly_independence_degree, '障害高齢者の日常生活自立度(フェイスシート)が未設定');
+  req(!!row.dementia_elderly_independence_degree, '認知症高齢者の日常生活自立度(フェイスシート)が未設定');
+  req(!!adlRec, 'ADL評価(Barthel)が未作成');
+  req(!!row.evaluate_date, '評価日が未設定');
+  if (row.evaluate_date && today && row.evaluate_date > lifeYmd(today)) errors.push('評価日が未来日付です');
+  if (patient?.birthDate && row.evaluate_date && lifeYmd(patient.birthDate) >= row.evaluate_date) errors.push('生年月日が評価日以降になっています');
+  LIFE_BI_ORDER.forEach((key,idx)=>{ const biCols=['食事','移乗','整容','トイレ','入浴','歩行','階段','更衣','排便','排尿']; if(adlRec && (adlRec.items?.[key]==null||adlRec.items?.[key]==='')) errors.push(`ADL「${biCols[idx]}」が未評価`); });
+  req(s.height!=null&&s.height!=='', '身長が未入力'); req(s.weight!=null&&s.weight!=='', '体重が未入力');
+  ['denture','choke','stains_on_teeth','condition_of_gums'].forEach(k=>{ const lbl={denture:'義歯',choke:'むせ',stains_on_teeth:'歯の汚れ',condition_of_gums:'歯肉の腫れ・出血'}[k]; if(row[k]==='') errors.push(`口腔「${lbl}」が未入力`); });
+  if ((s.demScale||[]).filter(v=>v!=null&&v!=='').length < 7) errors.push('生活・認知機能尺度(7設問)が未入力の設問があります');
+  if (row.vitality_index_01==='') errors.push('Vitality Index(意思疎通)が未入力');
+  if (s.dem_other && !s.dem_other_name) warns.push('認知症診断「その他」が有ですが病名が未記入');
+  if (!row.insurer_no) warns.push('保険者番号(6桁)が未設定（参考元は空欄運用可・要確認）');
+  if (!row.care_facility_id) warns.push('事業所番号が未設定（LIFE設定で入力・空欄運用可）');
+  return { errors, warns };
+};
+
+// CSV文字列生成(RFC4180準拠・改行CR-LF)。 値にカンマ/"/改行があれば "" で囲む。
+const lifeToCsvText = (headers, rows) => {
+  const esc = (v) => { const s=(v==null?'':String(v)); return /[",\r\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s; };
+  const lines = [headers.map(esc).join(',')];
+  rows.forEach(r => lines.push(headers.map(h => esc(r[h])).join(',')));
+  return lines.join('\r\n');
+};
+const lifeDownloadCsv = (filename, text) => {
+  try { const blob = new Blob([text], { type:'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 1000); }
+  catch(e){ alert('CSVの出力に失敗しました: '+e.message); }
+};
+
 function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
@@ -36930,6 +37051,49 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   ))}
                 </div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">備考</label><textarea value={editing.note} onChange={e=>{setEditing(x=>({...x,note:e.target.value}));markDirty();}} rows={2} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-none"/></div>
+                {addons.kasan_kagaku && (() => {
+                  const sci = editing.science || {};
+                  const setSci = (k,v)=>{ setEditing(x=>({...x, science:{...(x.science||{}), [k]:v}})); markDirty(); };
+                  const YN = [['1','あり'],['0','なし']];
+                  const seg = (k, opts, cur) => (<div className="flex gap-1.5 flex-wrap">{opts.map(([val,lb])=>{ const on=String(cur)===String(val); return (<button key={val} type="button" onClick={()=>setSci(k,val)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>{lb}</button>); })}</div>);
+                  return (
+                  <div className="border-t border-slate-200 pt-3 mt-1 space-y-3">
+                    <div className="text-sm font-bold text-purple-700">科学的介護推進体制加算（LIFE提出）固有項目</div>
+                    <div className="flex items-center gap-3 flex-wrap"><div className="w-40 text-xs font-bold text-slate-500">評価時点</div>{seg('status',[['利用開始時','利用開始時'],['利用中','利用中'],['利用終了時','利用終了時']], sci.status||'利用中')}</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">身長(cm)</label><input type="number" step="0.1" value={sci.height??''} onChange={e=>setSci('height', e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">体重(kg)</label><input type="number" step="0.1" value={sci.weight??''} onChange={e=>setSci('weight', e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                    </div>
+                    <div className="space-y-2">
+                      {[['denture','義歯の使用'],['choke','むせ'],['stains_on_teeth','歯の汚れ'],['condition_of_gums','歯肉の腫れ・出血']].map(([k,lb])=>(
+                        <div key={k} className="flex items-center gap-3 flex-wrap"><div className="w-40 text-xs font-bold text-slate-500">{lb}</div>{seg(k,YN,sci[k])}</div>
+                      ))}
+                      <div className="flex items-center gap-3 flex-wrap"><div className="w-40 text-xs font-bold text-slate-500">褥瘡(任意)</div>{seg('bedsore',YN,sci.bedsore)}</div>
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-500 mb-1">認知症の診断</div>
+                      <div className="flex gap-2 flex-wrap">
+                        {[['dem_alzheimer','アルツハイマー病'],['dem_vascular','血管性認知症'],['dem_lewy','レビー小体病'],['dem_other','その他']].map(([k,lb])=>{ const on=!!sci[k]; return (<button key={k} type="button" onClick={()=>setSci(k, !on)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-purple-600 text-white border-purple-600':'bg-white text-slate-600 border-slate-300'}`}>{lb}</button>); })}
+                      </div>
+                      {sci.dem_other && <input value={sci.dem_other_name||''} onChange={e=>setSci('dem_other_name', e.target.value)} placeholder="その他の病名" className="mt-2 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/>}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-500 mb-1">生活・認知機能尺度（7設問・5〜1点／別紙様式3）</div>
+                      <div className="space-y-1.5">
+                        {['記憶(近時)','記憶(即時)','見当識','問題解決','社会適応','自己管理','コミュニケーション'].map((lb,i)=>{
+                          const cur=(sci.demScale||[])[i];
+                          const setD=(v)=>{ const arr=[...(sci.demScale||[])]; arr[i]=v; setSci('demScale', arr); };
+                          return (<div key={i} className="flex items-center gap-3 flex-wrap"><div className="w-44 text-xs text-slate-600">設問{i+1}. {lb}</div><div className="flex gap-1">{[5,4,3,2,1].map(n=>{ const on=Number(cur)===n; return <button key={n} type="button" onClick={()=>setD(n)} className={`w-8 py-1.5 rounded text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-500 border-slate-300'}`}>{n}</button>; })}</div></div>);
+                        })}
+                      </div>
+                      <div className="text-[10px] text-slate-400 mt-1">※ 設問文・選択肢は厚労省 別紙様式3 の正式文言に差し替え予定。</div>
+                    </div>
+                    {(() => { const setV=(v)=>{ const arr=[...(sci.vitality||[])]; arr[0]=v; setSci('vitality', arr); }; const cur=(sci.vitality||[])[0]; return (
+                      <div className="flex items-center gap-3 flex-wrap"><div className="w-44 text-xs font-bold text-slate-500">Vitality Index:意思疎通</div><div className="flex gap-1">{['2','1','0'].map(n=>{ const on=String(cur)===n; return <button key={n} type="button" onClick={()=>setV(n)} className={`px-3 py-1.5 rounded text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-500 border-slate-300'}`}>{n}</button>; })}</div></div>
+                    ); })()}
+                  </div>
+                  );
+                })()}
               </div>
             ) : adlRecords.length===0 ? (
               <div className="text-sm text-slate-400 py-6 text-center">まだADL評価がありません。「＋ ADL評価を新規作成」から入力してください。</div>
@@ -36964,11 +37128,33 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
             )}
           </div>
 
-          {!editing && (
-            <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 text-xs text-amber-800 leading-relaxed">
-              <b>次の開発予定：</b> 各加算の固有項目フォーム（科学的介護推進体制＝口腔/栄養/認知症/既往 等、ADL維持等＝利得算定、個別機能訓練Ⅱ＝計画連携）と、<b>LIFE連携CSVの書き出し</b>。CSVは公式のLIFE連携仕様に合わせて実装します（要・最新仕様確認）。
-            </div>
-          )}
+          {!editing && addons.kasan_kagaku && (() => {
+            const latest = adlRecords[0] || null;
+            const sci = latest?.science || {};
+            const st = appData.systemSettings?.life || {};
+            const ym = String((latest?.evalDate||today)).slice(0,7).replace('-','');
+            const row = latest ? buildTifi2024Row(patient, latest, sci, st, ym) : null;
+            const vr = latest ? validateTifi2024(patient, latest, sci, row, today) : { errors:[], warns:[] };
+            const doExport = () => {
+              if (vr.errors.length && !window.confirm(`未入力・エラーが ${vr.errors.length} 件あります。\nこのまま出力しますか？（不足項目は空欄で出力されます）`)) return;
+              lifeDownloadCsv(`TIFI2024_${ym}.csv`, lifeToCsvText(LIFE_TIFI2024_COLUMNS, [row]));
+            };
+            return (
+              <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="text-sm font-bold text-purple-700">科学的介護推進体制加算 — LIFE提出CSV（TIFI2024・全{LIFE_TIFI2024_COLUMNS.length}列）</div>
+                  <button type="button" onClick={doExport} disabled={!latest} className={`px-4 py-2 rounded-lg text-sm font-bold shadow active:scale-95 ${latest?'bg-purple-600 hover:bg-purple-700 text-white':'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>この利用者のCSVを出力</button>
+                </div>
+                {!latest ? <div className="text-xs text-slate-400">ADL評価(Barthel)を作成するとCSVを出力できます。</div> : (<>
+                  <div className="text-xs text-slate-500">対象評価: {latest.evalDate}　／　管理番号: {row.external_system_management_number||'（被保険者番号が必要）'}</div>
+                  {vr.errors.length>0 && <div className="bg-red-50 border border-red-200 rounded-lg p-3"><div className="text-xs font-bold text-red-700 mb-1">提出前に確認（{vr.errors.length}件）</div><ul className="text-[11px] text-red-700 list-disc pl-4 space-y-0.5">{vr.errors.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
+                  {vr.warns.length>0 && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><div className="text-xs font-bold text-amber-700 mb-1">要確認（{vr.warns.length}件）</div><ul className="text-[11px] text-amber-700 list-disc pl-4 space-y-0.5">{vr.warns.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
+                  {vr.errors.length===0 && <div className="text-xs font-bold text-emerald-600">✓ 必須項目は揃っています。出力できます。</div>}
+                </>)}
+                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。提出頻度は令和6年度改定で概ね3ヶ月ごと。複数利用者まとめ出力・帳票印刷・他様式(ADL維持/個別機能訓練)は今後追加します。事業所番号・保険者番号はLIFE設定で登録予定。</div>
+              </div>
+            );
+          })()}
         </div>
         )}
       </div>
