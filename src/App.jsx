@@ -28752,9 +28752,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ 運動メニュー/個別運動(設定値)が変わったら「いつから」を確認 (規定値は翌月から適用・備考へ自動記載)
     if (peChanged || indChanged) {
       const _ctx = { pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) };
-      // ★ 自動保存では「いつから」モーダルを出さず、当日付で確定してサイレント保存する。
-      if (auto) { applyPlannedExChange(new Date().toISOString().slice(0,10), _ctx, { silent: true }); return; }
-      setPlannedExModal(_ctx);
+      // ★ 運動メニュー/個別運動(規定値)の変更は、数値・ハイフン(ー)・クリアを問わず必ず「いつから反映」を確認する。
+      //   自動保存でも当日付で勝手に確定しない = 過去に遡って全期間がハイフン等になるのを防ぎ、適用開始日を選べるようにする。
+      //   (テンキーの ○/× ー は押下で即確定=自動クローズするため、自動保存経由でも取りこぼさないようここで必ずモーダルを出す)
+      if (!plannedExModal) setPlannedExModal(_ctx);
       return;
     }
     onSave(next, auto ? { silent: true } : { manual: true, message: '✓ 利用者マスタを保存しました' });
