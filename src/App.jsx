@@ -36848,6 +36848,14 @@ const lifeYmd = (iso) => String(iso||'').slice(0,10).replace(/-/g,''); // YYYY-M
 const lifeZero10 = (v) => { const s=String(v||'').replace(/\D/g,''); return s ? s.padStart(10,'0').slice(-10) : ''; };
 // 管理番号 = 被保険者番号(10桁)+評価年月(YYYYMM)+様式ID
 const lifeMgmtNo = (insuredNo, ym, formId) => { const n=lifeZero10(insuredNo); const m=String(ym||'').replace(/\D/g,'').slice(0,6); return (n && m) ? `${n}${m}${formId}` : ''; };
+// 和暦「令和R年M月D日」→ YYYYMMDD。 ISO(YYYY-MM-DD)ならそのまま整形(生活機能チェックの作成日は和暦文字列で保持されるため)。
+const reiwaToYmd = (s) => {
+  const t = String(s||'').trim(); if (!t) return '';
+  const iso = t.match(/(\d{4})-(\d{2})-(\d{2})/); if (iso) return iso[1]+iso[2]+iso[3];
+  const m = t.match(/令和\s*(\d+)\s*年\s*(\d+)\s*月\s*(\d+)\s*日/);
+  if (m) { const y=2018+Number(m[1]); return `${y}${String(m[2]).padStart(2,'0')}${String(m[3]).padStart(2,'0')}`; }
+  return lifeYmd(t);
+};
 
 // 科学的介護推進(TIFI2024) 全114列の物理名(§6.2 の列順どおり)
 const LIFE_TIFI2024_COLUMNS = (() => {
@@ -36957,10 +36965,68 @@ const validateAint2024 = (patient, adlRec, sci, row, today) => {
   if (!row.care_facility_id) warns.push('事業所番号が未設定（各種設定→事業所情報で入力）');
   return { errors, warns };
 };
-// LIFE様式の共通定義(ダッシュボード/出力を様式横断で扱う)
+// 生活機能チェック(FUNC2024) 全52列(§6.2)。 元データ=生活機能チェック(様式3-2 seikatsuKinouRecords)。
+//   ADL10項目のstatusはBI段階コード(§6.4)。 IADL/起居動作は 自立=3/見守り=2/一部介助=1/全介助=0。
+//   課題の有無(is_*_assignment)は 自立=無(0)/それ以外=有(1)/未入力=空 の自動判定(ユーザー決定 2026-07-23)。
+const LIFE_FUNC2024_COLUMNS = ['care_facility_id','service_code','insurer_no','insured_no','external_system_management_number','trinity_attempt','evaluate_date','care_level','impaired_elderly_independence_degree','dementia_elderly_independence_degree','meal_status','is_meal_assignment','transfer_bed_chair_status','is_transfer_bed_chair_assignment','personal_hygiene_and_adjustment_status','is_personal_hygiene_and_adjustment_assignment','toilet_behavior_status','is_toilet_behavior_assignment','bathe_status','is_bathe_assignment','walking_status','is_walking_assignment','up_stairs_status','is_up_stairs_assignment','dressing_status','is_dressing_assignment','defecation_status','is_defecation_assignment','urination_status','is_urination_assignment','environment_viewpoint_adl','support_viewpoint_adl','cooking_status','is_cooking_assignment','washing_status','is_washing_assignment','cleaning_status','is_cleaning_assignment','environment_viewpoint_iadl','support_viewpoint_iadl','roll_over_status','is_roll_over_assignment','get_up_status','is_get_up_assignment','sitting_status','is_sitting_assignment','rising_from_chair_status','is_rising_from_chair_assignment','standup_status','is_standup_assignment','support_viewpoint_standup','version'];
+// IADL・起居動作の4段階 → §6.4コード(自立=3/見守り=2/一部介助=1/全介助=0)
+const LIFE_FUNC_LEVEL = { '自立':'3','見守り':'2','一部介助':'1','全介助':'0' };
+const lifeFuncLevel = (v) => { const s=String(v||'').trim(); return Object.prototype.hasOwnProperty.call(LIFE_FUNC_LEVEL,s) ? LIFE_FUNC_LEVEL[s] : ''; };
+// 課題の有無(自動判定): 自立=無(0)/見守り・一部介助・全介助=有(1)/未入力=空
+const lifeFuncAssign = (v) => { const s=String(v||'').trim(); return s ? (s==='自立'?'0':'1') : ''; };
+// FUNC2024 の1行を {列名:値} で生成。 rec = 生活機能チェック(様式3-2)の1レコード。
+const buildFunc2024Row = (patient, rec, sci, settings, targetYm) => {
+  const st = settings || {}; const r = rec || {};
+  const adl = r.adl||{}, iadl = r.iadl||{}, kikyo = r.kikyo||{};
+  const bar = seikatsuAdlToBarthel(adl); // 生活機能チェックADL → Barthel点数(未選択は含まれない)
+  const biOf = (barKey) => { const pt = bar[barKey]; return pt==null?'':lifeBiCode(barKey, pt); };
+  const row = {}; LIFE_FUNC2024_COLUMNS.forEach(k => { row[k] = ''; });
+  row.care_facility_id = st.officeNumber || '';
+  row.service_code = st.serviceCode || '';
+  row.insurer_no = patient?.insurerNo || st.insurerNo || '';
+  row.insured_no = lifeZero10(patient?.insuranceNo);
+  row.external_system_management_number = lifeMgmtNo(patient?.insuranceNo, targetYm, 'FUNC2024');
+  row.trinity_attempt = '0'; // 一体的取組(既定=なし)
+  row.evaluate_date = reiwaToYmd(r.recordDate);
+  row.care_level = LIFE_CARELEVEL_CODE[String(patient?.careLevel||'').trim()] || '';
+  row.impaired_elderly_independence_degree = LIFE_ADL_LEVEL_CODE[normalizeAdlLevel(patient?.faceSheet?.adlLevel)] || '';
+  row.dementia_elderly_independence_degree = LIFE_DEM_LEVEL_CODE[normalizeDemLevel(patient?.faceSheet?.dementiaLevel)] || '';
+  // ADL 10項目(生活機能チェックのadl): status=BI段階コード / 課題=自動判定
+  [['meal','eat','食事'],['transfer_bed_chair','transfer','移乗'],['personal_hygiene_and_adjustment','groom','整容'],['toilet_behavior','toilet','トイレ動作'],['bathe','bath','入浴'],['walking','walk','歩行'],['up_stairs','stairs','階段昇降'],['dressing','dress','更衣'],['defecation','stool','排便管理'],['urination','urine','排尿管理']]
+    .forEach(([col,barKey,jp])=>{ row[`${col}_status`] = biOf(barKey); row[`is_${col}_assignment`] = lifeFuncAssign(adl[jp]); });
+  // IADL 3項目(調理/洗濯/掃除): status=4段階コード / 課題=自動判定
+  [['cooking','調理'],['washing','洗濯'],['cleaning','掃除']]
+    .forEach(([col,jp])=>{ row[`${col}_status`] = lifeFuncLevel(iadl[jp]); row[`is_${col}_assignment`] = lifeFuncAssign(iadl[jp]); });
+  // 起居動作 5項目: status=4段階コード / 課題=自動判定
+  [['roll_over','寝返り'],['get_up','起き上がり'],['sitting','座位保持'],['rising_from_chair','立ち上がり'],['standup','立位保持']]
+    .forEach(([col,jp])=>{ row[`${col}_status`] = lifeFuncLevel(kikyo[jp]); row[`is_${col}_assignment`] = lifeFuncAssign(kikyo[jp]); });
+  // 環境・支援の視点(environment_viewpoint_*/support_viewpoint_*)は任意 → 空欄(Phase1)
+  row.version = st.version || LIFE_VERSION_DEFAULT;
+  return row;
+};
+const validateFunc2024 = (patient, rec, sci, row, today) => {
+  const errors=[], warns=[];
+  if (lifeZero10(patient?.insuranceNo).length!==10) errors.push('被保険者番号(10桁)が未設定');
+  if (!row.care_level) errors.push(`要介護度がコード化できません（${patient?.careLevel||'未設定'}）`);
+  if (!row.impaired_elderly_independence_degree) errors.push('障害高齢者の日常生活自立度(フェイスシート)が未設定');
+  if (!row.dementia_elderly_independence_degree) errors.push('認知症高齢者の日常生活自立度(フェイスシート)が未設定');
+  if (!rec) errors.push('生活機能チェック(様式3-2)が未作成');
+  if (!row.evaluate_date) errors.push('評価日(作成日)が未設定・和暦を認識できません');
+  if (row.evaluate_date && today && row.evaluate_date > lifeYmd(today)) errors.push('評価日が未来日付です');
+  if (patient?.birthDate && row.evaluate_date && lifeYmd(patient.birthDate) >= row.evaluate_date) errors.push('生年月日が評価日以降になっています');
+  const adlCols=['meal','transfer_bed_chair','personal_hygiene_and_adjustment','toilet_behavior','bathe','walking','up_stairs','dressing','defecation','urination'];
+  const adlFilled = adlCols.filter(c=>row[`${c}_status`]!=='').length;
+  if (rec && adlFilled===0) errors.push('ADL(生活機能チェック)が未入力です');
+  else if (rec && adlFilled<adlCols.length) warns.push(`生活機能チェックのADL未入力が${adlCols.length-adlFilled}項目あります`);
+  if (!row.insurer_no) warns.push('保険者番号(6桁)が未設定（参考元は空欄運用可・要確認）');
+  if (!row.care_facility_id) warns.push('事業所番号が未設定（各種設定→事業所情報で入力）');
+  return { errors, warns };
+};
+// LIFE様式の共通定義(ダッシュボード/出力を様式横断で扱う)。 source=元データ('adl'=Barthel adlRecords / 'seikatsu'=生活機能チェック)
 const LIFE_FORMS = {
-  TIFI2024: { label:'科学的介護推進', addon:'kasan_kagaku', cols:LIFE_TIFI2024_COLUMNS, build:buildTifi2024Row, validate:validateTifi2024 },
-  AINT2024: { label:'ADL維持等', addon:'kasan_adl', cols:LIFE_AINT2024_COLUMNS, build:buildAint2024Row, validate:validateAint2024 },
+  TIFI2024: { label:'科学的介護推進', addon:'kasan_kagaku', source:'adl', cols:LIFE_TIFI2024_COLUMNS, build:buildTifi2024Row, validate:validateTifi2024 },
+  AINT2024: { label:'ADL維持等', addon:'kasan_adl', source:'adl', cols:LIFE_AINT2024_COLUMNS, build:buildAint2024Row, validate:validateAint2024 },
+  FUNC2024: { label:'生活機能チェック', addon:'kasan_kinou2', source:'seikatsu', cols:LIFE_FUNC2024_COLUMNS, build:buildFunc2024Row, validate:validateFunc2024 },
 };
 
 // CSV文字列生成(RFC4180準拠・改行CR-LF)。 値にカンマ/"/改行があれば "" で囲む。
@@ -37009,16 +37075,25 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   const dashForm = enabledForms.find(f=>f.id===dashFormId) || enabledForms[0] || null;
   const dashRows = React.useMemo(() => {
     if (!dashForm) return [];
+    const src = dashForm.source || 'adl';
     return patients.map(p => {
-      const recs = (appData.adlRecords||[]).filter(r=>r.patientId===p.id).sort((a,b)=>(String(b.evalDate||'')).localeCompare(String(a.evalDate||'')));
-      const latest = recs[0]||null;
-      const sci = latest?.science||{};
-      const pym = latest ? String(latest.evalDate).slice(0,7).replace('-','') : '';
+      let latest=null, sci={}, pym='';
+      if (src==='seikatsu') {
+        const recs = (appData.seikatsuKinouRecords||[]).filter(r=>r.patientId===p.id).sort((a,b)=>String(b.recordDate||'').localeCompare(String(a.recordDate||''))||((b.createdAt||0)-(a.createdAt||0)));
+        latest = recs[0]||null;
+        pym = latest ? reiwaToYmd(latest.recordDate).slice(0,6) : '';
+      } else {
+        const recs = (appData.adlRecords||[]).filter(r=>r.patientId===p.id).sort((a,b)=>(String(b.evalDate||'')).localeCompare(String(a.evalDate||'')));
+        latest = recs[0]||null;
+        sci = latest?.science||{};
+        pym = latest ? String(latest.evalDate).slice(0,7).replace('-','') : '';
+      }
       const row = latest ? dashForm.build(p, latest, sci, lifeOfficeCfg, pym) : null;
-      const vr = latest ? dashForm.validate(p, latest, sci, row, today) : { errors:['ADL評価が未作成'], warns:[] };
+      const noneMsg = src==='seikatsu' ? '生活機能チェックが未作成' : 'ADL評価が未作成';
+      const vr = latest ? dashForm.validate(p, latest, sci, row, today) : { errors:[noneMsg], warns:[] };
       return { p, latest, row, vr, status: !latest ? 'none' : (vr.errors.length ? 'error' : 'ok') };
     });
-  }, [appData.adlRecords, appData.patients, dashFormId, appData.systemSettings?.facilityInfo]);
+  }, [appData.adlRecords, appData.seikatsuKinouRecords, appData.patients, dashFormId, appData.systemSettings?.facilityInfo]);
   const exportAllForm = () => {
     if (!dashForm) return;
     const ok = dashRows.filter(d=>d.status==='ok');
@@ -37133,7 +37208,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                     {dashRows.length===0 ? <tr><td colSpan={4} className="px-2 py-4 text-center text-slate-400">対象の利用者がいません</td></tr> : dashRows.map(d=>(
                       <tr key={d.p.id} className={`hover:bg-slate-50 cursor-pointer ${d.p.id===pid?'bg-purple-50':''}`} onClick={()=>{ setEditing(null); setPid(d.p.id); }}>
                         <td className="px-2 py-1.5 font-bold text-slate-700">{d.p.name}</td>
-                        <td className="px-2 py-1.5 text-center text-slate-500">{d.latest?.evalDate||'—'}</td>
+                        <td className="px-2 py-1.5 text-center text-slate-500">{d.latest?.evalDate||d.latest?.recordDate||'—'}</td>
                         <td className="px-2 py-1.5 text-center">{d.status==='ok'?<span className="text-emerald-600 font-bold">✓ 提出可</span>:d.status==='error'?<span className="text-red-600 font-bold">エラー{d.vr.errors.length}件</span>:<span className="text-slate-400 font-bold">未評価</span>}</td>
                         <td className="px-2 py-1.5 text-[11px] text-slate-500">{d.status==='error'?d.vr.errors.slice(0,3).join(' / ')+(d.vr.errors.length>3?' …':''):d.status==='ok'&&d.vr.warns.length?<span className="text-amber-600">要確認: {d.vr.warns.join(' / ')}</span>:''}</td>
                       </tr>
@@ -37303,10 +37378,19 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
           </div>
 
           {!editing && enabledForms.map(f => {
-            const latest = adlRecords[0] || null;
-            const sci = latest?.science || {};
+            const src = f.source || 'adl';
+            let latest=null, sci={}, ym='', dateLabel='';
+            if (src==='seikatsu') {
+              latest = latestSeikatsu;
+              ym = latest ? reiwaToYmd(latest.recordDate).slice(0,6) : today.slice(0,7).replace('-','');
+              dateLabel = latest?.recordDate || '';
+            } else {
+              latest = adlRecords[0] || null;
+              sci = latest?.science || {};
+              ym = String((latest?.evalDate||today)).slice(0,7).replace('-','');
+              dateLabel = latest?.evalDate || '';
+            }
             const st = lifeOfficeCfg;
-            const ym = String((latest?.evalDate||today)).slice(0,7).replace('-','');
             const row = latest ? f.build(patient, latest, sci, st, ym) : null;
             const vr = latest ? f.validate(patient, latest, sci, row, today) : { errors:[], warns:[] };
             const doExport = () => {
@@ -37319,13 +37403,13 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   <div className="text-sm font-bold text-purple-700">{f.label} — LIFE提出CSV（{f.id}・全{f.cols.length}列）</div>
                   <button type="button" onClick={doExport} disabled={!latest} className={`px-4 py-2 rounded-lg text-sm font-bold shadow active:scale-95 ${latest?'bg-purple-600 hover:bg-purple-700 text-white':'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>この利用者のCSVを出力</button>
                 </div>
-                {!latest ? <div className="text-xs text-slate-400">ADL評価(Barthel)を作成するとCSVを出力できます。</div> : (<>
-                  <div className="text-xs text-slate-500">対象評価: {latest.evalDate}　／　管理番号: {row.external_system_management_number||'（被保険者番号が必要）'}</div>
+                {!latest ? <div className="text-xs text-slate-400">{src==='seikatsu'?'生活機能チェック(様式3-2)を作成するとCSVを出力できます。':'ADL評価(Barthel)を作成するとCSVを出力できます。'}</div> : (<>
+                  <div className="text-xs text-slate-500">対象評価: {dateLabel}　／　管理番号: {row.external_system_management_number||'（被保険者番号が必要）'}</div>
                   {vr.errors.length>0 && <div className="bg-red-50 border border-red-200 rounded-lg p-3"><div className="text-xs font-bold text-red-700 mb-1">提出前に確認（{vr.errors.length}件）</div><ul className="text-[11px] text-red-700 list-disc pl-4 space-y-0.5">{vr.errors.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
                   {vr.warns.length>0 && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><div className="text-xs font-bold text-amber-700 mb-1">要確認（{vr.warns.length}件）</div><ul className="text-[11px] text-amber-700 list-disc pl-4 space-y-0.5">{vr.warns.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
                   {vr.errors.length===0 && <div className="text-xs font-bold text-emerald-600">✓ 必須項目は揃っています。出力できます。</div>}
                 </>)}
-                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。{f.id==='TIFI2024'?'提出頻度は令和6年度改定で概ね3ヶ月ごと。':f.id==='AINT2024'?'初月と6か月後の評価を「対象月区分」で指定してください。':''}帳票印刷・他様式は順次追加します。事業所番号・保険者番号は各種設定→事業所情報で登録できます。</div>
+                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。{f.id==='TIFI2024'?'提出頻度は令和6年度改定で概ね3ヶ月ごと。':f.id==='AINT2024'?'初月と6か月後の評価を「対象月区分」で指定してください。':f.id==='FUNC2024'?'生活機能チェック(様式3-2)を元に出力します。ADLは§6.4のBI段階コード、課題の有無は自立=無/それ以外=有で自動判定します。':''}帳票印刷・他様式は順次追加します。事業所番号・保険者番号は各種設定→事業所情報で登録できます。</div>
               </div>
             );
           })}
