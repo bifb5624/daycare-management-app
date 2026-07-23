@@ -1117,6 +1117,10 @@ const appendDocUpdate = (patient, by, byName, items) => {
 };
 // ★ フェイスシートの項目名(通知の「どこを変更したか」表示に使う)。 キーは faceSheet のフィールド名。
 const FS_FIELD_LABELS = {
+  // ★ フェイスシートで編集できる本人基本情報・連絡先・被保険者番号・留意点(利用者本体へ反映する項目)。
+  name:'お名前', kana:'フリガナ', birthDate:'生年月日', gender:'性別',
+  zipCode:'郵便番号', address:'住所', addressBuilding:'建物名', phone:'電話番号', phoneMobile:'電話番号(携帯)', email:'メールアドレス',
+  insuranceNo:'被保険者番号', ryui:'留意点', relatedParties:'その他関係者',
   receptionDate:'受付日', receptionMethod:'受付方法', receptionMethodOther:'受付方法', receptionStaff:'受付者', receptionStaffOther:'受付者',
   creator:'作成者', creatorOther:'作成者', createdDate:'作成日',
   fax:'FAX', householdType:'世帯区分', householdTypeOther:'世帯区分',
