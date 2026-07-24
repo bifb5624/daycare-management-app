@@ -18767,7 +18767,7 @@ export default function App() {
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
-             currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} /> :
+             currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
              currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
              currentView === 'dash_operation' ? <OperationDashboardView appData={appData} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} setAppData={setAppData} /> :
@@ -37279,7 +37279,7 @@ const DEM_SCALE_QUESTIONS = [
   { no:'⑤', label:'一人で着替えができるか', choices:['季節・気温に応じた服装を選び着脱衣できる','服装選びは不可だが順番・方法を理解し自分で着脱衣できる','促せば自分で着脱衣できる','着脱衣の一部を介護者が行う','着脱衣の全てを常に介護者が行う'] },
   { no:'⑥', label:'電化製品(テレビ・エアコン等)を操作できるか', choices:['自由に操作できる','普段している操作はできる','教えてもらえれば使える','認識しているが使い方が全く分からない','何をするものか分からない'] },
 ];
-function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef }) {
+function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef, onShowPrintPreview }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
   const [pid, setPid] = React.useState((targetPatientId!=null && (appData.patients||[]).some(p=>p.id===targetPatientId)) ? targetPatientId : (patients[0]?.id ?? null));
@@ -37640,7 +37640,12 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
               <div key={f.id} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="text-sm font-bold text-purple-700">{f.label} — LIFE提出CSV（{f.id}・全{f.cols.length}列）</div>
-                  <button type="button" onClick={doExport} disabled={!latest} className={`px-4 py-2 rounded-lg text-sm font-bold shadow active:scale-95 ${latest?'bg-purple-600 hover:bg-purple-700 text-white':'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>この利用者のCSVを出力</button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {onShowPrintPreview && latest && (f.id==='TIFI2024'||f.id==='AINT2024') && (
+                      <button type="button" onClick={()=>onShowPrintPreview(f.id==='TIFI2024'?'科学的介護推進に関する評価':'ADL維持等加算 評価','A4',f.id==='TIFI2024'?'tifi-print-area':'aint-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">帳票印刷</button>
+                    )}
+                    <button type="button" onClick={doExport} disabled={!latest} className={`px-4 py-2 rounded-lg text-sm font-bold shadow active:scale-95 ${latest?'bg-purple-600 hover:bg-purple-700 text-white':'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>この利用者のCSVを出力</button>
+                  </div>
                 </div>
                 {!latest ? <div className="text-xs text-slate-400">{src==='seikatsu'?'生活機能チェック(様式3-2)を作成するとCSVを出力できます。':src==='kinou'?'個別機能訓練計画書(様式3-3)を作成するとCSVを出力できます。':'ADL評価(Barthel)を作成するとCSVを出力できます。'}</div> : (<>
                   <div className="text-xs text-slate-500">対象評価: {dateLabel}　／　管理番号: {row.external_system_management_number||'（被保険者番号が必要）'}</div>
@@ -37648,10 +37653,70 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   {vr.warns.length>0 && <div className="bg-amber-50 border border-amber-200 rounded-lg p-3"><div className="text-xs font-bold text-amber-700 mb-1">要確認（{vr.warns.length}件）</div><ul className="text-[11px] text-amber-700 list-disc pl-4 space-y-0.5">{vr.warns.map((e,i)=><li key={i}>{e}</li>)}</ul></div>}
                   {vr.errors.length===0 && <div className="text-xs font-bold text-emerald-600">✓ 必須項目は揃っています。出力できます。</div>}
                 </>)}
-                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。{f.id==='TIFI2024'?'提出頻度は令和6年度改定で概ね3ヶ月ごと。':f.id==='AINT2024'?'初月と6か月後の評価を「対象月区分」で指定してください。':f.id==='FUNC2024'?'生活機能チェック(様式3-2)を元に出力します。ADLは§6.4のBI段階コード、課題の有無は自立=無/それ以外=有で自動判定します。':f.id==='IDUA2024'?'個別機能訓練計画書(様式3-3)を元に出力します。目標ICF・合併症・訓練プログラム/職種等のコードは計画書の「LIFE提出用コード」で指定してください（職種コードは要確認）。':''}帳票印刷・他様式は順次追加します。事業所番号・保険者番号は各種設定→事業所情報で登録できます。</div>
+                <div className="text-[10px] text-slate-400 leading-relaxed">※ 文字コードUTF-8・改行CR-LF。ファイル名に氏名・被保険者番号は含めません。{f.id==='TIFI2024'?'提出頻度は令和6年度改定で概ね3ヶ月ごと。「帳票印刷」で評価内容を紙様式で出力できます。':f.id==='AINT2024'?'初月と6か月後の評価を「対象月区分」で指定してください。「帳票印刷」でBI一覧を紙様式で出力できます。':f.id==='FUNC2024'?'生活機能チェック(様式3-2)を元に出力します。帳票は生活機能チェックシート画面の「印刷/PDF」から。':f.id==='IDUA2024'?'個別機能訓練計画書(様式3-3)を元に出力します。帳票は計画書画面の「印刷/PDF」から。目標ICF・合併症・職種等のコードは計画書の「LIFE提出用コード」で指定（職種コードは要確認）。':''}事業所番号・保険者番号は各種設定→事業所情報で登録できます。</div>
               </div>
             );
           })}
+          {/* ★ LIFE帳票(印刷用・非表示)。 科学的介護推進 / ADL維持等 は現在選択中の利用者の最新ADL評価+固有項目から生成 */}
+          {(() => {
+            const _a = adlRecords[0] || null; if (!_a) return null;
+            const _s = _a.science || {}; const fac = appData.systemSettings?.facilityInfo || {};
+            const cell={border:'1px solid #000',padding:'3px 7px',fontSize:'11px',verticalAlign:'top',lineHeight:1.5};
+            const lab={...cell,background:'#f1f2f4',fontWeight:'bold',whiteSpace:'nowrap'};
+            const yn=(v)=> (v===1||v===true||v==='1')?'あり':((v===0||v===false||v==='0')?'なし':'―');
+            const wrap={display:'none',background:'white',color:'#000',width:'794px',padding:'32px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic","Noto Sans JP",sans-serif',lineHeight:1.4};
+            const dementia=[['dem_alzheimer','アルツハイマー病'],['dem_vascular','血管性認知症'],['dem_lewy','レビー小体病'],['dem_other','その他']].filter(([k])=>_s[k]).map(([k,l])=>l==='その他'&&_s.dem_other_name?`その他（${_s.dem_other_name}）`:l);
+            const hdrRows=(
+              <table style={{width:'100%',borderCollapse:'collapse',marginBottom:'6px'}}><tbody>
+                <tr><td style={{...lab,width:'16%'}}>事業所名</td><td style={{...cell,width:'34%'}}>{fac.name||''}</td><td style={{...lab,width:'16%'}}>評価日</td><td style={{...cell,width:'34%'}}>{_a.evalDate||''}</td></tr>
+                <tr><td style={lab}>利用者氏名</td><td style={cell}>{patient?.name||''} 様</td><td style={lab}>要介護度</td><td style={cell}>{patient?.careLevel||''}</td></tr>
+                <tr><td style={lab}>障害高齢者の日常生活自立度</td><td style={cell}>{normalizeAdlLevel(patient?.faceSheet?.adlLevel)||''}</td><td style={lab}>認知症高齢者の日常生活自立度</td><td style={cell}>{normalizeDemLevel(patient?.faceSheet?.dementiaLevel)||''}</td></tr>
+              </tbody></table>
+            );
+            const biTable=(
+              <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+                <tr>{BARTHEL_ITEMS.map(it=><td key={it.key} style={{...lab,textAlign:'center',fontSize:'10px'}}>{it.label.replace(/（.*）/,'')}</td>)}<td style={{...lab,textAlign:'center'}}>合計</td></tr>
+                <tr>{BARTHEL_ITEMS.map(it=><td key={it.key} style={{...cell,textAlign:'center'}}>{_a.items?.[it.key]??'―'}</td>)}<td style={{...cell,textAlign:'center',fontWeight:'bold'}}>{barthelTotal(_a.items)}/100</td></tr>
+              </tbody></table>
+            );
+            return (<>
+              {/* 科学的介護推進に関する評価 */}
+              <div id="tifi-print-area" style={wrap}>
+                <div style={{fontSize:'10px'}}>別紙様式（科学的介護推進に関する評価）</div>
+                <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 8px'}}>科学的介護推進に関する評価（通所・居住サービス）</div>
+                {hdrRows}
+                <div style={{fontWeight:'bold',fontSize:'11px',margin:'8px 0 2px'}}>ADL（Barthel Index）</div>
+                {biTable}
+                <table style={{width:'100%',borderCollapse:'collapse',marginTop:'8px'}}><tbody>
+                  <tr><td style={{...lab,width:'16%'}}>身長</td><td style={{...cell,width:'34%'}}>{_s.height?`${_s.height} cm`:''}</td><td style={{...lab,width:'16%'}}>体重</td><td style={{...cell,width:'34%'}}>{_s.weight?`${_s.weight} kg`:''}</td></tr>
+                  <tr><td style={lab}>義歯の使用</td><td style={cell}>{yn(_s.denture)}</td><td style={lab}>むせ</td><td style={cell}>{yn(_s.choke)}</td></tr>
+                  <tr><td style={lab}>歯の汚れ</td><td style={cell}>{yn(_s.stains_on_teeth)}</td><td style={lab}>歯肉の腫れ・出血</td><td style={cell}>{yn(_s.condition_of_gums)}</td></tr>
+                  <tr><td style={lab}>認知症の診断</td><td style={cell} colSpan={3}>{dementia.length?dementia.join('／'):'―'}</td></tr>
+                </tbody></table>
+                <div style={{fontWeight:'bold',fontSize:'11px',margin:'8px 0 2px'}}>生活・認知機能尺度（別紙様式3）</div>
+                <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
+                  {DEM_SCALE_QUESTIONS.map((q,i)=>{ const cur=(_s.demScale||[])[i]; return (
+                    <tr key={i}><td style={{...lab,width:'70%',fontWeight:'normal',whiteSpace:'normal'}}>{q.no}. {q.label}</td><td style={{...cell,textAlign:'center',width:'8%'}}>{cur!=null&&cur!==''?`${cur}点`:'―'}</td><td style={{...cell,width:'22%',fontSize:'10px'}}>{cur!=null&&cur!==''?(q.choices?.[5-Number(cur)]||''):''}</td></tr>
+                  ); })}
+                  <tr><td style={{...lab,fontWeight:'normal'}}>Vitality Index：意思疎通</td><td style={{...cell,textAlign:'center'}} colSpan={2}>{(_s.vitality||[])[0]!=null&&(_s.vitality||[])[0]!==''?`${(_s.vitality)[0]}点`:'―'}</td></tr>
+                </tbody></table>
+                <div style={{fontSize:'10px',marginTop:'8px',textAlign:'right'}}>{fac.name||''}　評価時点：{_s.status||'利用中'}</div>
+              </div>
+              {/* ADL維持等加算 評価 */}
+              <div id="aint-print-area" style={wrap}>
+                <div style={{fontSize:'10px'}}>別紙様式（ADL維持等加算）</div>
+                <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 8px'}}>ADL維持等加算 評価（Barthel Index）</div>
+                {hdrRows}
+                <table style={{width:'100%',borderCollapse:'collapse',margin:'6px 0'}}><tbody>
+                  <tr><td style={{...lab,width:'16%'}}>評価日</td><td style={{...cell,width:'34%'}}>{_a.evalDate||''}</td><td style={{...lab,width:'16%'}}>対象月区分</td><td style={{...cell,width:'34%'}}>{_a.adlMonth==='first'?'初月':_a.adlMonth==='sixth'?'6か月後':'どちらでもない'}</td></tr>
+                </tbody></table>
+                <div style={{fontWeight:'bold',fontSize:'11px',margin:'8px 0 2px'}}>ADL（Barthel Index）</div>
+                {biTable}
+                <div style={{fontSize:'10px',marginTop:'8px'}}>※ ADL利得は初月と6か月後の合計点の差で評価します。</div>
+                <div style={{fontSize:'10px',marginTop:'4px',textAlign:'right'}}>{fac.name||''}</div>
+              </div>
+            </>);
+          })()}
         </div>
         )}
       </div>
