@@ -39428,6 +39428,26 @@ function FaxHelpModal({ onClose }) {
   );
 }
 
+// ★ FAX番号のワンクリックコピーボタン。 印刷時は no-print で非表示(複合機入力用に画面でだけ使う)。
+function CopyFaxButton({ value }) {
+  const [copied, setCopied] = React.useState(false);
+  if (!value) return null;
+  const doCopy = async (e) => {
+    e.preventDefault();
+    const txt = String(value);
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(txt); }
+      else { const ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.top='-9999px'; document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); }
+      setCopied(true); setTimeout(()=>setCopied(false), 1500);
+    } catch(err) { window.prompt('コピーできませんでした。手動でコピーしてください:', txt); }
+  };
+  return (
+    <button type="button" className="no-print" onClick={doCopy} title="FAX番号をコピー（複合機にそのまま貼り付け）"
+      style={{marginLeft:8,fontSize:12,fontWeight:'bold',padding:'2px 9px',border:'1px solid #94a3b8',borderRadius:6,background:copied?'#dcfce7':'#f1f5f9',color:copied?'#15803d':'#334155',cursor:'pointer',whiteSpace:'nowrap',lineHeight:1.6}}>
+      {copied ? '✓ コピー済' : '📋 コピー'}
+    </button>
+  );
+}
 function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const markClean = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=false; },[dirtyRef]);
@@ -39709,11 +39729,16 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   <AutoFitLine style={{flex:1,minWidth:0,fontSize:17}}>{patient.cmName || '　'}</AutoFitLine>
                   <span style={{fontWeight:'bold',flexShrink:0,whiteSpace:'nowrap',display:'inline-block',width:'2.5em',textAlign:'left'}}>様</span>
                 </div>
-                {patient.cmFax && (
-                  <div style={{fontSize:14,color:'#475569',marginTop:6}}>
-                    FAX：{patient.cmFax}
-                  </div>
-                )}
+                {(() => {
+                  const cmOffices = appData.systemSettings?.cmOffices || [];
+                  const effFax = patient.cmFax || (cmOffices.find(o => o && o.name === patient.cmOffice)?.fax) || '';
+                  return effFax ? (
+                    <div style={{fontSize:14,color:'#475569',marginTop:6,display:'flex',alignItems:'center',flexWrap:'wrap'}}>
+                      <span>FAX：{effFax}</span>
+                      <CopyFaxButton value={effFax}/>
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               {/* 右：発信元（左詰め表示） */}
@@ -40277,11 +40302,16 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                        style={{flex:1,minWidth:0,fontSize:(recipientName||'').length>22?12:(recipientName||'').length>16?14:17,border:'none',outline:'none',background:'transparent',padding:'2px 4px',fontFamily:'inherit'}}/>
                 <span style={{fontWeight:'bold',flexShrink:0,whiteSpace:'nowrap',display:'inline-block',width:'2.5em',textAlign:'left'}}>様</span>
               </div>
-              {patient?.cmFax && (
-                <div style={{fontSize:14,color:'#475569',marginTop:6}}>
-                  FAX：{patient.cmFax}
-                </div>
-              )}
+              {(() => {
+                const cmOffices = appData.systemSettings?.cmOffices || [];
+                const effFax = patient?.cmFax || (cmOffices.find(o => o && o.name === (recipientOffice || patient?.cmOffice))?.fax) || '';
+                return effFax ? (
+                  <div style={{fontSize:14,color:'#475569',marginTop:6,display:'flex',alignItems:'center',flexWrap:'wrap'}}>
+                    <span>FAX：{effFax}</span>
+                    <CopyFaxButton value={effFax}/>
+                  </div>
+                ) : null;
+              })()}
             </div>
             <div style={{width:280,border:'2px solid black',padding:'12px 16px',fontSize:16,lineHeight:1.7,textAlign:'left'}}>
               <AutoFitLine style={{fontWeight:'bold',fontSize:19,marginBottom:6,display:'block',width:'100%',textAlign:'left'}}>{facility.name || ''}</AutoFitLine>
