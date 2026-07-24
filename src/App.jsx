@@ -35763,6 +35763,90 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
               <KKDateField label="説明日" value={editing.setsumeiDate} onChange={v=>upd({setsumeiDate:v})}/>
               <KKField label="説明者" value={editing.setsumeisha} onChange={v=>upd({setsumeisha:v})}/>
             </div>
+            {/* ★ LIFE提出用コード (個別機能訓練加算Ⅱ ON のときのみ)。 IDUA2024 CSV に使うコードを指定。 */}
+            {(() => {
+              const addons = appData.systemSettings?.addons || {};
+              if (!addons.kasan_kinou2) return null;
+              const L = editing.life || {};
+              const setLife = (patch) => upd({ life: { ...(editing.life||{}), ...patch } });
+              const setComp = (k,v) => setLife({ comp: { ...(L.comp||{}), [k]: v } });
+              const setGoal = (slot,idx,v) => { const g={...(L.goals||{})}; const arr=[...(g[slot]||['','',''])]; arr[idx]=v; g[slot]=arr; setLife({goals:g}); };
+              const setArr = (field,i,v) => { const arr=[...(L[field]||[])]; while(arr.length<=i) arr.push(''); arr[i]=v; setLife({[field]:arr}); };
+              const icfOpt = <>{LIFE_ICF_GOALS.map(x=><option key={x.c} value={x.c}>{x.c}：{x.n}{x.g?`（${x.g}）`:''}</option>)}</>;
+              const goalSlots = [['短期 機能','shortKinou','shortKinou'],['短期 活動','shortKatsudo','shortKatsudo'],['短期 参加','shortSanka','shortSanka'],['長期 機能','longKinou','longKinou'],['長期 活動','longKatsudo','longKatsudo'],['長期 参加','longSanka','longSanka']];
+              return (
+                <div className="bg-purple-50 rounded-xl border border-purple-200 p-4 space-y-4">
+                  <div className="text-sm font-bold text-purple-700">LIFE提出用コード（個別機能訓練 IDUA2024）</div>
+                  <div className="text-[11px] text-purple-900 opacity-70 -mt-2">※ このコードはLIFE提出CSV（個別機能訓練）に使います。文章の目標・訓練内容は上で入力済みなので、ここでは対応するコードを選ぶだけです。</div>
+                  {/* 傷病名コード */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-600 w-40">傷病名コード（任意・7桁）</span>
+                    <input value={L.diseaseCode||''} onChange={e=>setLife({diseaseCode:e.target.value.replace(/[^0-9]/g,'').slice(0,7)})} placeholder="例: 2500014（未コード化は 999）" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-56"/>
+                  </div>
+                  {/* 合併症23分類 */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-1">合併症の管理・コントロール（該当にチェック）</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-1">
+                      {LIFE_COMPLICATIONS.map(([k,lb])=>(
+                        <label key={k} className="flex items-center gap-1 text-[11px] text-slate-700 bg-white border border-slate-200 rounded px-2 py-1 cursor-pointer">
+                          <input type="checkbox" checked={!!(L.comp&&L.comp[k])} onChange={e=>setComp(k,e.target.checked)}/>{lb}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 目標ICFコード */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-1">目標のICFコード（各 最大3つ／上の目標文に対応するコードを選択）</div>
+                    <div className="space-y-1.5">
+                      {goalSlots.map(([label,slot,txtKey])=>(
+                        <div key={slot} className="flex items-start gap-2 flex-wrap">
+                          <span className="text-[11px] font-bold text-slate-500 w-16 pt-1.5">{label}</span>
+                          <div className="flex-1 min-w-[240px]">
+                            <div className="text-[10px] text-slate-400 mb-0.5 truncate">{editing[txtKey]||'（目標文なし）'}</div>
+                            <div className="flex gap-1 flex-wrap">
+                              {[0,1,2].map(i=>(
+                                <select key={i} value={(L.goals&&L.goals[slot]&&L.goals[slot][i])||''} onChange={e=>setGoal(slot,i,e.target.value)} className="px-1 py-1 bg-white border border-slate-300 rounded text-[11px] outline-none max-w-[190px]">
+                                  <option value="">―</option>{icfOpt}
+                                </select>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* 達成度 */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-xs font-bold text-slate-600">前回目標の達成度</span>
+                    {[['shortAchieve','短期'],['longAchieve','長期']].map(([k,lb])=>(
+                      <label key={k} className="flex items-center gap-1 text-xs text-slate-700">{lb}
+                        <select value={L[k]||''} onChange={e=>setLife({[k]:e.target.value})} className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none">
+                          <option value="">自動（文章から）</option><option value="1">達成</option><option value="2">一部達成</option><option value="3">未達成</option>
+                        </select>
+                      </label>
+                    ))}
+                  </div>
+                  {/* 訓練プログラムのコード・職種 */}
+                  <div>
+                    <div className="text-xs font-bold text-slate-600 mb-1">訓練プログラムのコード・実施者職種（上の訓練内容に対応）</div>
+                    <div className="space-y-1.5">
+                      {(editing.programs||[]).slice(0,4).map((pr,i)=>(
+                        <div key={i} className="flex items-center gap-2 flex-wrap bg-white border border-slate-200 rounded px-2 py-1.5">
+                          <span className="text-[11px] text-slate-500 flex-1 min-w-[140px] truncate">{i+1}. {pr.content||'（内容なし）'}</span>
+                          <select value={(L.programCodes&&L.programCodes[i])||''} onChange={e=>setArr('programCodes',i,e.target.value)} className="px-1 py-1 bg-white border border-slate-300 rounded text-[11px] outline-none" title="訓練プログラムコード">
+                            <option value="">内容から自動推定</option>{LIFE_TRAIN_PROGRAMS.filter(x=>x.c!=='00').map(x=><option key={x.c} value={x.c}>{x.c} {x.n}</option>)}
+                          </select>
+                          <select value={(L.personCodes&&L.personCodes[i])||''} onChange={e=>setArr('personCodes',i,e.target.value)} className="px-1 py-1 bg-white border border-slate-300 rounded text-[11px] outline-none" title="実施者の職種コード">
+                            <option value="">職種コード</option>{LIFE_STAFF_JOBS.map(x=><option key={x.n} value={x.c}>{x.n}{x.c?`(${x.c})`:'(要確認)'}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">※ プログラムコードは訓練内容から自動推定されます（空欄のままでOK）。職種の3桁コードは准看護師=050のみ確定、他は公式表の確認待ちです。</div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         ) : (
           /* 一覧 */
