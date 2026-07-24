@@ -25125,6 +25125,9 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
               // 稼働率計算（月番号のみで照合、年情報なし）
               const _now = new Date();
               const _isCurMonth = (yr === _now.getFullYear() && mo === (_now.getMonth()+1));
+              // ★ 未来の月は「現段階の稼働率」が存在しない。年情報を持たない同月番号の記録(前年分等)を
+              //   拾って稼働率を出してしまうのを防ぐため、未来月は rate=null(非表示)にする。
+              const _isFutureMonth = (yr > _now.getFullYear()) || (yr === _now.getFullYear() && mo > (_now.getMonth()+1));
               const _dayOf = (r) => { const dm = r.date?.match(/(\d+)月(\d+)日/); return dm ? parseInt(dm[2]) : (r.date && /^\d{4}-\d{2}-\d{2}/.test(r.date) ? parseInt(r.date.slice(8,10)) : null); };
               const mRecs = allTicketRecs.filter(r => {
                 const m2 = r.date?.match(/(\d+)月/);
@@ -25138,7 +25141,8 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
               const pl = mRecs.filter(r=>isPlannedRec(r));
               const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
               // ★ データが無い月(未来・記録なし)は 0 ではなく null にして、グラフ・表で非表示にする(0へ急落させない)
-              const rate = pl.length ? Math.round(at.length/pl.length*100) : null;
+              //   未来月は年なし記録の混入を避けるため一律 null(現段階では稼働率なし)。
+              const rate = _isFutureMonth ? null : (pl.length ? Math.round(at.length/pl.length*100) : null);
               // 営業日数（その月の平日数）
               const workDays = getWorkingDays(yr, mo);
               // 前年稼働率（前年同月のチケットレコードから計算）
