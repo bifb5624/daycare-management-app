@@ -21204,6 +21204,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [patientSearch, setPatientSearch] = useState('');
   // 3ヶ月超の場合の表示モード: 'auto'=自動(月平均)、'daily'=毎日表示
   const [displayMode, setDisplayMode] = useState(externalDisplayMode || 'auto');
+  // ★ 気分の理由ツールチップ(iPad対応: ホバーとタップの両方で表示)。 {text,x,y}
+  const [moodTip, setMoodTip] = useState(null);
   React.useEffect(() => {
     if (externalDisplayMode && externalDisplayMode !== displayMode) setDisplayMode(externalDisplayMode);
   }, [externalDisplayMode]);
@@ -23840,6 +23842,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           })();
           return (
         <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #94a3b8',overflow:'hidden'}}>
+          {moodTip && <div style={{position:'fixed',left:moodTip.x,top:moodTip.y-10,transform:'translate(-50%,-100%)',background:'#1e293b',color:'#fff',padding:'6px 12px',borderRadius:8,fontSize:13,fontWeight:'bold',maxWidth:280,zIndex:999999,pointerEvents:'none',boxShadow:'0 6px 18px rgba(0,0,0,0.45)',whiteSpace:'normal',lineHeight:1.4,textAlign:'left'}}>{moodTip.text}</div>}
           <div style={{padding:'12px 20px',borderBottom:'1px solid #94a3b8',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:8}}>
             <div style={{fontSize:13,fontWeight:'bold',color:'#475569',display:'flex',alignItems:'center',gap:6}}><ClipboardList size={15}/>日々の詳細記録</div>
             <div style={{display:'flex',gap:8,alignItems:'center'}}>
@@ -23869,11 +23872,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <td style={{padding:'8px 10px',textAlign:'center'}}>
                         <span style={{fontSize:14,fontWeight:'bold',padding:'2px 6px',borderRadius:5,whiteSpace:'nowrap',display:'inline-block',backgroundColor:r.status==='出席'?'#dbeafe':r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='出席'?'#1d4ed8':r.status==='欠席'?'#dc2626':'#64748b'}}>{r.status}</span>
                       </td>
-                      <td style={{padding:'8px 6px',textAlign:'center',fontSize:20,verticalAlign:'middle',whiteSpace:'nowrap'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};const ml={excellent:'とても良い',good:'良い',normal:'普通',bad:'イマイチ',terrible:'とても悪い'};const e=m[r.kibunArrival];if(!e)return '-';const tip=(ml[r.kibunArrival]||'')+(r.kibunArrivalReason?`（${r.kibunArrivalReason}）`:'');return <span title={tip} style={{cursor:'default'}}>{e}</span>;})()}
+                      <td style={{padding:'8px 6px',textAlign:'center',fontSize:22,verticalAlign:'middle',whiteSpace:'nowrap'}}>
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};const ml={excellent:'とても良い',good:'良い',normal:'普通',bad:'イマイチ',terrible:'とても悪い'};const e=m[r.kibunArrival];if(!e)return <span style={{color:'#cbd5e1'}}>-</span>;const tip='通所時: '+(ml[r.kibunArrival]||'')+(r.kibunArrivalReason?`（${r.kibunArrivalReason}）`:'（理由なし）');const sh=(ev)=>setMoodTip({text:tip,x:ev.clientX,y:ev.clientY});return <span title={tip} onPointerEnter={sh} onPointerMove={sh} onPointerLeave={()=>setMoodTip(null)} onClick={(ev)=>{sh(ev);clearTimeout(window.__mtT);window.__mtT=setTimeout(()=>setMoodTip(null),2600);}} style={{cursor:'pointer'}}>{e}</span>;})()}
                       </td>
-                      <td style={{padding:'8px 6px',textAlign:'center',fontSize:20,verticalAlign:'middle',whiteSpace:'nowrap'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};const ml={excellent:'とても良い',good:'良い',normal:'普通',bad:'イマイチ',terrible:'とても悪い'};const e=m[r.kibunDeparture];if(!e)return '-';const tip=(ml[r.kibunDeparture]||'')+(r.kibunDepartureReason?`（${r.kibunDepartureReason}）`:'');return <span title={tip} style={{cursor:'default'}}>{e}</span>;})()}
+                      <td style={{padding:'8px 6px',textAlign:'center',fontSize:22,verticalAlign:'middle',whiteSpace:'nowrap'}}>
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};const ml={excellent:'とても良い',good:'良い',normal:'普通',bad:'イマイチ',terrible:'とても悪い'};const e=m[r.kibunDeparture];if(!e)return <span style={{color:'#cbd5e1'}}>-</span>;const tip='帰宅時: '+(ml[r.kibunDeparture]||'')+(r.kibunDepartureReason?`（${r.kibunDepartureReason}）`:'（理由なし）');const sh=(ev)=>setMoodTip({text:tip,x:ev.clientX,y:ev.clientY});return <span title={tip} onPointerEnter={sh} onPointerMove={sh} onPointerLeave={()=>setMoodTip(null)} onClick={(ev)=>{sh(ev);clearTimeout(window.__mtT);window.__mtT=setTimeout(()=>setMoodTip(null),2600);}} style={{cursor:'pointer'}}>{e}</span>;})()}
                       </td>
                       <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:tempW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
                         {r.temp?`${r.temp}℃`:'-'}{tempW&&'⚠'}
@@ -26033,7 +26036,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                   <tr className="bg-slate-800 text-white text-[10px]" style={{height:30}}>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:50}}><AutoFitText text="日付" max={13} bold color="#fff"/></th>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:34}}><AutoFitText text="状態" max={13} bold color="#fff"/></th>
-                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:60}}><AutoFitText text="気分" max={13} bold color="#fff"/></th>
+                    <th className="border border-slate-600 py-1 overflow-hidden" style={{width:34}}><AutoFitText text="気分" max={13} bold color="#fff"/></th>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:48}}><AutoFitText text="体温" max={13} bold color="#fff"/></th>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text="開始 血圧（脈）" max={11} bold color="#fff"/></th>
                     <th className="border border-slate-600 py-1 overflow-hidden" style={{width:58}}><AutoFitText text={`${secondBpLabel(appData)} 血圧（脈）`} max={11} bold color="#fff"/></th>
@@ -26072,7 +26075,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',minWidth:36}}>
+                          <td className="border border-slate-400 px-0 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle'}}>
                             {(() => {
                               // ★ 気分は絵文字だけをコンパクトに表示し、理由はホバー(title)で見せる。
                               //   理由の文字数が多いと行が縦に伸びて見づらかったのを解消(行高さを一定に保つ)。
