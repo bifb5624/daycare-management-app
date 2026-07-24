@@ -23863,17 +23863,17 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   const bpN=r.bpUpSt?Number(r.bpUpSt):null;
                   const tempW=tempN&&tempN>=37.1; const bpW=bpN&&bpN>=140;
                   return (
-                    <tr key={r.id} style={{borderBottom:'1px solid #f8fafc',backgroundColor:ri%2===0?'white':'#fafbfc'}}>
+                    <tr key={r.id} style={{borderBottom:'1px solid #eef2f6',backgroundColor:ri%2===0?'white':'#eef2f6'}}>
                       {/* ★ データセルも中央配置で項目名と揃える */}
                       <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>{r.date}</td>
                       <td style={{padding:'8px 10px',textAlign:'center'}}>
                         <span style={{fontSize:14,fontWeight:'bold',padding:'2px 6px',borderRadius:5,whiteSpace:'nowrap',display:'inline-block',backgroundColor:r.status==='出席'?'#dbeafe':r.status==='欠席'?'#fee2e2':'#f1f5f9',color:r.status==='出席'?'#1d4ed8':r.status==='欠席'?'#dc2626':'#64748b'}}>{r.status}</span>
                       </td>
-                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,maxWidth:170,verticalAlign:'middle'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunArrival]||'-';})()} {r.kibunArrivalReason&&<span title={r.kibunArrivalReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:230,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunArrivalReason})</span>}
+                      <td style={{padding:'8px 6px',textAlign:'center',fontSize:20,verticalAlign:'middle',whiteSpace:'nowrap'}}>
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};const ml={excellent:'とても良い',good:'良い',normal:'普通',bad:'イマイチ',terrible:'とても悪い'};const e=m[r.kibunArrival];if(!e)return '-';const tip=(ml[r.kibunArrival]||'')+(r.kibunArrivalReason?`（${r.kibunArrivalReason}）`:'');return <span title={tip} style={{cursor:'default'}}>{e}</span>;})()}
                       </td>
-                      <td style={{padding:'8px 10px',textAlign:'center',fontSize:13,maxWidth:170,verticalAlign:'middle'}}>
-                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};return m[r.kibunDeparture]||'-';})()} {r.kibunDepartureReason&&<span title={r.kibunDepartureReason} style={{fontSize:12,color:'#334155',display:'inline-block',maxWidth:230,whiteSpace:'normal',wordBreak:'break-word',verticalAlign:'middle',lineHeight:1.25}}>({r.kibunDepartureReason})</span>}
+                      <td style={{padding:'8px 6px',textAlign:'center',fontSize:20,verticalAlign:'middle',whiteSpace:'nowrap'}}>
+                        {(()=>{const m={excellent:'🤩',good:'😊',normal:'😐',bad:'😞',terrible:'😫'};const ml={excellent:'とても良い',good:'良い',normal:'普通',bad:'イマイチ',terrible:'とても悪い'};const e=m[r.kibunDeparture];if(!e)return '-';const tip=(ml[r.kibunDeparture]||'')+(r.kibunDepartureReason?`（${r.kibunDepartureReason}）`:'');return <span title={tip} style={{cursor:'default'}}>{e}</span>;})()}
                       </td>
                       <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:tempW?'#dc2626':'#475569',whiteSpace:'nowrap'}}>
                         {r.temp?`${r.temp}℃`:'-'}{tempW&&'⚠'}
@@ -23909,7 +23909,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         );
                       })}
                       <td style={{padding:'8px 10px',textAlign:'center',color:'#ea580c',fontWeight:'bold',fontSize:14,whiteSpace:'nowrap'}}>{r.massage||'-'}</td>
-                      <td style={{padding:'8px 10px',textAlign:'left',color:'#1e293b',fontSize:14,minWidth:220,whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.4}}>{r.tokki||'-'}</td>
+                      <td style={{padding:'8px 10px',textAlign:'left',color:'#1e293b',fontSize:14,minWidth:340,whiteSpace:'normal',wordBreak:'break-word',lineHeight:1.4}}>{r.tokki||'-'}</td>
                     </tr>
                   );
                 })}
@@ -26072,7 +26072,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                             </div>
                           </td>
                           <td className={`border border-slate-400 px-0.5 text-center text-[9px] ${sc}`} ><div className="cell-wrap" style={{justifyContent:'center'}}>{sl}</div></td>
-                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',minWidth:52}}>
+                          <td className="border border-slate-400 px-0.5 text-center overflow-hidden" style={{fontSize:9,verticalAlign:'middle',minWidth:36}}>
                             {(() => {
                               // ★ 気分は絵文字だけをコンパクトに表示し、理由はホバー(title)で見せる。
                               //   理由の文字数が多いと行が縦に伸びて見づらかったのを解消(行高さを一定に保つ)。
@@ -26089,7 +26089,6 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                                   <div title={tip} style={{display:'flex',alignItems:'center',justifyContent:'center',gap:3,cursor:'default'}}>
                                     <span style={{fontSize:8,color:'#64748b',fontWeight:'bold',flexShrink:0}}>{label}</span>
                                     <span style={{fontSize:15,lineHeight:1,flexShrink:0}}>{MOODS[mood]||mood}</span>
-                                    {reason && <span style={{fontSize:9,flexShrink:0}} title={tip}>💬</span>}
                                   </div>
                                 );
                               };
