@@ -17452,7 +17452,7 @@ export default function App() {
         let changed = false;
         // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
         //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
-        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));
@@ -17461,6 +17461,12 @@ export default function App() {
           const _now = syncNow();
           const _fts = { ...(p._fieldTs || {}) };
           _PT_FL.forEach(k => { let ch; try { ch = JSON.stringify(p[k]) !== JSON.stringify(old ? old[k] : undefined); } catch { ch = true; } if (ch) _fts[k] = _now; });
+          // ★ personalFile は入れ子(保険証メタ/フェイスシート/担当者会議/アセスメント等)。 変更されたサブキーを
+          //   pf:<key> で項目別に刻む。 これで別項目を触った端末が他店のpersonalFile更新を巻き戻さない。
+          { const _pf = p.personalFile; const _opf = (old && old.personalFile && typeof old.personalFile === 'object') ? old.personalFile : {};
+            if (_pf && typeof _pf === 'object') {
+              new Set([...Object.keys(_pf), ...Object.keys(_opf)]).forEach(sk => { let ch2; try { ch2 = JSON.stringify(_pf[sk]) !== JSON.stringify(_opf[sk]); } catch { ch2 = true; } if (ch2) _fts['pf:' + sk] = _now; });
+            } }
           return { ...p, _savedAt: _now, _fieldTs: _fts }; // 新規/変更 → 最新時刻 + 変更項目の _fieldTs
         });
         if (changed) newData = { ...newData, patients: stamped };

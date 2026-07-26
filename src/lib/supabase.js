@@ -606,7 +606,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   const FAMILY_CONTACT_FIELDS = new Set(['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail']);
   // ★ 利用者の「フィールド単位で時刻(_fieldTs)保護」する項目。 利用者を1項目編集して _savedAt 全体が
   //   更新されても、これらの項目は触っていなければ古い端末の保存で巻き戻らない(基本利用日/送迎/緊急連絡先)。
-  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden', ...FAMILY_CONTACT_FIELDS]);
+  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo', ...FAMILY_CONTACT_FIELDS]);
   // ★ 削除済み書類の墓石を両端末ぶん合算する。 _delDocs = { "<書類id>": 削除時刻(ms) }
   //   和集合(union)マージは「追加を失わない」代わりに削除を必ず復活させるため、墓石で除外する。
   const _mergeDocTombs = (...srcs) => {
@@ -673,6 +673,14 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         out[k] = [...byId.values()];
         return;
       }
+      // ★ 介護度/負担割合の変更履歴は「追加のみ」の記録。 両端末の追記を失わないよう和集合(JSON重複排除)で残す。
+      if (k === 'careLevelHistory' || k === 'costBurdenHistory') {
+        const la = Array.isArray(lv) ? lv : [], ca = Array.isArray(cv) ? cv : [];
+        if (!la.length && !ca.length) return;
+        const seen = new Set(); const merged = [];
+        [...ca, ...la].forEach(h => { let key; try { key = JSON.stringify(h); } catch { key = String(h); } if (!seen.has(key)) { seen.add(key); merged.push(h); } });
+        out[k] = merged; return;
+      }
       // ★ scheduleAmPm(基本利用日)は「無し」も意図的な設定値。 index 単位の空欄補完をすると、
       //   ある曜日を「無し」にしても クラウドの旧値(AM/PM)で復活してしまう。 最後の編集(ローカル)を優先する。
       if (k === 'scheduleAmPm') { out[k] = (lv !== undefined) ? lv : cv; return; }
@@ -686,6 +694,18 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         const lo = lObj ? lv : {}, co = cObj ? cv : {};
         const mo = { ...lo };
         Object.keys(co).forEach(kk => { if (_isEmptyVal(mo[kk]) && !_isEmptyVal(co[kk])) mo[kk] = co[kk]; });
+        // ★ personalFile(介護保険証/負担割合証のメタ・フェイスシート・担当者会議 等)はサブキー単位で
+        //   _fieldTs['pf:'+kk] の新しい方を採用する。 これで別項目を触った古い端末が、他店の保険証/フェイスシート
+        //   更新を「新しい利用者スナップショット」の名目で巻き戻す不具合を防ぐ。 assessment は下の和集合に委ねる。
+        if (k === 'personalFile') {
+          const _lpf = (lpArg.personalFile && typeof lpArg.personalFile === 'object') ? lpArg.personalFile : {};
+          const _cpf = (cpArg.personalFile && typeof cpArg.personalFile === 'object') ? cpArg.personalFile : {};
+          new Set([...Object.keys(_lpf), ...Object.keys(_cpf)]).forEach(kk => {
+            if (kk === 'assessment') return;
+            const lft = Number(_lFts['pf:' + kk]) || 0, cft = Number(_cFts['pf:' + kk]) || 0;
+            if (lft || cft) mo[kk] = (lft >= cft) ? _lpf[kk] : _cpf[kk];
+          });
+        }
         // ★ personalFile.assessment: 事業所/ケアマネ双方の編集を保持
         //   text は updatedAt が新しい方、files は id 単位で和集合。
         if (k === 'personalFile' && (lo.assessment || co.assessment)) {
