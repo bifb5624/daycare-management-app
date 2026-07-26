@@ -10109,6 +10109,9 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
 
   const row4col2 = mode === 'time' ? '00' : '.';
   const keys = ['7','8','9','DEL','4','5','6',rightCol1,'1','2','3',rightCol2,'0',row4col2,rightCol3,'ENTER'];
+  // ★ 特殊キーは英語だと分かりにくいため日本語表示にする(キー値は英語のままロジックで使用)。 BS は2行表示。
+  const KEY_LABEL = { DEL:'全削除', TAB:'右へ', ENTER:'確定' };
+  const isJpKey = (k) => k==='DEL' || k==='BS' || k==='TAB' || k==='ENTER';
 
   // ★ body 直下に Portal でレンダリング。 全画面でない時に親要素の transform で
   //   position:fixed が閉じ込められ、テンキーが見切れて出てこない不具合を防ぐ。
@@ -10152,7 +10155,8 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
           return (
             <button key={i} onClick={()=>handleKeyClick(k)}
               style={{
-                height:btnSize, borderRadius:12, fontSize:isSpecial?Math.round(fontSize*0.7):fontSize,
+                height:btnSize, borderRadius:12, fontSize:isJpKey(k)?(k==='BS'?Math.round(fontSize*0.5):Math.round(fontSize*0.56)):(isSpecial?Math.round(fontSize*0.7):fontSize),
+                lineHeight:1.1, whiteSpace:(isJpKey(k)&&k!=='BS')?'nowrap':'normal', textAlign:'center',
                 fontWeight:'bold', border:'2px solid',
                 background: isEnter?'#2563eb':isSpecial?'#1e293b':'#f8fafc',
                 color: isEnter||isSpecial?'white':'#1e293b',
@@ -10162,7 +10166,7 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
               }}
               onTouchStart={e=>{ e.currentTarget.style.transform='scale(0.93)'; }}
               onTouchEnd={e=>{ e.currentTarget.style.transform='scale(1)'; }}>
-              {k}
+              {k==='BS' ? <span style={{lineHeight:1.05}}>1文字<br/>削除</span> : (KEY_LABEL[k]||k)}
             </button>
           );
         })}
