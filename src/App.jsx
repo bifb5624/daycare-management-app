@@ -26685,13 +26685,15 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     let combinedHtml, pageSizeStr;
     if (_mode === '2') {
       // ★ B5横(257×182)に連絡帳を左右2面。 印刷後に中央でカット→B6×2枚。 奇数は末尾を空欄(手書き用)。
-      const pageW = 257, pageH = 182, half = pageW / 2, faceScale = 0.68;
+      const pageW = 257, pageH = 182, half = pageW / 2, faceScale = 0.70;
       const guideCut = _ss.renrakuGuideCut !== false, guidePunch = _ss.renrakuGuidePunch !== false;
       const parts = [...htmlParts];
       if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
-      const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;overflow:hidden;box-sizing:border-box;">`
-        + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(${faceScale});width:182mm;height:257mm;">${h||''}</div>`
-        + (guidePunch ? `<div style="position:absolute;left:2.5mm;top:${pageH/2-40}mm;width:1.6mm;height:1.6mm;border-radius:50%;background:#333;"></div><div style="position:absolute;left:2.5mm;top:${pageH/2+40}mm;width:1.6mm;height:1.6mm;border-radius:50%;background:#333;"></div>` : '')
+      // ★ 各面は1面(B6)と同じ「flexで中央＋0.70倍」配置に統一(左寄り/見切れ/1・2枚目の差を解消し、B5を左右いっぱいに使う)。
+      //   穴あけ点は各面の左・縦ど真ん中に1つ(左右どちらの面にも付く)。
+      const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;box-sizing:border-box;">`
+        + `<div style="transform:scale(${faceScale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h||''}</div>`
+        + (guidePunch ? `<div style="position:absolute;left:6mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
         + `</div>`;
       const pages = [];
       for (let i = 0; i < parts.length; i += 2) {
@@ -27178,9 +27180,9 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const d = new Date(selectedDate);
   const warekiYear = d.getFullYear() - 2018;
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-  const dateStr = `令和${warekiYear}年${d.getMonth() + 1}月${d.getDate()}日（${dayNames[d.getDay()]}）`;
+  const dateStr = `${d.getMonth() + 1}月${d.getDate()}日（${dayNames[d.getDay()]}）`;
 
-  let nextDateDisplay = "未定", nextTimeDisplay = "　時　分";
+  let nextDateDisplay = "　月　日（　）", nextTimeDisplay = "　時　分";
 
   // 日付: nextDateOverrideがあればそれ、なければ自動取得
   if (record.nextDateOverride !== undefined) {
