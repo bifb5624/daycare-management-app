@@ -17127,7 +17127,7 @@ export default function App() {
       document.querySelectorAll('style').forEach(s=>{ head+='<style>'+(s.textContent||'')+'</style>'; });
       document.querySelectorAll('link[rel="stylesheet"]').forEach(l=>{ if(l.href) head+='<link rel="stylesheet" href="'+l.href+'">'; });
     }catch{}
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html}</body></html>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html}</body></html>`;
   }, [printPreviewContent?.html]);
   // グローバルツールチップ（fixed）
   const [globalTip, setGlobalTip] = useState(null); // {text, x, y}
@@ -26681,7 +26681,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     // ★ 用紙: 'b6port'=B6縦(128×182)用紙いっぱい / それ以外='横(B5)'=B5横(257×182)用紙の中央に連絡帳(縦182×257を縮小)を配置。
     //   連絡帳の中身は常に縦。 用紙だけ横。
     const _ss = appData.systemSettings || {};
-    const _mode = _ss.renrakuMode === '2' ? '2' : '1';
+    const _mode = _ss.renrakuMode === '1' ? '1' : '2'; // 既定はB5横2面
     let combinedHtml, pageSizeStr;
     if (_mode === '2') {
       // ★ B5横(257×182)に連絡帳を左右2面。 印刷後に中央でカット→B6×2枚。 奇数は末尾を空欄(手書き用)。
@@ -26691,18 +26691,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
       // ★ 各面は1面(B6)と同じ「flexで中央＋0.70倍」配置に統一(左寄り/見切れ/1・2枚目の差を解消し、B5を左右いっぱいに使う)。
       //   穴あけ点は各面の左・縦ど真ん中に1つ(左右どちらの面にも付く)。
-      // ★ 各面を絶対配置(left:0 と left:半分)で置き、中身は translate(-50%,-50%)+scale で face の中央に。
-      //   flexの「はみ出し中央寄せ」だと左右に偏るため、絶対配置で両面まったく同じ中央配置にする。
+      // ★ 各面は flex 中央＋0.70倍(サイズが正しく出る方式)。 中身を各面の右側に寄せて中央カット線側の余白を作る
+      //   ため、内側の面は右寄せ・外側は左寄せにせず、両面とも「やや外側」に寄せて左右対称に見せる。
       const punch = guidePunch ? `<div style="position:absolute;left:6mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '';
-      const face = (h, leftMm) => `<div style="position:absolute;left:${leftMm}mm;top:0;width:${half}mm;height:${pageH}mm;overflow:hidden;">`
-        + `<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(${faceScale});width:182mm;height:257mm;">${h||''}</div>`
+      const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;box-sizing:border-box;">`
+        + `<div style="transform:scale(${faceScale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h||''}</div>`
         + punch
         + `</div>`;
       const pages = [];
       for (let i = 0; i < parts.length; i += 2) {
-        pages.push(`<div style="position:relative;page-break-after:${i < parts.length-2 ? 'always':'auto'};width:${pageW}mm;height:${pageH}mm;overflow:hidden;">`
-          + face(parts[i], 0) + face(parts[i+1], half)
-          + (guideCut ? `<div style="position:absolute;left:${half}mm;top:0;height:${pageH}mm;border-left:1px dashed #888;"></div>` : '')
+        pages.push(`<div style="position:relative;page-break-after:${i < parts.length-2 ? 'always':'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;overflow:hidden;">`
+          + face(parts[i]) + face(parts[i+1])
+          + (guideCut ? `<div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed #888;"></div>` : '')
           + `</div>`);
       }
       combinedHtml = pages.join('');
@@ -26884,7 +26884,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           </button>
           {showPrintSettings && (()=>{
             const ss = appData.systemSettings || {};
-            const mode = ss.renrakuMode === '2' ? '2' : '1';
+            const mode = ss.renrakuMode === '1' ? '1' : '2'; // 既定はB5横2面
             const paper = ss.renrakuPaper === 'b6port' ? 'b6port' : 'b5land';
             const guideCut = ss.renrakuGuideCut !== false, guidePunch = ss.renrakuGuidePunch !== false;
             const setSS = (patch)=>onSave({ ...appData, systemSettings: { ...ss, ...patch } });
