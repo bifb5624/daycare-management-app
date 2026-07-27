@@ -41492,10 +41492,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       const bodyText = h.memo || h.body || h.content || h.note || '';
                       return (
                       <div key={h.id}>
-                        <button onClick={()=>setExpandedFaxId(expanded?null:h.id)} className="w-full py-1.5 flex items-center justify-between gap-2 text-xs text-left hover:bg-slate-50 rounded px-1">
-                          <div className="min-w-0"><span className="text-slate-400 mr-1">{expanded?'▾':'▸'}</span><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}</div>
-                          <span className="text-slate-400 shrink-0">{_ts(h.timestamp)}</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={()=>setExpandedFaxId(expanded?null:h.id)} className="flex-1 min-w-0 py-1.5 flex items-center justify-between gap-2 text-xs text-left hover:bg-slate-50 rounded px-1">
+                            <div className="min-w-0"><span className="text-slate-400 mr-1">{expanded?'▾':'▸'}</span><span className="font-bold text-slate-700">{h.subject||title}</span>{h.recipientName && <span className="text-slate-400 ml-2">宛: {h.recipientName}</span>}</div>
+                            <span className="text-slate-400 shrink-0">{_ts(h.timestamp)}</span>
+                          </button>
+                          {/* ★ 送付履歴の削除(重複や誤登録をこの一覧から直接消せる) */}
+                          <button type="button" title="この履歴を削除" onClick={()=>{ if(window.confirm('この送付履歴を削除しますか？')){ onSave({...appData, faxHistory:(appData.faxHistory||[]).filter(x=>x.id!==h.id)}, {manual:true, message:'✓ 削除しました'}); if(expanded) setExpandedFaxId(null); } }} className="shrink-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded px-2 py-1 text-sm font-bold">✕</button>
+                        </div>
                         {expanded && (
                           <div className="mb-1.5 mx-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
                             {h.subject && <div><span className="font-bold text-slate-500">件名：</span><span className="text-slate-700">{h.subject}</span></div>}
