@@ -17559,7 +17559,15 @@ export default function App() {
           const _fk = new Set([...Object.keys(r), ...(_old ? Object.keys(_old) : [])]);
           _fk.forEach(k => {
             if (k === '_savedAt' || k === '_fieldTs' || k === 'id') return;
-            let chg; try { chg = JSON.stringify(r[k]) !== JSON.stringify(_old ? _old[k] : undefined); } catch { chg = true; }
+            const _nv = r[k], _ov = _old ? _old[k] : undefined;
+            // ★ 空↔未入力(undefined↔'')は「変更なし」とみなす。 保存時にフォームがバイタル等を空文字で
+            //   正規化(undefined→'')しただけの項目に _fieldTs を刻むと、マージ側が「意図的な削除」と誤判定し、
+            //   他端末で入力済みの血圧/体温(AM/PM)を空で上書きして消してしまうため。
+            //   ※ 実際に値がある→空(値→'')の削除は下の比較で chg=true になり、従来どおり反映される。
+            const _emptyN = (_nv == null || _nv === ''), _emptyO = (_ov == null || _ov === '');
+            let chg;
+            if (_emptyN && _emptyO) chg = false;
+            else { try { chg = JSON.stringify(_nv) !== JSON.stringify(_ov); } catch { chg = true; } }
             if (chg) _fts[k] = _now2;
           });
           return { ...r, _savedAt: _now2, _fieldTs: _fts };
