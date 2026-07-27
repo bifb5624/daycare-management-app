@@ -524,7 +524,17 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       if (!FIELDTS_EXCLUDE.has(k)
           && !(av && typeof av === 'object') && !(bv && typeof bv === 'object')) {
         const _aft = Number(_aFts[k]) || 0, _bft = Number(_bFts[k]) || 0;
-        if (_aft || _bft) { out[k] = (_aft >= _bft) ? av : bv; return; }
+        if (_aft || _bft) {
+          // ★ 多重防御: バイタル(体温/血圧/脈 の *_AM/*_PM)は「空が新しくても非空を絶対優先」。
+          //   万一どこかで空欄に新しい _fieldTs(削除フラグ)が付いても、入力済みの値を空で消させない。
+          //   (バイタルの明示クリアは反映されなくなるが、事故的な全消しを構造的に不可能にする方を優先)
+          const _isVitalK = /^(temp|bpUpSt|bpDnSt|bpUpEn|bpDnEn|plSt|plEn)(_|$)/.test(k);
+          if (_isVitalK) {
+            const _ae = _isEmptyVal(av), _be = _isEmptyVal(bv);
+            if (_ae !== _be) { out[k] = _ae ? bv : av; return; } // 片方だけ空 → 非空を採用
+          }
+          out[k] = (_aft >= _bft) ? av : bv; return;
+        }
       }
       // ★ 次回予定(nextDateOverride/nextTimeOverride)は「空欄=未設定(自動計算に任せる)」であり、
       //   「明示的な削除」と区別できない(1項目の保存でも記録全体の _savedAt が新しくなり、空欄も新しく見える)。
