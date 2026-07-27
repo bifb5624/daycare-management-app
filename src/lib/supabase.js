@@ -525,13 +525,20 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
           && !(av && typeof av === 'object') && !(bv && typeof bv === 'object')) {
         const _aft = Number(_aFts[k]) || 0, _bft = Number(_bFts[k]) || 0;
         if (_aft || _bft) {
-          // ★ 多重防御: バイタル(体温/血圧/脈 の *_AM/*_PM)は「空が新しくても非空を絶対優先」。
-          //   万一どこかで空欄に新しい _fieldTs(削除フラグ)が付いても、入力済みの値を空で消させない。
-          //   (バイタルの明示クリアは反映されなくなるが、事故的な全消しを構造的に不可能にする方を優先)
+          // ★ バイタル(体温/血圧/脈 の *_AM/*_PM)の空↔非空は特別扱い。
+          //   ・空側が「厳密に新しい _fieldTs」を持つ＝入力済みの値を"はっきり消した"(明示クリア) → クリアを反映。
+          //   ・空側に時刻が無い/古い＝"最初から空欄""正規化の空""うっかり保存" → 非空を絶対に守る(事故的な全消し防止)。
+          //   ※ 空欄への _fieldTs は 0c02dee 以降「値→空の明示クリア」のときだけ付く(未入力→空では付かない)ため、
+          //     この2条件で「意図的な削除」と「事故的な空」を安全に切り分けられる。
           const _isVitalK = /^(temp|bpUpSt|bpDnSt|bpUpEn|bpDnEn|plSt|plEn)(_|$)/.test(k);
           if (_isVitalK) {
             const _ae = _isEmptyVal(av), _be = _isEmptyVal(bv);
-            if (_ae !== _be) { out[k] = _ae ? bv : av; return; } // 片方だけ空 → 非空を採用
+            if (_ae !== _be) {
+              const _emptyFt = _ae ? _aft : _bft;   // 空側の _fieldTs
+              const _fullFt  = _ae ? _bft : _aft;   // 非空側の _fieldTs
+              if (_emptyFt > _fullFt) { out[k] = _ae ? av : bv; return; } // 明示クリアが新しい → クリアを反映
+              out[k] = _ae ? bv : av; return;                            // それ以外 → 非空を守る
+            }
           }
           out[k] = (_aft >= _bft) ? av : bv; return;
         }
