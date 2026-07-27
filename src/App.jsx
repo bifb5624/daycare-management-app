@@ -27180,7 +27180,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const d = new Date(selectedDate);
   const warekiYear = d.getFullYear() - 2018;
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-  const dateStr = `${d.getMonth() + 1}月${d.getDate()}日（${dayNames[d.getDay()]}）`;
+  const dateStr = `令和${warekiYear}年　月　日（　）`;
 
   let nextDateDisplay = "　月　日（　）", nextTimeDisplay = "　時　分";
 
