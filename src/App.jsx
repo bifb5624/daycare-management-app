@@ -26691,8 +26691,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
       // ★ 各面は1面(B6)と同じ「flexで中央＋0.70倍」配置に統一(左寄り/見切れ/1・2枚目の差を解消し、B5を左右いっぱいに使う)。
       //   穴あけ点は各面の左・縦ど真ん中に1つ(左右どちらの面にも付く)。
+      // ★ 縮小後の実寸(mm)ピッタリの箱を中央寄せ→左右の余白が両面で完全一致(はみ出し中央寄せの偏りを解消)。
+      const _vw = (182*faceScale).toFixed(2), _vh = (257*faceScale).toFixed(2);
       const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;box-sizing:border-box;">`
-        + `<div style="transform:scale(${faceScale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h||''}</div>`
+        + `<div style="width:${_vw}mm;height:${_vh}mm;overflow:hidden;flex:none;">`
+        + `<div style="width:182mm;height:257mm;transform:scale(${faceScale});transform-origin:top left;">${h||''}</div>`
+        + `</div>`
         + (guidePunch ? `<div style="position:absolute;left:6mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
         + `</div>`;
       const pages = [];
