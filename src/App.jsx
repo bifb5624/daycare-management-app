@@ -26701,7 +26701,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         + `<div style="width:${wrapW}mm;height:${wrapH}mm;margin:${marginTop}mm 0 0 ${marginLeft}mm;overflow:hidden;">`
         + `<div style="width:182mm;height:257mm;transform:scale(${scale});transform-origin:top left;">${h || ''}</div>`
         + `</div>`
-        + (guidePunch ? `<div style="position:absolute;left:13mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
+        + (guidePunch ? `<div style="position:absolute;left:5mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
         + `</div>`;
       const pages = [];
       for (let i = 0; i < parts.length; i += 2) {
@@ -39746,7 +39746,12 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 recipientOffice: selectedEntry?.patient?.cmOffice || '',
                 note: '自動記録',
               };
-              onSave({...appData, faxHistory: [newEntry, ...(appData.faxHistory||[])]});
+              // ★ 重複防止: 同じ利用者×同じ欠席日の休み連絡は1件だけ(プレビューを開くたびに増えないように)
+              const _fh = appData.faxHistory || [];
+              const _isDup = _fh.some(h => h.type === 'absence'
+                && ((newEntry.patientId != null && h.patientId === newEntry.patientId) || (!!newEntry.patientName && h.patientName === newEntry.patientName))
+                && (h.dateIso || '') === (newEntry.dateIso || ''));
+              if (!_isDup) onSave({...appData, faxHistory: [newEntry, ..._fh]});
               setTimeout(()=>{
                 onShowPrintPreview(`休み連絡_${selectedEntry?.patient?.name||''}`, 'A4 portrait', 'print-content-fax');
                 setIsPrint(false);
@@ -40214,7 +40219,13 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     };
     // 初回ご利用報告の場合は initialReports にも登録 → バナーから消える
     const pending = appData._pendingInitialReport;
-    let nextAppData = { ...appData, faxHistory: [newEntry, ...(appData.faxHistory||[])] };
+    // ★ 重複防止: 同じ宛先×件名×本文が変わっていなければ増やさない(プレビューを開くたびに増えないように)
+    const _fhG = appData.faxHistory || [];
+    const _isDupG = _fhG.some(h => h.type === 'general'
+      && (h.patientName || '') === (newEntry.patientName || '')
+      && (h.subject || '') === (newEntry.subject || '')
+      && (h.memo || '') === (newEntry.memo || ''));
+    let nextAppData = _isDupG ? { ...appData } : { ...appData, faxHistory: [newEntry, ..._fhG] };
     if (pending && patient && pending.patientId === patient.id && (subject || '').includes('初回')) {
       nextAppData = {
         ...nextAppData,
