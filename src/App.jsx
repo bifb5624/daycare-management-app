@@ -26510,6 +26510,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [renrakuModal, setRenrakuModal] = useState(null); // {patientId} 連絡事項の編集
   const [showPrintCards, setShowPrintCards] = useState(false); // ★ 印刷用の隠しカードは印刷時だけ描画(スマホのメモリ対策)
+  const [showPrintSettings, setShowPrintSettings] = useState(false); // ★ 右上「詳細設定」パネル(面数/用紙/補助線)
   const [mobileCardLimit, setMobileCardLimit] = useState(6); // ★ スマホは重いカードを少しずつ描画(メモリ対策)
   const [mobileOpenCardId, setMobileOpenCardId] = useState(null); // ★ スマホは重いカードを描画せず、開いた1人だけ描画(メモリ対策)
   const [printingIds, setPrintingIds] = useState([]); // ★ 印刷時に描画する利用者ID(全員ではなく印刷対象だけ描画)
@@ -26679,17 +26680,39 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     //   'b5land' = B5横(257×182, 既定)。 連絡帳の中身は常に縦(182×257)、縮率0.70で約B6(128×182)になる。
     // ★ 用紙: 'b6port'=B6縦(128×182)用紙いっぱい / それ以外='横(B5)'=B5横(257×182)用紙の中央に連絡帳(縦182×257を縮小)を配置。
     //   連絡帳の中身は常に縦。 用紙だけ横。
-    const paper = appData.systemSettings?.renrakuPaper === 'b6port' ? 'b6port' : 'b5land';
-    const isB6 = paper === 'b6port';
-    const pageW = isB6 ? 128 : 257;
-    const pageH = 182;
-    const scale = isB6 ? 0.70 : 0.66;
-    const pageSizeStr = `${pageW}mm ${pageH}mm`;
-    const combinedHtml = htmlParts.map((h,i)=>
-      `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">
-        <div style="transform:scale(${scale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h}</div>
-      </div>`
-    ).join('');
+    const _ss = appData.systemSettings || {};
+    const _mode = _ss.renrakuMode === '2' ? '2' : '1';
+    let combinedHtml, pageSizeStr;
+    if (_mode === '2') {
+      // ★ B5横(257×182)に連絡帳を左右2面。 印刷後に中央でカット→B6×2枚。 奇数は末尾を空欄(手書き用)。
+      const pageW = 257, pageH = 182, half = pageW / 2, faceScale = 0.68;
+      const guideCut = _ss.renrakuGuideCut !== false, guidePunch = _ss.renrakuGuidePunch !== false;
+      const parts = [...htmlParts];
+      if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
+      const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;overflow:hidden;box-sizing:border-box;">`
+        + `<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(${faceScale});width:182mm;height:257mm;">${h||''}</div>`
+        + (guidePunch ? `<div style="position:absolute;left:2.5mm;top:${pageH/2-40}mm;width:1.6mm;height:1.6mm;border-radius:50%;background:#333;"></div><div style="position:absolute;left:2.5mm;top:${pageH/2+40}mm;width:1.6mm;height:1.6mm;border-radius:50%;background:#333;"></div>` : '')
+        + `</div>`;
+      const pages = [];
+      for (let i = 0; i < parts.length; i += 2) {
+        pages.push(`<div style="position:relative;page-break-after:${i < parts.length-2 ? 'always':'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;overflow:hidden;">`
+          + face(parts[i]) + face(parts[i+1])
+          + (guideCut ? `<div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed #888;"></div>` : '')
+          + `</div>`);
+      }
+      combinedHtml = pages.join('');
+      pageSizeStr = `${pageW}mm ${pageH}mm`;
+    } else {
+      const paper = _ss.renrakuPaper === 'b6port' ? 'b6port' : 'b5land';
+      const isB6 = paper === 'b6port';
+      const pageW = isB6 ? 128 : 257, pageH = 182, scale = isB6 ? 0.70 : 0.66;
+      pageSizeStr = `${pageW}mm ${pageH}mm`;
+      combinedHtml = htmlParts.map((h,i)=>
+        `<div style="page-break-after:${i < htmlParts.length-1 ? 'always' : 'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;">`
+        + `<div style="transform:scale(${scale});transform-origin:center center;width:182mm;height:257mm;flex-shrink:0;">${h}</div>`
+        + `</div>`
+      ).join('');
+    }
     // ★ iPadで確実に開くよう、null→遅延イベントの2段階をやめ、HTML付きイベントを即時発火 (1段階で表示)
     window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:pageSizeStr,html:combinedHtml,elementId:null}}));
     // ★ 取得後は隠しカードを解放してメモリを戻す
@@ -26849,17 +26872,48 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         <button onClick={() => setIsConfigOpen(true)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
           <Settings size={16} className="mr-1.5" /> 項目
         </button>
-        {/* ★ 用紙の向き: 横(B5)＝B6非対応の複合機向け / 縦(B6)＝B6対応機向け。 連絡帳の中身は常に縦。 */}
-        <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-3 py-2 shrink-0"
-          title="「B5にB6（縦）」= B5サイズ・縦向きのページにB6の連絡帳を中央配置。複合機のB5トレイにB6用紙を入れている場合に最適（中央給紙でB6用紙にちょうど乗ります）。縦向きなのでWindows(Edge)/iPadでも回転・見切れしません。印刷時は用紙「B5」＋「縦向き」を選んでください。B6対応機なら「縦（B6）」、B5用紙そのままなら「横（B5）」。">
-          <span className="text-[12px] font-bold text-slate-500">用紙</span>
-          <select value={appData.systemSettings?.renrakuPaper === 'b6port' ? 'b6port' : 'b5land'}
-            onChange={e=>onSave({...appData, systemSettings:{...(appData.systemSettings||{}), renrakuPaper:e.target.value}})}
-            className="text-sm font-bold text-slate-700 outline-none bg-transparent cursor-pointer">
-            <option value="b5land">横（B5）</option>
-            <option value="b6port">縦（B6）</option>
-          </select>
-          <span className="text-slate-300 text-sm" title="B6サイズに対応した複合機がなければ「横（B5）」を選び、B5用紙の中央に連絡帳を配置して印刷します。B6対応機なら「縦（B6）」を選べます。">ⓘ</span>
+        {/* ★ 詳細設定: 面数(1面/2面)・用紙・補助線(カット線/パンチ点)をここで選ぶ */}
+        <div className="relative shrink-0">
+          <button onClick={()=>setShowPrintSettings(v=>!v)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap">
+            <Settings size={16} className="mr-1.5" /> 詳細設定
+          </button>
+          {showPrintSettings && (()=>{
+            const ss = appData.systemSettings || {};
+            const mode = ss.renrakuMode === '2' ? '2' : '1';
+            const paper = ss.renrakuPaper === 'b6port' ? 'b6port' : 'b5land';
+            const guideCut = ss.renrakuGuideCut !== false, guidePunch = ss.renrakuGuidePunch !== false;
+            const setSS = (patch)=>onSave({ ...appData, systemSettings: { ...ss, ...patch } });
+            const tabBtn = (on)=>`flex-1 px-2 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`;
+            return (
+              <div className="absolute right-0 top-full mt-1.5 z-30 bg-white border border-slate-300 rounded-xl shadow-xl p-3.5 w-80 text-left space-y-3">
+                <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-700">印刷の詳細設定</span><button onClick={()=>setShowPrintSettings(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">×</button></div>
+                <div>
+                  <div className="text-[11px] font-bold text-slate-500 mb-1">面数（1枚に何人分）</div>
+                  <div className="flex gap-2">
+                    <button onClick={()=>setSS({renrakuMode:'1'})} className={tabBtn(mode==='1')}>1面（1人ずつ）</button>
+                    <button onClick={()=>setSS({renrakuMode:'2'})} className={tabBtn(mode==='2')}>2面（B5横に2人）</button>
+                  </div>
+                </div>
+                {mode==='1' ? (
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-500 mb-1">用紙</div>
+                    <div className="flex gap-2">
+                      <button onClick={()=>setSS({renrakuPaper:'b5land'})} className={tabBtn(paper==='b5land')}>横（B5）</button>
+                      <button onClick={()=>setSS({renrakuPaper:'b6port'})} className={tabBtn(paper==='b6port')}>縦（B6）</button>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">B6対応機は「縦（B6）」。非対応機は「横（B5）」でB5中央にB6配置。</div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-[11px] font-bold text-slate-500 mb-1">補助線（B5横・2面）</div>
+                    <label className="flex items-center gap-2 text-xs text-slate-700 py-0.5 cursor-pointer"><input type="checkbox" checked={guideCut} onChange={e=>setSS({renrakuGuideCut:e.target.checked})}/>中央のカット線（縦の点線）</label>
+                    <label className="flex items-center gap-2 text-xs text-slate-700 py-0.5 cursor-pointer"><input type="checkbox" checked={guidePunch} onChange={e=>setSS({renrakuGuidePunch:e.target.checked})}/>穴あけ用の目印（各面の左に上下2つの点）</label>
+                    <div className="text-[10px] text-slate-400 mt-1">B5横に2人分を印刷し、中央でカット→B6×2枚。人数が奇数のときは最後の1面が空欄（手書き用）になります。</div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
         <button onClick={handlePrint} className="bg-slate-900 hover:bg-black text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
           <Printer size={16} className="mr-1.5" /> プレビュー
@@ -27042,6 +27096,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
               </div>
             );
           })}
+          {/* ★ 2面印刷で人数が奇数のときの余り用: 氏名/次回/連動/自由入力が空の連絡帳(手書き用) */}
+          <div id="print-content-cb-blank">
+            <ContactBookCard record={{ patientId:'__blank__', exercises:{}, status:'出席', date:'', kibunArrival:'', kibunDeparture:'', tokki:'' }} patient={{ id:'__blank__', name:'', kana:'', plannedExercises:{}, emergencyContacts:[] }} selectedDate={selectedDate} config={appData.contactBookConfig} appData={appData} onOpenConfig={()=>{}} />
+          </div>
         </div>
         )}
 
