@@ -16560,6 +16560,24 @@ export default function App() {
     }
   }, [appData, staffSession?.storeId]);
 
+  // ★ 控えめバナー: 自動同期(app_stateの数秒ごとpull)が止まっている＝スリープ/通信断で「最新が反映されていない
+  //   のに気づけない」状態のときだけ「未同期」を表示する。 lastAppliedAtRef は pull が走るたびに更新されるので、
+  //   30秒以上古い＝poll が止まっている合図。 通常の編集中は 4秒毎に pull され更新されるので誤検知しない。
+  //   ※ 読み取り専用(既存の値を見るだけ)。 同期の書き込み/マージには一切触れない。
+  const [syncStale, setSyncStale] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      const la = lastAppliedAtRef.current || 0;
+      setSyncStale(!!(isSupabaseEnabled && staffSession?.storeId && la > 0 && (Date.now() - la) > 30000));
+    };
+    const t = setInterval(check, 5000);
+    const onF = () => setTimeout(check, 1500);
+    window.addEventListener('focus', onF);
+    document.addEventListener('visibilitychange', onF);
+    check();
+    return () => { clearInterval(t); window.removeEventListener('focus', onF); document.removeEventListener('visibilitychange', onF); };
+  }, [staffSession?.storeId]);
+
   // ★ 同期停止の検知。 画面には出さず(誤検知で鬱陶しいため)、診断ログにだけ残す。
   //   ?syncdebug=1 を付けて開くと画面右下に直近のログを表示できる。
   useEffect(() => {
@@ -18705,6 +18723,13 @@ export default function App() {
                  currentView === 'settings' ? '各種設定' : 'システム画面'}
               </h1>
             </div>
+            {/* ★ 控えめバナー: 自動同期が止まっている(最新未反映の可能性)ときだけ表示。 タップで再読み込み。 */}
+            {syncStale && (
+              <div onClick={()=>window.location.reload()} title="自動同期が一時停止しています。最新の内容を反映するには再読み込みしてください。入力前に押すと安全です。"
+                className="flex items-center gap-1 shrink-0 mr-2 text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-full px-2.5 py-1 cursor-pointer hover:bg-amber-100 whitespace-nowrap active:scale-95">
+                <span>⚠ 未同期</span><span className="hidden sm:inline">· タップで再読み込み</span>
+              </div>
+            )}
             {/* ★ 最終更新した端末・時刻 (全端末で共有・表示用)。 狭い画面では非表示。 */}
             {(() => {
               const ls = appData._lastSync;
@@ -26716,7 +26741,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         + `<div style="width:${wrapW}mm;height:${wrapH}mm;margin:${marginTop}mm 0 0 ${marginLeft}mm;overflow:hidden;">`
         + `<div style="width:182mm;height:257mm;transform:scale(${scale});transform-origin:top left;">${h || ''}</div>`
         + `</div>`
-        + (guidePunch ? `<div style="position:absolute;left:5mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
+        + (guidePunch ? `<div style="position:absolute;left:3.5mm;top:50%;transform:translateY(-50%);font-size:3.4mm;line-height:1;color:#333;">◀</div>` : '')
         + `</div>`;
       const pages = [];
       for (let i = 0; i < parts.length; i += 2) {
