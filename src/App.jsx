@@ -31903,6 +31903,16 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   });
   const [exerciseItemsHistory, setExerciseItemsHistory] = useState(appData.systemSettings?.exerciseItemsHistory || []);
+  // ★ 運動メニュー系の「マウント時点の内容」。 保存時に「ユーザーが編集したか」を判定し、
+  //   編集済みなら削除を含めローカルを必ず保存(空でもクラウドに戻さない)。 未編集なら現行appData優先(古い巻き戻り防止)。
+  const _exBaseRef = React.useRef(null);
+  if (_exBaseRef.current === null) {
+    const _s = appData.systemSettings || {};
+    _exBaseRef.current = {
+      ex: JSON.stringify(_s.exerciseItems || []), ind: JSON.stringify(_s.individualExerciseItems || []),
+      hist: JSON.stringify(_s.exerciseItemsHistory || []), qb: JSON.stringify(_s.exerciseQuickButtons || []),
+    };
+  }
   const [exerciseQuickButtons, setExerciseQuickButtons] = useState(appData.systemSettings?.exerciseQuickButtons || ['分','回','kg']);
   const [newQuickBtn, setNewQuickBtn] = useState('');
   const isComposingRef = React.useRef(false);
@@ -32090,10 +32100,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const _ss0 = appData.systemSettings || {};
     const _keepArr = (local, cur) => (Array.isArray(local) && local.length) ? local : (Array.isArray(cur) ? cur : (local || []));
     const _keepStr = (local, cur) => (String(local ?? '').trim()) ? local : (cur ?? local ?? '');
+    // ★ 運動メニュー系: ユーザーが編集した(=マウント時と内容が違う)ならローカル(削除を反映)を必ず採用。
+    //   未編集なら現行appData(_ss0)を優先(マウント後にクラウド同期で増えた分の巻き戻り防止)。
+    const _exPick = (cur, curSaved, baseKey) => { let ed; try { ed = JSON.stringify(cur) !== _exBaseRef.current[baseKey]; } catch { ed = true; } return ed ? cur : (curSaved !== undefined ? curSaved : cur); };
     // 事業所情報: 全項目が空(=未同期の既定)なら appData 側を維持
     const _fiHasAny = !!(_facilityInfo && Object.keys(_facilityInfo).some(k => String(_facilityInfo[k] ?? '').trim()));
     const _fiSafe = _fiHasAny ? _facilityInfo : (_ss0.facilityInfo || _facilityInfo);
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: syncNow(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (_ss0.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (_ss0.careManagers||[]), facilityInfo: _fiSafe, exerciseItems: _keepArr(exerciseItems, _ss0.exerciseItems), exerciseItemsHistory: _keepArr(exerciseItemsHistory, _ss0.exerciseItemsHistory), individualExerciseItems: _keepArr(individualExerciseItems, _ss0.individualExerciseItems), exerciseQuickButtons: _keepArr(exerciseQuickButtons, _ss0.exerciseQuickButtons), anthropicApiKey: _keepStr(anthropicApiKey, _ss0.anthropicApiKey), serviceItems: _keepArr(serviceItems, _ss0.serviceItems) } }, { manual: true, message: '✓ 各種設定を保存しました' });
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: syncNow(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (_ss0.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (_ss0.careManagers||[]), facilityInfo: _fiSafe, exerciseItems: _exPick(exerciseItems, _ss0.exerciseItems, 'ex'), exerciseItemsHistory: _exPick(exerciseItemsHistory, _ss0.exerciseItemsHistory, 'hist'), individualExerciseItems: _exPick(individualExerciseItems, _ss0.individualExerciseItems, 'ind'), exerciseQuickButtons: _exPick(exerciseQuickButtons, _ss0.exerciseQuickButtons, 'qb'), anthropicApiKey: _keepStr(anthropicApiKey, _ss0.anthropicApiKey), serviceItems: _keepArr(serviceItems, _ss0.serviceItems) } }, { manual: true, message: '✓ 各種設定を保存しました' });
     // ★ 保存したので未保存フラグを解除し、未保存判定の基準も現在の内容に取り直す
     if (dirtyRef) dirtyRef.current = false;
     _dirtyBaseRef.current = null;
@@ -32582,7 +32595,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       if (!window.confirm(`「${item.name}」を ${exerciseApplyFrom} 以降の項目から削除します。よろしいですか？\n(過去の記録は元の項目のまま残ります)`)) return;
                       setExerciseItemsHistory(prev => {
                         const newH = [...prev];
-                        if (!newH.some(h => h.effectiveFrom === exerciseApplyFrom)) {
+                        if (!newH.some(h => h.effectiveTo && h.effectiveTo >= exerciseApplyFrom)) {
                           const prevMonth = (() => { const [y,m] = exerciseApplyFrom.split('-').map(Number); const d = new Date(y, m-2, 1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
                           newH.push({ effectiveTo: prevMonth, items: [...exerciseItems] });
                         }
