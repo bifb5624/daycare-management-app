@@ -26691,19 +26691,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
       // ★ 各面は1面(B6)と同じ「flexで中央＋0.70倍」配置に統一(左寄り/見切れ/1・2枚目の差を解消し、B5を左右いっぱいに使う)。
       //   穴あけ点は各面の左・縦ど真ん中に1つ(左右どちらの面にも付く)。
-      // ★ 縮小後の実寸(mm)ピッタリの箱を中央寄せ→左右の余白が両面で完全一致(はみ出し中央寄せの偏りを解消)。
-      const _vw = (182*faceScale).toFixed(2), _vh = (257*faceScale).toFixed(2);
-      const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;display:flex;justify-content:center;align-items:center;overflow:hidden;box-sizing:border-box;">`
-        + `<div style="width:${_vw}mm;height:${_vh}mm;overflow:hidden;flex:none;">`
-        + `<div style="width:182mm;height:257mm;transform:scale(${faceScale});transform-origin:top left;">${h||''}</div>`
-        + `</div>`
-        + (guidePunch ? `<div style="position:absolute;left:6mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
+      // ★ 各面を絶対配置(left:0 と left:半分)で置き、中身は translate(-50%,-50%)+scale で face の中央に。
+      //   flexの「はみ出し中央寄せ」だと左右に偏るため、絶対配置で両面まったく同じ中央配置にする。
+      const punch = guidePunch ? `<div style="position:absolute;left:6mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '';
+      const face = (h, leftMm) => `<div style="position:absolute;left:${leftMm}mm;top:0;width:${half}mm;height:${pageH}mm;overflow:hidden;">`
+        + `<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(${faceScale});width:182mm;height:257mm;">${h||''}</div>`
+        + punch
         + `</div>`;
       const pages = [];
       for (let i = 0; i < parts.length; i += 2) {
-        pages.push(`<div style="position:relative;page-break-after:${i < parts.length-2 ? 'always':'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;overflow:hidden;">`
-          + face(parts[i]) + face(parts[i+1])
-          + (guideCut ? `<div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed #888;"></div>` : '')
+        pages.push(`<div style="position:relative;page-break-after:${i < parts.length-2 ? 'always':'auto'};width:${pageW}mm;height:${pageH}mm;overflow:hidden;">`
+          + face(parts[i], 0) + face(parts[i+1], half)
+          + (guideCut ? `<div style="position:absolute;left:${half}mm;top:0;height:${pageH}mm;border-left:1px dashed #888;"></div>` : '')
           + `</div>`);
       }
       combinedHtml = pages.join('');
@@ -27184,7 +27183,10 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   const d = new Date(selectedDate);
   const warekiYear = d.getFullYear() - 2018;
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-  const dateStr = `令和${warekiYear}年　月　日（　）`;
+  // ★ 空面(2面印刷の余り・id=__blank__)だけ手書き用の空欄。 利用者がいる面は実際の日付。
+  const dateStr = (patient && patient.id === '__blank__')
+    ? `令和${warekiYear}年　月　日（　）`
+    : `令和${warekiYear}年${d.getMonth() + 1}月${d.getDate()}日（${dayNames[d.getDay()]}）`;
 
   let nextDateDisplay = "　月　日（　）", nextTimeDisplay = "　時　分";
 
