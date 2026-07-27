@@ -26689,14 +26689,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       const guideCut = _ss.renrakuGuideCut !== false, guidePunch = _ss.renrakuGuidePunch !== false;
       const parts = [...htmlParts];
       if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
-      // ★ 両面まったく同じ配置(絶対配置)。 カードは182×257固定で左に約19mmの綴じ代(空白)が内蔵。
-      //   ・boxLeftを両面共通にすることで、B5を中央でカット→2枚のB6を重ねたとき中身も穴も完全一致。
+      // ★ 両面まったく同じ配置。 カードは182×257固定で左に約19mmの綴じ代(空白)が内蔵。
+      //   ・縮小後の実寸ぴったりのラッパー枠に入れる(絶対配置+transformだと印刷クリップで中身が消えるため)。
+      //   ・marginLeftを両面共通にすることで、B5を中央でカット→2枚のB6を重ねたとき中身も穴も完全一致。
       //   ・右端の余白を小さく(2面を右に詰める)しつつ、左の綴じ代に穴あけドットを配置。
       const scale = faceScale;                       // 0.64
-      const boxTop = (pageH - 257 * scale) / 2;      // 縦中央
-      const boxLeft = 8;                             // 左端からの位置(両面共通)
+      const wrapW = 182 * scale, wrapH = 257 * scale; // 縮小後の実寸(≈116.5×164.5mm)
+      const marginTop = (pageH - wrapH) / 2;         // 縦中央
+      const marginLeft = 8;                          // 左端からの位置(両面共通)
       const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;overflow:hidden;flex:0 0 ${half}mm;box-sizing:border-box;">`
-        + `<div style="position:absolute;left:${boxLeft}mm;top:${boxTop}mm;transform:scale(${scale});transform-origin:left top;width:182mm;height:257mm;">${h || ''}</div>`
+        + `<div style="width:${wrapW}mm;height:${wrapH}mm;margin:${marginTop}mm 0 0 ${marginLeft}mm;overflow:hidden;">`
+        + `<div style="width:182mm;height:257mm;transform:scale(${scale});transform-origin:top left;">${h || ''}</div>`
+        + `</div>`
         + (guidePunch ? `<div style="position:absolute;left:13mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
         + `</div>`;
       const pages = [];
