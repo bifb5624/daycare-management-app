@@ -26689,19 +26689,20 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       const guideCut = _ss.renrakuGuideCut !== false, guidePunch = _ss.renrakuGuidePunch !== false;
       const parts = [...htmlParts];
       if (parts.length % 2 === 1) { const be = document.getElementById('print-content-cb-blank'); parts.push(be ? be.outerHTML.replace(/display:\s*none[^;"\']*/g,'display:block') : ''); }
-      // ★ 各面は1面(B6)と同じ「flexで中央＋0.70倍」配置に統一(左寄り/見切れ/1・2枚目の差を解消し、B5を左右いっぱいに使う)。
-      //   穴あけ点は各面の左・縦ど真ん中に1つ(左右どちらの面にも付く)。
-      // ★ ミラー配置: 左面は中身を左寄せ・右面は右寄せ。空いた分が中央(切り取り線側)に集まり、
-      //   中央ののりしろ余白が広く・外側の余白が小さくなる。倍率0.64で余白を確保。補助ドットは
-      //   中央のりしろ側(切り取り線寄り)に置く=中身と重ならず、綴じ穴の目印になる。
-      const face = (h, side) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;display:flex;justify-content:${side === 'L' ? 'flex-start' : 'flex-end'};align-items:center;overflow:hidden;box-sizing:border-box;padding:0 3mm;">`
-        + `<div style="transform:scale(${faceScale});transform-origin:${side === 'L' ? 'left' : 'right'} center;width:182mm;height:257mm;flex-shrink:0;">${h || ''}</div>`
-        + (guidePunch ? `<div style="position:absolute;${side === 'L' ? 'right:4mm' : 'left:4mm'};top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
+      // ★ 両面まったく同じ配置(絶対配置)。 カードは182×257固定で左に約19mmの綴じ代(空白)が内蔵。
+      //   ・boxLeftを両面共通にすることで、B5を中央でカット→2枚のB6を重ねたとき中身も穴も完全一致。
+      //   ・右端の余白を小さく(2面を右に詰める)しつつ、左の綴じ代に穴あけドットを配置。
+      const scale = faceScale;                       // 0.64
+      const boxTop = (pageH - 257 * scale) / 2;      // 縦中央
+      const boxLeft = 8;                             // 左端からの位置(両面共通)
+      const face = (h) => `<div style="position:relative;width:${half}mm;height:${pageH}mm;overflow:hidden;flex:0 0 ${half}mm;box-sizing:border-box;">`
+        + `<div style="position:absolute;left:${boxLeft}mm;top:${boxTop}mm;transform:scale(${scale});transform-origin:left top;width:182mm;height:257mm;">${h || ''}</div>`
+        + (guidePunch ? `<div style="position:absolute;left:13mm;top:50%;transform:translateY(-50%);width:1.8mm;height:1.8mm;border-radius:50%;background:#333;"></div>` : '')
         + `</div>`;
       const pages = [];
       for (let i = 0; i < parts.length; i += 2) {
         pages.push(`<div style="position:relative;page-break-after:${i < parts.length-2 ? 'always':'auto'};width:${pageW}mm;height:${pageH}mm;display:flex;overflow:hidden;">`
-          + face(parts[i], 'L') + face(parts[i+1], 'R')
+          + face(parts[i]) + face(parts[i+1])
           + (guideCut ? `<div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px dashed #888;"></div>` : '')
           + `</div>`);
       }
