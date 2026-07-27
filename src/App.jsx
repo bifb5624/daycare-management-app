@@ -19415,7 +19415,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
     // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
     const others = (appData.ticketRecords||[]).filter(r => !(r && recMatchesDateYear(r, _dateStr, _yr)));
-    const restored = snap.recs.map(r => ({ ...r, _savedAt: syncNow() })); // 復元＝最新として保存(他端末にも反映)
+    // ★ 復元は全項目の _fieldTs も「今」で刻む。 これをしないと、クラウド側に付いた「空にした削除フラグ
+    //   (新しい _fieldTs)」がフィールド単位マージで勝ち、復元しても血圧/体温が空のまま戻らない。
+    const _rnow = syncNow();
+    const restored = snap.recs.map(r => {
+      const _fts = { ...(r._fieldTs || {}) };
+      Object.keys(r).forEach(k => { if (k !== '_savedAt' && k !== '_fieldTs' && k !== 'id') _fts[k] = _rnow; });
+      return { ...r, _savedAt: _rnow, _fieldTs: _fts };
+    }); // 復元＝全項目を最新として保存(他端末にも反映・削除フラグに勝つ)
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
     // ★ 復元は「編集中(dirty)」でも必ず画面へ反映させる。 dirtyRef を落とさないと、
     //   再seedエフェクトのガード(!_dateChanged && dirtyRef)で localPatients が作り直されず、
