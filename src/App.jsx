@@ -28623,6 +28623,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       // 既に同じ ID の localPatient がある場合は上書きしない (編集中のデータを保護)
       if (!localPatient || localPatient.id !== editingPatientId) {
         lastLoadedPatientSigRef.current = JSON.stringify(p || null);
+        _pendingExBaseRef.current = null; // ★ 利用者切替=運動メニューの反映日確認の基準値をリセット
         setLocalPatient(_buildLocalPatient(p));
       }
     } else {
@@ -28642,6 +28643,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_remotePatientSig]);
 
+  // ★ 運動メニュー/個別運動の「反映日」確認を、保存時に1回だけまとめて出すための基準値(編集開始前の値)。
+  //   自動保存で値だけ先に保存しても、この基準と比較して未確定の変更を検知する。 確定/利用者切替でnullに戻す。
+  const _pendingExBaseRef = React.useRef(null);
   const updateLPFields = (obj) => {
     if (!localPatient) return;
     const updated = { ...localPatient, ...obj };
@@ -28866,12 +28870,20 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const _normIND = (arr) => { const r={}; (Array.isArray(arr)?arr:[]).forEach(x=>{ if(x&&x.itemId){ const v=(x.defaultValue==null?'':String(x.defaultValue)); if(v!=='') r[x.itemId]=v; } }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
     const peChanged = _normPE(prev.plannedExercises) !== _normPE(pat.plannedExercises);
     const indChanged = _normIND(prev.individualExercises) !== _normIND(pat.individualExercises);
-    // ★ 運動メニュー/個別運動(設定値)が変わったら「いつから」を確認 (規定値は翌月から適用・備考へ自動記載)
-    if (peChanged || indChanged) {
-      const _ctx = { pat, next, prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[], fromDate: new Date().toISOString().slice(0,10) };
-      // ★ 運動メニュー/個別運動(規定値)の変更は、数値・ハイフン(ー)・クリアを問わず必ず「いつから反映」を確認する。
-      //   自動保存でも当日付で勝手に確定しない = 過去に遡って全期間がハイフン等になるのを防ぎ、適用開始日を選べるようにする。
-      //   (テンキーの ○/× ー は押下で即確定=自動クローズするため、自動保存経由でも取りこぼさないようここで必ずモーダルを出す)
+    // ★ 運動メニュー/個別運動(規定値)の変更は「保存」を押したときに1回だけ、その日の全変更をまとめて反映日を確認する。
+    //   自動保存(1.5秒後)ではモーダルを出さず、値だけ静かに保存(消失防止)。 → 項目を1つずつ変えるたびに時差で
+    //   モーダルが出るのを防ぐ。 基準値(_pendingExBaseRef=編集開始前の値)と比較するので、自動保存で appData が
+    //   新値に変わっても未確定の変更を正しく検知できる。
+    const _exBase = _pendingExBaseRef.current;
+    const _basePlanned = _exBase ? _exBase.prevPlanned : (prev.plannedExercises||{});
+    const _baseInd = _exBase ? _exBase.prevIndividual : (prev.individualExercises||[]);
+    const _exChangedVsBase = (_normPE(_basePlanned) !== _normPE(pat.plannedExercises)) || (_normIND(_baseInd) !== _normIND(pat.individualExercises));
+    if (_exChangedVsBase) {
+      // 編集開始前の基準値を初回だけ確保(自動保存で appData が上書きされる前に)
+      if (!_exBase) _pendingExBaseRef.current = { prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[] };
+      if (auto) { onSave(next, { silent: true }); return; } // 自動保存: 値だけ保存し、反映日の確定は「保存」時に回す
+      const _b = _pendingExBaseRef.current;
+      const _ctx = { pat, next, prevPlanned: _b.prevPlanned, prevHistory: _b.prevHistory, prevIndividual: _b.prevIndividual, prevIndHistory: _b.prevIndHistory, fromDate: new Date().toISOString().slice(0,10) };
       if (!plannedExModal) setPlannedExModal(_ctx);
       return;
     }
@@ -28925,6 +28937,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     pat2.serviceChanges = sc;
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
+    _pendingExBaseRef.current = null; // ★ 反映日を確定したので基準値をリセット
     if (!ctxOverride) setPlannedExModal(null);
     if (opts.silent) onSave(next2, { silent: true });
     else onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
@@ -30244,7 +30257,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={()=>{ const m=plannedExModal; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 利用者マスタを保存しました' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="履歴で分けず、今の値を全期間に適用（備考にも記載しない）">分けない</button>
+              <button onClick={()=>setPlannedExModal(null)} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="閉じる（変更は保持されます。もう一度保存すると確認します）">キャンセル</button>
               <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この変更日で保存</button>
             </div>
           </div>
