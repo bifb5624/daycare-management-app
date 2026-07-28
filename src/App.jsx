@@ -28636,6 +28636,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   useEffect(() => {
     if (!editingPatientId || !localPatient || localPatient.id !== editingPatientId) return;
     if (_remotePatientSig === lastLoadedPatientSigRef.current) return; // リモートに変化なし
+    // ★ 保存直後(6秒)は再シードしない = push が反映される前に古いクラウド値で上書きし、
+    //   入力した基本利用日等が一瞬消える競合を防ぐ(6秒後に整合が取れてから反映)。
+    if (Date.now() - (_justSavedMasterRef.current || 0) < 6000) return;
     lastLoadedPatientSigRef.current = _remotePatientSig;
     if (dirtyRef?.current) return; // 編集中は上書きしない
     const p = (appData.patients||[]).find(pt => pt.id === editingPatientId);
@@ -28646,6 +28649,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   // ★ 運動メニュー/個別運動の「反映日」確認を、保存時に1回だけまとめて出すための基準値(編集開始前の値)。
   //   自動保存で値だけ先に保存しても、この基準と比較して未確定の変更を検知する。 確定/利用者切替でnullに戻す。
   const _pendingExBaseRef = React.useRef(null);
+  // ★ 直近にこの端末でマスタ保存した時刻。 保存直後(数秒)に古いクラウド値で localPatient が
+  //   再シードされ「入力した基本利用日が一瞬で消える→再入力で反映」となる競合を防ぐガード。
+  const _justSavedMasterRef = React.useRef(0);
   const updateLPFields = (obj) => {
     if (!localPatient) return;
     const updated = { ...localPatient, ...obj };
@@ -28826,6 +28832,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const saveMasterInfo = (auto = false) => {
     if (!localPatient) return;
     if (dirtyRef) dirtyRef.current = false;
+    _justSavedMasterRef.current = Date.now(); // ★ 保存直後ガード(古いクラウド値での再シード巻き戻りを防ぐ)
     let next = { ...appData };
     // ★ 月間スケジュール/チケットの保留変更も一緒に確定する。
     //   これをしないと保存後も pendingShifts/pendingTickets が残り、
@@ -29079,6 +29086,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     };
     if (pendingTickets) setPendingTickets(null);
     if (dirtyRef) dirtyRef.current = false;
+    _justSavedMasterRef.current = Date.now(); // ★ 保存直後ガード(基本利用日が一瞬で戻る競合を防ぐ)
     onSave(nextData, { manual: true, message: '✓ 基本利用日を保存しました' });
   };
   const handleKpInput = (nv) => { setKeypad(p => ({ ...p, value: nv, isFirstInput: false }));
@@ -30257,7 +30265,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={()=>setPlannedExModal(null)} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="閉じる（変更は保持されます。もう一度保存すると確認します）">キャンセル</button>
+              <button onClick={()=>{ const m=plannedExModal; _pendingExBaseRef.current=null; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 保存しました（反映日は未指定）' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="反映日を指定せず、今の値をそのまま保存します（履歴・備考に日付は残しません）">指定せず保存</button>
               <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この変更日で保存</button>
             </div>
           </div>
