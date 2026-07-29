@@ -9654,7 +9654,7 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
                 if (!m) return '';
                 let total = parseInt(m[1],10)*60 + parseInt(m[2],10) - 10; // 開始の10分前
                 if (total < 0) total += 24*60;
-                return `${Math.floor(total/60)}時${String(total%60).padStart(2,'0')}分`;
+                return `${Math.floor(total/60)}時`; // ★ 時だけ(例: 8:50→8時 / 13:15→13時)
             };
             let timeStr = "　時　分";
             const _regT = (patient.pickupType === 'fixed' || patient.pickupType === 'partial') ? (patient.pickupTimes?.[dayOfWeek] || "") : "";
@@ -9667,8 +9667,9 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
             } else if (_regT) {
                 timeStr = _regT;
             } else if (patient.pickupType !== 'flexible') {
-                // 未設定の曜日(振替先等) / 送迎時間タイプ未設定 → 施設のサービス提供時間から自動(無ければ従来既定)
-                timeStr = _facPickup(ampmStr) || (ampmStr === "AM" ? "9時00分" : "13時20分");
+                // 未設定の曜日(振替先等) / 送迎時間タイプ未設定 → 施設のサービス提供時間から自動(時だけ)。
+                //   施設のサービス提供時間も未入力なら、既定として AM=8時 / PM=13時 を入れる。
+                timeStr = _facPickup(ampmStr) || (ampmStr === "AM" ? "8時" : "13時");
             }
             // flexible(送迎時間タイプ=柔軟)は「　時　分」のまま
             return { date: `${nextDate.getMonth()+1}月${nextDate.getDate()}日（${dayNames[dayOfWeek]}）`, time: timeStr };
