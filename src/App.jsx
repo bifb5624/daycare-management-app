@@ -9643,21 +9643,34 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
             // 振替は furikaeAmpm に振替先の区分が入る (提供記録に ampm フィールドは無い)
             const _pmOnlyRec = _recComing && String(_rec?.furikaeAmpm || '') === 'PM';
             const ampmStr = _pmOnlyRec ? "PM" : (stateAM !== "空欄" && stateAM !== "欠席" && stateAM !== "休業") ? "AM" : "PM";
+            // ★ 送迎時間: その曜日に登録済みの送迎時間(pickupTimes)を最優先。 未設定の曜日(=振替先など)は
+            //   施設のサービス提供時間(各種設定→事業所情報)から自動計算する:
+            //   AM=AM開始時刻の10分前 / PM=PM開始時刻の10分前。 AM↔PMが変われば自動で切替わる。
+            //   ※ これは「次回お迎え時間」の表示用計算のみ。 利用者マスタの送迎時間は書き換えない。
+            const _fi = appData?.systemSettings?.facilityInfo || {};
+            const _facPickup = (ap) => {
+                const raw = ap === 'AM' ? (_fi.serviceTimeAM || '') : (_fi.serviceTimePM || '');
+                const m = String(raw).split(/[～〜]/)[0].trim().match(/(\d{1,2}):(\d{2})/);
+                if (!m) return '';
+                let total = parseInt(m[1],10)*60 + parseInt(m[2],10) - 10; // 開始の10分前
+                if (total < 0) total += 24*60;
+                return `${Math.floor(total/60)}時${String(total%60).padStart(2,'0')}分`;
+            };
             let timeStr = "　時　分";
-            if (patient.pickupType === 'fixed' || patient.pickupType === 'partial') {
-                const t = patient.pickupTimes?.[dayOfWeek] || "";
-                if (t.includes(':')) {
-                    const pts = t.split(':');
-                    // "--" は分未定 → 空白として表示
-                    const hStr = pts[0] && pts[0] !== '--' ? pts[0] : '　　';
-                    const mStr = pts[1] && pts[1] !== '--' ? pts[1] : '　　';
-                    timeStr = `${hStr}時${mStr}分`;
-                } else if (t) timeStr = t;
-            } else if (patient.pickupType === 'flexible') {
-                timeStr = "　時　分";
-            } else {
-                timeStr = ampmStr === "AM" ? "9時00分" : "13時20分";
+            const _regT = (patient.pickupType === 'fixed' || patient.pickupType === 'partial') ? (patient.pickupTimes?.[dayOfWeek] || "") : "";
+            if (_regT.includes(':')) {
+                const pts = _regT.split(':');
+                // "--" は分未定 → 空白として表示
+                const hStr = pts[0] && pts[0] !== '--' ? pts[0] : '　　';
+                const mStr = pts[1] && pts[1] !== '--' ? pts[1] : '　　';
+                timeStr = `${hStr}時${mStr}分`;
+            } else if (_regT) {
+                timeStr = _regT;
+            } else if (patient.pickupType !== 'flexible') {
+                // 未設定の曜日(振替先等) / 送迎時間タイプ未設定 → 施設のサービス提供時間から自動(無ければ従来既定)
+                timeStr = _facPickup(ampmStr) || (ampmStr === "AM" ? "9時00分" : "13時20分");
             }
+            // flexible(送迎時間タイプ=柔軟)は「　時　分」のまま
             return { date: `${nextDate.getMonth()+1}月${nextDate.getDate()}日（${dayNames[dayOfWeek]}）`, time: timeStr };
         }
     }
