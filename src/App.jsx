@@ -18428,7 +18428,7 @@ export default function App() {
           <div onClick={()=>setAuditLogOpen(false)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:99998,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
             <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:20,width:'100%',maxWidth:640,maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
               <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',gap:8}}>
-                <div style={{fontWeight:'bold',color:'#1e293b'}}>📋 変更ログ</div>
+                <div style={{fontWeight:'bold',color:'#1e293b'}}>変更ログ</div>
                 <div style={{fontSize:11,color:'#94a3b8'}}>いつ・どの端末で・何を変更したか（最新300件）</div>
                 <button onClick={()=>setAuditLogOpen(false)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:8,padding:'4px 10px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>閉じる</button>
               </div>
@@ -18848,7 +18848,7 @@ export default function App() {
             {/* ★ 変更ログ(監査)ビューアを開くボタン */}
             <button onClick={()=>setAuditLogOpen(true)} title="いつ・どの端末で・何を変更したかの履歴"
               className="hidden md:flex items-center gap-1 shrink-0 mr-2 text-[11px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-full px-2.5 py-1 whitespace-nowrap active:scale-95">
-              📋 変更ログ
+              変更ログ
             </button>
             {/* ジャンプナビをヘッダー右側に配置。 ★ 狭い画面(スマホ/iPad縦)ではタイトルと重なるため非表示(サイドバーで移動可)。 横長(lg〜)のみ表示 */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
