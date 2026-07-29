@@ -31264,7 +31264,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         const fullKana = `${newPatientKanaLast.trim()} ${newPatientKanaFirst.trim()}`.trim();
         // ★ 姓・名・姓ふりがな・名ふりがな すべて必須
         const canSubmit = !!(newPatientLast.trim() && newPatientFirst.trim() && newPatientKanaLast.trim() && newPatientKanaFirst.trim());
-        const submit = () => {
+        const submit = (openDetail = true) => {
           if (!canSubmit) return;
           // ★ 削除しても番号を戻さない連番 (patientIdSeq)。 前の利用者と同じIDの再利用を防ぐ。
           const newId = Math.max(0, ...(appData.patients||[]).map(p=>p.id), Number(appData.patientIdSeq)||0) + 1;
@@ -31284,8 +31284,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           //   作成済みに見える(＝作成漏れの判断を誤らせる)ため。 各画面の「＋ 新規作成」で作る。
           const _extra = {};
           // ★ B1: 新規追加は保存ボタン不要で即時クラウド保存(自動保存)。 debounce待ちで消えるのを防ぐ。
-          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message:'✓ 利用者を追加しました' });
-          setEditingPatientId(newId);
+          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message: openDetail ? '✓ 利用者を追加しました（続けて詳細情報を入力してください）' : '✓ 利用者を追加しました' });
+          if (openDetail) setEditingPatientId(newId); // ★「完了して詳細情報入力」= そのまま編集画面へ
           setPatientStatusFilter('利用中');
           setNewPatientModal(false);
           setNewPatientLast(''); setNewPatientFirst('');
@@ -31322,9 +31322,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   placeholder="タロウ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={()=>{ setNewPatientModal(false); setNewPatientLast(''); setNewPatientFirst(''); setNewPatientKanaLast(''); setNewPatientKanaFirst(''); }} className="flex-1 py-3 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200">キャンセル</button>
-              <button disabled={!canSubmit} onClick={submit} className="flex-1 py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">追加する</button>
+            <div className="flex flex-col gap-2">
+              {/* ★ 追加してそのまま詳細（基本利用日・送迎・運動等）の入力画面へ */}
+              <button disabled={!canSubmit} onClick={()=>submit(true)} className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">完了して詳細情報入力</button>
+              {/* ★ 名前だけ登録して一覧に戻る（詳細は後で） */}
+              <button disabled={!canSubmit} onClick={()=>submit(false)} className="w-full py-2.5 rounded-xl font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">追加のみ（詳細はあとで）</button>
+              <button onClick={()=>{ setNewPatientModal(false); setNewPatientLast(''); setNewPatientFirst(''); setNewPatientKanaLast(''); setNewPatientKanaFirst(''); }} className="w-full py-2 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200">キャンセル</button>
             </div>
           </div>
         </div>,
