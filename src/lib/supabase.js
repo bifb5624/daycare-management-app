@@ -768,7 +768,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
     //   上書きする恐れがあるためマージ対象に含めない (= 従来どおり編集端末の値を採用)。
-    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory'];
+    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory','auditLog'];
     // ★ 削除した記録の墓石(tombstone)を local+cloud で統合。 これが無いと「id単位の和集合マージ」で
     //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
     const localTomb = (localData && localData.deletedIds) || {};
@@ -787,7 +787,10 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       if (isOplogFrozen(k)) { merged[k] = Array.isArray(cloud[k]) ? cloud[k] : (Array.isArray(localData[k]) ? localData[k] : []); return; }
       const tomb = mergedTomb[k] || {};
       const arr = FIELD_MERGE_KEYS.has(k) ? mergeByIdFieldLevel(localData[k], cloud[k]) : mergeById(localData[k], cloud[k]);
-      merged[k] = arr.filter(r => !(r && r.id != null && tomb[String(r.id)]));
+      let _m = arr.filter(r => !(r && r.id != null && tomb[String(r.id)]));
+      // ★ 変更ログは端末間でunion併合されるので肥大しないよう時刻降順で最新300件に制限
+      if (k === 'auditLog') _m = _m.slice().sort((a,b)=>(Number(b&&b.at)||0)-(Number(a&&a.at)||0)).slice(0, 300);
+      merged[k] = _m;
     });
     // ★ 利用者マスタ: 端末間で運動メニュー(規定数値)・送迎時間などが消えないよう、
     //   ローカル基準で「空欄の項目だけ」クラウドの値で補完する (削除は保持: ローカルに無い利用者は復活させない)。

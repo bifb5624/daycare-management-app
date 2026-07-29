@@ -16582,6 +16582,8 @@ export default function App() {
   //   30秒以上古い＝poll が止まっている合図。 通常の編集中は 4秒毎に pull され更新されるので誤検知しない。
   //   ※ 読み取り専用(既存の値を見るだけ)。 同期の書き込み/マージには一切触れない。
   const [syncStale, setSyncStale] = useState(false);
+  const [auditLogOpen, setAuditLogOpen] = useState(false); // ★ 変更ログ(監査)ビューア
+  const [auditLogCat, setAuditLogCat] = useState('全て');  // 変更ログのカテゴリ絞り込み
   useEffect(() => {
     const check = () => {
       const la = lastAppliedAtRef.current || 0;
@@ -17468,6 +17470,47 @@ export default function App() {
     //   古い端末が「1人だけ編集」しても他の全員を最新扱いにしてしまうことはない。
     try {
       const prev = appData || {};
+      // ★ 変更ログ(監査): この保存で変わったカテゴリを「端末名・変更内容・時刻」で最新300件記録する。
+      //   読み取り専用の履歴なので同期のマージには影響しない(union併合)。 保存を壊さないよう try 内で完結。
+      try {
+        const _alNow = syncNow();
+        const _alDev = deviceName || '名称未設定の端末';
+        const _alCats = [
+          ['ticketRecords','提供記録'], ['dailyLogs','日誌'], ['fitnessRecords','体力測定'],
+          ['monitoringRecords','モニタリング'], ['faxHistory','連絡'], ['patients','利用者マスタ'],
+          ['scheduleEvents','スケジュール'], ['tsushoKeikakuRecords','通所計画書'],
+          ['kinouKeikakuRecords','機能訓練計画書'], ['seikatsuKinouRecords','生活機能'],
+          ['systemSettings','各種設定'], ['contactBookConfig','連絡帳設定'],
+        ];
+        const _alEntries = [];
+        _alCats.forEach(([k, cat]) => {
+          if (prev[k] === newData[k]) return;                        // 参照同一=未変更
+          if (prev[k] === undefined && newData[k] === undefined) return;
+          let detail = '';
+          try {
+            if (Array.isArray(newData[k]) && Array.isArray(prev[k])) {
+              const _pm = new Map(prev[k].map(r => [String(r && r.id), r]));
+              const _chg = newData[k].filter(r => r && _pm.get(String(r.id)) !== r);
+              const one = _chg[0];
+              if (one) {
+                const _pn = one.patientId != null ? ((newData.patients || prev.patients || []).find(p => p && p.id === one.patientId)?.name || '') : (one.patientName || '');
+                detail = [_pn, one.date, one.subject].filter(Boolean).join(' ').slice(0, 40);
+                if (_chg.length > 1) detail += ` 他${_chg.length - 1}件`;
+              } else if (newData[k].length !== prev[k].length) {
+                detail = `件数 ${prev[k].length}→${newData[k].length}`;
+              }
+            }
+          } catch {}
+          _alEntries.push({ id: `al_${_alNow}_${k}_${Math.random().toString(36).slice(2, 5)}`, at: _alNow, device: _alDev, cat, detail });
+        });
+        if (_alEntries.length) {
+          const _oldLog = Array.isArray(newData.auditLog) ? newData.auditLog : [];
+          // ★ 直近5件と同一(端末×カテゴリ×内容)は重複記録しない=頻繁なサイレント保存でログが埋まるのを防ぐ
+          const _recent = _oldLog.slice(0, 5);
+          const _fresh = _alEntries.filter(e => !_recent.some(o => o && o.device===e.device && o.cat===e.cat && (o.detail||'')===(e.detail||'')));
+          if (_fresh.length) newData = { ...newData, auditLog: [..._fresh, ..._oldLog].slice(0, 300) };
+        }
+      } catch (e) { console.warn('[auditLog] failed', e); }
       // ★ オブジェクト設定(systemSettings/diarySettings/contactBookConfig)の「変更フィールドだけ」に
       //   _fieldTs[field]=now を刻む共通処理。 function 宣言=巻き上げされるので、以降どこから呼んでもよい。
       function _stampFieldTs(nObj, pObj, now) {
@@ -18375,6 +18418,42 @@ export default function App() {
         </div>,
         document.body
       )}
+      {/* ★ 変更ログ(監査)ビューア: いつ・どの端末で・どのカテゴリを変更したか。 読み取り専用。 */}
+      {auditLogOpen && ReactDOM.createPortal((()=>{
+        const _log = Array.isArray(appData.auditLog) ? appData.auditLog : [];
+        const _cats = ['全て', ...Array.from(new Set(_log.map(e=>e && e.cat).filter(Boolean)))];
+        const _list = _log.filter(e => e && (auditLogCat==='全て' || e.cat===auditLogCat)).slice().sort((a,b)=>(Number(b.at)||0)-(Number(a.at)||0)).slice(0,300);
+        const _fmt = (t)=>{ try { return new Date(Number(t)).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch { return ''; } };
+        return (
+          <div onClick={()=>setAuditLogOpen(false)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:99998,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:20,width:'100%',maxWidth:640,maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+              <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',gap:8}}>
+                <div style={{fontWeight:'bold',color:'#1e293b'}}>📋 変更ログ</div>
+                <div style={{fontSize:11,color:'#94a3b8'}}>いつ・どの端末で・何を変更したか（最新300件）</div>
+                <button onClick={()=>setAuditLogOpen(false)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:8,padding:'4px 10px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>閉じる</button>
+              </div>
+              <div style={{padding:'8px 14px',borderBottom:'1px solid #f1f5f9',display:'flex',gap:6,flexWrap:'wrap'}}>
+                {_cats.map(c=>(
+                  <button key={c} onClick={()=>setAuditLogCat(c)} style={{fontSize:11,fontWeight:'bold',borderRadius:999,padding:'3px 10px',cursor:'pointer',border:'1px solid '+(auditLogCat===c?'#2563eb':'#e2e8f0'),background:auditLogCat===c?'#2563eb':'white',color:auditLogCat===c?'white':'#475569'}}>{c}</button>
+                ))}
+              </div>
+              <div style={{overflowY:'auto',padding:'6px 6px 12px'}}>
+                {_list.length===0 ? <div style={{textAlign:'center',color:'#94a3b8',padding:'32px 0',fontSize:13,fontWeight:'bold'}}>記録はまだありません</div> :
+                  _list.map(e=>(
+                    <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderBottom:'1px solid #f8fafc'}}>
+                      <span style={{fontSize:10,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:6,padding:'2px 7px',whiteSpace:'nowrap'}}>{e.cat}</span>
+                      <div style={{minWidth:0,flex:1}}>
+                        <div style={{fontSize:12,color:'#1e293b',fontWeight:'bold',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.detail || '（更新）'}</div>
+                        <div style={{fontSize:10,color:'#94a3b8'}}>{e.device||'端末不明'}</div>
+                      </div>
+                      <span style={{fontSize:11,color:'#94a3b8',whiteSpace:'nowrap'}}>{_fmt(e.at)}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
       {/* ★ 再読み込み直後の「一瞬データが消えたように見える」を防ぐ読込中オーバーレイ。
           操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。 */}
       {opsLoading && OPLOG_ENABLED && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
@@ -18766,6 +18845,11 @@ export default function App() {
                 </div>
               );
             })()}
+            {/* ★ 変更ログ(監査)ビューアを開くボタン */}
+            <button onClick={()=>setAuditLogOpen(true)} title="いつ・どの端末で・何を変更したかの履歴"
+              className="hidden md:flex items-center gap-1 shrink-0 mr-2 text-[11px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-full px-2.5 py-1 whitespace-nowrap active:scale-95">
+              📋 変更ログ
+            </button>
             {/* ジャンプナビをヘッダー右側に配置。 ★ 狭い画面(スマホ/iPad縦)ではタイトルと重なるため非表示(サイドバーで移動可)。 横長(lg〜)のみ表示 */}
             {['ticket','fitness','master','dash_personal','monitoring'].includes(currentView) && (
               <div className="hidden lg:flex items-center shrink-0">
