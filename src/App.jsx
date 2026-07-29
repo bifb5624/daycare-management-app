@@ -28577,6 +28577,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [newPatientFirst, setNewPatientFirst] = useState('');
   const [newPatientKanaLast, setNewPatientKanaLast] = useState('');
   const [newPatientKanaFirst, setNewPatientKanaFirst] = useState('');
+  const [newPatientStart, setNewPatientStart] = useState('');            // ★ 利用開始日(任意)
+  const [newPatientSched, setNewPatientSched] = useState(['','','','','','','']); // ★ 基本利用日(任意) 曜日ごと ''/AM/PM/1日
   const [careLevelModal, setCareLevelModal] = useState(null); // {newValue, from, to, note, isCostBurden, periodOnly}
   const [cmChangeModal, setCmChangeModal] = useState(null); // {office, name, from, note}
   const [editHistModal, setEditHistModal] = useState(null); // {type, idx, entry}
@@ -31262,9 +31264,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       {newPatientModal && (() => {
         const fullName = `${newPatientLast.trim()} ${newPatientFirst.trim()}`.trim();
         const fullKana = `${newPatientKanaLast.trim()} ${newPatientKanaFirst.trim()}`.trim();
-        // ★ 姓・名・姓ふりがな・名ふりがな すべて必須
-        const canSubmit = !!(newPatientLast.trim() && newPatientFirst.trim() && newPatientKanaLast.trim() && newPatientKanaFirst.trim());
-        const submit = (openDetail = true) => {
+        // ★ 必須は「氏名(姓・名)」のみ。 フリガナ・利用開始日・基本利用日は任意(分かる範囲で)。
+        const canSubmit = !!(newPatientLast.trim() && newPatientFirst.trim());
+        const _clearNew = () => { setNewPatientLast(''); setNewPatientFirst(''); setNewPatientKanaLast(''); setNewPatientKanaFirst(''); setNewPatientStart(''); setNewPatientSched(['','','','','','','']); };
+        // dest: 'service'=サービス提供内容(マスタ編集) / 'facesheet'=フェイスシート手書き / 'none'=一覧に戻る
+        const submit = (dest = 'service') => {
           if (!canSubmit) return;
           // ★ 削除しても番号を戻さない連番 (patientIdSeq)。 前の利用者と同じIDの再利用を防ぐ。
           const newId = Math.max(0, ...(appData.patients||[]).map(p=>p.id), Number(appData.patientIdSeq)||0) + 1;
@@ -31273,23 +31277,23 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             lastName: newPatientLast.trim(), firstName: newPatientFirst.trim(),
             kanaLast: newPatientKanaLast.trim(), kanaFirst: newPatientKanaFirst.trim(),
             status:'利用中', kiou:'', ryui:'',
-            scheduleAmPm:['','','','','','',''], pickupType:'fixed', pickupTimes:['','','','','','',''],
-            startDate:'', endDate:'', autoDeleteAfter5Years:false,
+            // ★ 基本利用日は最初の画面で入れた分を反映(サービス提供内容にそのまま出る)
+            scheduleAmPm: Array.isArray(newPatientSched) ? [...newPatientSched] : ['','','','','','',''],
+            pickupType:'fixed', pickupTimes:['','','','','','',''],
+            startDate: (newPatientStart||'').trim(), endDate:'', autoDeleteAfter5Years:false,
             massageNeed:'通常', onyokuDenryo:'無し', pauseHistory:[],
             plannedExercises:{u1:'',u2:'',u3:'',u4:'',u5:'',u6:'',heikobo:'',fumidai:'',stepper:'',okugai:'',onyoku:''},
             careLevel:'', gender:'', birthDate:'', phone:''
           };
-          // ★ 計画書(3-3)・生活機能チェック(3-2)・興味関心(3-1)の空レコードを自動作成するのは廃止。
-          //   利用者を追加しただけで「その日に作成された記録」が出来てしまい、入力していないのに
-          //   作成済みに見える(＝作成漏れの判断を誤らせる)ため。 各画面の「＋ 新規作成」で作る。
           const _extra = {};
           // ★ B1: 新規追加は保存ボタン不要で即時クラウド保存(自動保存)。 debounce待ちで消えるのを防ぐ。
-          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message: openDetail ? '✓ 利用者を追加しました（続けて詳細情報を入力してください）' : '✓ 利用者を追加しました' });
-          if (openDetail) setEditingPatientId(newId); // ★「完了して詳細情報入力」= そのまま編集画面へ
+          onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message: dest==='none' ? '✓ 利用者を追加しました' : '✓ 利用者を追加しました（続けて詳細を入力してください）' });
           setPatientStatusFilter('利用中');
+          if (dest === 'service') { setEditingPatientId(newId); }
+          else if (dest === 'facesheet') { setEditingPatientId(newId); setPersonalFileModal({ patient: newPat, initialTab: 'cat_1', focus: 'facesheet' }); }
+          // dest==='none' は一覧のまま
           setNewPatientModal(false);
-          setNewPatientLast(''); setNewPatientFirst('');
-          setNewPatientKanaLast(''); setNewPatientKanaFirst('');
+          _clearNew();
         };
         // ★ 縦並びレイアウト + Portal で body 直下 + flex items-start で画面上部に固定表示
         return ReactDOM.createPortal(
@@ -31310,24 +31314,48 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   placeholder="例: 太郎" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-base outline-none focus:border-blue-400"/>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">姓 フリガナ <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">姓 フリガナ <span className="text-slate-400 text-xs font-normal">（任意）</span></label>
                 <KanaInput type="text" value={newPatientKanaLast} onChangeText={v=>setNewPatientKanaLast(v)}
                   onKeyDown={e=>{if(e.nativeEvent.isComposing||e.isComposing) return; if(e.key==='Enter') submit();}}
                   placeholder="タナカ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">名 フリガナ <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">名 フリガナ <span className="text-slate-400 text-xs font-normal">（任意）</span></label>
                 <KanaInput type="text" value={newPatientKanaFirst} onChangeText={v=>setNewPatientKanaFirst(v)}
                   onKeyDown={e=>{if(e.nativeEvent.isComposing||e.isComposing) return; if(e.key==='Enter') submit();}}
                   placeholder="タロウ" className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
+              {/* ★ 利用開始日(任意) */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">利用開始日 <span className="text-slate-400 text-xs font-normal">（任意・分かれば）</span></label>
+                <input type="date" value={newPatientStart} onChange={e=>setNewPatientStart(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
+              </div>
+              {/* ★ 基本利用日(任意): 曜日ごとに 空→AM→PM→1日 で切替。 サービス提供内容にそのまま反映 */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">基本利用日 <span className="text-slate-400 text-xs font-normal">（任意・タップで 空→AM→PM→1日）</span></label>
+                <div className="grid grid-cols-7 gap-1">
+                  {['日','月','火','水','木','金','土'].map((d,i)=>{
+                    const v = newPatientSched[i]||'';
+                    const nx = v===''?'AM':v==='AM'?'PM':v==='PM'?'1日':'';
+                    return (
+                      <button key={i} type="button" onClick={()=>{ const a=[...newPatientSched]; a[i]=nx; setNewPatientSched(a); }}
+                        className={`py-1.5 rounded-lg text-xs font-bold border flex flex-col items-center ${v?'bg-blue-600 text-white border-blue-600':'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
+                        <span>{d}</span><span className="text-[10px] font-normal">{v||'－'}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <div className="flex flex-col gap-2">
-              {/* ★ 追加してそのまま詳細（基本利用日・送迎・運動等）の入力画面へ */}
-              <button disabled={!canSubmit} onClick={()=>submit(true)} className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">完了して詳細情報入力</button>
+              {/* ★ 追加 → フェイスシート(手書き入力)へ */}
+              <button disabled={!canSubmit} onClick={()=>submit('facesheet')} className="w-full py-3 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">完了 → フェイスシートを入力</button>
+              {/* ★ 追加 → サービス提供内容(基本利用日・送迎・運動)へ */}
+              <button disabled={!canSubmit} onClick={()=>submit('service')} className="w-full py-3 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-95">完了 → サービス提供内容を入力</button>
               {/* ★ 名前だけ登録して一覧に戻る（詳細は後で） */}
-              <button disabled={!canSubmit} onClick={()=>submit(false)} className="w-full py-2.5 rounded-xl font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">追加のみ（詳細はあとで）</button>
-              <button onClick={()=>{ setNewPatientModal(false); setNewPatientLast(''); setNewPatientFirst(''); setNewPatientKanaLast(''); setNewPatientKanaFirst(''); }} className="w-full py-2 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200">キャンセル</button>
+              <button disabled={!canSubmit} onClick={()=>submit('none')} className="w-full py-2.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95">追加のみ（詳細はあとで）</button>
+              <button onClick={()=>{ setNewPatientModal(false); _clearNew(); }} className="w-full py-2 rounded-xl font-bold text-slate-400 hover:bg-slate-100">キャンセル</button>
             </div>
           </div>
         </div>,
