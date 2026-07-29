@@ -17790,7 +17790,12 @@ export default function App() {
           const pf = p.personalFile || {};
           for (const f of (pf.files || [])) await migFile(f, `pf/${p.id}`);
           const fs = pf.faceSheet || {};
-          for (const k of ['genogramFiles','floorPlanFiles','pickupRouteFiles']) for (const a of (fs[k] || [])) await migFile(a, `fs/${p.id}`);
+          // ★ フェイスシート添付(原本/ラベル付き含む)を全て Storage へ(faceSheetFiles/labeledFiles の移行漏れを解消)
+          for (const k of ['genogramFiles','floorPlanFiles','pickupRouteFiles','faceSheetFiles','labeledFiles']) for (const a of (fs[k] || [])) await migFile(a, `fs/${p.id}`);
+          // ★ アセスメントシートの添付も Storage へ
+          for (const a of ((pf.assessment && pf.assessment.files) || [])) await migFile(a, `pf/${p.id}`);
+          // ★ 担当者会議の添付も Storage へ
+          for (const m of (pf.meetings || [])) for (const a of ((m && m.files) || [])) await migFile(a, `pf/${p.id}`);
           // 旧書類 (保険証/負担割合証/お薬手帳/その他) も Storage へ
           for (const k of ['docInsurance','docBurden','medicationImages','docOther']) for (const d of (p[k] || [])) await migFile(d, `pf/${p.id}`);
         }
