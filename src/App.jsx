@@ -31331,13 +31331,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 <input type="date" value={newPatientStart} onChange={e=>setNewPatientStart(e.target.value)}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-300 rounded-xl text-base outline-none focus:border-blue-400"/>
               </div>
-              {/* ★ 基本利用日(任意): 曜日ごとに 空→AM→PM→1日 で切替。 サービス提供内容にそのまま反映 */}
+              {/* ★ 基本利用日(任意): 半日型のため AM/PM のみ。 曜日ごとに 空→AM→PM→空 で切替。 サービス提供内容にそのまま反映 */}
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1.5">基本利用日 <span className="text-slate-400 text-xs font-normal">（任意・タップで 空→AM→PM→1日）</span></label>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">基本利用日 <span className="text-slate-400 text-xs font-normal">（任意・タップで 空→AM→PM）</span></label>
                 <div className="grid grid-cols-7 gap-1">
                   {['日','月','火','水','木','金','土'].map((d,i)=>{
                     const v = newPatientSched[i]||'';
-                    const nx = v===''?'AM':v==='AM'?'PM':v==='PM'?'1日':'';
+                    const nx = v===''?'AM':v==='AM'?'PM':'';
                     return (
                       <button key={i} type="button" onClick={()=>{ const a=[...newPatientSched]; a[i]=nx; setNewPatientSched(a); }}
                         className={`py-1.5 rounded-lg text-xs font-bold border flex flex-col items-center ${v?'bg-blue-600 text-white border-blue-600':'bg-slate-50 text-slate-500 border-slate-300 hover:bg-slate-100'}`}>
