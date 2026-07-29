@@ -31297,8 +31297,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         };
         // ★ 縦並びレイアウト + Portal で body 直下 + flex items-start で画面上部に固定表示
         return ReactDOM.createPortal(
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-10">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-10 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 max-h-[85vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-800 mb-5 text-center">新規利用者の追加</h3>
             <div className="space-y-3 mb-5">
               <div>
