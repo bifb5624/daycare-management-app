@@ -9672,10 +9672,13 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
                 timeStr = _facPickup(ampmStr) || (ampmStr === "AM" ? "8時" : "13時");
             }
             // flexible(送迎時間タイプ=柔軟)は「　時　分」のまま
-            return { date: `${nextDate.getMonth()+1}月${nextDate.getDate()}日（${dayNames[dayOfWeek]}）`, time: timeStr };
+            // ★ 次回が振替/臨時なら isFurikae=true。 表示側は振替の送迎時間を「常に自動計算」にし、
+            //   過去に手入力した値が残って別区分でも同じ時刻になる事故を防ぐ。
+            const isFurikae = (_recStatus === '振替' || _recStatus === '臨時');
+            return { date: `${nextDate.getMonth()+1}月${nextDate.getDate()}日（${dayNames[dayOfWeek]}）`, time: timeStr, isFurikae };
         }
     }
-    return { date: "未定", time: "　時　分" };
+    return { date: "未定", time: "　時　分", isFurikae: false };
 };
 
 // ★ 厚労省バイタルサイン基準値に合わせた色判定 (正常値は黒)
@@ -27256,12 +27259,17 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
       const info = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
       nextDateDisplay = info.date;
   }
-  // 時間: nextTimeOverrideがあればそれ（空でも）、なければ自動取得
-  if (record.nextTimeOverride !== undefined && record.nextTimeOverride !== null) {
-      nextTimeDisplay = record.nextTimeOverride || "　時　分";
-  } else {
+  // 時間: 次回が【振替/臨時】なら常に自動計算(過去の手入力を無視=区分に合った8時/13時)。
+  //   通常の次回は手入力(nextTimeOverride)を優先し、無ければ自動計算。
+  {
       const info2 = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
-      nextTimeDisplay = info2.time || "　時　分";
+      if (info2.isFurikae) {
+          nextTimeDisplay = info2.time || "　時　分";
+      } else if (record.nextTimeOverride !== undefined && record.nextTimeOverride !== null) {
+          nextTimeDisplay = record.nextTimeOverride || "　時　分";
+      } else {
+          nextTimeDisplay = info2.time || "　時　分";
+      }
   }
 
   const ex = record.exercises || {};
