@@ -40,7 +40,7 @@ export function syncLog(ev, detail) {
 export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
 export function clearSyncLog() { try { localStorage.removeItem(_SYNCLOG_KEY); } catch {} }
 // ★ 操作ログ方式へ移行済みのキー。 巨大JSON側では読み取り専用(スナップショット)として扱う。
-export const OPLOG_FROZEN_KEYS = new Set([]);  // ★凍結解除: ticketRecords も巨大JSONで通常マージ
+export const OPLOG_FROZEN_KEYS = new Set(['ticketRecords']);  // ★テーブル方式: 提供記録は巨大JSONでマージせず(綱引き防止)、テーブルを正とする
 // ★★ 自己検証つき切替【重要な安全装置】
 //   凍結(巨大JSONへの保存を止めること)は、「この端末の操作ログが実際にサーバーへ届いた」ことを
 //   確認できて初めて有効になる。 一度も届いていない間は従来どおり巨大JSONへ保存し続けるので、
