@@ -17490,7 +17490,15 @@ export default function App() {
           try {
             if (Array.isArray(newData[k]) && Array.isArray(prev[k])) {
               const _pm = new Map(prev[k].map(r => [String(r && r.id), r]));
-              const _chg = newData[k].filter(r => r && _pm.get(String(r.id)) !== r);
+              // ★ 参照ではなく「中身(JSON)が実際に変わった記録」だけを数える。 テーブル方式では同期のたびに
+              //   配列が作り直され参照が変わるため、参照比較だと未変更の記録まで「他N件」と過大カウントされる。
+              const _chg = newData[k].filter(r => {
+                if (!r) return false;
+                const _o = _pm.get(String(r.id));
+                if (_o === r) return false;   // 参照同一 = 未変更
+                if (!_o) return true;          // 新規
+                try { return JSON.stringify(_o) !== JSON.stringify(r); } catch { return true; }
+              });
               const one = _chg[0];
               if (one) {
                 const _pn = one.patientId != null ? ((newData.patients || prev.patients || []).find(p => p && p.id === one.patientId)?.name || '') : (one.patientName || '');
