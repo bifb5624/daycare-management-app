@@ -17747,6 +17747,13 @@ export default function App() {
             //   他端末で入力済みの血圧/体温(AM/PM)を空で上書きして消してしまうため。
             //   ※ 実際に値がある→空(値→'')の削除は下の比較で chg=true になり、従来どおり反映される。
             const _emptyN = (_nv == null || _nv === ''), _emptyO = (_ov == null || _ov === '');
+            // ★ 臨床項目(体温/血圧/脈 の *_AM/*_PM・プレーン, 通所/帰宅の気分)は、下書き(localPatients)の
+            //   欠落や再seedの遅延で「値→空」に化けることがある。 これを暗黙保存で「意図的クリア」として刻むと、
+            //   他端末の完全データを空で潰し、その空が新しい時刻で全端末へ逆流する(部分が完全を潰す)重大事故になる。
+            //   → 暗黙保存では臨床項目の空は刻まない(=削除しない)。 非空優先マージが値を守る。
+            //   意図的なクリアは明示操作(元に戻す 等)で行う(そちらは全項目を刻んで反映する別経路)。
+            const _clinicalK = /^(temp|bpUpSt|bpDnSt|bpUpEn|bpDnEn|plSt|plEn)(_|$)/.test(k) || k === 'kibunArrival' || k === 'kibunDeparture';
+            if (_clinicalK && _emptyN) return;
             let chg;
             if (_emptyN && _emptyO) chg = false;
             else { try { chg = JSON.stringify(_nv) !== JSON.stringify(_ov); } catch { chg = true; } }
