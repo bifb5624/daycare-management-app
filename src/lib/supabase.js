@@ -415,7 +415,21 @@ function _casBackoff(attempt) {
 //   ★ 競合判定は「返り行0件」で行う(JS側で version を比較して書く構造にはしない)。 0件=他端末が先に更新済み
 //     → バックオフして①から再取得・再mutate・再試行(最大 opts.maxRetries 回, 既定5)。 上限で {ok:false}。
 //   ★ 応答ロス→再試行での二重適用は、呼び出し側 mutate を「ID冪等」にして防ぐ(同IDが既存なら追加しない)。
+// ★ 同一店舗(key)のCAS書き込みを直列化(同時に1本だけ)。
+//   主保存経路が「全715件push」を短時間に複数撃つと、それらが自分同士でCAS衝突し、
+//   リトライ上限超過(conflict-retries-exhausted = push-fail)で保存が失敗していた(今回の凍結の直接原因)。
+//   関門をここ1箇所に絞り、前のCASが完了してから次を実行することで自己衝突を根絶する。
+//   各CASは実行時に最新versionを取り直して再mutateするので、直列化しても内容は最新・正しい。
+const _casChain = new Map(); // key -> Promise(直近CASの完了)
 async function supabaseCasUpdate(key, mutate, opts = {}) {
+  if (!supabase || !key) return { ok: false, reason: 'no-supabase' };
+  const prev = _casChain.get(key) || Promise.resolve();
+  const next = prev.then(() => _casUpdateInner(key, mutate, opts),
+                         () => _casUpdateInner(key, mutate, opts)); // 前が失敗しても次は必ず実行
+  _casChain.set(key, next.catch(() => {}));   // 鎖として保持(未処理rejectを出さない)。呼び出し側へは next をそのまま返す
+  return next;
+}
+async function _casUpdateInner(key, mutate, opts = {}) {
   if (!supabase || !key) return { ok: false, reason: 'no-supabase' };
   const MAX = (opts.maxRetries != null) ? opts.maxRetries : 5;
   for (let attempt = 0; attempt <= MAX; attempt++) {
