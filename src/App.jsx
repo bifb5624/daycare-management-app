@@ -1051,6 +1051,97 @@ const getActiveRecorderName = () => {
 const recMatchesDateYear = (r, dateStr, year) =>
   r && r.date === dateStr && (r.year == null || year == null || r.year === year);
 
+// ★ 提供記録の「項目単位マージ」。 保存(push)側 mergeRecordFields と対称のロジックを移植(sync_merge_test.py 11/11 検証済)。
+//   巨大JSON取り込み(pull)は従来「記録を丸ごと単位で _savedAt が新しい方」を採用していたため、
+//   端末ローカルが「一部項目だけ・でも時刻は新しい」部分記録を持つと、クラウドの完全記録を丸ごと捨て、
+//   他端末が入れた項目(下の血圧/脈/気分等)を画面から落とす不具合(=消えたように見える)があった。
+//   これを cloud(a) と local(b) の非空を両取りする項目単位マージに統一して解消する。
+//   ・スカラーで _fieldTs があれば新しい方(意図的な空=削除も反映)。 バイタルは「明示クリアが厳密に新しい」時だけ空を反映。
+//   ・オブジェクト(exercises等)はキー単位で非空優先マージ。
+//   ・上記以外の空↔非空は非空を優先(事故的な空欄で入力を消さない)。
+const _MRF_VITAL_RE = /^(temp|bpUpSt|bpDnSt|bpUpEn|bpDnEn|plSt|plEn)(_|$)/;
+const _MRF_FTS_EXCL = new Set(['nextDateOverride','nextTimeOverride','actualTime','temp','bpUpSt','bpDnSt','bpUpEn','bpDnEn','plSt','plEn']);
+const _MRF_PLAIN_VITALS = ['temp','bpUpSt','bpDnSt','plSt','bpUpEn','bpDnEn','plEn'];
+const _mrfEmpty = (v) => v == null || v === '';
+const _mrfNum = (v) => { if (v == null || v === '') return 0; const n = Number(v); return isNaN(n) ? 0 : n; };
+const mergeRecFields = (a, b) => {
+  if (!a) return b; if (!b) return a;
+  const at = _mrfNum(a._savedAt), bt = _mrfNum(b._savedAt);
+  const aNewer = at >= bt;
+  const aFts = (a._fieldTs && typeof a._fieldTs === 'object') ? a._fieldTs : {};
+  const bFts = (b._fieldTs && typeof b._fieldTs === 'object') ? b._fieldTs : {};
+  const out = {};
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  keys.forEach(k => {
+    if (k === '_savedAt' || k === '_fieldTs') return;
+    const av = a[k], bv = b[k];
+    const aObj = av && typeof av === 'object' && !Array.isArray(av);
+    const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
+    // _fieldTs 短絡(除外項目でなく、両方オブジェクトでない)
+    if (!_MRF_FTS_EXCL.has(k) && !aObj && !bObj) {
+      const aft = _mrfNum(aFts[k]), bft = _mrfNum(bFts[k]);
+      if (aft || bft) {
+        if (_MRF_VITAL_RE.test(k)) {
+          const ae = _mrfEmpty(av), be = _mrfEmpty(bv);
+          if (ae !== be) {
+            const emptyFt = ae ? aft : bft, fullFt = ae ? bft : aft;
+            if (emptyFt > fullFt) { out[k] = ae ? av : bv; return; } // 明示クリアが新しい→クリア反映
+            out[k] = ae ? bv : av; return;                          // それ以外→非空を守る
+          }
+        }
+        out[k] = (aft >= bft) ? av : bv; return;
+      }
+    }
+    // 次回予定: 空欄=未設定(自動計算)であり明示削除と区別できない→非空を無条件優先
+    if (k === 'nextDateOverride' || k === 'nextTimeOverride') {
+      const ae = _mrfEmpty(av), be = _mrfEmpty(bv);
+      if (ae && be) { out[k] = av; return; }
+      if (ae !== be) { out[k] = ae ? bv : av; return; }
+      out[k] = aNewer ? av : bv; return;
+    }
+    // オブジェクト(exercises等)はキー単位マージ
+    if (aObj || bObj) {
+      const ao = aObj ? av : {}, bo = bObj ? bv : {};
+      const older = aNewer ? bo : ao, newer = aNewer ? ao : bo;
+      const newerStrict = aNewer ? (at > bt) : (bt > at);
+      const mo = { ...older };
+      Object.keys(newer).forEach(kk => {
+        if (!_mrfEmpty(newer[kk])) mo[kk] = newer[kk];
+        else if (newerStrict) mo[kk] = newer[kk];
+        else if (!(kk in mo)) mo[kk] = newer[kk];
+      });
+      out[k] = mo; return;
+    }
+    // スカラー 空↔非空
+    const aE = _mrfEmpty(av), bE = _mrfEmpty(bv);
+    if (aE && bE) { out[k] = av; return; }
+    if (aE !== bE) {
+      if (!_MRF_VITAL_RE.test(k)) {
+        const newerIsEmpty = aNewer ? aE : bE;
+        const newerStrict = aNewer ? (at > bt) : (bt > at);
+        if (newerIsEmpty && newerStrict) { out[k] = aNewer ? av : bv; return; } // 非バイタルの明示クリア(新しい)は反映
+      }
+      out[k] = aE ? bv : av; return; // それ以外は非空を守る
+    }
+    out[k] = aNewer ? av : bv;
+  });
+  out._savedAt = Math.max(at, bt);
+  const mf = {};
+  new Set([...Object.keys(aFts), ...Object.keys(bFts)]).forEach(k => {
+    const t = Math.max(_mrfNum(aFts[k]), _mrfNum(bFts[k])); if (t) mf[k] = t;
+  });
+  if (Object.keys(mf).length) out._fieldTs = mf;
+  // プレーンバイタル射影(temp 等を *_AM/*_PM から)
+  if (_MRF_PLAIN_VITALS.some(f => (f + '_AM') in out || (f + '_PM') in out)) {
+    _MRF_PLAIN_VITALS.forEach(f => {
+      const am = out[f + '_AM'], pm = out[f + '_PM'];
+      if (am == null && pm == null) return;
+      out[f] = (!_mrfEmpty(am)) ? am : (!_mrfEmpty(pm) ? pm : '');
+    });
+  }
+  return out;
+};
+
 // === アドオン(オプション機能) ===
 // 本部(super_admin)が店舗ごとに ON/OFF。 店舗データの systemSettings.addons に保存。
 const ADDONS = [
@@ -16845,16 +16936,21 @@ export default function App() {
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
               const map = new Map();
               (Array.isArray(merged.ticketRecords) ? merged.ticketRecords : []).forEach(r => { if (r) map.set(keyOf(r), r); });
-              let _preserved = 0, _missing = 0;
+              let _preserved = 0, _missing = 0, _enriched = 0;
               prev.ticketRecords.forEach(r => {
                 if (!r) return;
                 if (r.id != null && tomb[String(r.id)]) return;
                 const k = keyOf(r), ex = map.get(k);
                 if (!ex) { map.set(k, r); _preserved++; _missing++; return; }
-                if ((Number(r._savedAt)||0) > (Number(ex._savedAt)||0)) { map.set(k, r); _preserved++; }
+                // ★ 丸ごと置換(_savedAt比較)をやめ、項目単位マージ(保存側 mergeRecordFields と対称)にする。
+                //   cloud(ex)とlocal(r)の非空を両取りする → 「localが一部項目だけ・でも時刻は新しい」時に
+                //   他端末が入れた項目(下の血圧/脈/気分等)を丸ごと捨てて表示から落とす不具合を解消。
+                const _mg = mergeRecFields(ex, r);
+                let _diff; try { _diff = JSON.stringify(_mg) !== JSON.stringify(ex); } catch { _diff = true; }
+                if (_diff) { map.set(k, _mg); _preserved++; _enriched++; }
               });
               if (_preserved > 0) merged.ticketRecords = [...map.values()];
-              if (_missing > 0) _mergedForPush = merged;
+              if (_missing > 0 || _enriched > 0) _mergedForPush = merged;
             } catch (e) { console.warn('[pull merge] ticketRecords failed', e); }
           }
           // ★★ 提供記録以外の記録配列(体力測定・モニタリング・日誌・計画書・スケジュール等)も
