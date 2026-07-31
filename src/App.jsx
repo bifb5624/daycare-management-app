@@ -16666,6 +16666,7 @@ export default function App() {
     // テーブルの行を appData.ticketRecords へ反映する。 手元の入力は空で消さない(非空優先マージ)。
     const applyRows = (items) => {
       if (stopped || !items || !items.length) return;
+      syncLog('rows-apply', { n: items.length });   // ★診断: テーブルから受信して手元へ反映開始
       setAppData(prev => {
         const map = new Map((Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).map(r => [String(r.id), r]));
         let changed = false;
@@ -16710,7 +16711,7 @@ export default function App() {
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length });
+        syncLog('table-initial', { n: rows.length, v: 2 });   // v:2 = _fieldTs対応ビルドの目印
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
         syncLog('table-initial-error', { err: String((e && e.message) || e).slice(0, 120) });
@@ -19360,7 +19361,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     //     「他端末の更新が下書きに反映されない＝再読込しないと同期しない」「古い下書きが自動保存で新しい時刻付きで
     //     push され他端末の入力を上書き」という重大な同期不具合になったため、dirty のみに戻す。
     //   日付が変わった時は必ず作り直す(前の日の編集中フラグが残って表示人数がおかしくなるのを防ぐ)。
-    if (!_dateChanged && dirtyRef?.current) return;
+    if (!_dateChanged && dirtyRef?.current) { if (TABLE_ENABLED) syncLog('seed-skip-dirty', {}); return; }
     const dayOfWeek = new Date(selectedDate).getDay();
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
@@ -19494,6 +19495,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          // 同じステータス内では あいうえお順 (kana)
          return (a.kana || '').localeCompare(b.kana || '', 'ja');
       });
+    if (TABLE_ENABLED) syncLog('seed', { n: filtered.length });   // ★診断: 画面(localPatients)を作り直した
     setLocalPatients(filtered);
     // 月全体表示用：選択月のレコードのみ保持してメモリ節約
     const selM2 = new Date(selectedDate).getMonth() + 1;
@@ -19594,6 +19596,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       Object.keys(r).forEach(k => { if (k !== '_savedAt' && k !== '_fieldTs' && k !== 'id') _fts[k] = _rnow; });
       return { ...r, _savedAt: _rnow, _fieldTs: _fts };
     }); // 復元＝全項目を最新として保存(他端末にも反映・削除フラグに勝つ)
+    syncLog('restore', { n: restored.length, t: snap.t });   // ★診断: 元に戻すを実行した
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
     // ★ 復元は「編集中(dirty)」でも必ず画面へ反映させる。 dirtyRef を落とさないと、
     //   再seedエフェクトのガード(!_dateChanged && dirtyRef)で localPatients が作り直されず、
