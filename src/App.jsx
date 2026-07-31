@@ -16836,10 +16836,18 @@ export default function App() {
         let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
+          // ★★ テーブル方式ON かつ この端末がテーブルを読めている間、pull は提供記録に一切触らない。
+          //   ticket_records テーブルが唯一の正であり、巨大JSON側は凍結スナップショット(古い)。
+          //   ここで触ると「テーブルで取り込んだ最新表示を、pull の古い凍結コピーが上書きする」レースになり、
+          //   前回カットオーバーの『再読み込みで一部しか表示されない』を引き起こした。 根本から断つ。
+          //   (テーブルが読めない端末は readable=false のまま → 従来どおり下の巨大JSONマージ=安全なフォールバック)
+          if (TABLE_ENABLED && oplogState.readable && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+            merged.ticketRecords = prev.ticketRecords;   // テーブル由来の手元をそのまま維持(巨大JSONの凍結コピーは無視)
+          }
           // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/
           //   端末内が新しい(=まだpushされていない)記録」を保持して消えないようにする。
           //   墓石(削除済み)は復活させない。 patient+日付+年 で突き合わせ。
-          if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
               const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
@@ -18468,8 +18476,10 @@ export default function App() {
         );
       })(), document.body)}
       {/* ★ 再読み込み直後の「一瞬データが消えたように見える」を防ぐ読込中オーバーレイ。
-          操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。 */}
-      {opsLoading && OPLOG_ENABLED && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
+          テーブル/操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。
+          ※ 従来 OPLOG_ENABLED のみでゲートしていたため、テーブル方式では一度も表示されず
+            「再読み込み後の数秒間、データが無いように見える」原因になっていた。 */}
+      {opsLoading && (TABLE_ENABLED || OPLOG_ENABLED) && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
         <div style={{position:'fixed',inset:0,zIndex:2000003,background:'rgba(255,255,255,0.92)',
           display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14}}>
           <div style={{width:46,height:46,border:'5px solid #d7e3c4',borderTopColor:'#7daa3d',borderRadius:'50%',animation:'tsumugiSpin 0.9s linear infinite'}}/>
