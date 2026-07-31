@@ -16629,16 +16629,38 @@ export default function App() {
     const storeId = staffSession.storeId;
     let stopped = false, unsubscribe = null;
 
-    // ★ 非空優先マージ: 受信した行(テーブル)の「入っている項目だけ」を手元へ反映する。
-    //   テーブルの空項目で手元の入力を消さない。 exercises 等のオブジェクトはキー単位で同様に統合。
-    const _mergeNonEmpty = (base, incoming) => {
-      const out = { ...(base || {}) };
-      Object.keys(incoming || {}).forEach(k => {
+    // ★ 項目単位・時刻つきマージ: 受信した行(incoming=テーブル)と手元(base)を項目ごとに比較する。
+    //   ・_fieldTs(項目の更新時刻)が新しい方を採用 → 「意図的に空にした(明示クリア)」も他端末へ伝わる。
+    //     旧実装(非空優先のみ)は空を絶対に適用しなかったため、削除・元に戻す(復元)が他端末に反映されず、
+    //     手元に残った古い値が次の保存で復活する(体温を触ると気分・運動が蘇る)不具合の根本原因だった。
+    //   ・時刻が無い/同じ場合は従来どおり非空を優先(事故的な空欄で入力を消さない=安全側)。
+    //   ・オブジェクト(exercises等)は時刻が新しい側を丸ごと採用(○の削除も反映)。時刻不明ならキー単位で非空統合。
+    const _mergeRecTs = (base, incoming) => {
+      const b = base || {}, inc = incoming || {};
+      const bF = (b._fieldTs && typeof b._fieldTs === 'object') ? b._fieldTs : {};
+      const iF = (inc._fieldTs && typeof inc._fieldTs === 'object') ? inc._fieldTs : {};
+      const out = { ...b };
+      Object.keys(inc).forEach(k => {
         if (k === 'id' || k === '_savedAt' || k === '_fieldTs') return;
-        const iv = incoming[k];
-        if (iv && typeof iv === 'object' && !Array.isArray(iv)) out[k] = _mergeNonEmpty(out[k] || {}, iv);
-        else if (iv !== undefined && iv !== '') out[k] = iv;
+        const iv = inc[k], bv = b[k];
+        const ift = Number(iF[k]) || 0, bft = Number(bF[k]) || 0;
+        const iObj = iv && typeof iv === 'object' && !Array.isArray(iv);
+        const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
+        if (iObj || bObj) {
+          if (ift > bft) { out[k] = iv; return; }                 // 受信が新しい→丸ごと採用(削除も反映)
+          if (bft > ift) return;                                   // 手元が新しい→維持
+          const m = { ...(bObj ? bv : {}) };                       // 時刻不明→キー単位で非空統合(安全側)
+          Object.keys(iObj ? iv : {}).forEach(kk => { const v2 = iv[kk]; if (v2 !== undefined && v2 !== '') m[kk] = v2; else if (!(kk in m)) m[kk] = v2; });
+          out[k] = m; return;
+        }
+        if (ift > bft) { out[k] = iv; return; }                    // 新しい方が勝つ(明示クリア含む)
+        if (bft > ift) return;                                      // 手元が新しい→維持
+        if (iv !== undefined && iv !== '') out[k] = iv;             // 時刻不明→非空優先(従来どおり)
       });
+      // _fieldTs はキー単位で大きい方を保持(次のマージ判定に使う)
+      const mf = { ...bF };
+      Object.keys(iF).forEach(k => { const t = Number(iF[k]) || 0; if (t > (Number(mf[k]) || 0)) mf[k] = t; });
+      if (Object.keys(mf).length) out._fieldTs = mf;
       return out;
     };
     // テーブルの行を appData.ticketRecords へ反映する。 手元の入力は空で消さない(非空優先マージ)。
@@ -16653,7 +16675,7 @@ export default function App() {
           if (deleted) return;   // ★ 削除は当面反映しない(データ消失防止)。 誤削除が全端末へ伝播するのを止める
           const ex = map.get(id);
           if (!ex) { map.set(id, rec); changed = true; return; }
-          const m = _mergeNonEmpty(ex, rec);
+          const m = _mergeRecTs(ex, rec);
           m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(rec._savedAt) || 0);
           let differs; try { differs = JSON.stringify(m) !== JSON.stringify(ex); } catch { differs = true; }
           if (differs) { map.set(id, m); changed = true; }
@@ -16680,7 +16702,7 @@ export default function App() {
             if (!lr || lr.id == null) return;
             const ex = map.get(String(lr.id));
             if (!ex) { map.set(String(lr.id), lr); return; }
-            const m = _mergeNonEmpty(ex, lr);      // 手元(lr)の非空を優先で上書き
+            const m = _mergeRecTs(ex, lr);         // 手元(lr)を項目時刻つきで重ねる(新しい方が勝つ)
             m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(lr._savedAt) || 0);
             map.set(String(lr.id), m);
           });
