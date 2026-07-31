@@ -16692,6 +16692,7 @@ export default function App() {
         const rows = await fetchTicketRecords(storeId);
         if (stopped) return;
         oplogState.readable = true;
+        oplogState.tableFailed = false;   // テーブルが読めた → 凍結・pullガードを継続
         markOplogWritable();
         _lastTblSyncRef.current = rows.reduce((m, r) => { const t = r._savedAt ? new Date(r._savedAt).toISOString() : null; return (t && (!m || t > m)) ? t : m; }, null);
         setAppData(prev => {
@@ -16714,6 +16715,7 @@ export default function App() {
         syncLog('table-initial', { n: rows.length, v: 2 });   // v:2 = _fieldTs対応ビルドの目印
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
+        oplogState.tableFailed = true;   // ★ 凍結・pullガードを解除し、巨大JSONの従来マージで安全に継続する
         syncLog('table-initial-error', { err: String((e && e.message) || e).slice(0, 120) });
         setOpsLoading(false);
       }
@@ -16863,8 +16865,11 @@ export default function App() {
           //   ticket_records テーブルが唯一の正であり、巨大JSON側は凍結スナップショット(古い)。
           //   ここで触ると「テーブルで取り込んだ最新表示を、pull の古い凍結コピーが上書きする」レースになり、
           //   前回カットオーバーの『再読み込みで一部しか表示されない』を引き起こした。 根本から断つ。
-          //   (テーブルが読めない端末は readable=false のまま → 従来どおり下の巨大JSONマージ=安全なフォールバック)
-          if (TABLE_ENABLED && oplogState.readable && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          //   ★ ガードは「起動直後から」効かせる(oplogState.readable=テーブル読込完了を待たない)。
+          //     待つ実装だと、起動〜読込完了までの数秒間に pull が走った場合、凍結時点の古い巨大JSONが
+          //     提供記録を丸ごと置き換え「再読込でデータが消え、1行ずつしか戻らない」事故になる(実ログで確認済)。
+          //     テーブル初回読込が失敗した端末だけ tableFailed=true になり、従来マージへフォールバックする。
+          if (TABLE_ENABLED && !oplogState.tableFailed && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             merged.ticketRecords = prev.ticketRecords;   // テーブル由来の手元をそのまま維持(巨大JSONの凍結コピーは無視)
           }
           // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/

@@ -53,13 +53,20 @@ export const oplogState = {
   //  クラウドの古いスナップショットで上書きされて消える)
   writable: (() => { try { return localStorage.getItem('tsumugiOplogMode') === '1'; } catch { return false; } })(),
   readable: false,
+  // ★ テーブル(ticket_records)の初回読込が「失敗した」ときだけ true。 true の間は凍結を解除し、
+  //   従来の巨大JSON方式にフォールバックする(テーブルが読めない端末でも記録が流れ続けるように)。
+  tableFailed: false,
 };
 export function markOplogWritable() {
   if (oplogState.writable) return;
   oplogState.writable = true;
   try { localStorage.setItem('tsumugiOplogMode', '1'); } catch {}
 }
-export const isOplogFrozen = (key) => oplogState.writable && OPLOG_FROZEN_KEYS.has(key);
+// ★ 凍結は「起動直後から」効かせる(テーブル読込の完了を待たない)。
+//   旧実装(writable待ち)は、起動〜テーブル読込完了までの数秒間に巨大JSONへの書込/取込が走り、
+//   7/30凍結時点の古いスナップショットが提供記録を丸ごと上書きする穴になっていた。
+//   テーブル初回読込が失敗した端末だけ凍結を解除(tableFailed)し、従来方式で安全に継続する。
+export const isOplogFrozen = (key) => OPLOG_FROZEN_KEYS.has(key) && !oplogState.tableFailed;
 const _CLOCK_KEY = 'tsumugiClockOffset';
 let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
 // 同期用の現在時刻。 _savedAt / _fieldTs / _updatedAt は必ずこれを使う。
