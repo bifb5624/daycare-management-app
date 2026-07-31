@@ -19495,7 +19495,15 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          // 同じステータス内では あいうえお順 (kana)
          return (a.kana || '').localeCompare(b.kana || '', 'ja');
       });
-    if (TABLE_ENABLED) syncLog('seed', { n: filtered.length });   // ★診断: 画面(localPatients)を作り直した
+    // ★診断: 画面(localPatients)を作り直した。 rec=appData内の当日記録数 / dat=うち実データ入りの数。
+    //   「画面が空なのに rec/dat が多い」=表示の問題、「dat が少ない」=そもそもデータが端末に無い、を切り分ける。
+    if (TABLE_ENABLED) { try {
+      const _ds2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
+      const _yr2 = new Date(selectedDate).getFullYear();
+      const _dayRecs = (appData.ticketRecords||[]).filter(r=>r&&recMatchesDateYear(r,_ds2,_yr2));
+      const _dat = _dayRecs.filter(r=>r.temp_AM||r.temp_PM||r.bpUpSt_AM||r.bpUpSt_PM||r.massage||r.kibunArrival||r.kibunDeparture||(r.exercises&&Object.keys(r.exercises).length)).length;
+      syncLog('seed', { n: filtered.length, rec: _dayRecs.length, dat: _dat });
+    } catch { syncLog('seed', { n: filtered.length }); } }
     setLocalPatients(filtered);
     // 月全体表示用：選択月のレコードのみ保持してメモリ節約
     const selM2 = new Date(selectedDate).getMonth() + 1;
@@ -21061,11 +21069,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <div className="p-3 overflow-y-auto">
                 {snaps.length===0 ? <div className="text-center text-slate-400 font-bold py-8 text-sm">この日の保存履歴はまだありません</div> :
                   snaps.map((s,i)=>{
-                    const chg = _snapChanges(s.recs, snaps[i+1]?.recs || []); // 直前(古い)との差分
+                    // ★ 最古の履歴は「比較する直前」が無く、全員(欠席・休止の既存状態まで)が差分扱いになって
+                    //   「(状態・特記) 他17名」等の無意味な表示になるため、差分計算せず「最初の保存」とだけ出す。
+                    const _isOldest = i === snaps.length - 1;
+                    const chg = _isOldest ? [] : _snapChanges(s.recs, snaps[i+1]?.recs || []); // 直前(古い)との差分
                     // ★ 「氏名（項目・項目）」で最大3名分。 それ以上は「他◯名」。
                     const chgLabel = chg.length
                       ? (chg.slice(0,3).map(c=>`${c.name}（${c.fields.slice(0,4).join('・')}${c.fields.length>4?' 他':''}）`).join(' / ') + (chg.length>3?` 他${chg.length-3}名`:''))
-                      : (i===snaps.length-1?'最初の保存':'変更なし');
+                      : (_isOldest?'この日の最初の保存':'変更なし');
                     return (
                     <button key={s.t} onClick={()=>{ if(window.confirm(`${_fmtT(s.t)} 時点の記録（入力あり${_cntData(s.recs)}名）に戻します。よろしいですか？`)) _restoreRecSnap(s); }}
                       className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-start justify-between gap-2 active:scale-[0.99]">
