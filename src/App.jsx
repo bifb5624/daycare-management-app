@@ -19582,7 +19582,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       nextDateOverride:'次回利用日', nextTimeOverride:'次回お迎え時間', actualTime:'提供時間' };
     const results = [];
     (newerRecs||[]).forEach(r=>{
-      if(!r) return; const o=om[r.patientId]||{};
+      if(!r) return; const _hasOld=!!om[r.patientId]; const o=om[r.patientId]||{};
       const changed = [];
       Object.keys(LBL).forEach(k=>{ if((r[k]||'')!==(o[k]||'') && !changed.includes(LBL[k])) changed.push(LBL[k]); });
       const ce=r.exercises||{}, oe=o.exercises||{};
@@ -19591,6 +19591,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         const sv=(oe[k]&&typeof oe[k]==='object')?(oe[k].value||''):(oe[k]||'');
         if(cv!==sv){ const nm=_exName(k); if(!changed.includes(nm)) changed.push(nm); }
       });
+      // ★ 直前スナップにその人が居ない(=初出)場合、既定値の「状態=出席」だけの差は変更と数えない。
+      //   初回保存で全員が「(状態) 他17名」のように出る過大表示の原因だった。
+      //   実際に触った項目(バイタル/気分/運動 等)や、欠席・振替など既定以外の状態だけを表示する。
+      if(!_hasOld && (r.status==='出席' || !r.status)){ const _i=changed.indexOf('状態'); if(_i>=0) changed.splice(_i,1); }
       if(changed.length) results.push({ name: r.name || `ID:${r.patientId}`, fields: changed });
     });
     return results;
@@ -34275,12 +34279,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const [newStaff, setNewStaff] = useState({role:'介護職員', name:'', ampm:'both'});
   const nameInputRef = React.useRef(null);
 
-  // 過去日付の編集ロック: 当日(local)より過去の selectedDate は読み取り専用 + 編集ボタンで一時解除
+  // ★ 過去日付の編集ロックは廃止(店舗要望・2026-08): 過去の日誌もそのまま追記/修正できる。
+  //   記入漏れの追記のしやすさを優先。 forceEdit の仕組みは残すが常時編集可(isReadOnly=false固定)。
   const [forceEdit, setForceEdit] = useState(false);
   React.useEffect(() => { setForceEdit(false); }, [selectedDate]);
   const _today = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const isPast = selectedDate < _today;
-  const isReadOnly = isPast && !forceEdit;
+  const isReadOnly = false;
 
   const fi = appData.systemSettings?.facilityInfo || {};
   const _baseDs = appData.diarySettings || { staff:[], cars:[], scheduleAM:[], schedulePM:[] };
