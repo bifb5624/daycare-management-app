@@ -16708,11 +16708,14 @@ export default function App() {
             m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(lr._savedAt) || 0);
             map.set(String(lr.id), m);
           });
-          return { ...prev, ticketRecords: [...map.values()] };
+          const _out = [...map.values()];
+          // ★診断: boot(初回テーブル読込)マージの入出力件数。 rows=テーブル行数 / prev=手元記録数 / out=マージ後
+          try { syncLog('boot-merge', { rows: rows.length, prev: (Array.isArray(prev.ticketRecords)?prev.ticketRecords.length:0), out: _out.length, pat: (Array.isArray(prev.patients)?prev.patients.length:0) }); } catch {}
+          return { ...prev, ticketRecords: _out };
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length, v: 2 });   // v:2 = _fieldTs対応ビルドの目印
+        syncLog('table-initial', { n: rows.length, v: 3 });   // v:3 = boot/pull診断入りビルドの目印
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
         oplogState.tableFailed = true;   // ★ 凍結・pullガードを解除し、巨大JSONの従来マージで安全に継続する
@@ -16871,12 +16874,15 @@ export default function App() {
           //     テーブル初回読込が失敗した端末だけ tableFailed=true になり、従来マージへフォールバックする。
           if (TABLE_ENABLED && !oplogState.tableFailed && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             merged.ticketRecords = prev.ticketRecords;   // テーブル由来の手元をそのまま維持(巨大JSONの凍結コピーは無視)
+            try { if (window.__tsumugiKeepN !== prev.ticketRecords.length) { window.__tsumugiKeepN = prev.ticketRecords.length; syncLog('pull-keep-tbl', { n: prev.ticketRecords.length }); } } catch {}
           }
           // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/
           //   端末内が新しい(=まだpushされていない)記録」を保持して消えないようにする。
           //   墓石(削除済み)は復活させない。 patient+日付+年 で突き合わせ。
           else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
+              // ★診断: テーブル方式なのにこの従来マージへ落ちた場合は必ず記録する(ガード素通りの検出)
+              if (TABLE_ENABLED) syncLog('pull-merge-tr', { cloud: (Array.isArray(merged.ticketRecords)?merged.ticketRecords.length:0), prev: prev.ticketRecords.length });
               const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
               const map = new Map();
