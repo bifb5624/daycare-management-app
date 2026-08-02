@@ -16647,10 +16647,17 @@ export default function App() {
         const iObj = iv && typeof iv === 'object' && !Array.isArray(iv);
         const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
         if (iObj || bObj) {
-          if (ift > bft) { out[k] = iv; return; }                 // 受信が新しい→丸ごと採用(削除も反映)
+          const bo = bObj ? bv : {}, io = iObj ? iv : {};
+          if (ift > bft) {
+            // 受信が新しい → 受信に含まれるキーだけ上書き(空=明示クリアも反映)。
+            // 受信は「変更したキーだけ」の部分オブジェクトなので、触れていない○は手元を維持する
+            // (丸ごと置換だと、1タップの部分更新が他のキーを全滅させる)。
+            const m = { ...bo }; Object.keys(io).forEach(kk => { m[kk] = io[kk]; });
+            out[k] = m; return;
+          }
           if (bft > ift) return;                                   // 手元が新しい→維持
-          const m = { ...(bObj ? bv : {}) };                       // 時刻不明→キー単位で非空統合(安全側)
-          Object.keys(iObj ? iv : {}).forEach(kk => { const v2 = iv[kk]; if (v2 !== undefined && v2 !== '') m[kk] = v2; else if (!(kk in m)) m[kk] = v2; });
+          const m = { ...bo };                                     // 時刻不明→キー単位で非空統合(安全側)
+          Object.keys(io).forEach(kk => { const v2 = io[kk]; if (v2 !== undefined && v2 !== '') m[kk] = v2; else if (!(kk in m)) m[kk] = v2; });
           out[k] = m; return;
         }
         if (ift > bft) { out[k] = iv; return; }                    // 新しい方が勝つ(明示クリア含む)
