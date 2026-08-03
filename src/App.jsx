@@ -19648,6 +19648,20 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     }); // 復元＝全項目を最新として保存(他端末にも反映・削除フラグに勝つ)
     syncLog('restore', { n: restored.length, t: snap.t });   // ★診断: 元に戻すを実行した
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
+    // ★ 復元は明示操作なので、差分計算に頼らず「全記録・全項目」をテーブルへ直接書き込む(確実性最優先)。
+    //   差分方式だと「手元の状態」との比較次第で血圧・運動等が送られないケースがあり、
+    //   復元したのに他端末・サーバーに届かない事象の恒久対策。 通信失敗は自動再送キューが引き受ける。
+    try {
+      if (TABLE_ENABLED && appData._sbStoreId) {
+        const _rows = restored.map(r => {
+          const d = {};
+          Object.keys(r).forEach(k => { if (k !== 'id' && k !== '_savedAt' && k !== '_fieldTs') d[k] = (r[k] === undefined ? null : r[k]); });
+          d._fieldTs = { ...(r._fieldTs || {}) };
+          return { id: String(r.id), patientId: r.patientId ?? null, recDate: null, data: d };
+        });
+        if (_rows.length) { upsertTicketRows(appData._sbStoreId, _rows); syncLog('restore-full', { n: _rows.length }); }
+      }
+    } catch (e) { console.warn('[restore] full upsert failed', e); }
     // ★ 復元は「編集中(dirty)」でも必ず画面へ反映させる。 dirtyRef を落とさないと、
     //   再seedエフェクトのガード(!_dateChanged && dirtyRef)で localPatients が作り直されず、
     //   データは復元されているのに画面が復元前のまま(=「戻したのに変わらない」)になる。
