@@ -19595,6 +19595,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   // ★ 元に戻す(スナップショット): 保存のたびにその日の記録を localStorage に丸ごと記録。
   //   万一データが消えても、時刻を選んで丸ごと復元できる(セル単位でなく全利用者ぶん)。 再読み込みしても残る。
   const [restoreModal, setRestoreModal] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState(null);   // {snap,msg} アプリ内確認ダイアログ(window.confirm不発対策)
   const _RECSNAP_KEY = 'tsumugiRecSnap_v1';
   const _recSnapSKey = () => `${appData._sbStoreId||'x'}|${selectedDate}`;
   const _readRecSnaps = () => { try { const all = JSON.parse(localStorage.getItem(_RECSNAP_KEY)||'{}'); return all[_recSnapSKey()] || []; } catch { return []; } };
@@ -19634,7 +19635,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (_lsWhen) _msg += `\n現在の最新: 「${_lsDevice || '名称未設定の端末'}」が ${_lsWhen} に更新\n`;
     if (_newerElsewhere) _msg += `\n⚠ この履歴（${_when}）より新しい更新が別の端末「${_lsDevice}」にあります。\n復元すると、その新しい内容が上書きされます。\n`;
     _msg += `\n他の端末で入力した、これより新しい内容がある場合は上書きされます。\n復元してよろしいですか？`;
-    if (!window.confirm(_msg)) return;
+    // ★ window.confirm はブラウザ設定や連続表示の抑止で「表示されずに false」になることがあり、
+    //   復元が無反応になる(実ログ: restore-click 後に restore が出ない)。 アプリ内ダイアログに置き換える。
+    setRestoreConfirm({ snap, msg: _msg });
+  };
+  const _doRestoreRecSnap = (snap) => {
+    if (!snap || !Array.isArray(snap.recs)) return;
     const dObj = new Date(selectedDate);
     const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
     // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
@@ -21112,6 +21118,18 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         </table>
       </div>
       {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
+      {/* ★ 復元のアプリ内確認ダイアログ(window.confirm の不発対策・確認は1回だけ) */}
+      {restoreConfirm && ReactDOM.createPortal(
+        <div style={{position:'fixed',inset:0,zIndex:2000010,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div style={{background:'white',borderRadius:16,maxWidth:500,width:'100%',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+            <div style={{fontWeight:'bold',fontSize:15,color:'#0f172a',marginBottom:10}}>記録を復元（元に戻す）</div>
+            <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-line',lineHeight:1.6,maxHeight:'50vh',overflowY:'auto'}}>{restoreConfirm.msg}</div>
+            <div style={{display:'flex',gap:10,marginTop:16,justifyContent:'flex-end'}}>
+              <button onClick={()=>setRestoreConfirm(null)} style={{padding:'10px 18px',borderRadius:10,border:'1px solid #cbd5e1',background:'white',fontWeight:'bold',fontSize:13,color:'#475569',cursor:'pointer'}}>キャンセル</button>
+              <button onClick={()=>{ const _s=restoreConfirm.snap; setRestoreConfirm(null); _doRestoreRecSnap(_s); }} style={{padding:'10px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>復元する</button>
+            </div>
+          </div>
+        </div>, document.body)}
       {restoreModal && ReactDOM.createPortal((()=>{
         const snaps = _readRecSnaps().slice().reverse(); // 新しい順
         const _fmtT = (t)=>{ const d=new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
@@ -21135,7 +21153,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       ? (chg.slice(0,3).map(c=>`${c.name}（${c.fields.slice(0,4).join('・')}${c.fields.length>4?' 他':''}）`).join(' / ') + (chg.length>3?` 他${chg.length-3}名`:''))
                       : (_isOldest?'この日の最初の保存':'変更なし');
                     return (
-                    <button key={s.t} onClick={()=>{ if(window.confirm(`${_fmtT(s.t)} 時点の記録（入力あり${_cntData(s.recs)}名）に戻します。よろしいですか？`)) _restoreRecSnap(s); }}
+                    <button key={s.t} onClick={()=>_restoreRecSnap(s)}
                       className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-start justify-between gap-2 active:scale-[0.99]">
                       <div className="min-w-0"><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div>
                         <div className="text-[12px] text-slate-700 font-bold leading-snug" style={{display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>✎ {chgLabel}</div>
