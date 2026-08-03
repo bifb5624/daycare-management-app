@@ -19525,7 +19525,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _yr2 = new Date(selectedDate).getFullYear();
       const _dayRecs = (appData.ticketRecords||[]).filter(r=>r&&recMatchesDateYear(r,_ds2,_yr2));
       const _dat = _dayRecs.filter(r=>r.temp_AM||r.temp_PM||r.bpUpSt_AM||r.bpUpSt_PM||r.massage||r.kibunArrival||r.kibunDeparture||(r.exercises&&Object.keys(r.exercises).length)).length;
-      syncLog('seed', { n: filtered.length, rec: _dayRecs.length, dat: _dat });
+      // ★診断: ex=運動○入りの記録数 / dup=同一利用者に記録が2件以上ある人数(別IDの二重記録の検出)
+      const _ex = _dayRecs.filter(r=>r.exercises&&Object.values(r.exercises).some(v=>v!==''&&v!=null)).length;
+      const _byPid = {}; _dayRecs.forEach(r=>{ _byPid[r.patientId]=(_byPid[r.patientId]||0)+1; });
+      const _dup = Object.values(_byPid).filter(c=>c>1).length;
+      syncLog('seed', { n: filtered.length, rec: _dayRecs.length, dat: _dat, ex: _ex, dup: _dup });
     } catch { syncLog('seed', { n: filtered.length }); } }
     setLocalPatients(filtered);
     // 月全体表示用：選択月のレコードのみ保持してメモリ節約
