@@ -16696,7 +16696,12 @@ export default function App() {
 
     const boot = async () => {
       try {
-        const rows = await fetchTicketRecords(storeId);
+        // ★ 初回読込を「差分取得と同じクエリ」に一本化。 実測ログで、全件クエリ(fetchTicketRecords)だけが
+        //   新しく書いた行を返さず(常に694行)、差分クエリ(fetchTicketRecordsSince)は正しく返し続ける事象を確認。
+        //   実証済みの経路だけを使う。 論理削除(deleted)はここで除外する。
+        const _all = await fetchTicketRecordsSince(storeId, '1970-01-01T00:00:00+00:00');
+        if (_all.length >= 5000) syncLog('boot-fetch-cap', { n: _all.length });   // 上限到達の検知(将来の増量時)
+        const rows = _all.filter(x => x && !x.deleted && x.rec).map(x => x.rec);
         if (stopped) return;
         oplogState.readable = true;
         oplogState.tableFailed = false;   // テーブルが読めた → 凍結・pullガードを継続
