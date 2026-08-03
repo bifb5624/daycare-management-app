@@ -40,7 +40,7 @@ export function syncLog(ev, detail) {
 export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
 export function clearSyncLog() { try { localStorage.removeItem(_SYNCLOG_KEY); } catch {} }
 // ★ 操作ログ方式へ移行済みのキー。 巨大JSON側では読み取り専用(スナップショット)として扱う。
-export const OPLOG_FROZEN_KEYS = new Set([]);  // ★巻き戻し: 提供記録を巨大JSONで通常マージに戻す(テーブル方式オフ)
+export const OPLOG_FROZEN_KEYS = new Set(['ticketRecords']);  // ★プレビュー検証(preview-table2): 提供記録はテーブルが正・巨大JSON側は凍結(テーブルが読めた端末のみ)
 // ★★ 自己検証つき切替【重要な安全装置】
 //   凍結(巨大JSONへの保存を止めること)は、「この端末の操作ログが実際にサーバーへ届いた」ことを
 //   確認できて初めて有効になる。 一度も届いていない間は従来どおり巨大JSONへ保存し続けるので、
@@ -53,13 +53,20 @@ export const oplogState = {
   //  クラウドの古いスナップショットで上書きされて消える)
   writable: (() => { try { return localStorage.getItem('tsumugiOplogMode') === '1'; } catch { return false; } })(),
   readable: false,
+  // ★ テーブル(ticket_records)の初回読込が「失敗した」ときだけ true。 true の間は凍結を解除し、
+  //   従来の巨大JSON方式にフォールバックする(テーブルが読めない端末でも記録が流れ続けるように)。
+  tableFailed: false,
 };
 export function markOplogWritable() {
   if (oplogState.writable) return;
   oplogState.writable = true;
   try { localStorage.setItem('tsumugiOplogMode', '1'); } catch {}
 }
-export const isOplogFrozen = (key) => oplogState.writable && OPLOG_FROZEN_KEYS.has(key);
+// ★ 凍結は「起動直後から」効かせる(テーブル読込の完了を待たない)。
+//   旧実装(writable待ち)は、起動〜テーブル読込完了までの数秒間に巨大JSONへの書込/取込が走り、
+//   7/30凍結時点の古いスナップショットが提供記録を丸ごと上書きする穴になっていた。
+//   テーブル初回読込が失敗した端末だけ凍結を解除(tableFailed)し、従来方式で安全に継続する。
+export const isOplogFrozen = (key) => OPLOG_FROZEN_KEYS.has(key) && !oplogState.tableFailed;
 const _CLOCK_KEY = 'tsumugiClockOffset';
 let _clockOffset = (() => { try { return Number(localStorage.getItem(_CLOCK_KEY)) || 0; } catch { return 0; } })();
 // 同期用の現在時刻。 _savedAt / _fieldTs / _updatedAt は必ずこれを使う。

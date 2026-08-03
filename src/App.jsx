@@ -16527,6 +16527,16 @@ export default function App() {
         // ★ スマホの内蔵ブラウザ等はlocalStorage容量が極小で、ログイン画面でもここに来る。
         //   クラウド(Supabase)が正データなのでローカル保存失敗は致命的でない → アラートは出さず静かにログのみ。
         console.warn('localStorageへの保存に失敗(クラウド同期は継続)', e2);
+        // ★ テーブル方式では提供記録はテーブルが正(起動時に必ず取得し直す)ため、提供記録を除いた
+        //   軽量版で再試行し、設定・利用者情報など残りだけでも端末に残す。
+        //   (実測: boot-merge prev:0 = 端末内保存が容量超過で毎回失敗していた事象の対策)
+        try {
+          syncLog('persist-fail', { err: String((e2 && e2.name) || e2).slice(0, 40) });
+          if (TABLE_ENABLED) {
+            localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] }));
+            syncLog('persist-slim', {});
+          }
+        } catch {}
       }
     }
     // ★ Supabase 同期 (debounce 1.5秒 - 店舗ごとに保存)
@@ -16629,21 +16639,51 @@ export default function App() {
     const storeId = staffSession.storeId;
     let stopped = false, unsubscribe = null;
 
-    // ★ 非空優先マージ: 受信した行(テーブル)の「入っている項目だけ」を手元へ反映する。
-    //   テーブルの空項目で手元の入力を消さない。 exercises 等のオブジェクトはキー単位で同様に統合。
-    const _mergeNonEmpty = (base, incoming) => {
-      const out = { ...(base || {}) };
-      Object.keys(incoming || {}).forEach(k => {
+    // ★ 項目単位・時刻つきマージ: 受信した行(incoming=テーブル)と手元(base)を項目ごとに比較する。
+    //   ・_fieldTs(項目の更新時刻)が新しい方を採用 → 「意図的に空にした(明示クリア)」も他端末へ伝わる。
+    //     旧実装(非空優先のみ)は空を絶対に適用しなかったため、削除・元に戻す(復元)が他端末に反映されず、
+    //     手元に残った古い値が次の保存で復活する(体温を触ると気分・運動が蘇る)不具合の根本原因だった。
+    //   ・時刻が無い/同じ場合は従来どおり非空を優先(事故的な空欄で入力を消さない=安全側)。
+    //   ・オブジェクト(exercises等)は時刻が新しい側を丸ごと採用(○の削除も反映)。時刻不明ならキー単位で非空統合。
+    const _mergeRecTs = (base, incoming) => {
+      const b = base || {}, inc = incoming || {};
+      const bF = (b._fieldTs && typeof b._fieldTs === 'object') ? b._fieldTs : {};
+      const iF = (inc._fieldTs && typeof inc._fieldTs === 'object') ? inc._fieldTs : {};
+      const out = { ...b };
+      Object.keys(inc).forEach(k => {
         if (k === 'id' || k === '_savedAt' || k === '_fieldTs') return;
-        const iv = incoming[k];
-        if (iv && typeof iv === 'object' && !Array.isArray(iv)) out[k] = _mergeNonEmpty(out[k] || {}, iv);
-        else if (iv !== undefined && iv !== '') out[k] = iv;
+        const iv = inc[k], bv = b[k];
+        const ift = Number(iF[k]) || 0, bft = Number(bF[k]) || 0;
+        const iObj = iv && typeof iv === 'object' && !Array.isArray(iv);
+        const bObj = bv && typeof bv === 'object' && !Array.isArray(bv);
+        if (iObj || bObj) {
+          const bo = bObj ? bv : {}, io = iObj ? iv : {};
+          if (ift > bft) {
+            // 受信が新しい → 受信に含まれるキーだけ上書き(空=明示クリアも反映)。
+            // 受信は「変更したキーだけ」の部分オブジェクトなので、触れていない○は手元を維持する
+            // (丸ごと置換だと、1タップの部分更新が他のキーを全滅させる)。
+            const m = { ...bo }; Object.keys(io).forEach(kk => { m[kk] = io[kk]; });
+            out[k] = m; return;
+          }
+          if (bft > ift) return;                                   // 手元が新しい→維持
+          const m = { ...bo };                                     // 時刻不明→キー単位で非空統合(安全側)
+          Object.keys(io).forEach(kk => { const v2 = io[kk]; if (v2 !== undefined && v2 !== '') m[kk] = v2; else if (!(kk in m)) m[kk] = v2; });
+          out[k] = m; return;
+        }
+        if (ift > bft) { out[k] = iv; return; }                    // 新しい方が勝つ(明示クリア含む)
+        if (bft > ift) return;                                      // 手元が新しい→維持
+        if (iv !== undefined && iv !== '') out[k] = iv;             // 時刻不明→非空優先(従来どおり)
       });
+      // _fieldTs はキー単位で大きい方を保持(次のマージ判定に使う)
+      const mf = { ...bF };
+      Object.keys(iF).forEach(k => { const t = Number(iF[k]) || 0; if (t > (Number(mf[k]) || 0)) mf[k] = t; });
+      if (Object.keys(mf).length) out._fieldTs = mf;
       return out;
     };
     // テーブルの行を appData.ticketRecords へ反映する。 手元の入力は空で消さない(非空優先マージ)。
     const applyRows = (items) => {
       if (stopped || !items || !items.length) return;
+      syncLog('rows-apply', { n: items.length });   // ★診断: テーブルから受信して手元へ反映開始
       setAppData(prev => {
         const map = new Map((Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).map(r => [String(r.id), r]));
         let changed = false;
@@ -16653,7 +16693,7 @@ export default function App() {
           if (deleted) return;   // ★ 削除は当面反映しない(データ消失防止)。 誤削除が全端末へ伝播するのを止める
           const ex = map.get(id);
           if (!ex) { map.set(id, rec); changed = true; return; }
-          const m = _mergeNonEmpty(ex, rec);
+          const m = _mergeRecTs(ex, rec);
           m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(rec._savedAt) || 0);
           let differs; try { differs = JSON.stringify(m) !== JSON.stringify(ex); } catch { differs = true; }
           if (differs) { map.set(id, m); changed = true; }
@@ -16666,9 +16706,15 @@ export default function App() {
 
     const boot = async () => {
       try {
-        const rows = await fetchTicketRecords(storeId);
+        // ★ 初回読込を「差分取得と同じクエリ」に一本化。 実測ログで、全件クエリ(fetchTicketRecords)だけが
+        //   新しく書いた行を返さず(常に694行)、差分クエリ(fetchTicketRecordsSince)は正しく返し続ける事象を確認。
+        //   実証済みの経路だけを使う。 論理削除(deleted)はここで除外する。
+        const _all = await fetchTicketRecordsSince(storeId, '1970-01-01T00:00:00+00:00');
+        if (_all.length >= 5000) syncLog('boot-fetch-cap', { n: _all.length });   // 上限到達の検知(将来の増量時)
+        const rows = _all.filter(x => x && !x.deleted && x.rec).map(x => x.rec);
         if (stopped) return;
         oplogState.readable = true;
+        oplogState.tableFailed = false;   // テーブルが読めた → 凍結・pullガードを継続
         markOplogWritable();
         _lastTblSyncRef.current = rows.reduce((m, r) => { const t = r._savedAt ? new Date(r._savedAt).toISOString() : null; return (t && (!m || t > m)) ? t : m; }, null);
         setAppData(prev => {
@@ -16680,17 +16726,21 @@ export default function App() {
             if (!lr || lr.id == null) return;
             const ex = map.get(String(lr.id));
             if (!ex) { map.set(String(lr.id), lr); return; }
-            const m = _mergeNonEmpty(ex, lr);      // 手元(lr)の非空を優先で上書き
+            const m = _mergeRecTs(ex, lr);         // 手元(lr)を項目時刻つきで重ねる(新しい方が勝つ)
             m._savedAt = Math.max(Number(ex._savedAt) || 0, Number(lr._savedAt) || 0);
             map.set(String(lr.id), m);
           });
-          return { ...prev, ticketRecords: [...map.values()] };
+          const _out = [...map.values()];
+          // ★診断: boot(初回テーブル読込)マージの入出力件数。 rows=テーブル行数 / prev=手元記録数 / out=マージ後
+          try { syncLog('boot-merge', { rows: rows.length, prev: (Array.isArray(prev.ticketRecords)?prev.ticketRecords.length:0), out: _out.length, pat: (Array.isArray(prev.patients)?prev.patients.length:0) }); } catch {}
+          return { ...prev, ticketRecords: _out };
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length });
+        syncLog('table-initial', { n: rows.length, v: 10 });  // v:10 = deviceName未定義エラー修正(復元の根本原因)入りビルド
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
+        oplogState.tableFailed = true;   // ★ 凍結・pullガードを解除し、巨大JSONの従来マージで安全に継続する
         syncLog('table-initial-error', { err: String((e && e.message) || e).slice(0, 120) });
         setOpsLoading(false);
       }
@@ -16836,11 +16886,30 @@ export default function App() {
         let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
+          // ★★ テーブル方式ON かつ この端末がテーブルを読めている間、pull は提供記録に一切触らない。
+          //   ticket_records テーブルが唯一の正であり、巨大JSON側は凍結スナップショット(古い)。
+          //   ここで触ると「テーブルで取り込んだ最新表示を、pull の古い凍結コピーが上書きする」レースになり、
+          //   前回カットオーバーの『再読み込みで一部しか表示されない』を引き起こした。 根本から断つ。
+          //   ★ ガードは「起動直後から」効かせる(oplogState.readable=テーブル読込完了を待たない)。
+          //     待つ実装だと、起動〜読込完了までの数秒間に pull が走った場合、凍結時点の古い巨大JSONが
+          //     提供記録を丸ごと置き換え「再読込でデータが消え、1行ずつしか戻らない」事故になる(実ログで確認済)。
+          //     テーブル初回読込が失敗した端末だけ tableFailed=true になり、従来マージへフォールバックする。
+          if (TABLE_ENABLED && !oplogState.tableFailed) {
+            // ★ 無条件で手元を維持(手元が無ければ空でスタートしテーブルbootが埋める)。
+            //   従来は prev._sbStoreId 一致を条件にしていたため、セッション揺らぎ等で手元が初期状態の瞬間に
+            //   pull が走ると、クラウド巨大JSON側の古い/空の提供記録が取り込まれ「3秒後に全消滅」する
+            //   破壊サイクルが起きていた(実ログ: boot直後 rec:20 → 3秒後 rec:0)。 クラウドの提供記録は
+            //   テーブル方式では一切信用しない。
+            merged.ticketRecords = (prev && Array.isArray(prev.ticketRecords)) ? prev.ticketRecords : [];
+            try { if (window.__tsumugiKeepN !== prev.ticketRecords.length) { window.__tsumugiKeepN = prev.ticketRecords.length; syncLog('pull-keep-tbl', { n: prev.ticketRecords.length }); } } catch {}
+          }
           // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/
           //   端末内が新しい(=まだpushされていない)記録」を保持して消えないようにする。
           //   墓石(削除済み)は復活させない。 patient+日付+年 で突き合わせ。
-          if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
+          else if (prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
             try {
+              // ★診断: テーブル方式なのにこの従来マージへ落ちた場合は必ず記録する(ガード素通りの検出)
+              if (TABLE_ENABLED) syncLog('pull-merge-tr', { cloud: (Array.isArray(merged.ticketRecords)?merged.ticketRecords.length:0), prev: prev.ticketRecords.length });
               const tomb = (merged.deletedIds && merged.deletedIds.ticketRecords) || {};
               const keyOf = (r) => `${r.patientId}|${r.date}|${r.year||''}`;
               const map = new Map();
@@ -18468,8 +18537,10 @@ export default function App() {
         );
       })(), document.body)}
       {/* ★ 再読み込み直後の「一瞬データが消えたように見える」を防ぐ読込中オーバーレイ。
-          操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。 */}
-      {opsLoading && OPLOG_ENABLED && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
+          テーブル/操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。
+          ※ 従来 OPLOG_ENABLED のみでゲートしていたため、テーブル方式では一度も表示されず
+            「再読み込み後の数秒間、データが無いように見える」原因になっていた。 */}
+      {opsLoading && (TABLE_ENABLED || OPLOG_ENABLED) && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
         <div style={{position:'fixed',inset:0,zIndex:2000003,background:'rgba(255,255,255,0.92)',
           display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14}}>
           <div style={{width:46,height:46,border:'5px solid #d7e3c4',borderTopColor:'#7daa3d',borderRadius:'50%',animation:'tsumugiSpin 0.9s linear infinite'}}/>
@@ -19120,8 +19191,8 @@ export default function App() {
 
 // === RecordView ===
 function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate, setSelectedDate, dirtyRef, saveFnRef, sharedAmpm, setSharedAmpm, showTip, hideTip, isSidebarOpen, setIsSidebarOpen, deviceName }) {
-  // ★ deviceName は「元に戻す」の確認文で使用。 props に無いまま参照すると ReferenceError で
-  //   復元処理が即死する(=元に戻すが無反応になる)ため、必ず受け取る。
+  // ★ deviceName は「元に戻す」の確認文で使用。 props に無いまま参照しており ReferenceError で
+  //   復元処理が restore-click 直後に即死していた(=復元が全く機能しない の根本原因)。
   // ★ 担当者名: 多段階フォールバック で保存時に必ず何か入る
   //   1. props (activeRecorder.name) — スタッフ切替で選んでいる人
   //   2. sessionStorage (getActiveRecorderName) — 保険
@@ -19330,7 +19401,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     //     「他端末の更新が下書きに反映されない＝再読込しないと同期しない」「古い下書きが自動保存で新しい時刻付きで
     //     push され他端末の入力を上書き」という重大な同期不具合になったため、dirty のみに戻す。
     //   日付が変わった時は必ず作り直す(前の日の編集中フラグが残って表示人数がおかしくなるのを防ぐ)。
-    if (!_dateChanged && dirtyRef?.current) return;
+    if (!_dateChanged && dirtyRef?.current) { if (TABLE_ENABLED) syncLog('seed-skip-dirty', {}); return; }
     const dayOfWeek = new Date(selectedDate).getDay();
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
@@ -19464,6 +19535,19 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          // 同じステータス内では あいうえお順 (kana)
          return (a.kana || '').localeCompare(b.kana || '', 'ja');
       });
+    // ★診断: 画面(localPatients)を作り直した。 rec=appData内の当日記録数 / dat=うち実データ入りの数。
+    //   「画面が空なのに rec/dat が多い」=表示の問題、「dat が少ない」=そもそもデータが端末に無い、を切り分ける。
+    if (TABLE_ENABLED) { try {
+      const _ds2 = `${new Date(selectedDate).getMonth()+1}月${new Date(selectedDate).getDate()}日`;
+      const _yr2 = new Date(selectedDate).getFullYear();
+      const _dayRecs = (appData.ticketRecords||[]).filter(r=>r&&recMatchesDateYear(r,_ds2,_yr2));
+      const _dat = _dayRecs.filter(r=>r.temp_AM||r.temp_PM||r.bpUpSt_AM||r.bpUpSt_PM||r.massage||r.kibunArrival||r.kibunDeparture||(r.exercises&&Object.keys(r.exercises).length)).length;
+      // ★診断: ex=運動○入りの記録数 / dup=同一利用者に記録が2件以上ある人数(別IDの二重記録の検出)
+      const _ex = _dayRecs.filter(r=>r.exercises&&Object.values(r.exercises).some(v=>v!==''&&v!=null)).length;
+      const _byPid = {}; _dayRecs.forEach(r=>{ _byPid[r.patientId]=(_byPid[r.patientId]||0)+1; });
+      const _dup = Object.values(_byPid).filter(c=>c>1).length;
+      syncLog('seed', { n: filtered.length, rec: _dayRecs.length, dat: _dat, ex: _ex, dup: _dup });
+    } catch { syncLog('seed', { n: filtered.length }); } }
     setLocalPatients(filtered);
     // 月全体表示用：選択月のレコードのみ保持してメモリ節約
     const selM2 = new Date(selectedDate).getMonth() + 1;
@@ -19513,6 +19597,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   // ★ 元に戻す(スナップショット): 保存のたびにその日の記録を localStorage に丸ごと記録。
   //   万一データが消えても、時刻を選んで丸ごと復元できる(セル単位でなく全利用者ぶん)。 再読み込みしても残る。
   const [restoreModal, setRestoreModal] = useState(false);
+  const [restoreConfirm, setRestoreConfirm] = useState(null);   // {snap,msg} アプリ内確認ダイアログ(window.confirm不発対策)
+  React.useEffect(() => { if (restoreConfirm) syncLog('restore-dialog', {}); }, [restoreConfirm]);   // ★診断: ダイアログが実際に表示された
   const _RECSNAP_KEY = 'tsumugiRecSnap_v1';
   const _recSnapSKey = () => `${appData._sbStoreId||'x'}|${selectedDate}`;
   const _readRecSnaps = () => { try { const all = JSON.parse(localStorage.getItem(_RECSNAP_KEY)||'{}'); return all[_recSnapSKey()] || []; } catch { return []; } };
@@ -19538,6 +19624,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   };
   const _restoreRecSnap = (snap) => {
     if (!snap || !Array.isArray(snap.recs)) return;
+    syncLog('restore-click', { t: snap.t });   // ★診断: 「戻す」を押した(確認ダイアログ前)。 これが出て restore が出ない=キャンセル/confirm不発
     // ★ 復元は全端末へ「最新」として反映される。 他端末の新しい入力を誤って消さないよう確認する。
     const _when = snap.t ? new Date(snap.t).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
     // ★ 現在クラウド上の「最終更新した端末・時刻」(_lastSync)を注意書きに出す。 復元で上書きされる相手が誰かを明示する。
@@ -19551,7 +19638,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (_lsWhen) _msg += `\n現在の最新: 「${_lsDevice || '名称未設定の端末'}」が ${_lsWhen} に更新\n`;
     if (_newerElsewhere) _msg += `\n⚠ この履歴（${_when}）より新しい更新が別の端末「${_lsDevice}」にあります。\n復元すると、その新しい内容が上書きされます。\n`;
     _msg += `\n他の端末で入力した、これより新しい内容がある場合は上書きされます。\n復元してよろしいですか？`;
-    if (!window.confirm(_msg)) return;
+    // ★ window.confirm はブラウザ設定や連続表示の抑止で「表示されずに false」になることがあり、
+    //   復元が無反応になる(実ログ: restore-click 後に restore が出ない)。 アプリ内ダイアログに置き換える。
+    setRestoreConfirm({ snap, msg: _msg });
+  };
+  const _doRestoreRecSnap = (snap) => {
+    if (!snap || !Array.isArray(snap.recs)) return;
     const dObj = new Date(selectedDate);
     const _dateStr = `${dObj.getMonth()+1}月${dObj.getDate()}日`; const _yr = dObj.getFullYear();
     // その日の既存記録を除去し、スナップショットの記録に置き換える(他の日は保持)
@@ -19564,7 +19656,22 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       Object.keys(r).forEach(k => { if (k !== '_savedAt' && k !== '_fieldTs' && k !== 'id') _fts[k] = _rnow; });
       return { ...r, _savedAt: _rnow, _fieldTs: _fts };
     }); // 復元＝全項目を最新として保存(他端末にも反映・削除フラグに勝つ)
+    syncLog('restore', { n: restored.length, t: snap.t });   // ★診断: 元に戻すを実行した
     onSave({ ...appData, ticketRecords: [...others, ...restored] }, { manual: true, message: '✓ 記録を復元しました' });
+    // ★ 復元は明示操作なので、差分計算に頼らず「全記録・全項目」をテーブルへ直接書き込む(確実性最優先)。
+    //   差分方式だと「手元の状態」との比較次第で血圧・運動等が送られないケースがあり、
+    //   復元したのに他端末・サーバーに届かない事象の恒久対策。 通信失敗は自動再送キューが引き受ける。
+    try {
+      if (TABLE_ENABLED && appData._sbStoreId) {
+        const _rows = restored.map(r => {
+          const d = {};
+          Object.keys(r).forEach(k => { if (k !== 'id' && k !== '_savedAt' && k !== '_fieldTs') d[k] = (r[k] === undefined ? null : r[k]); });
+          d._fieldTs = { ...(r._fieldTs || {}) };
+          return { id: String(r.id), patientId: r.patientId ?? null, recDate: null, data: d };
+        });
+        if (_rows.length) { upsertTicketRows(appData._sbStoreId, _rows); syncLog('restore-full', { n: _rows.length }); }
+      }
+    } catch (e) { console.warn('[restore] full upsert failed', e); }
     // ★ 復元は「編集中(dirty)」でも必ず画面へ反映させる。 dirtyRef を落とさないと、
     //   再seedエフェクトのガード(!_dateChanged && dirtyRef)で localPatients が作り直されず、
     //   データは復元されているのに画面が復元前のまま(=「戻したのに変わらない」)になる。
@@ -21014,10 +21121,30 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         </table>
       </div>
       {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
+      {/* ★ 復元のアプリ内確認ダイアログ(window.confirm の不発対策・確認は1回だけ) */}
+      {restoreConfirm && ReactDOM.createPortal(
+        <div style={{position:'fixed',inset:0,zIndex:2147483000,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div style={{background:'white',borderRadius:16,maxWidth:500,width:'100%',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+            <div style={{fontWeight:'bold',fontSize:15,color:'#0f172a',marginBottom:10}}>記録を復元（元に戻す）</div>
+            <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-line',lineHeight:1.6,maxHeight:'50vh',overflowY:'auto'}}>{restoreConfirm.msg}</div>
+            <div style={{display:'flex',gap:10,marginTop:16,justifyContent:'flex-end'}}>
+              <button onClick={()=>setRestoreConfirm(null)} style={{padding:'10px 18px',borderRadius:10,border:'1px solid #cbd5e1',background:'white',fontWeight:'bold',fontSize:13,color:'#475569',cursor:'pointer'}}>キャンセル</button>
+              <button onClick={()=>{ const _s=restoreConfirm.snap; setRestoreConfirm(null); _doRestoreRecSnap(_s); }} style={{padding:'10px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>復元する</button>
+            </div>
+          </div>
+        </div>, document.body)}
       {restoreModal && ReactDOM.createPortal((()=>{
         const snaps = _readRecSnaps().slice().reverse(); // 新しい順
         const _fmtT = (t)=>{ const d=new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
         const _cntData = (recs)=> (recs||[]).filter(r=>r && (r.temp_AM||r.temp_PM||r.temp||r.bpUpSt_AM||r.bpUpSt||r.plSt_AM||r.plSt||r.massage||r.tokki||r.kibunArrival||r.kibunDeparture||(r.exercises&&Object.keys(r.exercises).length))).length;
+        // ★ 「戻した後にどうなるか」を一目で分かるように: その時点のデータ内容を項目別に集計
+        const _snapSum = (recs)=>{ let t=0,b=0,k=0,e=0,m=0; (recs||[]).forEach(r=>{ if(!r) return;
+          if(r.temp_AM||r.temp_PM||r.temp) t++;
+          if(r.bpUpSt_AM||r.bpUpSt_PM||r.bpUpSt||r.bpUpEn_AM||r.bpUpEn_PM||r.bpUpEn) b++;
+          if(r.kibunArrival||r.kibunDeparture) k++;
+          if(r.exercises&&Object.values(r.exercises).some(v=>v!==''&&v!=null)) e++;
+          if(r.massage) m++; });
+          return `体温${t}名・血圧${b}名・気分${k}名・運動${e}名・整体${m}名`; };
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" style={{zIndex:100000}} onClick={()=>setRestoreModal(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
@@ -21028,16 +21155,21 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <div className="p-3 overflow-y-auto">
                 {snaps.length===0 ? <div className="text-center text-slate-400 font-bold py-8 text-sm">この日の保存履歴はまだありません</div> :
                   snaps.map((s,i)=>{
-                    const chg = _snapChanges(s.recs, snaps[i+1]?.recs || []); // 直前(古い)との差分
+                    // ★ 最古の履歴は「比較する直前」が無く、全員(欠席・休止の既存状態まで)が差分扱いになって
+                    //   「(状態・特記) 他17名」等の無意味な表示になるため、差分計算せず「最初の保存」とだけ出す。
+                    const _isOldest = i === snaps.length - 1;
+                    const chg = _isOldest ? [] : _snapChanges(s.recs, snaps[i+1]?.recs || []); // 直前(古い)との差分
                     // ★ 「氏名（項目・項目）」で最大3名分。 それ以上は「他◯名」。
                     const chgLabel = chg.length
                       ? (chg.slice(0,3).map(c=>`${c.name}（${c.fields.slice(0,4).join('・')}${c.fields.length>4?' 他':''}）`).join(' / ') + (chg.length>3?` 他${chg.length-3}名`:''))
-                      : (i===snaps.length-1?'最初の保存':'変更なし');
+                      : (_isOldest?'この日の最初の保存':'変更なし');
                     return (
-                    <button key={s.t} onClick={()=>{ if(window.confirm(`${_fmtT(s.t)} 時点の記録（入力あり${_cntData(s.recs)}名）に戻します。よろしいですか？`)) _restoreRecSnap(s); }}
+                    <button key={s.t} onClick={()=>_restoreRecSnap(s)}
                       className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-start justify-between gap-2 active:scale-[0.99]">
                       <div className="min-w-0"><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div>
-                        <div className="text-[12px] text-slate-700 font-bold leading-snug" style={{display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>✎ {chgLabel}</div>
+                        {/* ★ 主役は「この時点に戻すと何が残るか」。 データ内容の項目別サマリを大きく出す */}
+                        <div className="text-[12px] font-bold mt-0.5" style={{color:'#047857'}}>⟲ 戻した後の内容: {_snapSum(s.recs)}</div>
+                        <div className="text-[11px] text-slate-500 leading-snug mt-0.5" style={{display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>✎ この保存での変更: {chgLabel}</div>
                         <div className="text-[11px] text-slate-400 mt-0.5">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
                       <span className="text-xs font-bold text-blue-600 shrink-0">戻す →</span>
                     </button>
