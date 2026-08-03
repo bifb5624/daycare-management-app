@@ -16884,8 +16884,13 @@ export default function App() {
           //     待つ実装だと、起動〜読込完了までの数秒間に pull が走った場合、凍結時点の古い巨大JSONが
           //     提供記録を丸ごと置き換え「再読込でデータが消え、1行ずつしか戻らない」事故になる(実ログで確認済)。
           //     テーブル初回読込が失敗した端末だけ tableFailed=true になり、従来マージへフォールバックする。
-          if (TABLE_ENABLED && !oplogState.tableFailed && prev && prev._sbStoreId === newStoreId && Array.isArray(prev.ticketRecords)) {
-            merged.ticketRecords = prev.ticketRecords;   // テーブル由来の手元をそのまま維持(巨大JSONの凍結コピーは無視)
+          if (TABLE_ENABLED && !oplogState.tableFailed) {
+            // ★ 無条件で手元を維持(手元が無ければ空でスタートしテーブルbootが埋める)。
+            //   従来は prev._sbStoreId 一致を条件にしていたため、セッション揺らぎ等で手元が初期状態の瞬間に
+            //   pull が走ると、クラウド巨大JSON側の古い/空の提供記録が取り込まれ「3秒後に全消滅」する
+            //   破壊サイクルが起きていた(実ログ: boot直後 rec:20 → 3秒後 rec:0)。 クラウドの提供記録は
+            //   テーブル方式では一切信用しない。
+            merged.ticketRecords = (prev && Array.isArray(prev.ticketRecords)) ? prev.ticketRecords : [];
             try { if (window.__tsumugiKeepN !== prev.ticketRecords.length) { window.__tsumugiKeepN = prev.ticketRecords.length; syncLog('pull-keep-tbl', { n: prev.ticketRecords.length }); } } catch {}
           }
           // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/
