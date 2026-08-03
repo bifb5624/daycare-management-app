@@ -16737,7 +16737,7 @@ export default function App() {
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length, v: 8 });   // v:8 = 復元フル書込(restore-full)入りビルドの目印
+        syncLog('table-initial', { n: rows.length, v: 9 });   // v:9 = アプリ内復元ダイアログ入りビルドの目印
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
         oplogState.tableFailed = true;   // ★ 凍結・pullガードを解除し、巨大JSONの従来マージで安全に継続する
@@ -19596,6 +19596,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   //   万一データが消えても、時刻を選んで丸ごと復元できる(セル単位でなく全利用者ぶん)。 再読み込みしても残る。
   const [restoreModal, setRestoreModal] = useState(false);
   const [restoreConfirm, setRestoreConfirm] = useState(null);   // {snap,msg} アプリ内確認ダイアログ(window.confirm不発対策)
+  React.useEffect(() => { if (restoreConfirm) syncLog('restore-dialog', {}); }, [restoreConfirm]);   // ★診断: ダイアログが実際に表示された
   const _RECSNAP_KEY = 'tsumugiRecSnap_v1';
   const _recSnapSKey = () => `${appData._sbStoreId||'x'}|${selectedDate}`;
   const _readRecSnaps = () => { try { const all = JSON.parse(localStorage.getItem(_RECSNAP_KEY)||'{}'); return all[_recSnapSKey()] || []; } catch { return []; } };
@@ -21120,7 +21121,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       {/* ★ 介護整体の過去履歴ポップオーバー: body へ portal + fixed で最前面表示(表の背面に隠れない)。 zoom補正済みの座標で確認ボタンの真上に。 */}
       {/* ★ 復元のアプリ内確認ダイアログ(window.confirm の不発対策・確認は1回だけ) */}
       {restoreConfirm && ReactDOM.createPortal(
-        <div style={{position:'fixed',inset:0,zIndex:2000010,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+        <div style={{position:'fixed',inset:0,zIndex:2147483000,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
           <div style={{background:'white',borderRadius:16,maxWidth:500,width:'100%',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
             <div style={{fontWeight:'bold',fontSize:15,color:'#0f172a',marginBottom:10}}>記録を復元（元に戻す）</div>
             <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-line',lineHeight:1.6,maxHeight:'50vh',overflowY:'auto'}}>{restoreConfirm.msg}</div>
