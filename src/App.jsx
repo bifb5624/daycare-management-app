@@ -21137,6 +21137,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         const snaps = _readRecSnaps().slice().reverse(); // 新しい順
         const _fmtT = (t)=>{ const d=new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
         const _cntData = (recs)=> (recs||[]).filter(r=>r && (r.temp_AM||r.temp_PM||r.temp||r.bpUpSt_AM||r.bpUpSt||r.plSt_AM||r.plSt||r.massage||r.tokki||r.kibunArrival||r.kibunDeparture||(r.exercises&&Object.keys(r.exercises).length))).length;
+        // ★ 「戻した後にどうなるか」を一目で分かるように: その時点のデータ内容を項目別に集計
+        const _snapSum = (recs)=>{ let t=0,b=0,k=0,e=0,m=0; (recs||[]).forEach(r=>{ if(!r) return;
+          if(r.temp_AM||r.temp_PM||r.temp) t++;
+          if(r.bpUpSt_AM||r.bpUpSt_PM||r.bpUpSt||r.bpUpEn_AM||r.bpUpEn_PM||r.bpUpEn) b++;
+          if(r.kibunArrival||r.kibunDeparture) k++;
+          if(r.exercises&&Object.values(r.exercises).some(v=>v!==''&&v!=null)) e++;
+          if(r.massage) m++; });
+          return `体温${t}名・血圧${b}名・気分${k}名・運動${e}名・整体${m}名`; };
         return (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4" style={{zIndex:100000}} onClick={()=>setRestoreModal(false)}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[85vh] overflow-hidden flex flex-col" onClick={e=>e.stopPropagation()}>
@@ -21159,7 +21167,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     <button key={s.t} onClick={()=>_restoreRecSnap(s)}
                       className="w-full text-left px-4 py-3 rounded-xl border border-slate-200 hover:bg-blue-50 hover:border-blue-300 mb-2 flex items-start justify-between gap-2 active:scale-[0.99]">
                       <div className="min-w-0"><div className="font-bold text-slate-700 text-sm">{_fmtT(s.t)}{i===0 && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">最新</span>}</div>
-                        <div className="text-[12px] text-slate-700 font-bold leading-snug" style={{display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>✎ {chgLabel}</div>
+                        {/* ★ 主役は「この時点に戻すと何が残るか」。 データ内容の項目別サマリを大きく出す */}
+                        <div className="text-[12px] font-bold mt-0.5" style={{color:'#047857'}}>⟲ 戻した後の内容: {_snapSum(s.recs)}</div>
+                        <div className="text-[11px] text-slate-500 leading-snug mt-0.5" style={{display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>✎ この保存での変更: {chgLabel}</div>
                         <div className="text-[11px] text-slate-400 mt-0.5">入力あり {_cntData(s.recs)}名 / {(s.recs||[]).length}件</div></div>
                       <span className="text-xs font-bold text-blue-600 shrink-0">戻す →</span>
                     </button>
