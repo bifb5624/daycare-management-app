@@ -16527,6 +16527,16 @@ export default function App() {
         // ★ スマホの内蔵ブラウザ等はlocalStorage容量が極小で、ログイン画面でもここに来る。
         //   クラウド(Supabase)が正データなのでローカル保存失敗は致命的でない → アラートは出さず静かにログのみ。
         console.warn('localStorageへの保存に失敗(クラウド同期は継続)', e2);
+        // ★ テーブル方式では提供記録はテーブルが正(起動時に必ず取得し直す)ため、提供記録を除いた
+        //   軽量版で再試行し、設定・利用者情報など残りだけでも端末に残す。
+        //   (実測: boot-merge prev:0 = 端末内保存が容量超過で毎回失敗していた事象の対策)
+        try {
+          syncLog('persist-fail', { err: String((e2 && e2.name) || e2).slice(0, 40) });
+          if (TABLE_ENABLED) {
+            localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] }));
+            syncLog('persist-slim', {});
+          }
+        } catch {}
       }
     }
     // ★ Supabase 同期 (debounce 1.5秒 - 店舗ごとに保存)
