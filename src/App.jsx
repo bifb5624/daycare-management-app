@@ -16737,7 +16737,7 @@ export default function App() {
         });
         opsReadyRef.current = true;
         setOpsLoading(false);
-        syncLog('table-initial', { n: rows.length, v: 3 });   // v:3 = boot/pull診断入りビルドの目印
+        syncLog('table-initial', { n: rows.length, v: 8 });   // v:8 = 復元フル書込(restore-full)入りビルドの目印
       } catch (e) {
         console.warn('[ticket_records] 初回取得に失敗(従来方式で継続)', e);
         oplogState.tableFailed = true;   // ★ 凍結・pullガードを解除し、巨大JSONの従来マージで安全に継続する
@@ -19620,6 +19620,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   };
   const _restoreRecSnap = (snap) => {
     if (!snap || !Array.isArray(snap.recs)) return;
+    syncLog('restore-click', { t: snap.t });   // ★診断: 「戻す」を押した(確認ダイアログ前)。 これが出て restore が出ない=キャンセル/confirm不発
     // ★ 復元は全端末へ「最新」として反映される。 他端末の新しい入力を誤って消さないよう確認する。
     const _when = snap.t ? new Date(snap.t).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
     // ★ 現在クラウド上の「最終更新した端末・時刻」(_lastSync)を注意書きに出す。 復元で上書きされる相手が誰かを明示する。
