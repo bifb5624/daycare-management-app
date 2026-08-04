@@ -20614,7 +20614,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
             const isReadOnly = !isEditMode;
             const isAbsent = p.status === '欠席' || p.status === '休業';
-            const isPause = getPatientDisplayStatus(masterData) === '休止';
+            // ★ 休止は「休止期間内の日だけ」入力不可にする(期間前・終了後の日は通常どおり入力可)。
+            //   旧実装はマスタの現在ステータスだけを見て全日付をロックしていた。
+            //   期間情報が無い休止(pauseHistory空)のみ従来どおり常時ロック。
+            const isPause = !!getPauseReasonOnDate(masterData, selectedDate)
+              || (getPatientDisplayStatus(masterData) === '休止' && !(masterData.pauseHistory||[]).length);
             const config = getStatusConfig(p.status);
             const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
             const tf = (timeFilter==='AM'||timeFilter==='PM') ? timeFilter : 'AM';
@@ -20748,7 +20752,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
               const isReadOnly = !isEditMode; 
               const isAbsent = p.status === '欠席' || p.status === '休業';
-              const isPause = getPatientDisplayStatus(masterData) === '休止';
+              // ★ 休止は「休止期間内の日だけ」入力不可にする(期間前・終了後の日は通常どおり入力可)。
+            //   旧実装はマスタの現在ステータスだけを見て全日付をロックしていた。
+            //   期間情報が無い休止(pauseHistory空)のみ従来どおり常時ロック。
+            const isPause = !!getPauseReasonOnDate(masterData, selectedDate)
+              || (getPatientDisplayStatus(masterData) === '休止' && !(masterData.pauseHistory||[]).length);
               const nameParts = (p.name || "").split(/[\s　]+/);
               const config = getStatusConfig(p.status);
               // ★ 選択中セルの利用者を明示ハイライト (iPadのタッチで:hoverが残り前の人が光る問題対策)
