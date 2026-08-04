@@ -27152,7 +27152,25 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       if (field === 'nextDateOverride' && value && value !== "未定") finalValue = formatShortDate(value);
       else if (field === 'nextTimeOverride') finalValue = formatTimeString(value);
       setLocalOverrides(prev => ({ ...prev, [recordId]: { ...prev[recordId], [field]: finalValue } }));
-      // ★ 即保存 (連絡事項と同様に相互反映・更新ボタン不要)
+      // ★ 「実際に値が変わった時だけ」記録へ書き込む。 旧実装は欄に触れて閉じただけでも毎回書き込み、
+      //   空値/自動計算値が新しい時刻付きで保存され、同期(新しい方が勝つ)で他端末の入力済み時間を
+      //   次々と消していた(「入力した次回時間が時間が経つと全部消える」の根本原因)。
+      const _rec = (appData.ticketRecords||[]).find(r => String(r.id) === String(recordId));
+      const _cur = String((_rec && _rec[field]) ?? '').trim();
+      const _fin = String(finalValue ?? '').trim();
+      if (_fin === _cur) return;                                   // 変化なし → 書かない
+      if (!_cur || !/\d|未定/.test(_cur)) {
+        // 現在実質未設定(空/残骸)の場合: 自動計算値と同じ内容や空の書き込みは「変更なし」として書かない
+        //   (自動値の焼き付き=全員「変更済」化と、空の伝播を防ぐ)
+        let _pid = _rec ? _rec.patientId : (String(recordId).startsWith('auto-') ? Number(String(recordId).slice(5)) : null);
+        const _p = (appData.patients||[]).find(pt => pt.id === _pid);
+        if (!_fin) return;
+        if (_p) {
+          const _info = getNextVisitInfo(_p, selectedDate, appData.monthlyShifts, appData);
+          const _auto = String((field === 'nextDateOverride' ? _info.date : _info.time) ?? '').trim();
+          if (_fin === _auto) return;
+        }
+      }
       persistOverride(recordId, { [field]: finalValue });
   };
 
