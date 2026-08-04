@@ -40483,6 +40483,9 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [selectedPatientId, setSelectedPatientId] = React.useState(draft.selectedPatientId || null);
   const [subject, setSubject] = React.useState(draft.subject || '');
   const [memo, setMemo] = React.useState(draft.memo || '');
+  // ★ 連絡事項の書式(FAX向け: 文字サイズ/下線)。 定型文からも設定でき、下書きに保存される。
+  const [memoStyle, setMemoStyle] = React.useState(draft.memoStyle || { size: 'std', underline: false });
+  const [justSavedFax, setJustSavedFax] = React.useState(false);   // 保存ボタンの完了表示
   const [pageCount, setPageCount] = React.useState(draft.pageCount || 1);
   const [checks, setChecks] = React.useState(draft.checks || { kyuukyuu: false, kakunin: false, orikaesu: false });
   const [showFaxHist, setShowFaxHist] = React.useState(false);
@@ -40500,14 +40503,15 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const body = tplEdit.body || '';
     if (!title && !body.trim()) { setTplEdit(null); return; }
     let list = faxTemplates.slice();
-    if (tplEdit.id) list = list.map(t => t.id === tplEdit.id ? { ...t, title, body } : t);
-    else list = [...list, { id: `tpl_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, title, body }];
+    if (tplEdit.id) list = list.map(t => t.id === tplEdit.id ? { ...t, title, body, size: tplEdit.size || 'std', underline: !!tplEdit.underline } : t);
+    else list = [...list, { id: `tpl_${Date.now()}_${Math.random().toString(36).slice(2,6)}`, title, body, size: tplEdit.size || 'std', underline: !!tplEdit.underline }];
     _saveTemplates(list);
     setTplEdit(null);
   };
   const _deleteTemplate = (id) => { _saveTemplates(faxTemplates.filter(t => t.id !== id)); };
   const _insertTemplate = (t) => {
     setMemo(m => (m && m.trim()) ? (m.replace(/\s+$/, '') + '\n' + (t.body || '')) : (t.body || ''));
+    if (t.size || t.underline) setMemoStyle({ size: t.size || 'std', underline: !!t.underline });   // 定型文の書式を本文へ適用
     markDirty && markDirty();
     setShowTemplates(false);
   };
@@ -40563,7 +40567,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // 未保存ポップアップ用: 下書きを appData に書き戻す
   const flushSave = () => {
     onSave && onSave({ ...appData, generalFaxDraft: {
-      selectedPatientId, subject, memo, pageCount, checks,
+      selectedPatientId, subject, memo, memoStyle, pageCount, checks,
       recipientOffice, recipientName, customPatientName, selectedManager,
     }});
     markClean();
@@ -40693,6 +40697,20 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           <span style={{fontSize:12,fontWeight:'bold',color:'#cbd5e1'}}>枚</span>
         </label>
         <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+          {/* ★ 連絡事項の書式(文字サイズ/下線)。 FAXなので色は無し(店舗要望) */}
+          <div style={{display:'flex',alignItems:'center',gap:4,marginRight:4}}>
+            {[['std','標準'],['lg','大'],['xl','特大']].map(([v,l])=>(
+              <button key={v} type="button" onClick={()=>{ setMemoStyle(ms=>({...ms,size:v})); markDirty(); }}
+                      style={{padding:'6px 10px',borderRadius:8,fontWeight:'bold',fontSize:11,cursor:'pointer',border:'1px solid #cbd5e1',background:memoStyle.size===v?'#1d4ed8':'white',color:memoStyle.size===v?'white':'#334155'}}>{l}</button>
+            ))}
+            <button type="button" onClick={()=>{ setMemoStyle(ms=>({...ms,underline:!ms.underline})); markDirty(); }}
+                    style={{padding:'6px 10px',borderRadius:8,fontWeight:'bold',fontSize:11,cursor:'pointer',border:'1px solid #cbd5e1',background:memoStyle.underline?'#1d4ed8':'white',color:memoStyle.underline?'white':'#334155',textDecoration:'underline'}}>下線</button>
+          </div>
+          {/* ★ 保存ボタン(休み連絡と統一・店舗要望)。 下書きを保存して未保存状態を解消する */}
+          <button type="button" onClick={()=>{ flushSave(); setJustSavedFax(true); setTimeout(()=>setJustSavedFax(false), 2500); }}
+                  style={{background:justSavedFax?'#059669':'#2563eb',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
+            {justSavedFax ? '✓ 保存しました' : '保存'}
+          </button>
           <button type="button" onClick={()=>{setTplEdit(null);setShowTemplates(true);}}
                   style={{background:'#0369a1',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5}}>
             定型文
@@ -40886,7 +40904,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             <textarea value={memo} onChange={e=>setMemo(e.target.value)}
                       placeholder="ここに連絡事項を直接入力してください"
                       className="fax-inline-input"
-                      style={{flex:1,fontSize:16,lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%'}}/>
+                      style={{flex:1,fontSize:(memoStyle.size==='xl'?24:memoStyle.size==='lg'?20:16),lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%',textDecoration:(memoStyle.underline?'underline':'none')}}/>
             <div style={{fontSize:16,marginTop:8}}>今後ともよろしくお願いいたします。</div>
           </div>
         </div>
@@ -40917,6 +40935,10 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   </div>
                 ))}
                 <button onClick={()=>setTplEdit({title:'',body:''})} style={{width:'100%',marginTop:6,background:'#0369a1',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>＋ 新規追加</button>
+                <button onClick={()=>setTplEdit({ title: (subject||'').trim(), body: memo || '', size: memoStyle.size, underline: memoStyle.underline })}
+                        style={{width:'100%',marginTop:8,background:'#0f766e',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>
+                  今の入力内容から定型文を作成（件名→タイトル・本文→内容）
+                </button>
               </>
             )}
             {tplEdit && (
@@ -40927,6 +40949,15 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>本文</label>
                 <textarea value={tplEdit.body} onChange={e=>setTplEdit(v=>({...v,body:e.target.value}))} rows={7} placeholder="連絡事項に挿入される本文を入力してください"
                           style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',lineHeight:1.7,marginBottom:12}}/>
+                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>書式（挿入時に本文へ適用・FAX印刷の見え方）</label>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap'}}>
+                  {[['std','標準'],['lg','大'],['xl','特大']].map(([v,l])=>(
+                    <button key={v} onClick={()=>setTplEdit(pv=>({...pv,size:v}))}
+                            style={{padding:'6px 14px',borderRadius:8,fontWeight:'bold',fontSize:12,cursor:'pointer',border:'1px solid #cbd5e1',background:(tplEdit.size||'std')===v?'#1d4ed8':'white',color:(tplEdit.size||'std')===v?'white':'#334155'}}>{l}</button>
+                  ))}
+                  <button onClick={()=>setTplEdit(pv=>({...pv,underline:!pv.underline}))}
+                          style={{padding:'6px 14px',borderRadius:8,fontWeight:'bold',fontSize:12,cursor:'pointer',border:'1px solid #cbd5e1',background:tplEdit.underline?'#1d4ed8':'white',color:tplEdit.underline?'white':'#334155',textDecoration:'underline'}}>下線</button>
+                </div>
                 <div style={{display:'flex',gap:8}}>
                   <button onClick={_upsertTemplate} style={{flex:1,background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
                   <button onClick={()=>setTplEdit(null)} style={{flex:1,background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
