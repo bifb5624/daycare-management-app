@@ -26886,12 +26886,15 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   useEffect(() => {
       if (isBulkEditOpen || isScheduleModalOpen) {
           const initialOverrides = {};
+          // ★ 数字を含まない値(「　時　分」等の過去の残骸)は「未設定」とみなし自動計算値を表示する。
+          //   これをしないと、残骸のある人だけ空白表示になり、編集も効かないように見える。
+          const _hasNum = (v) => /\d/.test(String(v ?? ''));
           displayRecords.forEach(r => {
               const p = (appData.patients||[]).find(pt => pt.id === r.patientId);
               const info = getNextVisitInfo(p, selectedDate, appData.monthlyShifts, appData);
               initialOverrides[r.id] = {
-                  nextDateOverride: r.nextDateOverride !== undefined ? r.nextDateOverride : info.date,
-                  nextTimeOverride: r.nextTimeOverride !== undefined ? r.nextTimeOverride : info.time
+                  nextDateOverride: _hasNum(r.nextDateOverride) ? r.nextDateOverride : info.date,
+                  nextTimeOverride: _hasNum(r.nextTimeOverride) ? r.nextTimeOverride : info.time
               };
           });
           setLocalOverrides(initialOverrides);
@@ -27046,7 +27049,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   };
   
   const formatTimeString = (input) => {
-      if (!input || input.trim() === "") return "　時　分";
+      // ★ 空は空のまま返す。 以前は「　時　分」(空白文字入り)を返して記録に書き込んでいたため、
+      //   ①触っただけで「変更済」扱い ②モーダルで数字が取り出せず空白表示 ③同期の非空優先マージで
+      //   実際に入力された時間を打ち負かす(他店舗の「時間を入れたのに空白になる」報告の原因) になっていた。
+      if (!input || input.trim() === "") return "";
       if (input.includes('時')) return input; 
       let h = "　　", m = "　　";
       if (input.includes(':')) {
@@ -27235,12 +27241,13 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 <div className="space-y-3">
                   {displayRecords.map(r => {
                     const localData = localOverrides[r.id] || { nextDateOverride: "", nextTimeOverride: "" };
-                    const isOverridden = r.nextDateOverride !== undefined || r.nextTimeOverride !== undefined;
+                    // ★ 「変更済」は数字を含む実値がある時だけ(空白残骸では出さない)
+                    const isOverridden = /\d/.test(String(r.nextDateOverride ?? '')) || /\d/.test(String(r.nextTimeOverride ?? ''));
                     // ★ 既存値を 月/日/時/分 に分解
                     const dateMatch = (localData.nextDateOverride || '').match(/(\d+)月(\d+)日/);
                     const curMonth = dateMatch?.[1] || '';
                     const curDay = dateMatch?.[2] || '';
-                    const timeMatch = (localData.nextTimeOverride || '').match(/(\d+)\s*[:時]\s*(\d*)/);
+                    const timeMatch = (localData.nextTimeOverride || '').match(/(\d*)\s*[:時]\s*(\d*)/);   // 時が空でも分を保持
                     const curHour = timeMatch?.[1] || '';
                     const curMin = timeMatch?.[2] || '';
                     // ★ 月/日 を結合: 曜日も自動付与 (今年で計算、 過去なら来年扱い)
