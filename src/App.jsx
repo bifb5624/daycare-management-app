@@ -18552,7 +18552,7 @@ export default function App() {
       {/* ★ 新バージョン通知バナー (安全時は自動更新するが、すぐ更新したい場合の手動ボタンも出す) */}
       {updateAvailable && ReactDOM.createPortal(
         <div style={{position:'fixed',left:'50%',bottom:20,transform:'translateX(-50%)',zIndex:2000000,background:'#0f172a',color:'white',padding:'10px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:12,maxWidth:'92vw'}}>
-          <span style={{fontSize:13,fontWeight:'bold'}}>🔄 新しいバージョンがあります</span>
+          <span style={{fontSize:13,fontWeight:'bold'}}>⚠ 新しいバージョンがあります。<span style={{color:'#fca5a5'}}>必ず再読み込みしてください</span>（古いままだと同期や表示に不具合が出ることがあります）</span>
           {/* ★ 単なる reload だとブラウザのキャッシュから古いプログラムが読み直されることがあり、
               「押しても更新されない/しばらく経ってから反映」という症状になる。
               キャッシュとService Workerを消してから、URLに印を付けて確実に取り直す。 */}
@@ -27183,7 +27183,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         {/* ★ 詳細設定: 面数(1面/2面)・用紙・補助線(カット線/パンチ点)をここで選ぶ */}
         <div className="relative shrink-0">
           <button onClick={()=>setShowPrintSettings(v=>!v)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap">
-            <Settings size={16} className="mr-1.5" /> 詳細設定
+            <Settings size={16} className="mr-1.5" /> 印刷設定
           </button>
           {showPrintSettings && (()=>{
             const ss = appData.systemSettings || {};
@@ -27194,7 +27194,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
             const tabBtn = (on)=>`flex-1 px-2 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`;
             return (
               <div className="absolute right-0 top-full mt-1.5 z-30 bg-white border border-slate-300 rounded-xl shadow-xl p-3.5 w-80 text-left space-y-3">
-                <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-700">印刷の詳細設定</span><button onClick={()=>setShowPrintSettings(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">×</button></div>
+                <div className="flex items-center justify-between"><span className="text-sm font-bold text-slate-700">印刷設定</span><button onClick={()=>setShowPrintSettings(false)} className="text-slate-400 hover:text-slate-700 text-lg leading-none">×</button></div>
                 <div>
                   <div className="text-[11px] font-bold text-slate-500 mb-1">面数（1枚に何人分）</div>
                   <div className="flex gap-2">
@@ -27241,8 +27241,15 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 <div className="space-y-3">
                   {displayRecords.map(r => {
                     const localData = localOverrides[r.id] || { nextDateOverride: "", nextTimeOverride: "" };
-                    // ★ 「変更済」は数字を含む実値がある時だけ(空白残骸では出さない)
-                    const isOverridden = /\d/.test(String(r.nextDateOverride ?? '')) || /\d/.test(String(r.nextTimeOverride ?? ''));
+                    // ★ 「変更済」= マスタ由来の自動計算値(サービス提供内容の送迎時間・基本利用日)から
+                    //   実際に変わっている時だけ表示。 値が入っていても自動計算と同じなら未変更扱い。
+                    //   数字も「未定」も含まない残骸(空白のみ等)は未設定扱い。 意図的な「未定」は変更として扱う。
+                    const _rp = (appData.patients||[]).find(pt => pt.id === r.patientId);
+                    const _auto = getNextVisitInfo(_rp, selectedDate, appData.monthlyShifts, appData);
+                    const _nv = (v) => String(v ?? '').trim();
+                    const _isReal = (v) => /\d/.test(_nv(v)) || _nv(v) === '未定';
+                    const isOverridden = (_isReal(r.nextDateOverride) && _nv(r.nextDateOverride) !== _nv(_auto.date))
+                                      || (_isReal(r.nextTimeOverride) && _nv(r.nextTimeOverride) !== _nv(_auto.time));
                     // ★ 既存値を 月/日/時/分 に分解
                     const dateMatch = (localData.nextDateOverride || '').match(/(\d+)月(\d+)日/);
                     const curMonth = dateMatch?.[1] || '';
