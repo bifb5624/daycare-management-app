@@ -20044,7 +20044,35 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     }
   };
 
+  // ★ バイタル入力値の妥当性チェック(体温「7」・血圧「1257」等の桁違い入力の検知)。
+  //   入力は止めない(記録の自由は保つ)が、範囲外なら画面上部に赤い警告を数秒表示して気付けるようにする。
+  const [vitalWarn, setVitalWarn] = useState(null);   // 警告文字列
+  const _vitalWarnTimerRef = React.useRef(null);
+  const _checkVitalRange = (field, value) => {
+    try {
+      const f = String(field || '');
+      const v = String(value == null ? '' : value).trim();
+      if (!v) return;
+      const warn = (label, num, min, max) => {
+        if (isNaN(num) || (num >= min && num <= max)) return;
+        setVitalWarn(`${label}「${num}」は通常範囲(${min}〜${max})外です。入力をご確認ください`);
+        if (_vitalWarnTimerRef.current) clearTimeout(_vitalWarnTimerRef.current);
+        _vitalWarnTimerRef.current = setTimeout(() => setVitalWarn(null), 8000);
+      };
+      if (/^temp(_|$)/.test(f)) { warn('体温', parseFloat(v), 30, 43); return; }
+      if (f.startsWith('bpSt_combo') || f.startsWith('bpEn_combo')) {
+        const [up, dn] = v.split('/');
+        if (up) warn('血圧(上)', parseFloat(up), 50, 250);
+        if (dn) warn('血圧(下)', parseFloat(dn), 30, 150);
+        return;
+      }
+      if (/^bpUp/.test(f)) { warn('血圧(上)', parseFloat(v), 50, 250); return; }
+      if (/^bpDn/.test(f)) { warn('血圧(下)', parseFloat(v), 30, 150); return; }
+      if (/^pl(St|En)/.test(f)) { warn('脈拍', parseFloat(v), 30, 200); return; }
+    } catch {}
+  };
   const handleTab = () => {
+    _checkVitalRange(keypad.field, keypad.value);   // 次のセルへ移る前に今の値をチェック
     // 現在の timeFilter に合わせて ampm 別フィールドで Tab 巡回
     const _ampm = timeFilter || 'AM';
     // ★ 血圧は統合フィールド bpSt_combo / bpEn_combo で巡回
@@ -21238,7 +21266,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </div>
         );
       })(), document.body)}
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => setKeypad({...keypad, isOpen: false})} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}
+      {/* ★ バイタル範囲外の警告バナー(入力は止めない・気付き用) */}
+      {vitalWarn && ReactDOM.createPortal(
+        <div style={{position:'fixed',top:12,left:'50%',transform:'translateX(-50%)',zIndex:2000020,background:'#dc2626',color:'white',padding:'10px 18px',borderRadius:12,fontWeight:'bold',fontSize:14,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:10,maxWidth:'92vw'}}>
+          <span>⚠ {vitalWarn}</span>
+          <button onClick={()=>setVitalWarn(null)} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'white',borderRadius:8,padding:'4px 10px',fontWeight:'bold',cursor:'pointer',fontSize:12}}>閉じる</button>
+        </div>, document.body)}
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { _checkVitalRange(keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}
         unitSep={(()=>{ const _ei=(appData.systemSettings?.exerciseItems||appSettings.exerciseItems).find(i=>i.id===keypad.field); if(_ei && _ei.type!=='individual') return _ei.unitSep||''; const _rec=(filterMode==='single'?localPatients:localTicketRecords).find(x=>x.id===keypad.recordId); const _cur=_rec&&_rec.exercises&&_rec.exercises[keypad.field]; const _iid=(_cur&&typeof _cur==='object')?_cur.itemId:null; if(_iid){ const _ii=(appData.systemSettings?.individualExerciseItems||appSettings.individualExerciseItems||[]).find(x=>x.id===_iid); return (_ii&&_ii.unitSep)||''; } return ''; })()}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
