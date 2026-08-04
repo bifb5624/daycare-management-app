@@ -33754,6 +33754,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             <div ref={deviceSectionRef}>
             <SectionCard title="この端末の名前・最終更新">
               <p className="text-xs text-slate-500 mb-3">この端末（iPad・PC 等）に名前を付けておくと、記録を保存したときに「どの端末で最後に更新したか」が全端末に表示されます。名前はこの端末だけに保存され、他の端末には送信されません。</p>
+              {/* ★ 保存済みの端末名を常時表示(確定値がどこにも出ず、保存されたか分からない問題の解消) */}
+              <div className="mb-2 bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-500 shrink-0">現在の端末名</span>
+                <span className="text-sm font-bold text-slate-800">{deviceName || '名称未設定'}</span>
+                {deviceName ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-bold">保存済み</span>
+                            : <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-bold">未設定</span>}
+              </div>
               <label className="block text-sm font-bold text-slate-600 mb-1.5">端末名</label>
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                 <input
@@ -33761,6 +33768,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   onChange={e => { setDeviceNameDraft(e.target.value); setDeviceNameSaved(false); }}
                   placeholder="例: 事務所PC / iPad（相談員） / 送迎iPhone"
                   maxLength={30}
+                  name="tsumugi-device-label" autoComplete="off" autoCorrect="off" spellCheck={false}
                   className="flex-1 px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none focus:border-blue-400"/>
                 <button
                   type="button"
