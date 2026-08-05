@@ -39459,6 +39459,19 @@ ${optionsDesc}
           ⏳ 当月（{tM}月）分のモニタリングは<strong>毎月15日以降</strong>に作成・AI下書き・記入ができます（AIコスト管理のため）。過去月はいつでも編集できます。
         </div>
       )}
+      {/* ★ 確定サマリ＋締切(店舗要望): 確定/未確定を一目で。 締切=対象月の最終日18時。 過ぎると確定分が分析(個人)へ自動反映 */}
+      {attendedPats.length > 0 && (() => {
+        const _lastDay = new Date(tY, tM, 0).getDate();
+        const _confN = attendedPats.filter(p => results[p.id]?.confirmed).length;
+        const _todoN = attendedPats.length - _confN;
+        return (
+          <div className="no-print" style={{flexShrink:0,background:'#f8fafc',borderBottom:'1px solid #e2e8f0',padding:'8px 16px',fontSize:12.5,fontWeight:'bold',display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
+            <span style={{color:'#059669'}}>✓ 確定 {_confN}名</span>
+            <span style={{color:_todoN>0?'#d97706':'#94a3b8'}}>● 未確定 {_todoN}名</span>
+            <span style={{color:'#475569',fontWeight:'normal'}}>締切: {tM}月{_lastDay}日 18:00 までに確定（過ぎると確定分が分析（個人）へ自動反映されます）</span>
+          </div>
+        );
+      })()}
       <div className="no-print" style={{flexShrink:0,background:_aiRemaining>0?'#eff6ff':'#fef2f2',borderBottom:`1px solid ${_aiRemaining>0?'#bfdbfe':'#fecaca'}`,color:_aiRemaining>0?'#1e40af':'#b91c1c',padding:'6px 16px',fontSize:12,display:'flex',alignItems:'center',gap:8}}>
         今月のAI下書き：<strong>残り{_aiRemaining}回</strong>（上限{_aiLimit}回＝利用者{_aiActiveCount}名＋3回／{_aiUsed}回使用済み）
         {_aiRemaining<=0 && <span style={{fontWeight:'bold'}}>— 上限に達しました。手入力または「一括作成（既定）」でご対応ください。</span>}
