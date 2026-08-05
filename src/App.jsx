@@ -12831,7 +12831,7 @@ function FamilyView() {
         <div style={{width:'100%',maxWidth:380}}>
           {/* 紡ぎ ロゴ v23: 四つ葉クローバー + 丸ゴ + 緑 */}
           <div style={{textAlign:'center',marginBottom:20}}>
-            <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
+            <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:200,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
             <div style={{fontSize:18,fontWeight:'bold',marginTop:10,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
           </div>
           {mode === 'signup' && _inviteAlreadyUsed && !signupForm.done ? (
@@ -16258,7 +16258,7 @@ function StaffLoginGate({ onLogin }) {
       <div style={{width:'100%',maxWidth:420,background:'white',borderRadius:24,padding:'32px 28px',boxShadow:'0 12px 40px rgba(125,170,61,0.25)',boxSizing:'border-box'}}>
         {/* 紡ぎ ロゴ: 家族ログインと同じものをそのまま使用 */}
         <div style={{textAlign:'center',marginBottom:20}}>
-          <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
+          <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:200,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
           <div style={{fontSize:18,fontWeight:'bold',marginTop:6,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>事業所スタッフ専用ログイン</div>
         </div>
         <form onSubmit={handleSubmit}>
@@ -18207,7 +18207,7 @@ export default function App() {
         <div style={{width:'100%',maxWidth:400}}>
           {/* ロゴ v23: 四つ葉クローバー (X字+rotate(-60)) + 丸ゴ + 明るい緑 */}
           <div style={{textAlign:'center',marginBottom:28}}>
-            <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
+            <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:200,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
           </div>
 
           {/* ログインカード: 白基調 + 緑アクセント */}
@@ -18622,30 +18622,7 @@ export default function App() {
       }`}>
           <div className="w-64 h-full flex flex-col">
             <div className="h-16 flex items-center px-5 border-b" style={{background:'#fafef1',borderColor:'#d4e7a5'}}>
-              <svg viewBox="0 0 100 100" className="w-8 h-8 mr-2 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <radialGradient id="sidebarLeafA" cx="40%" cy="55%" r="55%">
-                    <stop offset="0%" stopColor="#608a3e"/>
-                    <stop offset="50%" stopColor="#94c456"/>
-                    <stop offset="100%" stopColor="#d4e7a5"/>
-                  </radialGradient>
-                  <radialGradient id="sidebarLeafB" cx="55%" cy="50%" r="55%">
-                    <stop offset="0%" stopColor="#5a8330"/>
-                    <stop offset="50%" stopColor="#8fb84a"/>
-                    <stop offset="100%" stopColor="#cee49b"/>
-                  </radialGradient>
-                </defs>
-                <g transform="translate(50, 49)">
-                  <path d="M 0 3 Q 1 18 -1 42" stroke="#3d5021" strokeWidth="1.8" fill="none" strokeLinecap="round"/>
-                  <g transform="rotate(-60)">
-                    <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#sidebarLeafA)"/></g>
-                    <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#sidebarLeafB)"/></g>
-                    <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#sidebarLeafA)"/></g>
-                    <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#sidebarLeafB)"/></g>
-                    <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
-                  </g>
-                </g>
-              </svg>
+              <img src="/preview/tsumugi-mark-transparent.png" alt="" className="w-8 h-8 mr-2 flex-shrink-0" style={{objectFit:'contain'}}/>
               <div className="flex-1 min-w-0 leading-none">
                 <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'22px',color:'#3d5021',fontWeight:700,letterSpacing:'2px',lineHeight:1}}>つむぎ</span>
                 <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'10px',color:'#7daa3d',letterSpacing:'3px',marginLeft:'8px',fontWeight:500,lineHeight:1,verticalAlign:'middle'}}>Tsumugi</span>
