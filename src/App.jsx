@@ -50,6 +50,7 @@ import {
   applyOps,
   senderId as opSenderId,
 } from './lib/syncOps';
+import { CONSENT_DEFAULT_TEMPLATES, CONSENT_DEFAULT_VARS, CONSENT_SIGNER_LABELS, fillConsentVars } from './lib/consentTemplates';
 import {
   supabaseLoadStateForStore,
   supabaseStaffLogin,
@@ -1057,6 +1058,7 @@ const ADDONS = [
   { key: 'kinou_keikaku', label: '個別機能訓練計画書', icon: '', desc: '個別機能訓練加算の計画書を作成・印刷（運動・バイタル・体力測定から自動補完）' },
   { key: 'tsusho_keikaku', label: '通所介護計画書', icon: '', desc: '通所介護計画書の作成・印刷（個別機能訓練計画書・興味関心から自動取込）' },
   { key: 'assessment', label: 'アセスメント・居宅訪問', icon: '', desc: 'アセスメント記録・居宅訪問記録の作成・保管', soon: true },
+  { key: 'consent', label: '電子同意書', icon: '', desc: '契約書・重要事項説明書・個人情報同意書・写真掲載承諾書の作成・印刷（条文は店舗ごとに編集可・利用者情報を差し込み）' },
   // === LIFE（科学的介護）関連加算：加算ごとに独立アドオン（まとめて算定・個別算定のどちらにも対応）===
   { key: 'kasan_kinou2', label: '個別機能訓練加算Ⅱ（LIFE）', icon: '', desc: '個別機能訓練計画（3-3/3-1/3-2）のLIFE標準項目・提出用データ', life: true },
   { key: 'kasan_kagaku', label: '科学的介護推進体制加算（LIFE）', icon: '', desc: 'ADL・栄養・口腔・認知症・既往等の総論項目をLIFE提出用に記録', life: true },
@@ -18947,6 +18949,9 @@ export default function App() {
                   )}
                 </SidebarGroup>
               )}
+              {hasAddon(appData,'consent') && (
+                <SidebarItem icon={<FileText size={18} />} label="電子同意書" active={currentView === 'consent'} onClick={() => navigateTo('consent')} />
+              )}
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
                 <SidebarItem icon={<BarChart3 size={18} />} label="分析（個人）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
@@ -18982,6 +18987,7 @@ export default function App() {
                  currentView === 'roster' ? '勤務表' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
                  currentView === 'keikaku_yotei' ? '計画書・加算の作成予定' :
+                 currentView === 'consent' ? '電子同意書' :
                  currentView === 'tsusho_keikaku' ? '通所介護計画書' :
                  currentView === 'life_hub' ? 'LIFE・加算' :
                  currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
@@ -19084,6 +19090,7 @@ export default function App() {
              currentView === 'roster' ? <RosterView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} /> :
+             currentView === 'consent' ? <ConsentView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
              currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
@@ -36161,6 +36168,190 @@ const SEIKATSU_SHINSHIN = ['麻痺','関節拘縮','筋力低下','関節痛','�
 const KYOMI_DEFAULT = ['自分でトイレに行く','一人でお風呂に入る','自分で服を着る','自分で食べる','歯磨きをする','身だしなみを整える','好きなときに眠る','掃除・整理整頓','料理を作る','買い物','散歩','友人とのおしゃべり','家族・親戚との団らん','趣味の活動','スポーツ','旅行・外出','庭いじり・園芸','読書','俳句・川柳','書道','絵を描く','写真','音楽を聴く','歌・カラオケ','楽器の演奏','将棋・囲碁・麻雀','編み物・手芸','針仕事','テレビ・映画','パソコン・スマホ','賃金を伴う仕事','ボランティア活動','地域の行事・活動','子や孫の世話','動物の世話','お参り・信仰'];
 
 // === 個別機能訓練計画書 (アドオン: kinou_keikaku) ===
+// ★ 電子同意書の印刷用HTMLを組み立てる（差し込み済み）。 copies=2 で「お渡し用＋事業者控え」を改ページで2部。
+function buildConsentPrintHtml(doc, vars, copies) {
+  const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fv = (s) => esc(fillConsentVars(s, vars)).replace(/\n/g, '<br>');
+  const oneDoc = (copyLabel) => {
+    let h = '<div class="doc">';
+    if (copyLabel) h += `<div class="copy">（${esc(copyLabel)}）</div>`;
+    h += `<h1>${esc(doc.title)}</h1>`;
+    if (doc.subtitle) h += `<div class="sub">${esc(doc.subtitle)}</div>`;
+    if (doc.note) h += `<div class="note">${fv(doc.note)}</div>`;
+    if (doc.intro) h += `<p>${fv(doc.intro)}</p>`;
+    if (doc.choice) h += `<div class="choice">${esc(doc.choice.label)}：` + doc.choice.options.map(o => `（　）${esc(o)}`).join('　') + '</div>';
+    (doc.sections || []).forEach(sec => { h += `<div class="sec"><div class="heading">${esc(sec.heading)}</div><div class="body">${fv(sec.body)}</div></div>`; });
+    (doc.priceTables || []).forEach(pt => {
+      h += `<div class="ptitle">${esc(pt.title)} <span class="pnote">${esc(pt.note || '')}</span></div>`;
+      h += '<table><thead><tr>' + pt.header.map(x => `<th>${esc(x)}</th>`).join('') + '</tr></thead><tbody>' +
+        pt.rows.map(r => '<tr>' + r.map(c => `<td>${esc(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+    });
+    if (doc.addressee) h += `<div class="addressee">${fv(doc.addressee)}</div>`;
+    if (doc.closing) h += `<p class="closing">${fv(doc.closing)}</p>`;
+    if ((doc.signatures || []).length) {
+      h += '<div class="signs">';
+      doc.signatures.forEach(sg => {
+        const lbl = CONSENT_SIGNER_LABELS[sg] || sg;
+        if (sg === 'provider') {
+          h += `<div class="sign"><div class="slabel">${esc(lbl)}</div><div class="sline">住所：${esc(vars.会社住所 || '')}</div><div class="sline">名称：${esc(vars.会社名 || '')}　代表者：${esc(vars.代表者名 || '')}　㊞</div></div>`;
+        } else {
+          h += `<div class="sign"><div class="slabel">${esc(lbl)}</div><div class="sline">住所：＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿</div><div class="sline">氏名：＿＿＿＿＿＿＿＿＿＿＿＿　㊞　　電話：＿＿＿＿＿＿＿＿＿</div></div>`;
+        }
+      });
+      h += '</div>';
+    }
+    h += '<div class="date">契約締結日：' + (vars.契約締結日 ? esc(vars.契約締結日) : '令和　　年　　月　　日') + '</div>';
+    h += '</div>';
+    return h;
+  };
+  let body = oneDoc(copies === 2 ? 'お渡し用' : '');
+  if (copies === 2) body += '<div class="pagebreak"></div>' + oneDoc('事業者控え');
+  return '<!doctype html><html lang="ja"><head><meta charset="utf-8"><title>' + esc(doc.title) + '</title><style>' +
+    '@page{size:A4;margin:14mm} body{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;color:#111;font-size:10.5pt;line-height:1.7}' +
+    '.copy{text-align:right;font-weight:bold;color:#b91c1c;font-size:10pt} h1{text-align:center;font-size:15pt;margin:2px 0}' +
+    '.sub{text-align:center;font-size:10pt;color:#555} .note{text-align:center;font-size:9pt;color:#555;margin-bottom:6px}' +
+    '.sec{margin:5px 0;page-break-inside:avoid} .heading{font-weight:bold;border-left:3px solid #2563eb;padding-left:6px;margin-bottom:2px}' +
+    '.choice{border:1px solid #333;padding:6px;margin:8px 0;font-weight:bold}' +
+    'table{border-collapse:collapse;width:100%;font-size:8pt;margin:4px 0;page-break-inside:avoid} th,td{border:1px solid #333;padding:2px 4px;text-align:center} th{background:#f1f5f9}' +
+    '.ptitle{font-weight:bold;margin-top:8px} .pnote{font-weight:normal;font-size:8pt;color:#555}' +
+    '.addressee{text-align:right;font-weight:bold;margin-top:8px} .closing{font-size:9pt;color:#333;margin-top:10px}' +
+    '.signs{margin-top:12px;border-top:1px solid #333;padding-top:8px} .sign{margin:6px 0} .slabel{font-weight:bold} .sline{margin:3px 0}' +
+    '.date{margin-top:10px;font-weight:bold} .pagebreak{page-break-before:always}' +
+    '</style></head><body>' + body + '</body></html>';
+}
+
+// ★★ 電子同意書ビュー（第1段: 文書テンプレート閲覧・目次ジャンプ・利用者差し込み・印刷/PDF）。
+//   既存機能に一切依存しない独立追加。 条文の初期値は consentTemplates.js（原本ver26.6）。
+//   店舗が編集した版は systemSettings.consentTemplates に保存（次段で編集UI）。
+function ConsentView({ appData, onSave, targetPatientId }) {
+  const templates = (appData.systemSettings?.consentTemplates && appData.systemSettings.consentTemplates.length)
+    ? appData.systemSettings.consentTemplates : CONSENT_DEFAULT_TEMPLATES;
+  const [docKey, setDocKey] = React.useState(templates[0]?.key || 'keiyaku');
+  const [pid, setPid] = React.useState(targetPatientId || null);
+  const [extra, setExtra] = React.useState({});
+  const doc = templates.find(t => t.key === docKey) || templates[0];
+  const fi = appData.systemSettings?.facilityInfo || {};
+  const patient = (appData.patients || []).find(p => p.id === pid);
+  const vars = React.useMemo(() => ({
+    ...CONSENT_DEFAULT_VARS,
+    事業所名: fi.name || CONSENT_DEFAULT_VARS.事業所名,
+    提供場所住所: fi.address || CONSENT_DEFAULT_VARS.提供場所住所,
+    事業所電話: fi.phone || CONSENT_DEFAULT_VARS.事業所電話,
+    管理者名: fi.manager || fi.managerName || CONSENT_DEFAULT_VARS.管理者名,
+    利用者氏名: patient?.name || '',
+    利用者住所: patient?.address || '',
+    利用者電話: patient?.phone || '',
+    契約締結日: extra.契約締結日 || '',
+    主治医氏名: extra.主治医氏名 || patient?.doctor || patient?.kakaritsukeI || '',
+    主治医連絡先: extra.主治医連絡先 || patient?.doctorPhone || '',
+    家族氏名: extra.家族氏名 || '',
+    家族連絡先: extra.家族連絡先 || '',
+  }), [fi.name, fi.address, fi.phone, fi.manager, fi.managerName, patient, extra]);
+
+  const scrollToSec = (id) => { const el = document.getElementById('consent-sec-' + id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+
+  const openPrint = (copies) => {
+    const html = buildConsentPrintHtml(doc, vars, copies);
+    const w = window.open('', '_blank');
+    if (!w) { alert('印刷ウィンドウを開けませんでした。ポップアップを許可してください。'); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => { try { w.focus(); w.print(); } catch {} }, 400);
+  };
+
+  const upd = (k, v) => setExtra(prev => ({ ...prev, [k]: v }));
+
+  return (
+    <div className="p-4 md:p-6 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+        <h1 className="text-xl font-bold text-slate-800">電子同意書</h1>
+        <div className="flex gap-2">
+          <button onClick={() => openPrint(1)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm">印刷（1部）</button>
+          <button onClick={() => openPrint(2)} className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">お渡し用＋控え（2部印刷）</button>
+        </div>
+      </div>
+
+      {/* 文書タブ */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {templates.map(t => (
+          <button key={t.key} onClick={() => setDocKey(t.key)}
+            className={`px-4 py-2 rounded-xl font-bold text-sm border transition-all ${docKey === t.key ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{t.title}</button>
+        ))}
+      </div>
+
+      {/* 差し込み入力 */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4">
+        <div className="text-xs font-bold text-slate-500 mb-2">差し込み情報（選ぶと下の書面に反映されます）</div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <select value={pid || ''} onChange={e => setPid(Number(e.target.value) || null)} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+            <option value="">利用者を選択</option>
+            {[...(appData.patients || [])].sort((a, b) => (a.kana || '').localeCompare(b.kana || '', 'ja')).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <input value={extra.契約締結日 || ''} onChange={e => upd('契約締結日', e.target.value)} placeholder="契約締結日（例: 令和8年4月1日）" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
+          <input value={extra.主治医氏名 || ''} onChange={e => upd('主治医氏名', e.target.value)} placeholder="主治医 氏名" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
+          <input value={extra.主治医連絡先 || ''} onChange={e => upd('主治医連絡先', e.target.value)} placeholder="主治医 連絡先" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
+          <input value={extra.家族氏名 || ''} onChange={e => upd('家族氏名', e.target.value)} placeholder="ご家族 氏名（続柄）" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
+          <input value={extra.家族連絡先 || ''} onChange={e => upd('家族連絡先', e.target.value)} placeholder="ご家族 連絡先" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
+        </div>
+      </div>
+
+      <div className="flex gap-4">
+        {/* 目次 */}
+        {doc.sections && doc.sections.length > 0 && (
+          <nav className="hidden md:block w-52 shrink-0 sticky top-4 self-start max-h-[80vh] overflow-y-auto bg-white border border-slate-200 rounded-xl p-2">
+            <div className="text-[11px] font-bold text-slate-400 px-2 py-1">目次</div>
+            {doc.sections.map(sec => (
+              <button key={sec.id} onClick={() => scrollToSec(sec.id)} className="block w-full text-left px-2 py-1.5 rounded-lg text-[12px] font-bold text-slate-600 hover:bg-blue-50 hover:text-blue-700 truncate">{sec.heading}</button>
+            ))}
+          </nav>
+        )}
+        {/* 条文プレビュー */}
+        <article className="flex-1 bg-white border border-slate-200 rounded-xl p-5 md:p-8 min-w-0" style={{ lineHeight: 1.8 }}>
+          <h2 className="text-lg font-bold text-center text-slate-900">{doc.title}</h2>
+          {doc.subtitle && <div className="text-center text-sm text-slate-500 mb-1">{doc.subtitle}</div>}
+          {doc.note && <div className="text-center text-xs text-slate-500 mb-3">{fillConsentVars(doc.note, vars)}</div>}
+          {doc.intro && <p className="text-sm text-slate-700 mb-4" style={{ whiteSpace: 'pre-wrap' }}>{fillConsentVars(doc.intro, vars)}</p>}
+          {doc.choice && (
+            <div className="my-4 p-3 border border-slate-300 rounded-lg text-sm font-bold">
+              {doc.choice.label}：{doc.choice.options.map((o, i) => <span key={i} className="mx-2">（　）{o}</span>)}
+              <div className="text-[11px] text-slate-400 mt-1">※ どちらかに○を付けてください</div>
+            </div>
+          )}
+          {(doc.sections || []).map(sec => (
+            <section key={sec.id} id={'consent-sec-' + sec.id} className="mb-4 scroll-mt-4">
+              <h3 className="text-sm font-bold text-slate-900 border-l-4 border-blue-500 pl-2 mb-1">{sec.heading}</h3>
+              <div className="text-sm text-slate-700" style={{ whiteSpace: 'pre-wrap' }}>{fillConsentVars(sec.body, vars)}</div>
+            </section>
+          ))}
+          {/* 料金表 */}
+          {(doc.priceTables || []).map((pt, ti) => (
+            <div key={ti} className="my-4 overflow-x-auto">
+              <div className="text-sm font-bold text-slate-800 mb-1">{pt.title} <span className="text-[11px] font-normal text-slate-500">{pt.note}</span></div>
+              <table className="w-full border-collapse text-[11px]">
+                <thead><tr>{pt.header.map((h, hi) => <th key={hi} className="border border-slate-300 bg-slate-50 px-1 py-1 font-bold">{h}</th>)}</tr></thead>
+                <tbody>{pt.rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => <td key={ci} className="border border-slate-300 px-1 py-1 text-center">{c}</td>)}</tr>)}</tbody>
+              </table>
+            </div>
+          ))}
+          {doc.addressee && <div className="text-sm font-bold text-right mt-4">{fillConsentVars(doc.addressee, vars)}</div>}
+          {doc.closing && <p className="text-xs text-slate-600 mt-5" style={{ whiteSpace: 'pre-wrap' }}>{fillConsentVars(doc.closing, vars)}</p>}
+          {/* 署名欄プレビュー */}
+          {(doc.signatures || []).length > 0 && (
+            <div className="mt-5 pt-4 border-t border-slate-200 space-y-2">
+              <div className="text-xs font-bold text-slate-400">署名欄（印刷後に手書き。次段でタブレット署名に対応予定）</div>
+              {doc.signatures.map(sg => (
+                <div key={sg} className="text-sm text-slate-700 flex items-center gap-3 flex-wrap">
+                  <span className="font-bold w-40 shrink-0">{CONSENT_SIGNER_LABELS[sg] || sg}</span>
+                  <span className="text-slate-400">住所　　　　　　　　氏名　　　　　　　　㊞</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+      </div>
+    </div>
+  );
+}
+
 function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo, targetPatientId }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
