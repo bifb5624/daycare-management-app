@@ -22039,7 +22039,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           {!compactMode && (
           <button type="button" onClick={()=>setShowPrintOptionsPopup(true)}
               style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
-            <Printer size={14}/>プレビュー
+            プレビュー
           </button>
           )}
           {/* 隠しトリガー: ポップアップから .click() で発火される。既存の生成ロジックを温存。 */}
@@ -22470,7 +22470,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               </button>
               <button onClick={()=>{ setShowPrintOptionsPopup(false); setTimeout(()=>document.getElementById('personal-print-hidden-trigger')?.click(),50); }}
                       style={{background:'linear-gradient(135deg,#2563eb,#1e40af)',color:'white',border:'none',borderRadius:10,padding:'10px 20px',fontWeight:'bold',fontSize:14,cursor:'pointer',display:'flex',alignItems:'center',gap:6,boxShadow:'0 2px 8px rgba(37,99,235,0.3)'}}>
-                <Printer size={16}/>プレビューを生成
+                プレビューを生成
               </button>
             </div>
           </div>
@@ -25439,7 +25439,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div style={{display:'flex',gap:6,alignItems:'center'}}>
           <button type="button" onClick={()=>setPrintOptsModal(true)}
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:8,padding:'6px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4,whiteSpace:'nowrap'}}>
-            <Printer size={14}/>プレビュー
+            プレビュー
           </button>
         </div>
       </div>{/* end orange header */}
@@ -26302,7 +26302,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={()=>{ setPeriodMode(p=>{ const np=!p; if(np && (!periodFrom||!periodTo)){ // 既定: 最古の記録月〜当月
             const set=new Set(); (appData.ticketRecords||[]).forEach(r=>{ if(r.patientId!==sp.id) return; const m=(r.date||'').match(/(\d+)月/); if(!m) return; let y=r.year; if(!y){ y=(typeof r.id==='number'&&r.id>1e12)?new Date(r.id).getFullYear():new Date().getFullYear(); } set.add(`${y}-${String(+m[1]).padStart(2,'0')}`); });
-            const arr=[...set].sort(); setPeriodFrom(arr[0]||curMonth); setPeriodTo(curMonth); } return np; }); }} className={`px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap active:scale-95 ${periodMode?'bg-violet-700 text-white':'bg-violet-100 text-violet-700 border border-violet-300 hover:bg-violet-200'}`} title="選んだ開始月〜終了月の提供記録を、この画面と同じ形式で並べて表示します。プレビューでまとめてPDF保存できます"><FileText size={16} className="mr-1.5"/>{periodMode?'期間出力 中':'期間出力'}</button>
+            const arr=[...set].sort(); setPeriodFrom(arr[0]||curMonth); setPeriodTo(curMonth); } return np; }); }} className={`px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap active:scale-95 ${periodMode?'bg-violet-700 text-white':'bg-violet-100 text-violet-700 border border-violet-300 hover:bg-violet-200'}`} title="選んだ開始月〜終了月の提供記録を、この画面と同じ形式で並べて表示します。プレビューでまとめてPDF保存できます">{periodMode?'期間出力 中':'期間出力'}</button>
           {periodMode && (
             <div className="flex items-center gap-1 bg-white border border-violet-300 rounded-xl px-2 py-1 shrink-0">
               <input type="month" value={periodFrom} max={periodTo||undefined} onChange={e=>setPeriodFrom(e.target.value)} className="text-xs font-bold text-slate-700 outline-none"/>
@@ -26310,8 +26310,8 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
               <input type="month" value={periodTo} min={periodFrom||undefined} onChange={e=>setPeriodTo(e.target.value)} className="text-xs font-bold text-slate-700 outline-none"/>
             </div>
           )}
-          <button onClick={()=>{ const mk=`${tY}-${String(tM).padStart(2,'0')}`; const cur = (sp.bikouOverrides && sp.bikouOverrides[mk] != null) ? sp.bikouOverrides[mk] : computeServiceChangeBikou(sp, tY, tM, appData); setBikouEdit({ text: cur }); }} className="bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap" title="この月の備考欄を手動で編集します"><PenTool size={15} className="mr-1.5"/>備考編集</button>
-          <button onClick={()=>{if(onShowPrintPreview){onShowPrintPreview(periodMode?`サービス提供記録_${periodFrom}〜${periodTo}_${sp?.name||''}`:`サービス提供記録_${tY}年${tM}月_${sp?.name||''}`, 'A4 landscape', 'print-content-ticket')}else{window.print();}}} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm"><Printer size={16} className="mr-1.5"/>プレビュー</button>
+          <button onClick={()=>{ const mk=`${tY}-${String(tM).padStart(2,'0')}`; const cur = (sp.bikouOverrides && sp.bikouOverrides[mk] != null) ? sp.bikouOverrides[mk] : computeServiceChangeBikou(sp, tY, tM, appData); setBikouEdit({ text: cur }); }} className="bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 px-4 py-2 rounded-xl font-bold flex items-center text-sm whitespace-nowrap" title="この月の備考欄を手動で編集します">備考編集</button>
+          <button onClick={()=>{if(onShowPrintPreview){onShowPrintPreview(periodMode?`サービス提供記録_${periodFrom}〜${periodTo}_${sp?.name||''}`:`サービス提供記録_${tY}年${tM}月_${sp?.name||''}`, 'A4 landscape', 'print-content-ticket')}else{window.print();}}} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm">プレビュー</button>
         </div>
       </div>
       {/* コンテンツ：横スクロール可能 */}
@@ -27373,18 +27373,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </div>
         <div className="flex-1" />
         <button onClick={() => setRenrakuModal({ patientId: null })} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-blue-600 border-blue-600 hover:bg-blue-700 text-white">
-          <MessageSquare size={16} className="mr-1.5" /> 連絡事項
+          連絡事項
         </button>
         <button onClick={() => setIsScheduleModalOpen(true)} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-white border-slate-300 hover:bg-slate-50 text-slate-700">
-          <Clock size={16} className="mr-1.5" /> 次回予定
+          次回予定
         </button>
         <button onClick={() => setIsConfigOpen(true)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
-          <Settings size={16} className="mr-1.5" /> 項目
+          項目
         </button>
         {/* ★ 詳細設定: 面数(1面/2面)・用紙・補助線(カット線/パンチ点)をここで選ぶ */}
         <div className="relative shrink-0">
           <button onClick={()=>setShowPrintSettings(v=>!v)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap">
-            <Settings size={16} className="mr-1.5" /> 印刷設定
+            印刷設定
           </button>
           {showPrintSettings && (()=>{
             const ss = appData.systemSettings || {};
@@ -27425,7 +27425,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           })()}
         </div>
         <button onClick={handlePrint} className="bg-slate-900 hover:bg-black text-white px-5 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
-          <Printer size={16} className="mr-1.5" /> プレビュー
+          プレビュー
         </button>
       </div>
       <div className="max-w-[800px] mx-auto space-y-8 pb-32 pt-6">
@@ -30036,7 +30036,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               })()}{(localPatient.cmOffice||localPatient.cmName) && <div className="flex flex-col"><span className="text-[13px] font-bold text-slate-900">{localPatient.cmOffice}</span><span className="text-[13px] font-bold text-slate-900">{localPatient.cmName}</span></div>}{localPatient.startDate && <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">{dTxt(dBtw(localPatient.startDate,new Date()))}利用</span>}</div>{isResigned && <span className="text-xs font-bold bg-slate-200 text-slate-600 px-3 py-1 rounded-lg">終了</span>}
             <div className="flex items-center gap-2">{isResigned ? (<>{!isEditingResigned && <button onClick={() => setIsEditingResigned(true)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm flex items-center active:scale-95"><Lock size={14} className="mr-1" />編集</button>}{isEditingResigned && <button onClick={() => { saveMasterInfo(); setIsEditingResigned(false); }} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm flex items-center active:scale-95"><Save size={14} className="mr-1" />保存</button>}<button onClick={() => setDeleteConfirmModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm flex items-center shadow-lg active:scale-95"><Trash2 size={14} className="mr-1" />完全削除</button></>) : (<div className="flex gap-2 flex-wrap justify-end"><button onClick={() => setDeleteConfirmModal(true)} className="px-3 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl font-bold text-sm flex items-center whitespace-nowrap shrink-0 active:scale-95" title={localPatient.startDate ? '利用中の利用者を削除します (関連記録も削除されます)' : '利用者を削除'}><Trash2 size={14} className="mr-1" />削除</button><button onClick={()=>setPersonalFileModal({patient:localPatient})} className="px-3 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl font-bold text-sm flex items-center whitespace-nowrap shrink-0 active:scale-95" title="個人ファイル: フェイスシート・契約書・ケアプラン・モニタリング 等"><BookOpen size={14} className="mr-1"/>個人ファイル</button><button onClick={()=>setFamilyShareModal({patient:localPatient})} className="px-3 py-2 bg-violet-100 hover:bg-violet-200 text-violet-700 rounded-xl font-bold text-sm flex items-center whitespace-nowrap shrink-0 active:scale-95" title="家族・ケアマネ用ログインアカウントを発行・管理"><QrCode size={14} className="mr-1"/>アカウント管理</button>{/* ★ onClick={saveMasterInfo} だとクリックイベントが第1引数(auto)に渡り auto=truthy(自動保存扱い)になり、
     運動メニュー変更時の「いつから適用」モーダルが出ずに当日付で確定し、保存トーストも出なかった。 明示的に auto=false で呼ぶ。 */}
-<button onClick={()=>saveMasterInfo(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center whitespace-nowrap shrink-0 shadow-lg active:scale-95 text-sm"><Save size={16} className="mr-1.5" />保存</button></div>)}</div>
+<button onClick={()=>saveMasterInfo(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold flex items-center whitespace-nowrap shrink-0 shadow-lg active:scale-95 text-sm">保存</button></div>)}</div>
           </div>
           <div className="flex border-b border-slate-200 bg-slate-50 shrink-0 px-6"><button onClick={() => setActiveDetailTab('basic')} className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'basic' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>基本情報</button><button onClick={() => setActiveDetailTab('service')} className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'service' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>サービス提供内容</button><button onClick={() => setActiveDetailTab('history')} className={`px-4 py-2 text-sm font-bold border-b-2 transition-colors ${activeDetailTab === 'history' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>変更履歴</button></div>
           <div className="flex-1 overflow-auto p-6"><div className="max-w-5xl mx-auto space-y-5 pb-12 master-detail-content">
@@ -32884,7 +32884,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         </div>
         <button type="button" onClick={saveAll}
           className="shrink-0 mb-2 px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md active:scale-95 flex items-center gap-1.5 text-sm">
-          <Save size={15}/>保存
+          保存
         </button>
       </div>
 
@@ -35576,7 +35576,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               const title = isPrintPreview==='both'?'業務日誌（AM/PM）':'業務日誌';
               window.dispatchEvent(new CustomEvent('setPrintHtml',{detail:{title,pageSize:'A4 portrait',html:parts}}));
             }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-bold text-sm flex items-center gap-2">
-            <Printer size={15}/> プレビュー
+            プレビュー
           </button>
         </div>
         {/* A4を96dpi換算でスケール表示 */}
