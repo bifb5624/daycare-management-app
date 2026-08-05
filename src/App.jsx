@@ -9791,6 +9791,20 @@ const nearestOpenDate = (isoDate, closedDays, holidays) => {
   return isoDate;
 };
 
+// ★ 前方のみの営業日送り: 次回利用日が定休日/休業日に当たる場合、その後の最初の営業日へ進める。
+//   (nearestOpenDateは後退もするが、次回予定は必ず未来方向へ送る)
+const forwardOpenDate = (isoDate, closedDays, holidays) => {
+  const closed = Array.isArray(closedDays) ? closedDays : [0];
+  const holiSet = new Set((holidays||[]).map(h => (h && h.date) ? h.date : h));
+  const d = new Date(isoDate);
+  if (isNaN(d.getTime())) return isoDate;
+  for (let i = 0; i < 62; i++) {
+    if (!closed.includes(d.getDay()) && !holiSet.has(_isoOf(d))) return _isoOf(d);
+    d.setDate(d.getDate() + 1);
+  }
+  return isoDate;
+};
+
 const getRowFromKana = (kana) => {
   if (!kana) return 'その他';
   const firstChar = kana.charAt(0);
@@ -27147,9 +27161,32 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       markClean();
       onSave({ ...appData, ticketRecords: recs }, { silent: true }); // ★ 即時クラウド保存(次回時間の他端末反映を早める)
   };
+  // ★ 次回利用日が定休日/休業日に当たったら、その後の最初の営業日へ自動で送る(店舗要望)。
+  //   入力途中に発動すると入力と喧嘩するため、欄を離れた時(blur)にだけ調整する。
+  const _labelOfIso = (iso) => { const d=new Date(iso); const w=['日','月','火','水','木','金','土']; return `${d.getMonth()+1}月${d.getDate()}日（${w[d.getDay()]}）`; };
+  const _skipClosedLabel = (label) => {
+    const mm = String(label||'').match(/(\d+)月(\d+)日/);
+    if (!mm) return label;
+    const y0 = new Date().getFullYear();
+    let cand = new Date(y0, +mm[1]-1, +mm[2]);
+    const td = new Date(); td.setHours(0,0,0,0);
+    if (cand < td) cand = new Date(y0+1, +mm[1]-1, +mm[2]);
+    const iso = _isoOf(cand);
+    const closed = (appData.systemSettings?.facilityInfo?.closedDays||[0]);
+    const open = forwardOpenDate(iso, closed, appData.holidays);
+    return open === iso ? _labelOfIso(iso) : _labelOfIso(open);
+  };
+  const _skipClosedDate = (rid) => {
+    setLocalOverrides(prev => {
+      const cur = (prev[rid] && prev[rid].nextDateOverride) || '';
+      const adj = _skipClosedLabel(cur);
+      if (!cur || adj === cur) return prev;
+      return { ...prev, [rid]: { ...prev[rid], nextDateOverride: adj } };
+    });
+  };
   const handleOverrideBlur = (recordId, field, value) => {
       let finalValue = value;
-      if (field === 'nextDateOverride' && value && value !== "未定") finalValue = formatShortDate(value);
+      if (field === 'nextDateOverride' && value && value !== "未定") finalValue = _skipClosedLabel(formatShortDate(value));
       else if (field === 'nextTimeOverride') finalValue = formatTimeString(value);
       setLocalOverrides(prev => ({ ...prev, [recordId]: { ...prev[recordId], [field]: finalValue } }));
       // ★ 「実際に値が変わった時だけ」記録へ書き込む。 旧実装は欄に触れて閉じただけでも毎回書き込み、
@@ -27336,7 +27373,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                     const isOverridden = (_isReal(r.nextDateOverride) && _nv(r.nextDateOverride) !== _nv(_auto.date))
                                       || (_isReal(r.nextTimeOverride) && _nv(r.nextTimeOverride) !== _nv(_auto.time));
                     // ★ 既存値を 月/日/時/分 に分解
-                    const dateMatch = (localData.nextDateOverride || '').match(/(\d+)月(\d+)日/);
+                    const dateMatch = (localData.nextDateOverride || '').match(/(\d*)月(\d*)日/);   // 入力途中(片方空)も保持
                     const curMonth = dateMatch?.[1] || '';
                     const curDay = dateMatch?.[2] || '';
                     const timeMatch = (localData.nextTimeOverride || '').match(/(\d*)\s*[:時]\s*(\d*)/);   // 時が空でも分を保持
@@ -27344,7 +27381,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                     const curMin = timeMatch?.[2] || '';
                     // ★ 月/日 を結合: 曜日も自動付与 (今年で計算、 過去なら来年扱い)
                     const composeDate = (m, d) => {
-                      if (!m || !d) return '';
+                      if (!m && !d) return '';
+                      // ★ 入力途中(月だけ/日だけ)でも値を保持する。 以前は片方が空だと全体が空になり、
+                      //   「日付の数字を打っても何も表示されない(入力できない)」状態だった(時間側と同じバグ)。
+                      if (!m || !d) return `${m||''}月${d||''}日`;
                       const dow = ['日','月','火','水','木','金','土'];
                       const y = new Date().getFullYear();
                       const candidate = new Date(y, +m-1, +d);
@@ -27377,10 +27417,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                           <div className="text-[10px] font-bold text-slate-400 mb-1">次回利用日</div>
                           <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${r.nextDateOverride !== undefined ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                             <input type="text" inputMode="numeric" value={curMonth} maxLength={2}
+                              onBlur={()=>_skipClosedDate(r.id)}
                               onChange={e=>updateOverride('date', e.target.value.replace(/\D/g,''), curDay, curHour, curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
                             <span className="text-xs font-bold text-slate-500">月</span>
                             <input type="text" inputMode="numeric" value={curDay} maxLength={2}
+                              onBlur={()=>_skipClosedDate(r.id)}
                               onChange={e=>updateOverride('date', curMonth, e.target.value.replace(/\D/g,''), curHour, curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
                             <span className="text-xs font-bold text-slate-500">日</span>
