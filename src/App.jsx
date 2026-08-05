@@ -9615,11 +9615,15 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
         _recMap.set(`${r.year ?? ''}|${parseInt(mm[1],10)}|${parseInt(mm[2],10)}`, r);
     });
     const _recOn = (y, m, d) => _recMap.get(`${y}|${m}|${d}`) || _recMap.get(`|${m}|${d}`) || null;
+    // ★ 施設休業日(夏季休暇・年末年始等)は来所日にならない。 これを見ていなかったため、
+    //   休業期間中の基本利用日(例: 8/12)が次回として表示されていた → スキップして次の利用日(8/19等)へ。
+    const _holiSet = new Set((appData?.holidays||[]).map(h => (h && h.date) ? h.date : h));
     for (let i = 1; i <= 30; i++) {
         const nextDate = new Date(current);
         nextDate.setDate(current.getDate() + i);
         const dayOfWeek = nextDate.getDay();
         if (closedDays.includes(dayOfWeek)) continue;
+        if (_holiSet.has(`${nextDate.getFullYear()}-${String(nextDate.getMonth()+1).padStart(2,'0')}-${String(nextDate.getDate()).padStart(2,'0')}`)) continue;
         const monthKey = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
 
         const day = nextDate.getDate();
@@ -27164,7 +27168,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   // ★ 次回利用日が定休日/休業日に当たったら、その後の最初の営業日へ自動で送る(店舗要望)。
   //   入力途中に発動すると入力と喧嘩するため、欄を離れた時(blur)にだけ調整する。
   const _labelOfIso = (iso) => { const d=new Date(iso); const w=['日','月','火','水','木','金','土']; return `${d.getMonth()+1}月${d.getDate()}日（${w[d.getDay()]}）`; };
-  const _skipClosedLabel = (label) => {
+  // ★ 入力した次回利用日が定休日/休業日に当たる場合、「翌営業日」ではなく
+  //   その利用者の次の利用日(基本利用日・振替があれば振替優先=getNextVisitInfo)へ送る(店舗要望)。
+  //   営業日で基本利用日以外(臨時利用の意図)はそのまま尊重する。
+  const _skipClosedLabel = (label, pid) => {
     const mm = String(label||'').match(/(\d+)月(\d+)日/);
     if (!mm) return label;
     const y0 = new Date().getFullYear();
@@ -27173,20 +27180,33 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     if (cand < td) cand = new Date(y0+1, +mm[1]-1, +mm[2]);
     const iso = _isoOf(cand);
     const closed = (appData.systemSettings?.facilityInfo?.closedDays||[0]);
-    const open = forwardOpenDate(iso, closed, appData.holidays);
-    return open === iso ? _labelOfIso(iso) : _labelOfIso(open);
+    const holi = (appData.holidays||[]).some(h => ((h && h.date) ? h.date : h) === iso);
+    if (!closed.includes(cand.getDay()) && !holi) return _labelOfIso(iso);   // 営業日 → そのまま
+    // 休業/定休 → その利用者の次の利用日へ(前日に立って次回を計算=入力日以降の最初の利用日)
+    const _p = (appData.patients||[]).find(pt => pt.id === pid);
+    if (_p) {
+      const prevDay = new Date(cand); prevDay.setDate(prevDay.getDate() - 1);
+      const info = getNextVisitInfo(_p, _isoOf(prevDay), appData.monthlyShifts, appData);
+      if (info && info.date && info.date !== '未定') return info.date;
+    }
+    const open = forwardOpenDate(iso, closed, appData.holidays);   // 利用者不明時の保険: 翌営業日
+    return _labelOfIso(open);
   };
-  const _skipClosedDate = (rid) => {
+  const _skipClosedDate = (rid, pid) => {
     setLocalOverrides(prev => {
       const cur = (prev[rid] && prev[rid].nextDateOverride) || '';
-      const adj = _skipClosedLabel(cur);
+      const adj = _skipClosedLabel(cur, pid);
       if (!cur || adj === cur) return prev;
       return { ...prev, [rid]: { ...prev[rid], nextDateOverride: adj } };
     });
   };
   const handleOverrideBlur = (recordId, field, value) => {
       let finalValue = value;
-      if (field === 'nextDateOverride' && value && value !== "未定") finalValue = _skipClosedLabel(formatShortDate(value));
+      if (field === 'nextDateOverride' && value && value !== "未定") {
+        const _r0 = (appData.ticketRecords||[]).find(r => String(r.id) === String(recordId));
+        const _pid0 = _r0 ? _r0.patientId : (String(recordId).startsWith('auto-') ? Number(String(recordId).slice(5)) : null);
+        finalValue = _skipClosedLabel(formatShortDate(value), _pid0);
+      }
       else if (field === 'nextTimeOverride') finalValue = formatTimeString(value);
       setLocalOverrides(prev => ({ ...prev, [recordId]: { ...prev[recordId], [field]: finalValue } }));
       // ★ 「実際に値が変わった時だけ」記録へ書き込む。 旧実装は欄に触れて閉じただけでも毎回書き込み、
@@ -27417,12 +27437,12 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                           <div className="text-[10px] font-bold text-slate-400 mb-1">次回利用日</div>
                           <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${r.nextDateOverride !== undefined ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                             <input type="text" inputMode="numeric" value={curMonth} maxLength={2}
-                              onBlur={()=>_skipClosedDate(r.id)}
+                              onBlur={()=>_skipClosedDate(r.id, r.patientId)}
                               onChange={e=>updateOverride('date', e.target.value.replace(/\D/g,''), curDay, curHour, curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
                             <span className="text-xs font-bold text-slate-500">月</span>
                             <input type="text" inputMode="numeric" value={curDay} maxLength={2}
-                              onBlur={()=>_skipClosedDate(r.id)}
+                              onBlur={()=>_skipClosedDate(r.id, r.patientId)}
                               onChange={e=>updateOverride('date', curMonth, e.target.value.replace(/\D/g,''), curHour, curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
                             <span className="text-xs font-bold text-slate-500">日</span>
