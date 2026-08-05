@@ -11700,12 +11700,16 @@ function FamilyAdminView({ appData, onSave }) {
   const removeAttachedPhoto = (idx) => {
     setPostForm(f => ({...f, files: f.files.filter((_,i)=>i!==idx), filePreview: f.filePreview.filter((_,i)=>i!==idx)}));
   };
+  const [posting, setPosting] = useState(false);   // ★ 投稿中の表示・二重投稿ガード
   const submitPost = async () => {
+    if (posting) return;   // 二重タップで同じお知らせが2件投稿されるのを防止
     const hasText = postForm.title.trim();
     const hasPhotos = postForm.files.length > 0;
     if (!hasText && !hasPhotos) { alert('タイトルまたは写真のどちらかを入力してください'); return; }
     if (postForm.scope === 'specific' && postForm.patientIds.length === 0) { alert('対象の利用者を1人以上選択してください'); return; }
     if (!postForm.audience || postForm.audience.length === 0) { alert('送付先（ご家族／ケアマネ／その他関係者）を1つ以上選択してください'); return; }
+    setPosting(true);
+    try {
     // ★ 写真/PDFを Supabase Storage(非公開) へアップロードし、storagePath のみ保持。
     //   未接続/失敗時は従来どおり base64(url) にフォールバック。
     let uploadedPhotos = postForm.files.map(it => ({ url: it.url, name: it.name }));
@@ -11800,7 +11804,13 @@ function FamilyAdminView({ appData, onSave }) {
     }
     onSave(newData);
     setPostForm({ scope:'all', patientIds:[], audience: postForm.audience, title:'', body:'', date: new Date().toISOString().slice(0,10), eventClass: postForm.eventClass, files:[], filePreview:[] });
+    } finally { setPosting(false); }
   };
+  // ★ お知らせ/写真の削除は墓石(deletedIds)を残す。 これらの配列はID和集合で同期されるため、
+  //   墓石なしで消すとクラウド/他端末のコピーから復活し「削除したのに残り続ける」状態になる(店舗報告)。
+  const _annKindKey = (k) => k === 'photo' ? 'familyPhotos' : (k === 'news_all' ? 'familyAnnouncements' : 'familyPersonalAnnouncements');
+  const _annTombAdd = (kind, id) => { const key=_annKindKey(kind); const t={...(appData.deletedIds||{})}; t[key]={...(t[key]||{}), [String(id)]: Date.now()}; return t; };
+  const _annTombRemove = (kind, id) => { const key=_annKindKey(kind); const t={...(appData.deletedIds||{})}; const m={...(t[key]||{})}; delete m[String(id)]; t[key]=m; return t; };
   const deletePhoto = (id) => {
     if (!window.confirm('この写真を削除しますか？\n（ゴミ箱に移動し、7日間は復元できます）')) return;
     const target = photos.find(p => p.id === id);
@@ -11808,6 +11818,7 @@ function FamilyAdminView({ appData, onSave }) {
     onSave({ ...appData,
       familyPhotos: photos.filter(p => p.id !== id),
       trashedAnnouncements: [...(appData.trashedAnnouncements||[]), { ...target, _deletedAt: new Date().toISOString(), _kind: 'photo' }],
+      deletedIds: _annTombAdd('photo', id),   // ★ 墓石: 他端末からの復活防止
     });
   };
   // ★ お知らせ ゴミ箱: 復元 / 完全削除
@@ -11818,6 +11829,7 @@ function FamilyAdminView({ appData, onSave }) {
     const { _deletedAt, _kind, ...item } = t;
     const newTrash = annTrash.filter(x => x.id !== id);
     const patch = { trashedAnnouncements: newTrash };
+    patch.deletedIds = _annTombRemove(_kind || 'news_all', id);   // ★ 復元時は墓石を外す(残すと同期で再び消される)
     if (_kind === 'photo') patch.familyPhotos = [item, ...(appData.familyPhotos||[])];
     else if (_kind === 'news_all') patch.familyAnnouncements = [item, ...(appData.familyAnnouncements||[])];
     else patch.familyPersonalAnnouncements = [item, ...(appData.familyPersonalAnnouncements||[])];
@@ -12027,7 +12039,13 @@ function FamilyAdminView({ appData, onSave }) {
                 <button onClick={()=>{ setEditingAnn(null); setPostForm(f=>({...f, title:'', body:'', files:[], filePreview:[]})); }} className="shrink-0 px-2 py-1 bg-white border border-amber-300 rounded-lg text-amber-700 hover:bg-amber-100">編集をやめる</button>
               </div>
             )}
-            <button onClick={submitPost} className={`w-full py-2.5 rounded-xl font-bold text-white shadow active:scale-95 ${editingAnn?'bg-amber-500 hover:bg-amber-600':'bg-emerald-500 hover:bg-emerald-600'}`}>
+            {posting && ReactDOM.createPortal(
+              <div style={{position:'fixed',inset:0,zIndex:2000030,background:'rgba(255,255,255,0.75)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:12}}>
+                <div style={{width:42,height:42,border:'5px solid #d1fae5',borderTopColor:'#059669',borderRadius:'50%',animation:'tsumugiSpin 0.9s linear infinite'}}/>
+                <div style={{fontSize:15,fontWeight:'bold',color:'#065f46'}}>投稿しています…（写真の保存に少し時間がかかります）</div>
+                <style>{`@keyframes tsumugiSpin{to{transform:rotate(360deg)}}`}</style>
+              </div>, document.body)}
+            <button onClick={submitPost} disabled={posting} className={`w-full py-2.5 rounded-xl font-bold text-white shadow active:scale-95 disabled:opacity-60 ${editingAnn?'bg-amber-500 hover:bg-amber-600':'bg-emerald-500 hover:bg-emerald-600'}`}>
               {editingAnn ? 'この内容で更新する' : (()=>{
                 const what = [postForm.title.trim() && 'お知らせ', postForm.files.length > 0 && `写真${postForm.files.length}枚`].filter(Boolean).join('+') || '内容';
                 const who = postForm.scope === 'specific' && postForm.patientIds.length > 0 ? `${postForm.patientIds.length}名に` : '全体に';
@@ -12189,9 +12207,10 @@ function FamilyAdminView({ appData, onSave }) {
                         if (!window.confirm('この項目を削除します。\n（ゴミ箱に移動し、7日間は復元できます）')) return;
                         const _trashEntry = { ...historyDetail.item, _deletedAt: new Date().toISOString(), _kind: historyDetail.kind };
                         const _trash = [...(appData.trashedAnnouncements||[]), _trashEntry];
-                        if (historyDetail.kind === 'photo') onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== historyDetail.item.id), trashedAnnouncements: _trash });
-                        else if (historyDetail.kind === 'news_all') onSave({ ...appData, familyAnnouncements: allAnnouncements.filter(a => a.id !== historyDetail.item.id), trashedAnnouncements: _trash });
-                        else onSave({ ...appData, familyPersonalAnnouncements: personalAnnouncements.filter(a => a.id !== historyDetail.item.id), trashedAnnouncements: _trash });
+                        const _tomb8 = _annTombAdd(historyDetail.kind, historyDetail.item.id);   // ★ 墓石: 復活防止
+                        if (historyDetail.kind === 'photo') onSave({ ...appData, familyPhotos: photos.filter(p => p.id !== historyDetail.item.id), trashedAnnouncements: _trash, deletedIds: _tomb8 });
+                        else if (historyDetail.kind === 'news_all') onSave({ ...appData, familyAnnouncements: allAnnouncements.filter(a => a.id !== historyDetail.item.id), trashedAnnouncements: _trash, deletedIds: _tomb8 });
+                        else onSave({ ...appData, familyPersonalAnnouncements: personalAnnouncements.filter(a => a.id !== historyDetail.item.id), trashedAnnouncements: _trash, deletedIds: _tomb8 });
                         setHistoryDetail(null);
                       }} className="flex-1 py-2 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-700 rounded-lg">削除</button>
                     </div>
@@ -27436,7 +27455,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                         </div>
                         <div className="flex-1">
                           <div className="text-[10px] font-bold text-slate-400 mb-1">次回利用日</div>
-                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${r.nextDateOverride !== undefined ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${/\d|未定/.test(String(r.nextDateOverride ?? '')) ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                             <input type="text" inputMode="numeric" value={curMonth} maxLength={2}
                               onBlur={()=>_skipClosedDate(r.id, r.patientId)}
                               onChange={e=>updateOverride('date', e.target.value.replace(/\D/g,''), curDay, curHour, curMin)}
@@ -27454,7 +27473,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                         </div>
                         <div className="flex-1">
                           <div className="text-[10px] font-bold text-slate-400 mb-1">お迎え時間</div>
-                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${r.nextTimeOverride !== undefined ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${/\d/.test(String(r.nextTimeOverride ?? '')) ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                             <input type="text" inputMode="numeric" value={curHour} maxLength={2}
                               onChange={e=>updateOverride('time', curMonth, curDay, e.target.value.replace(/\D/g,''), curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
