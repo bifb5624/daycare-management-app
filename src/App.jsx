@@ -1071,7 +1071,6 @@ const ADDONS = [
   { key: 'kinou_keikaku', label: '個別機能訓練計画書', icon: '', desc: '個別機能訓練加算の計画書を作成・印刷（運動・バイタル・体力測定から自動補完）' },
   { key: 'tsusho_keikaku', label: '通所介護計画書', icon: '', desc: '通所介護計画書の作成・印刷（個別機能訓練計画書・興味関心から自動取込）' },
   { key: 'assessment', label: 'アセスメント・居宅訪問', icon: '', desc: 'アセスメント記録・居宅訪問記録の作成・保管', soon: true },
-  { key: 'consent', label: '電子同意書', icon: '', desc: '契約書・重要事項説明書・個人情報同意書・写真掲載承諾書の作成・印刷（条文は店舗ごとに編集可・利用者情報を差し込み）' },
   // === LIFE（科学的介護）関連加算：加算ごとに独立アドオン（まとめて算定・個別算定のどちらにも対応）===
   { key: 'kasan_kinou2', label: '個別機能訓練加算Ⅱ（LIFE）', icon: '', desc: '個別機能訓練計画（3-3/3-1/3-2）のLIFE標準項目・提出用データ', life: true },
   { key: 'kasan_kagaku', label: '科学的介護推進体制加算（LIFE）', icon: '', desc: 'ADL・栄養・口腔・認知症・既往等の総論項目をLIFE提出用に記録', life: true },
@@ -18962,9 +18961,6 @@ export default function App() {
                   )}
                 </SidebarGroup>
               )}
-              {hasAddon(appData,'consent') && (
-                <SidebarItem icon={<FileText size={18} />} label="電子同意書" active={currentView === 'consent'} onClick={() => navigateTo('consent')} />
-              )}
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
                 <SidebarItem icon={<BarChart3 size={18} />} label="分析（個人）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
@@ -19000,7 +18996,6 @@ export default function App() {
                  currentView === 'roster' ? '勤務表' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
                  currentView === 'keikaku_yotei' ? '計画書・加算の作成予定' :
-                 currentView === 'consent' ? '電子同意書' :
                  currentView === 'tsusho_keikaku' ? '通所介護計画書' :
                  currentView === 'life_hub' ? 'LIFE・加算' :
                  currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
@@ -19103,7 +19098,6 @@ export default function App() {
              currentView === 'roster' ? <RosterView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} /> :
-             currentView === 'consent' ? <ConsentView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
              currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
@@ -42543,7 +42537,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           )}
           {/* モニタリングタブ: モニタリング表（保管・閲覧） */}
           {/* ★ 契約・同意関係タブ: 電子同意書アドオンONなら、この利用者固定で作成・印刷できる */}
-          {activeCat === 'cat_2' && hasAddon(appData, 'consent') && (
+          {activeCat === 'cat_2' && (
             <div className="mb-4 -mx-2">
               <ConsentView appData={appData} onSave={onSave} fixedPatientId={patient?.id} />
             </div>
