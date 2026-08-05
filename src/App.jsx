@@ -11238,7 +11238,7 @@ function ScheduleView({ appData, onSave }) {
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <button onClick={()=>setLabelEditorOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>ラベル編集</button>
           <button onClick={()=>setRepeatMgrOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>🔁 繰り返し設定</button>
-          <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}><Plus size={16}/>予定を追加</button>
+          <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>予定を追加</button>
         </div>
       </div>
       <div style={{flex:1,overflow:'auto',padding:16}}>
@@ -11376,7 +11376,7 @@ function ScheduleView({ appData, onSave }) {
             <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
                 <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{fmtJp(selDay)} の予定</div>
-                <button onClick={()=>openNew(selDay)} style={{background:'#6366f1',color:'white',border:'none',borderRadius:8,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}><Plus size={13}/>追加</button>
+                <button onClick={()=>openNew(selDay)} style={{background:'#6366f1',color:'white',border:'none',borderRadius:8,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>追加</button>
               </div>
               {selEvents.length===0 ? (
                 <div style={{fontSize:13,color:'#94a3b8',padding:'12px 0'}}>この日の予定はありません。「追加」から登録できます。</div>
@@ -39350,11 +39350,11 @@ ${optionsDesc}
           </div>
           <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-            <Printer size={14}/> プレビュー
+            プレビュー
           </button>
           <button type="button" onClick={()=>{ markClean(); onSave({...appData}, {manual:true, message:'✓ 保存しました'}); }}
             style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-            <Save size={14}/> 保存
+            保存
           </button>
         </div>
       </div>
@@ -39530,7 +39530,7 @@ ${optionsDesc}
                       </button>
                       <button type="button" onClick={()=>{ const s=(sheetRec&&sheetRec.sheet)||getOrInitSheetFor(patient); const txt=MON_ITEMS.map(it=>{const c=_monCell(s[it.key]);return `${it.no}${it.title}：${c.sel}${c.text?` ${c.text}`:''}`;}).join('\n'); copyText(patient.id, txt); }}
                         style={{background:copiedId===patient.id?'#d1fae5':'#f0fdf4',border:`1px solid ${copiedId===patient.id?'#6ee7b7':'#bbf7d0'}`,color:copiedId===patient.id?'#059669':'#10b981',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:3,whiteSpace:'nowrap'}}>
-                        {copiedId===patient.id ? '✓ コピー済' : <><Copy size={10}/> 全文コピー</>}
+                        {copiedId===patient.id ? '✓ コピー済' : <>全文コピー</>}
                       </button>
                       <button type="button" onClick={()=>faxRowToCareManager(patient)} title={`担当ケアマネ${patient.cmOffice?`（${patient.cmOffice}）`:'（未設定）'}宛てでこの表を出力し、送付履歴に記録します`}
                         style={{background:'#fff7ed',border:'1px solid #fdba74',color:'#c2410c',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
