@@ -1531,6 +1531,22 @@ function getEffectivePolicy(kind, systemSettings) {
   return { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT, notify: _defNotify, history: [] };
 }
 const renderPolicyText = (text, facility, tel) => String(text || '').replace(/\{facility\}/g, facility || '当事業所').replace(/\{tel\}/g, tel ? ` / TEL ${tel}` : '');
+
+// ★ 有効な電子同意書テンプレート: ①全店共通(法人管理者=管理局が編集・globalキャッシュ) →
+//   ②事業所の上書き(systemSettings.consentTemplates) → ③既定(consentTemplates.js の原本ver26.6)。
+//   条文は法人共通で一括管理し、事業所固有(住所・料金・管理者等)は差し込み変数で事業所ごとに反映する。
+function getEffectiveConsentTemplates(systemSettings) {
+  const gv = _globalPolicyCache && _globalPolicyCache.consent;
+  if (gv && Array.isArray(gv.templates) && gv.templates.length) return gv.templates;
+  const ov = systemSettings?.consentTemplates;
+  if (Array.isArray(ov) && ov.length) return ov;
+  return CONSENT_DEFAULT_TEMPLATES;
+}
+// 全店共通の同意書テンプレートの版情報(管理局編集用)
+function getGlobalConsentMeta() {
+  const gv = _globalPolicyCache && _globalPolicyCache.consent;
+  return { version: (gv && gv.version) || '1', date: (gv && gv.date) || '', history: (gv && Array.isArray(gv.history)) ? gv.history : [] };
+}
 // ★ 最新版の同意を求めるゲート(家族/ケアマネ=ログイン後 / 事業所=入場後)。 同意するまで先へ進めない。
 function ConsentGateModal({ title, subtitle, policy, facility, tel, agreeLabel, onAgree, onCancel, cancelLabel, busy }) {
   const [checked, setChecked] = React.useState(false);
@@ -16032,6 +16048,8 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         </div>
         {/* ★ J: 全店共通ポリシー編集 (一番下・折りたたみ) */}
         <GlobalPolicyPanel staffSession={staffSession}/>
+        {/* ★ 電子同意書テンプレート編集 (全店共通・法人管理者) */}
+        <ConsentTemplateAdminPanel staffSession={staffSession}/>
       </div>
       {/* 店舗追加モーダル */}
       {/* ★ 店舗情報の編集 (後から店舗名・短縮名・法人名・住所・電話・FAXを変更) */}
@@ -36175,6 +36193,105 @@ const SEIKATSU_SHINSHIN = ['麻痺','関節拘縮','筋力低下','関節痛','�
 const KYOMI_DEFAULT = ['自分でトイレに行く','一人でお風呂に入る','自分で服を着る','自分で食べる','歯磨きをする','身だしなみを整える','好きなときに眠る','掃除・整理整頓','料理を作る','買い物','散歩','友人とのおしゃべり','家族・親戚との団らん','趣味の活動','スポーツ','旅行・外出','庭いじり・園芸','読書','俳句・川柳','書道','絵を描く','写真','音楽を聴く','歌・カラオケ','楽器の演奏','将棋・囲碁・麻雀','編み物・手芸','針仕事','テレビ・映画','パソコン・スマホ','賃金を伴う仕事','ボランティア活動','地域の行事・活動','子や孫の世話','動物の世話','お参り・信仰'];
 
 // === 個別機能訓練計画書 (アドオン: kinou_keikaku) ===
+// ★ 電子同意書テンプレート編集（管理局＝法人管理者専用・全店共通）。 条文の編集/追加/削除/並べ替え＋版管理＋全店配信。
+//   保存すると全事業所へ配信され、各店は事業所情報を差し込んで使う（事業所固有の上書きは systemSettings.consentTemplates）。
+function ConsentTemplateAdminPanel({ staffSession }) {
+  const [open, setOpen] = React.useState(false);
+  const [templates, setTemplates] = React.useState(null);
+  const [version, setVersion] = React.useState('1');
+  const [date, setDate] = React.useState('');
+  const [history, setHistory] = React.useState([]);
+  const [docKey, setDocKey] = React.useState('keiyaku');
+  const [loading, setLoading] = React.useState(true);
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState('');
+  const origVerRef = React.useRef('');
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const gp = await supabaseLoadGlobalPolicies();
+        const c = gp && gp.consent;
+        if (alive) {
+          setTemplates((c && Array.isArray(c.templates) && c.templates.length) ? c.templates : JSON.parse(JSON.stringify(CONSENT_DEFAULT_TEMPLATES)));
+          setVersion((c && c.version) || '1'); setDate((c && c.date) || '');
+          setHistory((c && Array.isArray(c.history)) ? c.history : []);
+          origVerRef.current = (c && c.version) || '';
+        }
+      } catch {}
+      if (alive) setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
+  if (staffSession?.role !== 'super_admin') return null;
+  const doc = templates && templates.find(t => t.key === docKey);
+  const updDoc = (fn) => setTemplates(ts => ts.map(t => t.key !== docKey ? t : fn(t)));
+  const updSec = (secId, field, value) => updDoc(t => ({ ...t, sections: t.sections.map(s => s.id !== secId ? s : ({ ...s, [field]: value })) }));
+  const addSec = () => updDoc(t => ({ ...t, sections: [...(t.sections || []), { id: 'c' + Math.random().toString(36).slice(2, 8), heading: '新しい条', body: '' }] }));
+  const delSec = (secId) => { if (window.confirm('この条文を削除しますか？')) updDoc(t => ({ ...t, sections: t.sections.filter(s => s.id !== secId) })); };
+  const moveSec = (secId, dir) => updDoc(t => { const arr = [...t.sections]; const i = arr.findIndex(s => s.id === secId); const j = i + dir; if (i < 0 || j < 0 || j >= arr.length) return t; [arr[i], arr[j]] = [arr[j], arr[i]]; return { ...t, sections: arr }; });
+  const save = async () => {
+    if (!String(version).trim()) { alert('版(バージョン)を入力してください'); return; }
+    setBusy(true); setMsg('');
+    try {
+      const cur = (await supabaseLoadGlobalPolicies()) || {};
+      const verChanged = String(version).trim() !== String(origVerRef.current || '');
+      let newHist = Array.isArray(history) ? history.slice() : [];
+      if (verChanged) newHist = [{ version: String(version).trim(), date, templates, savedAt: new Date().toISOString(), savedBy: staffSession?.username || 'honbu' }, ...newHist].slice(0, 30);
+      const consent = { templates, version: String(version).trim(), date, history: newHist };
+      const ok = await supabaseSaveGlobalPolicies({ ...cur, consent });
+      if (!ok) { alert('保存に失敗しました(通信エラー)'); setBusy(false); return; }
+      setGlobalPolicyCache({ ...cur, consent });
+      setHistory(newHist); origVerRef.current = String(version).trim();
+      setMsg(verChanged ? '✓ 全店へ保存しました（版を更新）' : '✓ 全店へ保存しました');
+    } catch (e) { alert('保存に失敗: ' + (e?.message || '')); }
+    setBusy(false);
+  };
+  const inp = { padding: '6px 8px', border: '1px solid #cbd5e1', borderRadius: 8, fontSize: 13, outline: 'none' };
+  return (
+    <div style={{ marginTop: 16, border: '1px solid #e2e8f0', borderRadius: 12, background: 'white' }}>
+      <button onClick={() => setOpen(o => !o)} style={{ width: '100%', textAlign: 'left', padding: '12px 16px', background: 'none', border: 'none', fontWeight: 'bold', fontSize: 14, cursor: 'pointer', color: '#1e293b' }}>
+        電子同意書テンプレート編集（全店共通・法人管理者） {open ? '▲' : '▼'}
+      </button>
+      {open && (loading ? <div style={{ padding: 16, color: '#94a3b8' }}>読み込み中…</div> : (templates && (
+        <div style={{ padding: '0 16px 16px' }}>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>ここで編集した条文は<b>全事業所へ配信</b>されます。事業所名・住所・電話・営業時間・休日・管理者・料金などは各事業所の設定から <b>{'{{変数}}'}</b> で自動差し込みされます。</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>版</span>
+            <input value={version} onChange={e => setVersion(e.target.value)} style={{ ...inp, width: 56 }} />
+            <span style={{ fontSize: 12, fontWeight: 'bold', color: '#475569' }}>改定日</span>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} style={inp} />
+            <button onClick={save} disabled={busy} style={{ marginLeft: 'auto', padding: '8px 18px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 8, fontWeight: 'bold', fontSize: 13, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>{busy ? '保存中…' : '全店へ保存'}</button>
+            {msg && <span style={{ fontSize: 12, fontWeight: 'bold', color: '#059669' }}>{msg}</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            {templates.map(t => <button key={t.key} onClick={() => setDocKey(t.key)} style={{ padding: '6px 12px', borderRadius: 8, fontWeight: 'bold', fontSize: 12, cursor: 'pointer', border: '1px solid #cbd5e1', background: docKey === t.key ? '#1d4ed8' : 'white', color: docKey === t.key ? 'white' : '#334155' }}>{t.title}</button>)}
+          </div>
+          {doc && doc.intro != null && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 'bold', color: '#64748b', marginBottom: 2 }}>前文</div>
+              <textarea value={doc.intro} onChange={e => updDoc(t => ({ ...t, intro: e.target.value }))} rows={2} style={{ ...inp, width: '100%', boxSizing: 'border-box', resize: 'vertical' }} />
+            </div>
+          )}
+          {doc && (doc.sections || []).map(sec => (
+            <div key={sec.id} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
+                <input value={sec.heading} onChange={e => updSec(sec.id, 'heading', e.target.value)} style={{ ...inp, flex: 1, fontWeight: 'bold' }} />
+                <button onClick={() => moveSec(sec.id, -1)} style={{ ...inp, cursor: 'pointer', background: '#f1f5f9' }}>↑</button>
+                <button onClick={() => moveSec(sec.id, 1)} style={{ ...inp, cursor: 'pointer', background: '#f1f5f9' }}>↓</button>
+                <button onClick={() => delSec(sec.id)} style={{ ...inp, cursor: 'pointer', background: '#fee2e2', color: '#b91c1c' }}>削除</button>
+              </div>
+              <textarea value={sec.body} onChange={e => updSec(sec.id, 'body', e.target.value)} rows={4} style={{ ...inp, width: '100%', boxSizing: 'border-box', resize: 'vertical', lineHeight: 1.6 }} />
+            </div>
+          ))}
+          <button onClick={addSec} style={{ width: '100%', padding: 10, background: '#0369a1', color: 'white', border: 'none', borderRadius: 8, fontWeight: 'bold', fontSize: 13, cursor: 'pointer' }}>＋ 条文を追加</button>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>※ 版を上げて保存すると過去版は履歴に保管されます（現在 {history.length} 件）。料金表の項目編集は次のアップデートで対応予定です。</div>
+        </div>
+      )))}
+    </div>
+  );
+}
+
 // ★ 電子同意書の印刷用HTMLを組み立てる（差し込み済み）。 copies=2 で「お渡し用＋事業者控え」を改ページで2部。
 function buildConsentPrintHtml(doc, vars, copies) {
   const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -36231,8 +36348,7 @@ function buildConsentPrintHtml(doc, vars, copies) {
 //   既存機能に一切依存しない独立追加。 条文の初期値は consentTemplates.js（原本ver26.6）。
 //   店舗が編集した版は systemSettings.consentTemplates に保存（次段で編集UI）。
 function ConsentView({ appData, onSave, targetPatientId, fixedPatientId }) {
-  const templates = (appData.systemSettings?.consentTemplates && appData.systemSettings.consentTemplates.length)
-    ? appData.systemSettings.consentTemplates : CONSENT_DEFAULT_TEMPLATES;
+  const templates = getEffectiveConsentTemplates(appData.systemSettings);
   const [docKey, setDocKey] = React.useState(templates[0]?.key || 'keiyaku');
   const [pid, setPid] = React.useState(fixedPatientId || targetPatientId || null);
   React.useEffect(() => { if (fixedPatientId) setPid(fixedPatientId); }, [fixedPatientId]);
