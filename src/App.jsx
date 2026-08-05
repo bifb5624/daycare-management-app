@@ -1051,6 +1051,19 @@ const getActiveRecorderName = () => {
 const recMatchesDateYear = (r, dateStr, year) =>
   r && r.date === dateStr && (r.year == null || year == null || r.year === year);
 
+// ★ 確定モニタリングを分析（個人）へ反映してよいか。 対象月(period 例:'2026年8月')の
+//   最終日18:00 を過ぎたら反映する（店舗要望 2026-08: 確定しても対象月内は分析個人に出さず、
+//   月末最終日18時以降に自動反映）。 未確定は反映しない。 対象月不明の古い記録は従来どおり反映。
+function monitoringReflectable(rec) {
+  if (!rec || !rec.confirmed) return false;
+  const m = String(rec.period || '').match(/(\d+)年(\d+)月/);
+  if (!m) return true;
+  const y = Number(m[1]), mo = Number(m[2]);
+  const lastDay = new Date(y, mo, 0).getDate();
+  const deadline = new Date(y, mo - 1, lastDay, 18, 0, 0, 0).getTime();
+  return Date.now() >= deadline;
+}
+
 // === アドオン(オプション機能) ===
 // 本部(super_admin)が店舗ごとに ON/OFF。 店舗データの systemSettings.addons に保存。
 const ADDONS = [
@@ -24212,11 +24225,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               {rangeLabel}
             </span>
           </div>
-          {(appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId).length > 0 ? (
+          {(appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId && monitoringReflectable(r)).length > 0 ? (
             <div style={{padding:'8px 0'}}>
               {(() => {
                 // ★ 同じ月(period)は1件だけ(最新)に絞る。 同月が何個も並ぶのを防ぐ。
-                const _rows = (appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+                const _rows = (appData.monitoringRecords||[]).filter(r=>r.patientId===selectedPatientId && monitoringReflectable(r)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
                 const _seen = new Set();
                 return _rows.filter(r => { const k = String(r.period||r.createdDate||r.id); if(_seen.has(k)) return false; _seen.add(k); return true; });
               })()
