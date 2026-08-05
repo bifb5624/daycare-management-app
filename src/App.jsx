@@ -17755,6 +17755,7 @@ export default function App() {
           _fk.forEach(k => {
             if (k === '_savedAt' || k === '_fieldTs' || k === 'id') return;
             const _nv = r[k], _ov = _old ? _old[k] : undefined;
+            if (_nv === undefined) return;   // ★ キー欠落(画面の再構築で失われた項目)は変更ではない → 刻印しない
             // ★ 空↔未入力(undefined↔'')は「変更なし」とみなす。 保存時にフォームがバイタル等を空文字で
             //   正規化(undefined→'')しただけの項目に _fieldTs を刻むと、マージ側が「意図的な削除」と誤判定し、
             //   他端末で入力済みの血圧/体温(AM/PM)を空で上書きして消してしまうため。
