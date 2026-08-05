@@ -11022,13 +11022,20 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
                 {news.map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
-                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
+                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                       <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
                       <span style={{fontSize:10,color:'#94a3b8'}}>{a.date||''}</span>
                     </div>
                     <div style={{fontSize:13,fontWeight:'bold',color:_c}}>{a.title||'(写真)'}</div>
                     {a.body && <div style={{fontSize:11,color:'#475569',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
+                    {/* ★ 投稿写真のサムネイル(店舗要望: 件名・本文だけでなく写真もここで見える) */}
+                    {Array.isArray(a.photos) && a.photos.length>0 && (
+                      <div style={{display:'flex',gap:4,marginTop:4,alignItems:'center'}}>
+                        {a.photos.slice(0,3).map((ph,i)=>(<StoredImage key={i} file={ph} style={{width:44,height:44,objectFit:'cover',borderRadius:6,border:'1px solid #e2e8f0'}}/>))}
+                        {a.photos.length>3 && <span style={{fontSize:10,color:'#94a3b8'}}>+{a.photos.length-3}枚</span>}
+                      </div>
+                    )}
                   </button>
                 ); })}
               </div>
@@ -11080,6 +11087,11 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
             </div>
             <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10,lineHeight:1.4}}>{noticeDetail.title}</div>
             {noticeDetail.body && <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-wrap',lineHeight:1.75}}>{noticeDetail.body}</div>}
+            {Array.isArray(noticeDetail.photos) && noticeDetail.photos.length > 0 && (
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:12}}>
+                {noticeDetail.photos.map((ph,i)=>(<StoredImage key={i} file={ph} style={{width:'100%',height:150,objectFit:'cover',borderRadius:10,border:'1px solid #e2e8f0'}}/>))}
+              </div>
+            )}
             <div style={{display:'flex',gap:8,marginTop:20,justifyContent:'flex-end'}}>
               {noticeDetail.isMeeting && noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId; try{sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({patientId:pid, tab:'cat_3', focus:'meeting'}));}catch{} setNoticeDetail(null); navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>担当者会議記録を入力</button>}
               {noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId;setNoticeDetail(null);navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#4338ca',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>利用者を開く</button>}
@@ -11840,7 +11852,10 @@ function FamilyAdminView({ appData, onSave }) {
     if (!t) return;
     if (!window.confirm('完全に削除します。元に戻せません。よろしいですか?')) return;
     purgeStorageFiles(t); // Storage実体も削除
-    onSave({ ...appData, trashedAnnouncements: annTrash.filter(x => x.id !== id) });
+    onSave({ ...appData, trashedAnnouncements: annTrash.filter(x => x.id !== id),
+      // ★ ゴミ箱からの完全削除も墓石を残し、クラウドコピーからの復活を防止
+      deletedIds: (()=>{ const _t={...(appData.deletedIds||{})}; _t.trashedAnnouncements={...(_t.trashedAnnouncements||{}), [String(id)]: Date.now()}; return _t; })(),
+    });
   };
   const filteredPhotos = photoFilter ? photos.filter(p => p.class === photoFilter) : photos;
   // 特記の表示制御
@@ -16923,6 +16938,21 @@ export default function App() {
         let _mergedForPush = null;
         setAppData(prev => {
           const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
+          // ★ 墓石(deletedIds)は local と cloud の和集合を常に保持し、削除済みIDを各配列から除外する。
+          //   これが無いと、削除→push完了前のpullで墓石ごと巻き戻り、
+          //   「削除が2〜3回押さないと反映されない/復活する」事象が起きていた(店舗報告)。
+          try {
+            const _lt = (prev && prev.deletedIds) || {};
+            const _ct = merged.deletedIds || {};
+            const _mt = {};
+            new Set([...Object.keys(_lt), ...Object.keys(_ct)]).forEach(k => { _mt[k] = { ...(_ct[k] || {}), ...(_lt[k] || {}) }; });
+            merged.deletedIds = _mt;
+            Object.keys(_mt).forEach(k => {
+              const tm = _mt[k];
+              if (!tm || !Object.keys(tm).length || !Array.isArray(merged[k])) return;
+              merged[k] = merged[k].filter(r => !(r && r.id != null && tm[String(r.id)]));
+            });
+          } catch {}
           // ★★ テーブル方式ON かつ この端末がテーブルを読めている間、pull は提供記録に一切触らない。
           //   ticket_records テーブルが唯一の正であり、巨大JSON側は凍結スナップショット(古い)。
           //   ここで触ると「テーブルで取り込んだ最新表示を、pull の古い凍結コピーが上書きする」レースになり、
