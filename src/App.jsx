@@ -18622,7 +18622,7 @@ export default function App() {
       }`}>
           <div className="w-64 h-full flex flex-col">
             <div className="h-16 flex items-center px-5 border-b" style={{background:'#fafef1',borderColor:'#d4e7a5'}}>
-              <img src="/preview/tsumugi-mark-transparent.png" alt="" className="w-8 h-8 mr-2 flex-shrink-0" style={{objectFit:'contain'}}/>
+              <img src="/preview/tsumugi-mark-transparent.png" alt="" className="w-11 h-11 mr-2 flex-shrink-0" style={{objectFit:'contain'}}/>
               <div className="flex-1 min-w-0 leading-none">
                 <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'22px',color:'#3d5021',fontWeight:700,letterSpacing:'2px',lineHeight:1}}>つむぎ</span>
                 <span style={{fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",fontSize:'10px',color:'#7daa3d',letterSpacing:'3px',marginLeft:'8px',fontWeight:500,lineHeight:1,verticalAlign:'middle'}}>Tsumugi</span>
