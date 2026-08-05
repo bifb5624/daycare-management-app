@@ -36230,6 +36230,11 @@ function ConsentTemplateAdminPanel({ staffSession }) {
   const addSec = () => updDoc(t => ({ ...t, sections: [...(t.sections || []), { id: 'c' + Math.random().toString(36).slice(2, 8), heading: '新しい条', body: '' }] }));
   const delSec = (secId) => { if (window.confirm('この条文を削除しますか？')) updDoc(t => ({ ...t, sections: t.sections.filter(s => s.id !== secId) })); };
   const moveSec = (secId, dir) => updDoc(t => { const arr = [...t.sections]; const i = arr.findIndex(s => s.id === secId); const j = i + dir; if (i < 0 || j < 0 || j >= arr.length) return t; [arr[i], arr[j]] = [arr[j], arr[i]]; return { ...t, sections: arr }; });
+  // 料金表(priceTables)の編集
+  const updPT = (ti, fn) => updDoc(t => ({ ...t, priceTables: (t.priceTables || []).map((p, i) => i !== ti ? p : fn(p)) }));
+  const updCell = (ti, ri, ci, val) => updPT(ti, p => ({ ...p, rows: p.rows.map((r, j) => j !== ri ? r : r.map((c, k) => k !== ci ? c : val)) }));
+  const addRow = (ti) => updPT(ti, p => ({ ...p, rows: [...p.rows, p.header.map(() => '')] }));
+  const delRow = (ti, ri) => updPT(ti, p => ({ ...p, rows: p.rows.filter((_, j) => j !== ri) }));
   const save = async () => {
     if (!String(version).trim()) { alert('版(バージョン)を入力してください'); return; }
     setBusy(true); setMsg('');
@@ -36285,7 +36290,32 @@ function ConsentTemplateAdminPanel({ staffSession }) {
             </div>
           ))}
           <button onClick={addSec} style={{ width: '100%', padding: 10, background: '#0369a1', color: 'white', border: 'none', borderRadius: 8, fontWeight: 'bold', fontSize: 13, cursor: 'pointer' }}>＋ 条文を追加</button>
-          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>※ 版を上げて保存すると過去版は履歴に保管されます（現在 {history.length} 件）。料金表の項目編集は次のアップデートで対応予定です。</div>
+          {/* 料金表の編集(重要事項説明書) */}
+          {doc && Array.isArray(doc.priceTables) && doc.priceTables.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 13, fontWeight: 'bold', color: '#1e293b', marginBottom: 6 }}>料金表の編集</div>
+              {doc.priceTables.map((pt, ti) => (
+                <div key={ti} style={{ marginBottom: 12, border: '1px solid #e2e8f0', borderRadius: 10, padding: 10 }}>
+                  <input value={pt.title} onChange={e => updPT(ti, p => ({ ...p, title: e.target.value }))} style={{ ...inp, width: '100%', boxSizing: 'border-box', fontWeight: 'bold', marginBottom: 6 }} />
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ borderCollapse: 'collapse', fontSize: 11 }}>
+                      <thead><tr>{pt.header.map((h, hi) => <th key={hi} style={{ border: '1px solid #cbd5e1', background: '#f1f5f9', padding: '2px 4px', whiteSpace: 'nowrap' }}>{h}</th>)}<th style={{ border: '1px solid #cbd5e1', background: '#f1f5f9', padding: '2px 4px' }}></th></tr></thead>
+                      <tbody>
+                        {pt.rows.map((row, ri) => (
+                          <tr key={ri}>
+                            {row.map((cell, ci) => <td key={ci} style={{ border: '1px solid #e2e8f0', padding: 0 }}><input value={cell} onChange={e => updCell(ti, ri, ci, e.target.value)} style={{ border: 'none', outline: 'none', padding: '3px 4px', fontSize: 11, width: ci === 0 ? 140 : 64, textAlign: ci === 0 ? 'left' : 'center' }} /></td>)}
+                            <td style={{ border: '1px solid #e2e8f0', padding: 0, textAlign: 'center' }}><button onClick={() => delRow(ti, ri)} style={{ border: 'none', background: '#fee2e2', color: '#b91c1c', cursor: 'pointer', fontWeight: 'bold', padding: '3px 6px', fontSize: 11 }}>×</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <button onClick={() => addRow(ti)} style={{ marginTop: 6, padding: '5px 12px', background: '#e0f2fe', color: '#0369a1', border: '1px solid #7dd3fc', borderRadius: 6, fontWeight: 'bold', fontSize: 11, cursor: 'pointer' }}>＋ 行を追加</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 8 }}>※ 版を上げて保存すると過去版は履歴に保管されます（現在 {history.length} 件）。事業所名・住所・電話・営業時間・休日・管理者・定員などは各事業所の設定から自動で埋まります。</div>
         </div>
       )))}
     </div>
@@ -36356,21 +36386,36 @@ function ConsentView({ appData, onSave, targetPatientId, fixedPatientId }) {
   const doc = templates.find(t => t.key === docKey) || templates[0];
   const fi = appData.systemSettings?.facilityInfo || {};
   const patient = (appData.patients || []).find(p => p.id === pid);
-  const vars = React.useMemo(() => ({
-    ...CONSENT_DEFAULT_VARS,
-    事業所名: fi.name || CONSENT_DEFAULT_VARS.事業所名,
-    提供場所住所: fi.address || CONSENT_DEFAULT_VARS.提供場所住所,
-    事業所電話: fi.phone || CONSENT_DEFAULT_VARS.事業所電話,
-    管理者名: fi.manager || fi.managerName || CONSENT_DEFAULT_VARS.管理者名,
-    利用者氏名: patient?.name || '',
-    利用者住所: patient?.address || '',
-    利用者電話: patient?.phone || '',
-    契約締結日: extra.契約締結日 || '',
-    主治医氏名: extra.主治医氏名 || patient?.doctor || patient?.kakaritsukeI || '',
-    主治医連絡先: extra.主治医連絡先 || patient?.doctorPhone || '',
-    家族氏名: extra.家族氏名 || '',
-    家族連絡先: extra.家族連絡先 || '',
-  }), [fi.name, fi.address, fi.phone, fi.manager, fi.managerName, patient, extra]);
+  const vars = React.useMemo(() => {
+    const _dow = ['日', '月', '火', '水', '木', '金', '土'];
+    const _closedStr = (Array.isArray(fi.closedDays) && fi.closedDays.length)
+      ? fi.closedDays.slice().sort((a, b) => a - b).map(d => _dow[d]).join('・') + '曜' : '';
+    const _holiday = [_closedStr, fi.holidayPolicy].filter(Boolean).join('、') || CONSENT_DEFAULT_VARS.休日;
+    const _addr = [fi.zipCode ? ('〒' + fi.zipCode) : '', fi.address || '', fi.addressBuilding || ''].filter(Boolean).join(' ').trim();
+    const _mgr = [fi.managerLast, fi.managerFirst].filter(Boolean).join(' ') || fi.manager || fi.managerName || '';
+    const _sresp = [fi.serviceResponsibleLast, fi.serviceResponsibleFirst].filter(Boolean).join(' ');
+    return {
+      ...CONSENT_DEFAULT_VARS,
+      事業所名: fi.name || CONSENT_DEFAULT_VARS.事業所名,
+      提供場所住所: _addr || CONSENT_DEFAULT_VARS.提供場所住所,
+      事業所電話: fi.phone || CONSENT_DEFAULT_VARS.事業所電話,
+      事業所FAX: fi.fax || '',
+      管理者名: _mgr || CONSENT_DEFAULT_VARS.管理者名,
+      サービス提供責任者: _sresp,
+      提供時間AM: fi.serviceTimeAM || CONSENT_DEFAULT_VARS.提供時間AM,
+      提供時間PM: fi.serviceTimePM || CONSENT_DEFAULT_VARS.提供時間PM,
+      定員: (fi.capacity != null && fi.capacity !== '') ? String(fi.capacity) : CONSENT_DEFAULT_VARS.定員,
+      休日: _holiday,
+      利用者氏名: patient?.name || '',
+      利用者住所: patient?.address || '',
+      利用者電話: patient?.phone || '',
+      契約締結日: extra.契約締結日 || '',
+      主治医氏名: extra.主治医氏名 || patient?.doctor || patient?.kakaritsukeI || '',
+      主治医連絡先: extra.主治医連絡先 || patient?.doctorPhone || '',
+      家族氏名: extra.家族氏名 || '',
+      家族連絡先: extra.家族連絡先 || '',
+    };
+  }, [fi, patient, extra]);
 
   const scrollToSec = (id) => { const el = document.getElementById('consent-sec-' + id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
 
