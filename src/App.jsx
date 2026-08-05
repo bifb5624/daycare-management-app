@@ -36236,11 +36236,12 @@ function buildConsentPrintHtml(doc, vars, copies) {
 // ★★ 電子同意書ビュー（第1段: 文書テンプレート閲覧・目次ジャンプ・利用者差し込み・印刷/PDF）。
 //   既存機能に一切依存しない独立追加。 条文の初期値は consentTemplates.js（原本ver26.6）。
 //   店舗が編集した版は systemSettings.consentTemplates に保存（次段で編集UI）。
-function ConsentView({ appData, onSave, targetPatientId }) {
+function ConsentView({ appData, onSave, targetPatientId, fixedPatientId }) {
   const templates = (appData.systemSettings?.consentTemplates && appData.systemSettings.consentTemplates.length)
     ? appData.systemSettings.consentTemplates : CONSENT_DEFAULT_TEMPLATES;
   const [docKey, setDocKey] = React.useState(templates[0]?.key || 'keiyaku');
-  const [pid, setPid] = React.useState(targetPatientId || null);
+  const [pid, setPid] = React.useState(fixedPatientId || targetPatientId || null);
+  React.useEffect(() => { if (fixedPatientId) setPid(fixedPatientId); }, [fixedPatientId]);
   const [extra, setExtra] = React.useState({});
   const doc = templates.find(t => t.key === docKey) || templates[0];
   const fi = appData.systemSettings?.facilityInfo || {};
@@ -36295,10 +36296,14 @@ function ConsentView({ appData, onSave, targetPatientId }) {
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-4">
         <div className="text-xs font-bold text-slate-500 mb-2">差し込み情報（選ぶと下の書面に反映されます）</div>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-          <select value={pid || ''} onChange={e => setPid(Number(e.target.value) || null)} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
-            <option value="">利用者を選択</option>
-            {[...(appData.patients || [])].sort((a, b) => (a.kana || '').localeCompare(b.kana || '', 'ja')).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
+          {fixedPatientId
+            ? <div className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-700">{patient?.name || '利用者'}</div>
+            : (
+              <select value={pid || ''} onChange={e => setPid(Number(e.target.value) || null)} className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
+                <option value="">利用者を選択</option>
+                {[...(appData.patients || [])].sort((a, b) => (a.kana || '').localeCompare(b.kana || '', 'ja')).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
           <input value={extra.契約締結日 || ''} onChange={e => upd('契約締結日', e.target.value)} placeholder="契約締結日（例: 令和8年4月1日）" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
           <input value={extra.主治医氏名 || ''} onChange={e => upd('主治医氏名', e.target.value)} placeholder="主治医 氏名" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
           <input value={extra.主治医連絡先 || ''} onChange={e => upd('主治医連絡先', e.target.value)} placeholder="主治医 連絡先" className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none" />
@@ -42524,6 +42529,12 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             </div>
           )}
           {/* モニタリングタブ: モニタリング表（保管・閲覧） */}
+          {/* ★ 契約・同意関係タブ: 電子同意書アドオンONなら、この利用者固定で作成・印刷できる */}
+          {activeCat === 'cat_2' && hasAddon(appData, 'consent') && (
+            <div className="mb-4 -mx-2">
+              <ConsentView appData={appData} onSave={onSave} fixedPatientId={patient?.id} />
+            </div>
+          )}
           {isMonitoringTab && (() => {
             // ★ 同じ月が複数あれば最新(createdAt)のみに集約して表示
             const _byPeriod = {};
