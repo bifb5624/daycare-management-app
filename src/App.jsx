@@ -12831,33 +12831,7 @@ function FamilyView() {
         <div style={{width:'100%',maxWidth:380}}>
           {/* 紡ぎ ロゴ v23: 四つ葉クローバー + 丸ゴ + 緑 */}
           <div style={{textAlign:'center',marginBottom:20}}>
-            <svg viewBox="0 0 460 130" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto'}} xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <radialGradient id="famLeafA" cx="40%" cy="55%" r="55%">
-                  <stop offset="0%" stopColor="#608a3e"/>
-                  <stop offset="50%" stopColor="#94c456"/>
-                  <stop offset="100%" stopColor="#d4e7a5"/>
-                </radialGradient>
-                <radialGradient id="famLeafB" cx="55%" cy="50%" r="55%">
-                  <stop offset="0%" stopColor="#5a8330"/>
-                  <stop offset="50%" stopColor="#8fb84a"/>
-                  <stop offset="100%" stopColor="#cee49b"/>
-                </radialGradient>
-              </defs>
-              <g transform="translate(105, 58) scale(0.8)">
-                <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
-                <g transform="rotate(-60)">
-                  <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#famLeafA)" opacity="0.96"/></g>
-                  <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#famLeafB)" opacity="0.96"/></g>
-                  <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#famLeafA)" opacity="0.94"/></g>
-                  <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#famLeafB)" opacity="0.94"/></g>
-                  <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
-                </g>
-              </g>
-              <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
-              <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">ご利用者を紡ぐ、記録管理アプリ</text>
-            </svg>
+            <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
             <div style={{fontSize:18,fontWeight:'bold',marginTop:10,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>ご家族・ご関係者専用ログイン</div>
           </div>
           {mode === 'signup' && _inviteAlreadyUsed && !signupForm.done ? (
@@ -16284,33 +16258,7 @@ function StaffLoginGate({ onLogin }) {
       <div style={{width:'100%',maxWidth:420,background:'white',borderRadius:24,padding:'32px 28px',boxShadow:'0 12px 40px rgba(125,170,61,0.25)',boxSizing:'border-box'}}>
         {/* 紡ぎ ロゴ: 家族ログインと同じものをそのまま使用 */}
         <div style={{textAlign:'center',marginBottom:20}}>
-          <svg viewBox="0 0 460 130" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto'}} xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <radialGradient id="staffLeafA" cx="40%" cy="55%" r="55%">
-                <stop offset="0%" stopColor="#608a3e"/>
-                <stop offset="50%" stopColor="#94c456"/>
-                <stop offset="100%" stopColor="#d4e7a5"/>
-              </radialGradient>
-              <radialGradient id="staffLeafB" cx="55%" cy="50%" r="55%">
-                <stop offset="0%" stopColor="#5a8330"/>
-                <stop offset="50%" stopColor="#8fb84a"/>
-                <stop offset="100%" stopColor="#cee49b"/>
-              </radialGradient>
-            </defs>
-            <g transform="translate(105, 58) scale(0.8)">
-              <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
-              <g transform="rotate(-60)">
-                <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#staffLeafA)" opacity="0.96"/></g>
-                <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#staffLeafB)" opacity="0.96"/></g>
-                <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#staffLeafA)" opacity="0.94"/></g>
-              <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#staffLeafB)" opacity="0.94"/></g>
-                <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
-              </g>
-            </g>
-            <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
-            <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-            <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">通所介護 業務支援システム</text>
-          </svg>
+          <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
           <div style={{fontSize:18,fontWeight:'bold',marginTop:6,color:'#3d5021',fontFamily:"'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif",letterSpacing:'3px'}}>事業所スタッフ専用ログイン</div>
         </div>
         <form onSubmit={handleSubmit}>
@@ -18259,35 +18207,7 @@ export default function App() {
         <div style={{width:'100%',maxWidth:400}}>
           {/* ロゴ v23: 四つ葉クローバー (X字+rotate(-60)) + 丸ゴ + 明るい緑 */}
           <div style={{textAlign:'center',marginBottom:28}}>
-            <svg viewBox="0 0 460 130" style={{width:'100%',maxWidth:380,height:'auto',display:'block',margin:'0 auto'}} xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <radialGradient id="loginLeafA" cx="40%" cy="55%" r="55%">
-                  <stop offset="0%" stopColor="#608a3e"/>
-                  <stop offset="50%" stopColor="#94c456"/>
-                  <stop offset="100%" stopColor="#d4e7a5"/>
-                </radialGradient>
-                <radialGradient id="loginLeafB" cx="55%" cy="50%" r="55%">
-                  <stop offset="0%" stopColor="#5a8330"/>
-                  <stop offset="50%" stopColor="#8fb84a"/>
-                  <stop offset="100%" stopColor="#cee49b"/>
-                </radialGradient>
-              </defs>
-              {/* クローバー (scale 0.8 で縮小、文字縦幅に合わせる、右に55シフトで中央寄せ) */}
-              <g transform="translate(105, 58) scale(0.8)">
-                <path d="M 0 3 Q 1 22 -1 50" stroke="#3d5021" strokeWidth="2.2" fill="none" strokeLinecap="round"/>
-                <g transform="rotate(-60)">
-                  <g transform="rotate(45)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#loginLeafA)" opacity="0.96"/></g>
-                  <g transform="rotate(135)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#loginLeafB)" opacity="0.96"/></g>
-                  <g transform="rotate(225)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#loginLeafA)" opacity="0.94"/></g>
-                  <g transform="rotate(315)"><path d="M 0 -3 C -8 -10 -22 -22 -22 -34 C -22 -44 -11 -47 0 -40 C 11 -47 22 -44 22 -34 C 22 -22 8 -10 0 -3 Z" fill="url(#loginLeafB)" opacity="0.94"/></g>
-                  <circle cx="0" cy="0" r="4" fill="#fbbf24"/>
-                </g>
-              </g>
-              {/* テキスト: 丸ゴ (白背景で映える深緑、右に55シフトで中央寄せ) */}
-              <text x="155" y="50" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="40" fill="#3d5021" fontWeight="700" letterSpacing="1">つむぎ</text>
-              <text x="157" y="73" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="17" fill="#7daa3d" fontWeight="500" letterSpacing="6">Tsumugi</text>
-              <text x="157" y="98" fontFamily="'Hiragino Maru Gothic ProN','Hiragino Maru Gothic Pro',sans-serif" fontSize="11" fill="#5e8030" fontWeight="400" letterSpacing="2" opacity="0.9">通所介護 業務支援システム</text>
-            </svg>
+            <img src="/preview/tsumugi-logo-full-transparent.png" alt="つむぎ Tsumugi" style={{width:'100%',maxWidth:340,height:'auto',display:'block',margin:'0 auto',objectFit:'contain'}}/>
           </div>
 
           {/* ログインカード: 白基調 + 緑アクセント */}
