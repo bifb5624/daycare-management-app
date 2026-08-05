@@ -19070,7 +19070,7 @@ export default function App() {
             {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} isNoticeRead={isNoticeRead} markNoticeRead={markNoticeRead} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} deviceName={deviceName} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
-             currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} /> :
+             currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} /> :
              currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} /> :
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
              currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} deviceName={deviceName} updateDeviceName={updateDeviceName} lastSync={appData._lastSync} /> :
@@ -26930,7 +26930,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
   );
 }
 
-function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirtyRef, onShowPrintPreview, sharedAmpm }) {
+function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirtyRef, onShowPrintPreview, sharedAmpm, setSharedAmpm }) {
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
   const markClean = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=false; },[dirtyRef]);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -27359,6 +27359,15 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 setSelectedDate(nearestOpenDate(e.target.value, closed, []));
               }} className="bg-transparent text-sm font-bold outline-none cursor-pointer text-slate-700" />
         </div>
+        {/* ★ AM/PM切替(提供記録・日誌と同じ共有トグル。店舗要望) */}
+        {setSharedAmpm && (
+          <div className="flex rounded-xl overflow-hidden border border-slate-300 shrink-0">
+            {['AM','PM'].map(v=>(
+              <button key={v} type="button" onClick={()=>setSharedAmpm(v)}
+                className={`px-4 py-2 text-sm font-bold transition-all ${sharedAmpm===v?'bg-blue-600 text-white':'bg-white text-slate-600 hover:bg-slate-50'}`}>{v}</button>
+            ))}
+          </div>
+        )}
         <div className="bg-emerald-50 px-3 py-2 rounded-xl text-sm font-bold text-emerald-700 border border-emerald-200 flex items-center gap-1.5 shrink-0">
           <Users size={15} /> {displayRecords.length} 名
         </div>
@@ -27698,9 +27707,11 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
   let nextDateDisplay = "　月　日（　）", nextTimeDisplay = "　時　分";
 
-  // 日付: nextDateOverrideがあればそれ、なければ自動取得
-  if (record.nextDateOverride !== undefined) {
-      nextDateDisplay = record.nextDateOverride || "　月　日（　）";
+  // 日付: 数字入りの実値(または「未定」)があればそれ、なければ自動計算。
+  //   ★ null/''/空白残骸(過去の消失バグの名残)は「値なし」として自動計算に落とす。
+  //     旧実装(undefined以外を全て採用)では、null残骸のある利用者だけ空欄表示になっていた。
+  if (/\d|未定/.test(String(record.nextDateOverride ?? ''))) {
+      nextDateDisplay = record.nextDateOverride;
   } else {
       const info = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
       nextDateDisplay = info.date;
@@ -27711,8 +27722,8 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
       const info2 = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
       if (info2.isFurikae) {
           nextTimeDisplay = info2.time || "　時　分";
-      } else if (record.nextTimeOverride !== undefined && record.nextTimeOverride !== null) {
-          nextTimeDisplay = record.nextTimeOverride || "　時　分";
+      } else if (/\d/.test(String(record.nextTimeOverride ?? ''))) {
+          nextTimeDisplay = record.nextTimeOverride;
       } else {
           nextTimeDisplay = info2.time || "　時　分";
       }
@@ -28160,6 +28171,10 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
   // ★ 数値入力用テンキー (提供記録入力と同じ DigitalKeypad)。 身長・体重・体力測定の各項目で使う。
   //   field は測定項目のid。 iPad等でOSキーボードを出さずに素早く入力できるようにする。
   const [keypad, setKeypad] = useState({ isOpen: false, field: null, value: '', isFirstInput: true });
+  // ★ アプリのテンキーが有効な店舗では入力欄をreadOnlyにしてOSキーボードを抑止する。
+  //   両方出ると、テンキーとOSキーボードの二重入力で「1→11」「12→122」と末尾がダブる事故になる。
+  //   テンキー無効(keypadDisabled)の店舗は従来どおりOSキーボードで直接入力。
+  const _fitKpOn = (appData.systemSettings?.keypadDisabled !== true);
   const openFitKeypad = (itemId) => {
     setKeypad({ isOpen: true, field: itemId, value: String(values[itemId] ?? ''), isFirstInput: true });
   };
@@ -28483,8 +28498,8 @@ function FitnessView({ appData, onSave, selectedDate, sharedAmpm, navigateTo, ta
                     <div className="px-1.5 sm:px-4 py-3 font-bold text-[13px] sm:text-sm text-slate-700 leading-tight">{item.name}<span className="text-xs text-slate-400 ml-0.5">（{item.unit}）</span></div>
                     <div className="px-1 sm:px-4 py-2">
                       {/* ★ タップでテンキーを表示。 手入力(OSキーボード)も可能で、全角は半角へ自動変換する */}
-                      <input type="text" inputMode="decimal" value={values[item.id] ?? ''}
-                        onClick={() => openFitKeypad(item.id)}
+                      <input type="text" inputMode={_fitKpOn ? 'none' : 'decimal'} readOnly={_fitKpOn} value={values[item.id] ?? ''}
+                        onClick={() => { if (_fitKpOn) openFitKeypad(item.id); }}
                         onChange={e => { setValues({...values, [item.id]: toHalfWidthNum(e.target.value)}); markDirty(); }}
                         placeholder="—"
                         className={`w-full px-1 sm:px-3 py-1.5 border rounded-lg text-sm font-bold outline-none text-center cursor-pointer ${keypad.isOpen && keypad.field===item.id ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 focus:border-blue-400'}`} />
