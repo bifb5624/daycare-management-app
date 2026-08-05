@@ -12135,7 +12135,7 @@ function FamilyAdminView({ appData, onSave }) {
                         ) : (
                           <>
                             {/* お知らせに紐付いた写真があれば先頭1枚をサムネ表示 */}
-                            {(e.photos || []).length > 0 && <img src={e.photos[0].url} alt="" className="w-10 h-10 object-cover rounded shrink-0"/>}
+                            {(e.photos || []).length > 0 && <StoredImage file={e.photos[0]} alt="" className="w-10 h-10 object-cover rounded shrink-0"/>}
                             <span className="text-sm font-bold text-slate-800 truncate flex-1">{e.title || '(タイトルなし)'}</span>
                             {(e.photos || []).length > 0 && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded shrink-0">×{e.photos.length}</span>}
                             {pat && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded">{pat.name}</span>}
@@ -12165,7 +12165,7 @@ function FamilyAdminView({ appData, onSave }) {
                             <a href={historyDetail.item.url} download={historyDetail.item.name||'document.pdf'} className="inline-flex items-center gap-1 mt-2 px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold no-underline">ダウンロード</a>
                           </div>
                         ) : (
-                          <img src={historyDetail.item.url} alt="" className="w-full rounded-xl mb-3"/>
+                          <StoredImage file={historyDetail.item} alt="" className="w-full rounded-xl mb-3"/>
                         )}
                         {historyDetail.item.name && <div className="text-[11px] text-slate-500 mb-2 font-mono break-all">{historyDetail.item.name}</div>}
                         {historyDetail.item.caption && <div className="text-sm text-slate-700 mb-2">{historyDetail.item.caption}</div>}
@@ -41214,24 +41214,34 @@ const dataUrlToBlob = (dataUrl) => {
 
 // ★ 非公開Storage: storagePath から署名URL(時間制限)を取得して表示用URLを返す。
 //   storagePath が無い旧データ(公開url / base64 data)はそれをそのまま使う(後方互換)。
+// ★ 署名URLの共有キャッシュ(10分)。 画面の再描画・再マウントのたびに取得し直すと、
+//   取得完了までの空白で写真がチカチカ点滅して見える(ホームのお知らせ等)。 一度取れたURLは
+//   キャッシュから即座に使い、期限が近づいたらバックグラウンドで更新する。
+const _signedUrlCache = new Map();   // storagePath -> { url, t }
 function useSignedUrl(file) {
+  const path = (file && file.storagePath) || '';
   const direct = (file && (file.url || file.data)) || '';
-  const [src, setSrc] = useState(direct);
+  const _c0 = path ? _signedUrlCache.get(path) : null;
+  const [src, setSrc] = useState((_c0 && _c0.url) || direct);
   useEffect(() => {
     let cancelled = false;
-    if (file && file.storagePath && isSupabaseEnabled) {
+    if (path && isSupabaseEnabled) {
+      const c = _signedUrlCache.get(path);
+      if (c && (Date.now() - c.t) < 10 * 60 * 1000) { setSrc(c.url); return; }   // キャッシュ有効
       // ★ 署名URLを優先 (非公開/公開どちらでも、anon に SELECT 権限があれば有効)。
       //   取れなければ公開URL (公開バケット時) にフォールバック。
-      supabaseGetSignedUrl(file.storagePath).then(u => {
+      supabaseGetSignedUrl(path).then(u => {
         if (cancelled) return;
-        setSrc(u || supabaseGetPublicUrl(file.storagePath) || direct);
+        const _u = u || supabaseGetPublicUrl(path) || direct;
+        if (_u) _signedUrlCache.set(path, { url: _u, t: Date.now() });
+        if (_u) setSrc(_u);   // 取得失敗時は現在の表示を維持(空に戻してチカチカさせない)
       });
     } else {
       setSrc(direct);
     }
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file && file.storagePath, file && file.url, file && file.data]);
+  }, [path, file && file.url, file && file.data]);
   return src;
 }
 // 画像表示 (署名URL対応)
