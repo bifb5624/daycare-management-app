@@ -17691,7 +17691,7 @@ export default function App() {
         let changed = false;
         // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
         //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
-        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));
@@ -19606,7 +19606,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          const pauseInfo = getPauseReasonOnDate(p, selectedDate);
          if (pauseInfo) {
              pData.status = "休止"; // 一時停止中は休止表記。カウント上は欠席扱い
+             // ★ 休止の理由・期間ラベルは「表示のみ」。 保存はしない(_pauseAuto)。 これで休止が終わって
+             //   出席に戻った時に、過去の休止ラベルが特記に焼き付いて残らない。
              pData.tokki = `${pauseInfo.reason}（${pauseInfo.fromDate.replace(/-/g,'/')}〜）`;
+             pData._pauseAuto = true;
+         } else if (pData.tokki && /（\d{4}\/\d{1,2}\/\d{1,2}〜）\s*$/.test(pData.tokki)) {
+             // ★ 休止期間が終わった(出席等に戻った)のに、過去に焼き付いた休止ラベルが残っている → 消す。
+             pData.tokki = '';
          }
          return pData;
       })
@@ -19901,11 +19907,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _yr = _sd.getFullYear();
       const _recs = [...(appData.ticketRecords||[])];
       const _ridx = _recs.findIndex(r => r.patientId === targetPatientId && recMatchesDateYear(r, _dateLabel, _yr));
-      if (_ridx >= 0) _recs[_ridx] = { ..._recs[_ridx], status: '休止', tokki: reason || _recs[_ridx].tokki || '休止', _savedAt: syncNow() };
-      else _recs.push({ id: `tr_${targetPatientId}_${_yr}_${_sd.getMonth()+1}_${_sd.getDate()}`, patientId: targetPatientId, date: _dateLabel, year: _yr, status: '休止', tokki: reason || '休止', _savedAt: syncNow() });
+      // ★ 休止の理由は pauseHistory(利用者)に持ち、特記(tokki)には焼き込まない(表示で計算する)。
+      //   焼き込むと休止が終わって出席に戻っても特記に残り続けるため。 既存の特記メモはそのまま保持。
+      if (_ridx >= 0) _recs[_ridx] = { ..._recs[_ridx], status: '休止', _savedAt: syncNow() };
+      else _recs.push({ id: `tr_${targetPatientId}_${_yr}_${_sd.getMonth()+1}_${_sd.getDate()}`, patientId: targetPatientId, date: _dateLabel, year: _yr, status: '休止', _savedAt: syncNow() });
       onSave({ ...appData, patients: updatedPatients, ticketRecords: _recs }, { manual: true, message: '✓ 休止に設定しました' });
       // 画面上の localPatients も即時反映
-      setLocalPatients(prev => prev.map(p => p.id===id ? {...p, status: '休止', tokki: reason||'休止'} : p));
+      setLocalPatients(prev => prev.map(p => p.id===id ? {...p, status: '休止'} : p));
       if (dirtyRef) dirtyRef.current = false; // 即時保存済み
       return;
     }
@@ -20232,7 +20240,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           //   空枠だけ削除(削除idは上の removedIds に入っている=墓石になる)。
           updatedTicketRecords = updatedTicketRecords.map(r => {
             if (!(r.patientId === patientId && r.date === destDateStr && (destAny || r.status === '振替'))) return r;
-            if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: (/分振替/.test(r.tokki||'') ? '' : (r.tokki||'')), _savedAt: syncNow() };
+            if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: syncNow() };
             return null;
           }).filter(Boolean);
           // 振替先の 振 シフトを削除
@@ -20296,7 +20304,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   temp: p[`temp_${timeFilter}`] || p.temp_AM || p.temp_PM || "",
                   bpUpSt: p[`bpUpSt_${timeFilter}`] || p.bpUpSt_AM || p.bpUpSt_PM || "", bpDnSt: p[`bpDnSt_${timeFilter}`] || p.bpDnSt_AM || p.bpDnSt_PM || "", plSt: p[`plSt_${timeFilter}`] || p.plSt_AM || p.plSt_PM || "",
                   bpUpEn: p[`bpUpEn_${timeFilter}`] || p.bpUpEn_AM || p.bpUpEn_PM || "", bpDnEn: p[`bpDnEn_${timeFilter}`] || p.bpDnEn_AM || p.bpDnEn_PM || "", plEn: p[`plEn_${timeFilter}`] || p.plEn_AM || p.plEn_PM || "",
-                  massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
+                  massage: p.massage || "", exercises: p.exercises || {}, tokki: p._pauseAuto ? "" : (p.tokki || ""), actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
                   // ★ 次回予定(連絡帳で設定する 次回利用日/お迎え時間)は提供記録入力では編集しない。
@@ -29769,7 +29777,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ 振替先の記録: バイタル等のデータがあれば消さずに残す(出席として保持・振替の目印tokkiは消す)。空枠だけ削除。
     let updated = (effTickets||[]).map(r => {
       if (!(r && r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替')) return r;
-      if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: (/分振替/.test(r.tokki||'') ? '' : (r.tokki||'')), _savedAt: _now };
+      if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: _now };
       if (r.id != null) _removedIds.push(String(r.id));
       return null;
     }).filter(Boolean);
@@ -29876,7 +29884,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         const removed = [];
         const filteredTickets = (effTickets||[]).map(t => {
           if (!(t.patientId === localPatient.id && t.date === dateStr)) return t;
-          if (ticketHasClinicalData(t)) return { ...t, status: '出席', furikaeAmpm: undefined, tokki: (/振替/.test(t.tokki||'') ? '' : (t.tokki||'')), _savedAt: syncNow() };
+          if (ticketHasClinicalData(t)) return { ...t, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: syncNow() };
           removed.push(t); return null;
         }).filter(Boolean);
         // ★ 削除した(空の)記録を墓石(deletedIds)へ → クラウドマージで復活させない。 その場で即保存し確実に反映。
