@@ -28917,10 +28917,16 @@ function SmartDateInput({ value, onChange, onBlur, onFocus, disabled, width }) {
       <span className="text-slate-400">/</span>
       <input ref={dRef} type="text" inputMode="numeric" disabled={disabled} value={parts.d} placeholder="--" onFocus={(e)=>{ try{e.target.select();}catch{} }} onChange={e=>_set('d',e.target.value)} className={`${inC} w-6`} aria-label="日"/>
       {!disabled && (
-        <label className="ml-auto pl-1 cursor-pointer text-slate-400 hover:text-slate-600 relative flex items-center" title="カレンダーから選ぶ">
-          <CalendarCheck size={15}/>
-          <input type="date" tabIndex={-1} value={value||''} onChange={(e)=>{ const v=e.target.value; committedRef.current=v; setParts(_parse(v)); onChange && onChange({ target: { value: v } }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
-        </label>
+        <div className="ml-auto flex items-center gap-1.5">
+          {/* ★ クリア(✕): 年月日を確実に空にする。 一部だけ消してフォーカスを外すと元に戻る挙動の逃げ道。 */}
+          {(value||'') && (
+            <button type="button" tabIndex={-1} title="日付をクリア" onClick={()=>{ committedRef.current=''; setParts({y:'',mo:'',d:''}); onChange && onChange({ target: { value: '' } }); }} className="text-slate-300 hover:text-red-400 flex items-center"><X size={14}/></button>
+          )}
+          <label className="cursor-pointer text-slate-400 hover:text-slate-600 relative flex items-center" title="カレンダーから選ぶ">
+            <CalendarCheck size={15}/>
+            <input type="date" tabIndex={-1} value={value||''} onChange={(e)=>{ const v=e.target.value; committedRef.current=v; setParts(_parse(v)); onChange && onChange({ target: { value: v } }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+          </label>
+        </div>
       )}
     </div>
   );
