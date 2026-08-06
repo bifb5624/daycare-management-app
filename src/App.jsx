@@ -21402,13 +21402,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">休止 開始日</label>
-                    <input type="date" value={statusModal.pauseFromDate} onChange={e => setStatusModal(s => ({...s, pauseFromDate: e.target.value}))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
+                    <SmartDateInput value={statusModal.pauseFromDate} onChange={e => setStatusModal(s => ({...s, pauseFromDate: e.target.value}))} />
                   </div>
                   <div>
                     <label className="block text-sm font-bold text-slate-600 mb-1.5">休止 終了日 <span className="text-[10px] font-normal text-slate-400">(未定なら空欄)</span></label>
-                    <input type="date" value={statusModal.pauseToDate} onChange={e => setStatusModal(s => ({...s, pauseToDate: e.target.value}))}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100" />
+                    <SmartDateInput value={statusModal.pauseToDate} onChange={e => setStatusModal(s => ({...s, pauseToDate: e.target.value}))} />
                   </div>
                 </div>
                 <div>
@@ -28874,7 +28872,48 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
 
 // ★ 日付などの入力。 モジュールレベルで定義(コンポーネント内に置くと毎レンダリングで作り直され、
 //   入力中に再マウントされて日付ピッカーが開けない/クリックできない原因になる)
+// ★ 独自の日付入力(年4桁/月/日を個別に入力)。 OS標準の type=date は「日を1桁で確定してしまう」
+//   「年が6桁入る」などブラウザ依存の挙動があり入力しづらいため、これに置き換える。
+//   ・年は4桁まで、月→日へ自動送り。 ・途中の1桁では確定しない(完成 or 全消去でだけ親へ反映)。
+//   ・カレンダーアイコンから従来のピッカーも使える。 ・onChange/onBlur は {target:{value: 'YYYY-MM-DD'}} で通知(既存呼び出し互換)。
+function SmartDateInput({ value, onChange, onBlur, onFocus, disabled, width }) {
+  const _parse = (v) => { const m = String(v||'').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/); return m ? { y:m[1], mo:String(+m[2]), d:String(+m[3]) } : { y:'', mo:'', d:'' }; };
+  const [parts, setParts] = React.useState(() => _parse(value));
+  const committedRef = React.useRef(value || '');
+  const yRef = React.useRef(null), moRef = React.useRef(null), dRef = React.useRef(null);
+  React.useEffect(() => { const v = value || ''; if (v !== committedRef.current) { committedRef.current = v; setParts(_parse(v)); } }, [value]);
+  const _iso = (p) => { if (!p.y && !p.mo && !p.d) return ''; if (p.y.length === 4 && p.mo && p.d) { const mo = Math.min(12, Math.max(1, parseInt(p.mo)||1)), d = Math.min(31, Math.max(1, parseInt(p.d)||1)); return `${p.y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`; } return null; };
+  const _commit = (p) => { const iso = _iso(p); if (iso === null) return; if (iso !== committedRef.current) { committedRef.current = iso; onChange && onChange({ target: { value: iso } }); } };
+  const _set = (k, raw) => {
+    const digits = String(raw).replace(/[^0-9]/g,'').slice(0, k==='y'?4:2); const np = { ...parts, [k]: digits }; setParts(np);
+    if (k==='y' && digits.length===4) { moRef.current && moRef.current.focus(); }
+    else if (k==='mo' && (digits.length===2 || (digits.length===1 && parseInt(digits)>1))) { dRef.current && dRef.current.focus(); }
+    // ★ 月/日の「2桁目がまだ入りうる1桁(月:1、日:1〜3)」は確定を保留(1桁で固定されない)。 2桁目 or フォーカス移動 or blur で確定。
+    const ambiguous = (k==='mo' && digits==='1') || (k==='d' && (digits==='1' || digits==='2' || digits==='3'));
+    if (!ambiguous) _commit(np);
+  };
+  const _blur = (e) => { if (e.currentTarget.contains(e.relatedTarget)) return; _commit(parts); if (_iso(parts) === null) setParts(_parse(committedRef.current)); onBlur && onBlur({ target: { value: committedRef.current } }); };
+  const inC = `text-center bg-transparent outline-none font-bold text-sm ${disabled?'opacity-60':''}`;
+  return (
+    <div style={width ? { width } : undefined} className={`flex items-center gap-0.5 px-2.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl ${disabled?'opacity-60':''}`} onBlur={_blur}>
+      <input ref={yRef} type="text" inputMode="numeric" disabled={disabled} value={parts.y} placeholder="----" onFocus={(e)=>{ try{e.target.select();}catch{} onFocus&&onFocus(e); }} onChange={e=>_set('y',e.target.value)} className={`${inC} w-11`} aria-label="年"/>
+      <span className="text-slate-400">/</span>
+      <input ref={moRef} type="text" inputMode="numeric" disabled={disabled} value={parts.mo} placeholder="--" onFocus={(e)=>{ try{e.target.select();}catch{} }} onChange={e=>_set('mo',e.target.value)} className={`${inC} w-6`} aria-label="月"/>
+      <span className="text-slate-400">/</span>
+      <input ref={dRef} type="text" inputMode="numeric" disabled={disabled} value={parts.d} placeholder="--" onFocus={(e)=>{ try{e.target.select();}catch{} }} onChange={e=>_set('d',e.target.value)} className={`${inC} w-6`} aria-label="日"/>
+      {!disabled && (
+        <label className="ml-auto pl-1 cursor-pointer text-slate-400 hover:text-slate-600 relative flex items-center" title="カレンダーから選ぶ">
+          <CalendarCheck size={15}/>
+          <input type="date" tabIndex={-1} value={value||''} onChange={(e)=>{ const v=e.target.value; committedRef.current=v; setParts(_parse(v)); onChange && onChange({ target: { value: v } }); }} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"/>
+        </label>
+      )}
+    </div>
+  );
+}
 function LabelInput({ label, disabled, value, onChange, onBlur, onFocus, type = "text", placeholder = "", width }) {
+  if (type === "date") {
+    return (<div style={width ? { width } : undefined}><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><SmartDateInput value={value} disabled={disabled} onChange={onChange} onBlur={onBlur} onFocus={onFocus} /></div>);
+  }
   return (<div style={width ? { width } : undefined}><label className="block text-sm font-bold text-slate-600 mb-1.5">{label}</label><input type={type} disabled={disabled} value={value || ""} onChange={onChange} onBlur={onBlur} onFocus={onFocus} placeholder={placeholder} className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none disabled:opacity-60" /></div>);
 }
 // ★ 表示専用の項目行(ラベル=左・色つき / 値=右)。 基本情報の閲覧を表形式で見やすくする。
@@ -32165,10 +32204,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               {/* ★ iPad等で日付入力の最小幅が広く横並びだと重なるため、縦並びにする */}
               <div className="space-y-4">
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label>
-                  <input type="date" value={pauseFromCellModal.fromDate} onChange={e=>setPauseFromCellModal({...pauseFromCellModal,fromDate:e.target.value})} className="w-full p-3 bg-white border border-slate-300 rounded-xl font-bold outline-none"/>
+                  <SmartDateInput value={pauseFromCellModal.fromDate} onChange={e=>setPauseFromCellModal({...pauseFromCellModal,fromDate:e.target.value})} />
                 </div>
                 <div><label className="text-xs font-bold text-slate-500 block mb-1">終了日（空欄で無期限）</label>
-                  <input type="date" value={pauseFromCellModal.toDate} onChange={e=>setPauseFromCellModal({...pauseFromCellModal,toDate:e.target.value})} className="w-full p-3 bg-white border border-slate-300 rounded-xl font-bold outline-none"/>
+                  <SmartDateInput value={pauseFromCellModal.toDate} onChange={e=>setPauseFromCellModal({...pauseFromCellModal,toDate:e.target.value})} />
                 </div>
               </div>
             </div>
