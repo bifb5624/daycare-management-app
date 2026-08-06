@@ -10890,7 +10890,7 @@ function RosterView({ appData, onSave }) {
   );
 }
 // === ホーム / ダッシュボード ===
-function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeRead, markNoticeRead }) {
+function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes, isNoticeRead, markNoticeRead }) {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const dow = ['日','月','火','水','木','金','土'][now.getDay()];
@@ -10935,7 +10935,10 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, isNoticeR
           const sevMeta = { info:{label:'お知らせ',emoji:'ℹ️',color:'#0369a1',bg:'#f0f9ff'}, warning:{label:'メンテナンス',emoji:'',color:'#c2410c',bg:'#fff7ed'}, critical:{label:'重要',emoji:'🚨',color:'#dc2626',bg:'#fef2f2'} };
           const fromHq = (notices||[]).filter(n=>!(n.ends_at && new Date(n.ends_at).getTime()<nowT)).map(n=>({ id:n.id, date:(n.created_at?String(n.created_at).slice(0,10):''), m: sevMeta[n.severity]||sevMeta.info, title:n.title, body:n.body }));
           const builtin = DEV_ANNOUNCEMENTS.map(a=>{ const mm=DEV_ANN_META[a.type]||DEV_ANN_META.info; return { id:a.id, date:a.date, m:{label:mm.label,emoji:mm.emoji,color:mm.color,bg:mm.bg}, title:a.title, body:a.body }; });
-          const all = [...fromHq, ...builtin].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
+          // ★ update-notes.json からライブ取得した更新内容(再読み込みなしで反映)
+          const live = (devNotes||[]).map(a=>{ const mm=DEV_ANN_META[a.type]||DEV_ANN_META.info; return { id:a.id, date:a.date, m:{label:mm.label,emoji:mm.emoji,color:mm.color,bg:mm.bg}, title:a.title, body:a.body }; });
+          const _seen=new Set();
+          const all = [...fromHq, ...live, ...builtin].filter(x=>{ if(!x.id||_seen.has(x.id)) return false; _seen.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
           if (!all.length) return null;
           return (
             <Card style={{borderColor:'#c7d2fe'}}>
@@ -17409,6 +17412,8 @@ export default function App() {
   // ★ 新バージョン検知 → 通知バナー＋安全時の自動リロード。 デプロイ後に各端末を手動リロードしなくても更新される。
   //   仕組み: index.html(no-cache)を定期取得し、参照する /assets/*.js が起動時と変わっていたら「更新あり」。
   const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  const [devUpdateNotes, setDevUpdateNotes] = React.useState([]); // ★ 更新内容(つむぎ運営からのお知らせ)をJSONからライブ取得
+  const [showUpdateNotes, setShowUpdateNotes] = React.useState(false); // 更新内容モーダルの開閉
   const _selfAssetsRef = React.useRef(null);
   const _isEditingNow = React.useCallback(() => {
     try { const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return true; } catch {}
@@ -17446,6 +17451,25 @@ export default function App() {
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [updateAvailable, _isEditingNow]);
+  // ★ 更新内容(つむぎ運営からのお知らせ)を静的JSON(/update-notes.json)からライブ取得。
+  //   バンドルに焼き込む DEV_ANNOUNCEMENTS と違い、再読み込みしなくてもホーム/更新バナーに反映される。
+  useEffect(() => {
+    let stopped = false;
+    const load = async () => {
+      try {
+        const res = await fetch('/update-notes.json?_v=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        const notes = Array.isArray(j) ? j : (Array.isArray(j.notes) ? j.notes : []);
+        if (!stopped) setDevUpdateNotes(notes.filter(n => n && n.id && (n.title || n.body)));
+      } catch {}
+    };
+    load();
+    const t = setInterval(load, 60 * 1000);
+    const onFocus = () => { if (document.visibilityState !== 'hidden') load(); };
+    window.addEventListener('focus', onFocus);
+    return () => { stopped = true; clearInterval(t); window.removeEventListener('focus', onFocus); };
+  }, []);
   // ★ データ消失対策: アプリ切替/タブ離脱/スリープ移行時に、開いている入力画面の未保存データを自動保存。
   //   入力画面は「保存」を押すまでローカル保持のため、押さずに離れると消える。 これを背景化時に拾う。
   useEffect(() => {
@@ -18576,6 +18600,8 @@ export default function App() {
       {updateAvailable && ReactDOM.createPortal(
         <div style={{position:'fixed',left:'50%',bottom:20,transform:'translateX(-50%)',zIndex:2000000,background:'#0f172a',color:'white',padding:'10px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:12,maxWidth:'92vw'}}>
           <span style={{fontSize:13,fontWeight:'bold'}}>⚠ 新しいバージョンがあります。<span style={{color:'#fca5a5'}}>必ず再読み込みしてください</span>（古いままだと同期や表示に不具合が出ることがあります）</span>
+          {/* ★ 何が変わったか分からず更新してよいか迷う、を解消。 押すと今回の更新内容(update-notes.json)を表示 */}
+          <button onClick={()=>setShowUpdateNotes(true)} style={{background:'transparent',color:'#e2e8f0',border:'1px solid #64748b',borderRadius:8,padding:'6px 12px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>更新内容を確認</button>
           {/* ★ 単なる reload だとブラウザのキャッシュから古いプログラムが読み直されることがあり、
               「押しても更新されない/しばらく経ってから反映」という症状になる。
               キャッシュとService Workerを消してから、URLに印を付けて確実に取り直す。 */}
@@ -18607,6 +18633,36 @@ export default function App() {
               window.location.replace(u.toString());
             } catch { try { window.location.reload(); } catch {} }
           }} style={{background:'#7daa3d',color:'white',border:'none',borderRadius:8,padding:'6px 14px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ更新</button>
+        </div>,
+        document.body
+      )}
+      {/* ★ 更新内容モーダル (更新バナーの「更新内容を確認」から開く) */}
+      {showUpdateNotes && ReactDOM.createPortal(
+        <div onClick={()=>setShowUpdateNotes(false)} style={{position:'fixed',inset:0,zIndex:2000001,background:'rgba(15,23,42,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,maxWidth:520,width:'100%',maxHeight:'80vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.4)'}}>
+            <div style={{padding:'16px 20px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,background:'white'}}>
+              <div style={{fontSize:15,fontWeight:'bold',color:'#1e293b'}}>🆕 今回の更新内容</div>
+              <button onClick={()=>setShowUpdateNotes(false)} style={{border:'none',background:'#f1f5f9',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:16,color:'#64748b'}}>×</button>
+            </div>
+            <div style={{padding:'16px 20px',display:'flex',flexDirection:'column',gap:12}}>
+              {devUpdateNotes.length ? devUpdateNotes.map(n=>{ const mm=DEV_ANN_META[n.type]||DEV_ANN_META.info; return (
+                <div key={n.id} style={{border:`1px solid ${mm.color}44`,background:mm.bg,borderRadius:12,padding:'12px 14px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                    <span style={{fontSize:11,fontWeight:'bold',color:'white',background:mm.color,borderRadius:6,padding:'2px 8px'}}>{mm.emoji} {mm.label}</span>
+                    {n.date && <span style={{fontSize:11,color:'#94a3b8'}}>{n.date}</span>}
+                  </div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:mm.color,marginBottom:4}}>{n.title}</div>
+                  {n.body && <div style={{fontSize:13,color:'#475569',whiteSpace:'pre-wrap',lineHeight:1.7}}>{n.body}</div>}
+                </div>
+              ); }) : (
+                <div style={{fontSize:13,color:'#64748b',lineHeight:1.7,textAlign:'center',padding:'12px 0'}}>更新内容の詳細は準備中です。<br/>「今すぐ更新」で最新版に更新してください。</div>
+              )}
+              <div style={{fontSize:12,color:'#64748b',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px',lineHeight:1.6}}>
+                この内容はホームの「つむぎ運営からのお知らせ」でもいつでも確認できます。「今すぐ更新」を押すと最新版に切り替わります。
+              </div>
+              <button onClick={()=>setShowUpdateNotes(false)} style={{alignSelf:'flex-end',background:'#e2e8f0',color:'#334155',border:'none',borderRadius:8,padding:'8px 18px',fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+            </div>
+          </div>
         </div>,
         document.body
       )}
@@ -18977,7 +19033,7 @@ export default function App() {
                 高さが解決できず運動テーブル(flex:1 1 0)が潰れて切れる(サイドバーを開くと縮率が下がり顕在化)。
                 ホーム(dashboard)と同様に zoom 縮小の対象外にし、等倍＋スクロールで表示する。 */}
             <div style={isMobileLayout ? {width:'100%',minWidth:0} : (currentView==='dashboard' || currentView==='print' || currentView==='master') ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : 1, width: contentScale<1 ? `${100/contentScale}%` : '100%', height: contentScale<1 ? `${100/contentScale}%` : '100%'}}>
-            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} isNoticeRead={isNoticeRead} markNoticeRead={markNoticeRead} /> :
+            {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} devNotes={devUpdateNotes} isNoticeRead={isNoticeRead} markNoticeRead={markNoticeRead} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} deviceName={deviceName} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} /> :
