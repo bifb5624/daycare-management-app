@@ -29581,7 +29581,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     newSched[dayIndex] = newVal;
 
     // 2. 変更履歴
-    const hist = [...(localPatient.scheduleChangeHistory||[])];
+    // ★ 同じ曜日で「applyFrom 以降に予約された古い変更履歴」は、この再設定で上書きするため除去する。
+    //   (基本利用曜日を なし→PM 等と何度か変更した時に、古い履歴が累積して getScheduleOnDate が
+    //    その曜日を空欄へ巻き戻し、月間スケジュールが空欄になる不具合の対策)。
+    const hist = [...(localPatient.scheduleChangeHistory||[])].filter(h => !(h && h.dayIndex === dayIndex && h.date && String(h.date) >= String(applyFrom)));
     hist.push({date:applyFrom, dayIndex, oldVal, newVal, label:`${dN2[dayIndex]}曜日 ${oldVal||'無'}→${newVal||'無'}`});
     const changeTypeLabel = isAdd?'増回':isRemove?'減回':'変更';
     const changeLogEntry = {date: new Date().toISOString().slice(0,10), label:`基本利用日${changeTypeLabel}`, oldValue:null, newValue:`${dN2[dayIndex]}曜日 ${oldVal||'無'}→${newVal||'無'}（${applyFrom}〜適用）`, note:changeTypeLabel};
@@ -30902,6 +30905,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             </div>
             <div className="mb-5">
               <label className="block text-sm font-bold text-slate-600 mb-1.5">適用開始日</label>
+              {/* ★ 通常は「今日から」でOK。 未来の日付を選ぶと、その日より前の月は空欄になる(まだ利用曜日でない扱い)ため、
+                  基本利用曜日を今すぐ反映したい時は必ず「今日から」を押す。 */}
+              {(() => { const _t=new Date(); const _td=`${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`; return (
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <button onClick={()=>setSchedModal(m=>({...m, applyFrom:_td, vY:_t.getFullYear(), vM:_t.getMonth()}))} className={`px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 ${schedModal.applyFrom===_td?'bg-blue-600 text-white shadow':'bg-blue-50 text-blue-700 border border-blue-200'}`}>今日から（すぐ反映）</button>
+                  <span className="text-[11px] text-slate-400">通常はこれでOK。未来から反映したい時だけ下で日付を選択</span>
+                </div>
+              ); })()}
               {/* ★ iPad のネイティブ日付ピッカーはモーダル内で開かない事があるため、
                   常時表示のインラインカレンダーに変更 (タップで確実に選択できる) */}
               {(() => {
