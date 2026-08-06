@@ -17707,7 +17707,7 @@ export default function App() {
         let changed = false;
         // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
         //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
-        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','contactBookRenraku','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));
@@ -26836,6 +26836,7 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
     _tmplSig0Ref.current = JSON.stringify(templates);
   }
   const [warn, setWarn] = React.useState('');
+  const [clearN, setClearN] = React.useState({}); // ★ 連絡事項エディタを空で再マウントするための世代カウンタ(クリアボタン用)
   const measureRef = React.useRef(null);
   const allInsertRef = React.useRef(null); // 全員エディタへ挿入
   const patInsertRef = React.useRef(null); // 個別エディタへ挿入
@@ -26889,8 +26890,13 @@ function RenrakuModal({ appData, patientId, dayPatientIds, onClose, onSave }) {
           onClick={()=>openTmplForm({ title:'', content: st.html || '' }, -1)}
           className="ml-auto px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-white text-blue-700 border-blue-300 hover:bg-blue-50 disabled:opacity-40 shrink-0"
           title="いま入力している本文を、書式ごと定型文として登録します">＋ 定型文に追加</button>
+        {/* ★ この連絡事項を削除(クリア)。 本文と表示期間を空にし、エディタを空で再マウントする */}
+        <button type="button" disabled={!tmplToPlain(st.html) && !st.from && !st.until}
+          onClick={()=>{ set(()=>({ html:'', from:'', until:'' })); setClearN(m=>({ ...m, [editorKey]:(m[editorKey]||0)+1 })); }}
+          className="px-2.5 py-1 rounded-lg text-[11px] font-bold border bg-white text-red-600 border-red-300 hover:bg-red-50 disabled:opacity-40 shrink-0"
+          title="この連絡事項を削除(空に)します">削除</button>
       </div>
-      <RichEditor key={editorKey} initialHtml={st.html} onRegister={onRegister} onChange={(html)=>set(s=>({...s,html}))}/>
+      <RichEditor key={`${editorKey}:${clearN[editorKey]||0}`} initialHtml={st.html} onRegister={onRegister} onChange={(html)=>set(s=>({...s,html}))}/>
       {(() => {
         const isNone = !st.from && !st.until;
         const isToday = st.from===_today && st.until===_today;
