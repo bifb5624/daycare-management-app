@@ -20299,6 +20299,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   massage: p.massage || "", exercises: p.exercises || {}, tokki: p.tokki || "", actualTime: p.actualTime || "",
                   kibunArrival: p.kibunArrival || "", kibunArrivalReason: p.kibunArrivalReason || "",
                   kibunDeparture: p.kibunDeparture || "", kibunDepartureReason: p.kibunDepartureReason || "",
+                  // ★ 次回予定(連絡帳で設定する 次回利用日/お迎え時間)は提供記録入力では編集しない。
+                  //   ここで書き出さないと、他項目を保存した瞬間に再構築で消えてしまうため、既存値を必ず引き継ぐ。
+                  ...(((existing?.nextDateOverride ?? p.nextDateOverride) ?? '') !== '' ? { nextDateOverride: existing?.nextDateOverride ?? p.nextDateOverride } : {}),
+                  ...(((existing?.nextTimeOverride ?? p.nextTimeOverride) ?? '') !== '' ? { nextTimeOverride: existing?.nextTimeOverride ?? p.nextTimeOverride } : {}),
                   // ★ 担当者: スタッフ切替で選んでいるアクティブ記録者を保存
                   //   未選択の場合は 既存値を維持 (それ以外のフォールバックは使わない)
                   recorder: getRecorderName() || existing?.recorder || '',
