@@ -36345,6 +36345,61 @@ const SEIKATSU_IADL = ['調理','掃除','洗濯','買い物','交通機関の�
 const SEIKATSU_SHINSHIN = ['麻痺','関節拘縮','筋力低下','関節痛','バランス低下','嚥下障害','視力低下','聴力低下'];
 const KYOMI_DEFAULT = ['自分でトイレに行く','一人でお風呂に入る','自分で服を着る','自分で食べる','歯磨きをする','身だしなみを整える','好きなときに眠る','掃除・整理整頓','料理を作る','買い物','散歩','友人とのおしゃべり','家族・親戚との団らん','趣味の活動','スポーツ','旅行・外出','庭いじり・園芸','読書','俳句・川柳','書道','絵を描く','写真','音楽を聴く','歌・カラオケ','楽器の演奏','将棋・囲碁・麻雀','編み物・手芸','針仕事','テレビ・映画','パソコン・スマホ','賃金を伴う仕事','ボランティア活動','地域の行事・活動','子や孫の世話','動物の世話','お参り・信仰'];
 
+// ★ LIFE傷病名マスタ(厚労省・約2.7万件)。 public/life-disease-master.json を初回検索時にだけ読み込む
+//   (994KB あるため、バンドルには入れずオンデマンド fetch。 読み込み後はモジュール内キャッシュ)。
+let _lifeDiseasePromise = null;
+const loadLifeDiseaseMaster = () => {
+  if (!_lifeDiseasePromise) {
+    _lifeDiseasePromise = fetch('/life-disease-master.json')
+      .then(r => r.ok ? r.json() : { items: [] })
+      .then(j => (Array.isArray(j.items) ? j.items : []))
+      .catch(() => { _lifeDiseasePromise = null; return []; });
+  }
+  return _lifeDiseasePromise;
+};
+// 検索用正規化: 全角英数→半角(NFKC)・ひらがな→カタカナ(マスタの病名はカタカナ+漢字のため)
+const _dzNorm = (s) => String(s || '').normalize('NFKC').replace(/[ぁ-ん]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+// ★ 病名検索ボックス: 名前で検索→候補から選ぶとコードが自動入力される(コード手入力も従来どおり可)
+function LifeDiseaseSearch({ onPick }) {
+  const [q, setQ] = React.useState('');
+  const [hits, setHits] = React.useState([]);
+  const [loading, setLoading] = React.useState(false);
+  const [open, setOpen] = React.useState(false);
+  const _seq = React.useRef(0);
+  const search = async (raw) => {
+    setQ(raw);
+    const query = _dzNorm(raw.trim());
+    if (!query) { setHits([]); setOpen(false); return; }
+    const my = ++_seq.current;
+    setLoading(true); setOpen(true);
+    const items = await loadLifeDiseaseMaster();
+    if (my !== _seq.current) return; // 追い越された古い検索は捨てる
+    const out = [];
+    for (const it of items) {
+      if (_dzNorm(it[1]).includes(query) || String(it[0]).startsWith(raw.trim())) { out.push(it); if (out.length >= 30) break; }
+    }
+    setHits(out); setLoading(false);
+  };
+  return (
+    <div className="relative flex-1 min-w-[220px]">
+      <input value={q} onChange={e=>search(e.target.value)} onFocus={()=>{ if(hits.length) setOpen(true); }} onBlur={()=>setTimeout(()=>setOpen(false),200)}
+        placeholder="病名で検索（例: 脳梗塞・こつそしょう）" className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none"/>
+      {open && (
+        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-56 overflow-auto">
+          {loading ? <div className="px-3 py-2 text-[11px] text-slate-400">傷病名マスタを読み込み中…（初回のみ）</div>
+            : hits.length === 0 ? <div className="px-3 py-2 text-[11px] text-slate-400">該当なし（漢字・カタカナなど別の表記でお試しください）</div>
+            : hits.map(([c, n]) => (
+              <button key={`${c}_${n}`} type="button" onMouseDown={(e)=>{ e.preventDefault(); onPick(c, n); setQ(''); setOpen(false); }}
+                className="block w-full text-left px-3 py-1.5 text-xs hover:bg-purple-50 border-b border-slate-100 last:border-b-0">
+                <span className="font-bold text-slate-700">{n}</span><span className="text-[10px] text-slate-400 ml-2">{c}</span>
+              </button>
+            ))}
+          {!loading && hits.length >= 30 && <div className="px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50">先頭30件のみ表示。続きは語を足して絞り込んでください。</div>}
+        </div>
+      )}
+    </div>
+  );
+}
 // === 個別機能訓練計画書 (アドオン: kinou_keikaku) ===
 function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPreview, navigateTo, targetPatientId }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
@@ -36648,10 +36703,21 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                 <div className="bg-purple-50 rounded-xl border border-purple-200 p-4 space-y-4">
                   <div className="text-sm font-bold text-purple-700">LIFE提出用コード（個別機能訓練 IDUA2024）</div>
                   <div className="text-[11px] text-purple-900 opacity-70 -mt-2">※ このコードはLIFE提出CSV（個別機能訓練）に使います。文章の目標・訓練内容は上で入力済みなので、ここでは対応するコードを選ぶだけです。</div>
-                  {/* 傷病名コード */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-bold text-slate-600 w-40">傷病名コード（任意・7桁）</span>
-                    <input value={L.diseaseCode||''} onChange={e=>setLife({diseaseCode:e.target.value.replace(/[^0-9]/g,'').slice(0,7)})} placeholder="例: 2500014（未コード化は 999）" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-56"/>
+                  {/* 傷病名コード: 病名検索(2.7万件マスタ)→選ぶとコード自動入力。 手入力も従来どおり可 */}
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-bold text-slate-600 w-40">傷病名（任意）</span>
+                      <LifeDiseaseSearch onPick={(c,n)=>setLife({diseaseCode:c, diseaseName:n})}/>
+                      <input value={L.diseaseCode||''} onChange={e=>setLife({diseaseCode:e.target.value.replace(/[^0-9]/g,'').slice(0,7), diseaseName:''})} placeholder="コード直接入力" title="傷病名コード（7桁・未コード化は999）" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-32"/>
+                    </div>
+                    {L.diseaseCode ? (
+                      <div className="text-[11px] text-purple-800 mt-1 ml-[10.5rem] flex items-center gap-2">
+                        選択中: <b>{L.diseaseName || '（コード直接入力）'}</b>（{L.diseaseCode}）
+                        <button type="button" onClick={()=>setLife({diseaseCode:'', diseaseName:''})} className="text-red-500 hover:text-red-600 font-bold">✕ クリア</button>
+                      </div>
+                    ) : (
+                      <div className="text-[10px] text-slate-400 mt-1 ml-[10.5rem]">病名で検索して選ぶとコードが自動で入ります（未コード化は 999）</div>
+                    )}
                   </div>
                   {/* 合併症23分類 */}
                   <div>
