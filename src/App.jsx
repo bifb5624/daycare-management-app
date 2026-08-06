@@ -19526,7 +19526,24 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          if (!pData.status || pData.status === '通所' || pData.status === '利用中') pData.status = '出席';
          const targetDateStr = `${new Date(selectedDate).getMonth() + 1}月${new Date(selectedDate).getDate()}日`;
          const _selYear3 = new Date(selectedDate).getFullYear();
-         const existingRecord = (appData.ticketRecords || []).find(r => r.patientId === p.id && recMatchesDateYear(r, targetDateStr, _selYear3));
+         // ★ 同一利用者・同一日に複数の記録(振替の重複など)がある場合は、非空を寄せ集めて1件に統合して表示する。
+         //   これをしないと find が拾った片方に無い項目(終了血圧・脈など)が「消えた」ように見える。
+         const _matchRecs = (appData.ticketRecords || []).filter(r => r.patientId === p.id && recMatchesDateYear(r, targetDateStr, _selYear3));
+         let existingRecord = _matchRecs[0] || null;
+         if (_matchRecs.length > 1) {
+           const _score = (r) => Object.keys(r).filter(k => k[0] !== '_' && r[k] !== '' && r[k] != null && !(k==='exercises' && !Object.keys(r[k]||{}).length)).length;
+           const _sorted = [..._matchRecs].sort((a,b) => _score(b) - _score(a) || (Number(b._savedAt)||0) - (Number(a._savedAt)||0));
+           existingRecord = _sorted.reduce((acc, r) => {
+             Object.keys(r).forEach(k => {
+               if (k === 'id' || k === '_savedAt' || k === '_fieldTs') return;
+               const v = r[k]; const cur = acc[k];
+               const curEmpty = cur === '' || cur == null || (k === 'exercises' && !Object.keys(cur||{}).length);
+               const vFull = v !== '' && v != null && !(k === 'exercises' && !Object.keys(v||{}).length);
+               if (curEmpty && vFull) acc[k] = v;
+             });
+             return acc;
+           }, { ..._sorted[0] });
+         }
          if (existingRecord) {
              pData.recordId = existingRecord.id;
              pData.patientId = p.id;
@@ -19956,7 +19973,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         tokki: (_existDest.tokki && String(_existDest.tokki).trim()) ? _existDest.tokki : _furiTokki,
         _savedAt: syncNow()
       } : {
-        id: Date.now()+Math.random(),
+        id: `tr_${id}_${destD.getFullYear()}_${destD.getMonth()+1}_${destD.getDate()}`,
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
         date:destDateStr, year: destD.getFullYear(), dayOfWeek:destDowStr,
         status:'振替', furikaeAmpm: furikaeAmpm,
@@ -19985,7 +20002,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         status:'欠席', tokki:srcTokki,
         _savedAt: syncNow()
       } : {
-        id: Date.now()+Math.random()+1,
+        id: `tr_${id}_${srcD.getFullYear()}_${srcD.getMonth()+1}_${srcD.getDate()}`,
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
         date:srcDateStr, dayOfWeek:srcDowStr,
         status:'欠席', tokki:srcTokki,
@@ -20013,7 +20030,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         status:newStatus, tokki: reason || _existAbs.tokki || '',
         _savedAt: syncNow()
       } : {
-        id: Date.now()+Math.random(),
+        id: `tr_${id}_${srcD.getFullYear()}_${srcD.getMonth()+1}_${srcD.getDate()}`,
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
         date:srcDateStr, dayOfWeek:srcDowStr,
         status:newStatus, tokki:reason||'',
@@ -26986,9 +27003,13 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     const ampmFilter = sharedAmpm === 'all' || !sharedAmpm ? null : sharedAmpm; // 'AM' | 'PM' | null
 
     // ticketRecordsから出席・振替（欠席は除外）
-    const recs = (appData.ticketRecords || []).filter(r =>
+    const _rawRecs = (appData.ticketRecords || []).filter(r =>
       recMatchesDateYear(r, targetDateStr, targetYear) && (r.status === '出席' || (r.status && r.status.startsWith('振')))
     );
+    // ★ 同一利用者・同一日に複数記録(振替の重複など)がある場合は1件に絞る(データの多い方を優先)。 二重表示を防ぐ。
+    const _byPat = new Map();
+    _rawRecs.forEach(r => { const ex = _byPat.get(r.patientId); const sc = (x) => Object.keys(x).filter(k => k[0] !== '_' && x[k] !== '' && x[k] != null).length; if (!ex || sc(r) > sc(ex)) _byPat.set(r.patientId, r); });
+    const recs = [..._byPat.values()];
     const recIds = new Set(recs.map(r=>r.patientId));
     // 欠席として記録されている人のIDセット
     const absentIds = new Set(
@@ -29945,12 +29966,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const _furiNow = syncNow();
     const srcIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, srcLabel, srcYear));
     if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear, _savedAt: _furiNow };
-    else ur.push({ id: Date.now() + Math.random(), patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki, _savedAt: _furiNow });
+    else ur.push({ id: `tr_${localPatient.id}_${srcYear}_${srcDateObj.getMonth()+1}_${srcDateObj.getDate()}`, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki, _savedAt: _furiNow });
     // 振替先 ticketRecord（振替）の新規作成 / 更新
     const destTokki = `${srcLabel}${ampmSuffix}分振替`;
     const destIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, destLabel, destYear));
     if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear, _savedAt: _furiNow };
-    else ur.push({ id: Date.now() + Math.random() + 1, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, _savedAt: _furiNow });
+    else ur.push({ id: `tr_${localPatient.id}_${destYear}_${destDateObj.getMonth()+1}_${destDateObj.getDate()}`, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, _savedAt: _furiNow });
     // ★ 振替は下書きに留めず即クラウド保存(欠席記録/振替記録をすぐ反映 → 提供記録入力にも欠席者が出る)
     setPendingShifts(null); setPendingTickets(null);
     if (dirtyRef) dirtyRef.current = false;
