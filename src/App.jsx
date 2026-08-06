@@ -10272,7 +10272,7 @@ function SidebarGroup({ icon, label, activeChild, children }) {
   return (
     <div>
       <button onClick={() => setOpen(o => !o)} className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeChild && !open ? 'bg-blue-600/20 text-white font-bold' : 'hover:bg-slate-800 hover:text-white font-medium'}`}>
-        {icon}<span className="text-sm whitespace-nowrap flex-1 text-left">{label}</span>
+        {icon}<span className="text-sm whitespace-nowrap flex-1">{label}</span>
         {open ? <ChevronDown size={16} className="shrink-0"/> : <ChevronRight size={16} className="shrink-0"/>}
       </button>
       {open && <div className="mt-1 ml-4 pl-2 border-l border-slate-700 space-y-1">{children}</div>}
@@ -10916,11 +10916,24 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
   const markRead = markNoticeRead || (()=>{});
   const [noticeDetail, setNoticeDetail] = React.useState(null);
   const openDetail = (d) => { setNoticeDetail(d); if (d) markRead(d.id); };
-  // ★ ホーム各カードの「もっと見る」開閉。 既定は上位のみ表示し、高さを揃える。
-  const [showAllDev, setShowAllDev] = React.useState(false);   // つむぎ運営からのお知らせ(上位3)
-  const [showAllExt, setShowAllExt] = React.useState(false);   // 家族・ケアマネからの更新(上位5)
-  const [showAllNews, setShowAllNews] = React.useState(false); // お知らせ(上位5)
-  const _moreBtnStyle = { width:'100%', marginTop:8, fontSize:12, fontWeight:'bold', color:'#64748b', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'6px 0', cursor:'pointer' };
+  // ★ ホーム各カードのページ送り(＜ 1 2 3 ＞)。 下に長く伸びず、一定の高さで見やすくする。
+  const [devPage, setDevPage] = React.useState(0);   // つむぎ運営からのお知らせ(3件/頁)
+  const [extPage, setExtPage] = React.useState(0);   // 家族・ケアマネからの更新(5件/頁)
+  const [newsPage, setNewsPage] = React.useState(0); // お知らせ(5件/頁)
+  const _pageSlice = (arr, page, size) => { const pages = Math.max(1, Math.ceil((arr.length||0)/size)); const p = Math.min(Math.max(0,page), pages-1); return arr.slice(p*size, p*size+size); };
+  const renderPager = (total, size, page, setPage) => {
+    const pages = Math.ceil((total||0)/size);
+    if (pages <= 1) return null;
+    const p = Math.min(Math.max(0,page), pages-1);
+    const btn = (active,dim) => ({ minWidth:26, height:26, borderRadius:6, fontSize:12, fontWeight:'bold', border:'1px solid '+(active?'#4338ca':'#e2e8f0'), background:active?'#4338ca':'white', color:active?'white':'#475569', cursor:dim?'default':'pointer', padding:'0 6px', opacity:dim?0.4:1 });
+    return (
+      <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5,marginTop:10,flexWrap:'wrap'}}>
+        <button onClick={()=>setPage(Math.max(0,p-1))} disabled={p<=0} style={btn(false,p<=0)}>‹</button>
+        {Array.from({length:pages},(_,i)=>i).map(i=>(<button key={i} onClick={()=>setPage(i)} style={btn(i===p,false)}>{i+1}</button>))}
+        <button onClick={()=>setPage(Math.min(pages-1,p+1))} disabled={p>=pages-1} style={btn(false,p>=pages-1)}>›</button>
+      </div>
+    );
+  };
   const Card = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
   const Tile = ({icon, label, sub, color, view}) => (
     <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
@@ -10955,7 +10968,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           const _seen=new Set();
           const all = [...fromHq, ...live, ...builtin].filter(x=>{ if(!x.id||_seen.has(x.id)) return false; _seen.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,50);
           if (!all.length) return null;
-          const _devShown = showAllDev ? all : all.slice(0,3);
+          const _devShown = _pageSlice(all, devPage, 3);
           return (
             <Card style={{borderColor:'#c7d2fe'}}>
               <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span>
@@ -10981,9 +10994,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   </button>
                 ); })}
               </div>
-              {all.length > 3 && (
-                <button onClick={()=>setShowAllDev(v=>!v)} style={_moreBtnStyle}>{showAllDev ? '閉じる' : `もっと見る（他 ${all.length-3} 件）`}</button>
-              )}
+              {renderPager(all.length, 3, devPage, setDevPage)}
             </Card>
           );
         })()}
@@ -11020,7 +11031,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           {(() => {
             // ★ 家族・ケアマネがビューアから行った編集/添付/招待/登録の未確認通知を集約
             const ext = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[]).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice).map(u => ({...u, _pid:p.id, _pname:p.name}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,50);
-            const _extShown = showAllExt ? ext : ext.slice(0,5);
+            const _extShown = _pageSlice(ext, extPage, 5);
             // ★ 常時表示: 更新が無くてもカードは出し、無い旨を表示する
             const _fmt = (iso)=>{ try{ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch{ return ''; } };
             const _unread = ext.filter(u=>!isRead(u.id)).length;
@@ -11044,9 +11055,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                     </button>
                   ); })}
                 </div>
-                {ext.length > 5 && (
-                  <button onClick={()=>setShowAllExt(v=>!v)} style={_moreBtnStyle}>{showAllExt ? '閉じる' : `もっと見る（他 ${ext.length-5} 件）`}</button>
-                )}
+                {renderPager(ext.length, 5, extPage, setExtPage)}
                 <div style={{fontSize:10,color:'#a16207',marginTop:6}}>タップで詳細を表示（見ると既読＝グレーになります／既読は担当者ごと）。</div>
                 </>)}
               </Card>
@@ -11060,7 +11069,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
             {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
-                {(showAllNews ? news : news.slice(0,5)).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
+                {_pageSlice(news, newsPage, 5).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
                   <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                       <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
@@ -11077,9 +11086,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                     )}
                   </button>
                 ); })}
-                {news.length > 5 && (
-                  <button onClick={()=>setShowAllNews(v=>!v)} style={_moreBtnStyle}>{showAllNews ? '閉じる' : `もっと見る（他 ${news.length-5} 件）`}</button>
-                )}
+                {renderPager(news.length, 5, newsPage, setNewsPage)}
               </div>
             )}
           </Card>
@@ -17440,6 +17447,7 @@ export default function App() {
   //   仕組み: index.html(no-cache)を定期取得し、参照する /assets/*.js が起動時と変わっていたら「更新あり」。
   const [updateAvailable, setUpdateAvailable] = React.useState(false);
   const [devUpdateNotes, setDevUpdateNotes] = React.useState([]); // ★ 更新内容(つむぎ運営からのお知らせ)をJSONからライブ取得
+  const _initialNoteIdsRef = React.useRef(null); // ★ 起動時点で存在した更新内容のid集合。 更新バナーのモーダルは「起動後に増えた=今回の更新分」だけ出す
   const [showUpdateNotes, setShowUpdateNotes] = React.useState(false); // 更新内容モーダルの開閉
   const _selfAssetsRef = React.useRef(null);
   const _isEditingNow = React.useCallback(() => {
@@ -17488,7 +17496,10 @@ export default function App() {
         if (!res.ok) return;
         const j = await res.json();
         const notes = Array.isArray(j) ? j : (Array.isArray(j.notes) ? j.notes : []);
-        if (!stopped) setDevUpdateNotes(notes.filter(n => n && n.id && (n.title || n.body)));
+        const _valid = notes.filter(n => n && n.id && (n.title || n.body));
+        // ★ 起動時点の更新内容idを1回だけ記録(以降に増えた分＝今回の再読み込みで更新される分)
+        if (_initialNoteIdsRef.current === null) _initialNoteIdsRef.current = new Set(_valid.map(n => n.id));
+        if (!stopped) setDevUpdateNotes(_valid);
       } catch {}
     };
     load();
@@ -18672,7 +18683,11 @@ export default function App() {
               <button onClick={()=>setShowUpdateNotes(false)} style={{border:'none',background:'#f1f5f9',borderRadius:8,width:30,height:30,cursor:'pointer',fontSize:16,color:'#64748b'}}>×</button>
             </div>
             <div style={{padding:'16px 20px',display:'flex',flexDirection:'column',gap:12}}>
-              {devUpdateNotes.length ? devUpdateNotes.map(n=>{ const mm=DEV_ANN_META[n.type]||DEV_ANN_META.info; return (
+              {(() => {
+                // ★ 起動後に増えた分(=今回の再読み込みで更新される分)だけ表示。 無ければ最新1件でフォールバック。
+                const _newNotes = devUpdateNotes.filter(n => !(_initialNoteIdsRef.current && _initialNoteIdsRef.current.has(n.id)));
+                const _shown = _newNotes.length ? _newNotes : devUpdateNotes.slice(0,1);
+                return _shown.length ? _shown.map(n=>{ const mm=DEV_ANN_META[n.type]||DEV_ANN_META.info; return (
                 <div key={n.id} style={{border:`1px solid ${mm.color}44`,background:mm.bg,borderRadius:12,padding:'12px 14px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
                     <span style={{fontSize:11,fontWeight:'bold',color:'white',background:mm.color,borderRadius:6,padding:'2px 8px'}}>{mm.emoji} {mm.label}</span>
@@ -18683,7 +18698,7 @@ export default function App() {
                 </div>
               ); }) : (
                 <div style={{fontSize:13,color:'#64748b',lineHeight:1.7,textAlign:'center',padding:'12px 0'}}>更新内容の詳細は準備中です。<br/>「今すぐ更新」で最新版に更新してください。</div>
-              )}
+              ); })()}
               <div style={{fontSize:12,color:'#64748b',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px',lineHeight:1.6}}>
                 この内容はホームの「つむぎ運営からのお知らせ」でもいつでも確認できます。「今すぐ更新」を押すと最新版に切り替わります。
               </div>
