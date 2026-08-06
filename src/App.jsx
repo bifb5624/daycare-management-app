@@ -19779,6 +19779,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       return;
     }
     if (newStatus === '欠席' || newStatus === '休業' || newStatus === '振替') {
+      // ★ 過去日を欠席/休業/振替に変更しようとした時は警告(誤操作でその日の記録が変わるのを防ぐ)。
+      const _isPast = (()=>{ try{ const d=new Date(selectedDate); d.setHours(0,0,0,0); const t=new Date(); t.setHours(0,0,0,0); return d.getTime()<t.getTime(); }catch{ return false; } })();
+      if (_isPast) {
+        const _d=new Date(selectedDate);
+        if(!window.confirm(`⚠ ${_d.getMonth()+1}月${_d.getDate()}日は過去の日付です。\n\nこの日を「${newStatus}」に変更してよろしいですか？\n\n入力済みの記録(血圧・脈・気分・運動など)は保持され、「出席」に戻せば元に戻りますが、誤って変更しないようご注意ください。`)) return;
+      }
       setStatusModal({ isOpen: true, id, status: newStatus, reason: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: '', pauseToDate: '' });
       return;
     }
@@ -19958,14 +19964,23 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const ampmSuffix = furikaeAmpm !== '1日' ? furikaeAmpm : '';
       const srcTokki = `${destLabel}${ampmSuffix}へ振替${substituteReason?'（'+substituteReason+'）':''}`;
       const srcIdx = updatedRecords.findIndex(r=>r.patientId===id&&r.date===srcDateStr);
-      const srcRecord = {
-        id: srcIdx>=0?updatedRecords[srcIdx].id:Date.now()+Math.random()+1,
+      const _existSrc = srcIdx>=0 ? updatedRecords[srcIdx] : null;
+      // ★ 振替元(欠席)も既存の入力を保持したまま状態だけ変更。 取り消しで出席に戻せば元の記録が戻る。
+      const srcRecord = _existSrc ? {
+        ..._existSrc,
+        patientId:id, name:srcPatient?.name||_existSrc.name||'', kana:srcPatient?.kana||_existSrc.kana||'',
+        date:srcDateStr, dayOfWeek:srcDowStr,
+        status:'欠席', tokki:srcTokki,
+        _savedAt: syncNow()
+      } : {
+        id: Date.now()+Math.random()+1,
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
         date:srcDateStr, dayOfWeek:srcDowStr,
         status:'欠席', tokki:srcTokki,
         temp:'',bpUpSt:'',bpDnSt:'',plSt:'',bpUpEn:'',bpDnEn:'',plEn:'',
         massage:'',exercises:{},actualTime:'',
-        kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false
+        kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false,
+        _savedAt: syncNow()
       };
       if (srcIdx>=0) updatedRecords[srcIdx]=srcRecord; else updatedRecords.push(srcRecord);
     } else if (isNowAbsent) {
@@ -19976,14 +19991,24 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const srcDateStr = `${srcD.getMonth()+1}月${srcD.getDate()}日`;
       const srcDowStr = dayNames[srcD.getDay()];
       const srcIdx = updatedRecords.findIndex(r=>r.patientId===id&&r.date===srcDateStr);
-      const absRecord = {
-        id: srcIdx>=0?updatedRecords[srcIdx].id:Date.now()+Math.random(),
+      const _existAbs = srcIdx>=0 ? updatedRecords[srcIdx] : null;
+      // ★ 欠席/休業に変更しても、その日に入力済みのバイタル・気分・運動・整体・特記は保持する(状態と理由だけ変更)。
+      //   間違えて欠席にしても記録が消えず、出席に戻せば元どおりになる(データ消失防止)。
+      const absRecord = _existAbs ? {
+        ..._existAbs,
+        patientId:id, name:srcPatient?.name||_existAbs.name||'', kana:srcPatient?.kana||_existAbs.kana||'',
+        date:srcDateStr, dayOfWeek:srcDowStr,
+        status:newStatus, tokki: reason || _existAbs.tokki || '',
+        _savedAt: syncNow()
+      } : {
+        id: Date.now()+Math.random(),
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
         date:srcDateStr, dayOfWeek:srcDowStr,
         status:newStatus, tokki:reason||'',
         temp:'',bpUpSt:'',bpDnSt:'',plSt:'',bpUpEn:'',bpDnEn:'',plEn:'',
         massage:'',exercises:{},actualTime:'',
-        kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false
+        kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false,
+        _savedAt: syncNow()
       };
       if (srcIdx>=0) updatedRecords[srcIdx]=absRecord; else updatedRecords.push(absRecord);
     } else {
@@ -29728,6 +29753,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const { day, ap, isBase } = shiftStatusModal;
     if (!localPatient) { setShiftStatusModal({isOpen:false,day:null,ap:null,currentStatus:'',isBase:false}); return; }
     setShiftStatusModal({isOpen:false,day:null,ap:null,currentStatus:'',isBase:false});
+    // ★ 過去日を欠席/休業/振替/休止に変更しようとした時は警告(誤操作で過去の記録が変わるのを防ぐ)。
+    if (['欠席','休業','振替','休止'].includes(newStatus)) {
+      const _cd = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day); _cd.setHours(0,0,0,0);
+      const _td = new Date(); _td.setHours(0,0,0,0);
+      if (_cd.getTime() < _td.getTime()) {
+        if(!window.confirm(`⚠ ${currentMonth.getMonth()+1}月${day}日は過去の日付です。\n\nこの日を「${newStatus}」に変更してよろしいですか？\n\n入力済みの記録(血圧・脈・気分・運動など)は保持されますが、誤って過去の記録を変更しないようご注意ください。`)) return;
+      }
+    }
     if (newStatus === '取り消し') {
       // 振替セルなら振替取り消し、それ以外なら状態をクリア (空欄 = 既定に戻す)
       const cu = shiftStatusModal.currentStatus;
