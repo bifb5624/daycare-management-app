@@ -34886,7 +34886,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           //   driver(運転者)・carTimes(車別の時間)は利用者非依存なのでそのままコピー。
           const _rankG = (st)=>st==='出席'?0:st==='振替'?1:st==='欠席'?2:st==='休止'?3:st==='休業'?4:5;
           const _matchG = (r,p,dw)=>{ if(ampm==='1日')return true; if(r.status==='振替'){ const fa=r.furikaeAmpm; if(fa)return fa===ampm||fa==='1日'; if(typeof r.tokki==='string'){ if(r.tokki.includes('1日分振替'))return true; if(ampm==='AM'&&r.tokki.includes('AM分振替'))return true; if(ampm==='PM'&&r.tokki.includes('PM分振替'))return true; } const slot=p.scheduleAmPm?.[dw]||''; if(['AM','PM','1日'].includes(slot))return [ampm,'1日'].includes(slot); return ampm==='AM'; } return [ampm,'1日'].includes(p.scheduleAmPm?.[dw]); };
-          const _pidsForDate=(dStr,dw)=>{ const rec=(appData.ticketRecords||[]).filter(r=>r.date===dStr).filter(r=>{const p=(appData.patients||[]).find(pp=>pp.id===r.patientId);if(!p)return false;return _matchG(r,p,dw);}).map(r=>({pid:r.patientId,status:r.status})); const recPids=new Set(rec.map(r=>r.pid)); const extra=(appData.patients||[]).filter(p=>{ if(recPids.has(p.id))return false; if(getPatientDisplayStatus&&getPatientDisplayStatus(p)!=='利用中')return false; const slot=p.scheduleAmPm?.[dw]||''; if(ampm==='1日')return ['AM','PM','1日'].includes(slot); return slot===ampm||slot==='1日'; }).map(p=>({pid:p.id,status:'出席'})); return [...rec,...extra].sort((a,b)=>_rankG(a.status)-_rankG(b.status)).map(x=>x.pid); };
+          const _pidsForDate=(dStr,dw)=>{ const rec=(appData.ticketRecords||[]).filter(r=>r.date===dStr).filter(r=>{const p=(appData.patients||[]).find(pp=>pp.id===r.patientId);if(!p)return false;return _matchG(r,p,dw);}).map(r=>({pid:r.patientId,status:r.status})); const recPids=new Set(rec.map(r=>r.pid)); const extra=(appData.patients||[]).filter(p=>{ if(recPids.has(p.id))return false; if(getPatientDisplayStatus&&getPatientDisplayStatus(p)!=='利用中')return false; const slot=p.scheduleAmPm?.[dw]||''; if(ampm==='1日')return ['AM','PM','1日'].includes(slot); return slot===ampm||slot==='1日'; }).map(p=>({pid:p.id,status:'出席'})); return [...new Set([...rec,...extra].sort((a,b)=>_rankG(a.status)-_rankG(b.status)).map(x=>x.pid))]; }; /* ★ Setで利用者ID重複排除(振替の重複記録で送迎が二重に出ないように) */
           const _curDow = new Date(selectedDate).getDay();
           const curPids = _pidsForDate(dateStr, _curDow);
           const prevPids = _pidsForDate(`${_d.getMonth()+1}月${_d.getDate()}日`, _d.getDay());
@@ -35047,9 +35047,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   // ソート: 出席 → 振替 → 欠席 → 休止 → 休業 → その他
   const _statusRank = (st) => st === '出席' ? 0 : st === '振替' ? 1 : st === '欠席' ? 2 : st === '休止' ? 3 : st === '休業' ? 4 : 5;
   // 既存の ticketRecords から該当者を抽出
-  const recordedPatients = (appData.ticketRecords||[])
+  const _recordedRaw = (appData.ticketRecords||[])
     .filter(r=>r.date===dateStr)
-    .filter(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId); if(!p) return false; return _matchesAmpm(r, p); })
+    .filter(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId); if(!p) return false; return _matchesAmpm(r, p); });
+  // ★ 同一利用者・同一日に複数記録(振替の重複など)がある場合は1件に絞る(データの多い方を優先)。 日誌の二重表示を防ぐ。
+  const _rpMap = new Map();
+  _recordedRaw.forEach(r => { const ex=_rpMap.get(r.patientId); const sc=(x)=>Object.keys(x).filter(k=>k[0]!=='_'&&x[k]!==''&&x[k]!=null).length; if(!ex || sc(r)>sc(ex)) _rpMap.set(r.patientId, r); });
+  const recordedPatients = [..._rpMap.values()]
     .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; });
   const recordedPids = new Set(recordedPatients.map(r=>r.patientId));
   // ★ ticketRecords にまだ記録が無くても、当日の曜日スケジュールに該当する利用者を表示
