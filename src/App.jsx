@@ -1455,6 +1455,16 @@ const toHalfWidthNum = (v) => {
 // 日本の電話番号フォーマッタ: ハイフン無しの数字 → 自動でハイフン付与 (実装は下部 formatJpPhone)
 // ★ 稼働率/出席率の「予定(分母)」判定。 振替=出席扱い。 振替済みの欠席(tokkiに「へ振替」)は相殺で分母から除外。
 const isPlannedRec = (r) => !!r && (r.status==='出席'||r.status==='振替'||r.status==='休止'||(r.status==='欠席'&&!(r.tokki||'').includes('へ振替')));
+// ★ 提供記録が「臨床データ(バイタル/気分/運動/整体)を持っているか」。 振替/欠席の取り消し時に、
+//   データのある記録を誤って削除して消さないためのガードに使う(tokkiは振替の目印なので判定に含めない)。
+const ticketHasClinicalData = (r) => !!(r && (
+  r.temp_AM||r.temp_PM||r.temp||
+  r.bpUpSt_AM||r.bpUpSt_PM||r.bpUpSt||r.bpDnSt_AM||r.bpDnSt_PM||r.bpDnSt||
+  r.bpUpEn_AM||r.bpUpEn_PM||r.bpUpEn||r.bpDnEn_AM||r.bpDnEn_PM||r.bpDnEn||
+  r.plSt_AM||r.plSt_PM||r.plSt||r.plEn_AM||r.plEn_PM||r.plEn||
+  r.massage||(r.exercises&&Object.keys(r.exercises).some(k=>{const v=r.exercises[k];return v!==''&&v!=null&&!(typeof v==='object'&&!v.value);}))||
+  r.kibunArrival||r.kibunDeparture||r.actualTime
+));
 // ★ 事業所側の編集モーダル(フェイスシート等)を開いている間は true。 その間はクラウドポーリング(checkAndPull)を
 //   スキップし、appData 差し替えによる再描画/再マウントで入力欄のフォーカスが外れる・添付が中断するのを防ぐ。
 const officeEditingActive = { current: false };
@@ -19837,12 +19847,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     }
     const _mk = (mdStr) => { const mm = String(mdStr).match(/(\d+)月(\d+)日/); return mm ? { mk: `${yr}-${String(+mm[1]).padStart(2,'0')}`, day: +mm[2] } : null; };
     const dMK = _mk(destDateStr), sMK = _mk(srcDateStr);
-    // 墓石にする記録id(振替先/この日の記録 + 振替元の欠席)を収集
+    // 墓石にする記録id(振替先/この日の記録 + 振替元の欠席)を収集。
+    // ★ バイタル等のデータがある記録は墓石にしない(取り消しで入力が消えるのを防ぐ)。 空枠だけ削除対象。
     const _removedIds = [];
     recs.forEach(r => {
       if (r.patientId !== id) return;
-      if (destDateStr && r.date === destDateStr && (destAny || r.status === '振替') && r.id != null) _removedIds.push(String(r.id));
-      if (srcDateStr && r.date === srcDateStr && r.status === '欠席' && r.id != null) _removedIds.push(String(r.id));
+      const _isDest = destDateStr && r.date === destDateStr && (destAny || r.status === '振替');
+      const _isSrc = srcDateStr && r.date === srcDateStr && r.status === '欠席';
+      if ((_isDest || _isSrc) && r.id != null && !ticketHasClinicalData(r)) _removedIds.push(String(r.id));
     });
     setPendingCancellations(prev => [...prev, {
       patientId: id,
@@ -20199,8 +20211,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _cancelTomb = [];
       pendingCancellations.forEach(({patientId, destDateStr, destDay, destMK, destAmpm, srcDateStr, srcMK, srcDay, restore, removedIds, destAny}) => {
           (removedIds||[]).forEach(rid => _cancelTomb.push(String(rid)));
-          // 振替先(またはこの日)の記録を削除。 destAny=true の時は状態を問わず削除(基本利用日以外の残骸を消す)
-          updatedTicketRecords = updatedTicketRecords.filter(r => !(r.patientId === patientId && r.date === destDateStr && (destAny || r.status === '振替')));
+          // 振替先(またはこの日)の記録。 ★ バイタル等のデータがあれば消さずに残す(出席として保持・振替の目印は消す)。
+          //   空枠だけ削除(削除idは上の removedIds に入っている=墓石になる)。
+          updatedTicketRecords = updatedTicketRecords.map(r => {
+            if (!(r.patientId === patientId && r.date === destDateStr && (destAny || r.status === '振替'))) return r;
+            if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: (/分振替/.test(r.tokki||'') ? '' : (r.tokki||'')), _savedAt: syncNow() };
+            return null;
+          }).filter(Boolean);
           // 振替先の 振 シフトを削除
           if (destMK && newShifts[destMK]?.[patientId]) {
               if (destAmpm === '1日') { delete newShifts[destMK][patientId][`${destDay}_AM`]; delete newShifts[destMK][patientId][`${destDay}_PM`]; }
@@ -20208,8 +20225,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           }
           if (srcDateStr) {
               if (restore) {
-                  // ★ 振替元を出席に戻す: 欠席の記録を削除(=記録なし=基本の出席) + 欠席シフトを削除
-                  updatedTicketRecords = updatedTicketRecords.filter(r => !(r.patientId === patientId && r.date === srcDateStr && r.status === '欠席'));
+                  // ★ 振替元を出席に戻す。 データがあれば出席として保持(振替の目印tokkiは消す)、無ければ削除(記録なし=基本の出席)。
+                  updatedTicketRecords = updatedTicketRecords.map(r => {
+                    if (!(r.patientId === patientId && r.date === srcDateStr && r.status === '欠席')) return r;
+                    if (ticketHasClinicalData(r)) return { ...r, status: '出席', tokki: '', _savedAt: syncNow() };
+                    return null;
+                  }).filter(Boolean);
                   if (srcMK && srcDay && newShifts[srcMK]?.[patientId]) {
                       ['AM','PM'].forEach(ap => { const k=`${srcDay}_${ap}`; if (newShifts[srcMK][patientId][k] === '欠席') delete newShifts[srcMK][patientId][k]; });
                   }
@@ -29681,8 +29702,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const destDateStr = `${currentMonth.getMonth()+1}月${day}日`;
     const _now = Date.now();
     const _removedIds = []; // ★ 削除した記録は墓石(deletedIds)に登録 → クラウドマージで復活させない
-    (effTickets||[]).forEach(r => { if (r && r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替' && r.id != null) _removedIds.push(String(r.id)); });
-    let updated = effTickets.filter(r => !(r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替'));
+    // ★ 振替先の記録: バイタル等のデータがあれば消さずに残す(出席として保持・振替の目印tokkiは消す)。空枠だけ削除。
+    let updated = (effTickets||[]).map(r => {
+      if (!(r && r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替')) return r;
+      if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: (/分振替/.test(r.tokki||'') ? '' : (r.tokki||'')), _savedAt: _now };
+      if (r.id != null) _removedIds.push(String(r.id));
+      return null;
+    }).filter(Boolean);
     const newShifts = JSON.parse(JSON.stringify(effShifts));
     // ★ 振替先のシフト削除
     if (newShifts[mKey]?.[localPatient.id]) {
@@ -29698,9 +29724,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       const srcMKey = mKey; // 表示中の月の shift store を扱う
       if (srcAction === 'restore') {
         // ★ 元の欠席を出席に戻す:
-        // 1. ticketRecord の '欠席' 記録を削除 (墓石に登録)
-        (updated||[]).forEach(r => { if (r && r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席' && r.id != null) _removedIds.push(String(r.id)); });
-        updated = updated.filter(r => !(r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席'));
+        // 1. ticketRecord の '欠席' 記録を出席へ戻す(振替の目印tokkiは消す)。 データがあれば保持、無ければ削除。
+        updated = (updated||[]).map(r => {
+          if (!(r && r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席')) return r;
+          if (ticketHasClinicalData(r)) return { ...r, status: '出席', tokki: '', _savedAt: _now };
+          if (r.id != null) _removedIds.push(String(r.id));
+          return null;
+        }).filter(Boolean);
         // 2. shifts の '欠席' override も削除 (これが残っているとセルに「欠席」が表示され続ける)
         if (srcSameMonth && newShifts[srcMKey]?.[localPatient.id]) {
           const dayKeys = Object.keys(newShifts[srcMKey][localPatient.id]);
@@ -29776,11 +29806,16 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       } else {
         // 状態を空にする (基本利用日なら '〇' に戻す = isBase ? '〇' : 空欄)
         const ns2 = saveSh(localPatient.id, day, ap, isBase ? '〇' : '空欄', isBase, null);
-        // ticketRecords 側の該当日記録 (欠席/休業/振替の残骸など) も削除して整合。
+        // ticketRecords 側の該当日記録 (欠席/休業/振替の残骸など) を整理。 ★ バイタル等のデータがある記録は
+        //   消さずに残す(出席として保持・振替/欠席の目印tokkiは消す)。 データの無い空枠だけ削除する。
         const dateStr = `${currentMonth.getMonth()+1}月${day}日`;
-        const removed = effTickets.filter(t => t.patientId === localPatient.id && t.date === dateStr);
-        const filteredTickets = effTickets.filter(t => !(t.patientId === localPatient.id && t.date === dateStr));
-        // ★ 削除した記録を墓石(deletedIds)へ → クラウドマージで復活させない。 その場で即保存し確実に反映。
+        const removed = [];
+        const filteredTickets = (effTickets||[]).map(t => {
+          if (!(t.patientId === localPatient.id && t.date === dateStr)) return t;
+          if (ticketHasClinicalData(t)) return { ...t, status: '出席', furikaeAmpm: undefined, tokki: (/振替/.test(t.tokki||'') ? '' : (t.tokki||'')), _savedAt: syncNow() };
+          removed.push(t); return null;
+        }).filter(Boolean);
+        // ★ 削除した(空の)記録を墓石(deletedIds)へ → クラウドマージで復活させない。 その場で即保存し確実に反映。
         const _tomb = { ...(appData.deletedIds || {}) };
         _tomb.ticketRecords = { ...(_tomb.ticketRecords || {}) };
         removed.forEach(t => { if (t && t.id != null) _tomb.ticketRecords[String(t.id)] = Date.now(); });
