@@ -10909,13 +10909,18 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
   const news = [
     ...(appData.familyAnnouncements||[]).map(a=>({...a,_kind:'全体'})),
     ...(appData.familyPersonalAnnouncements||[]).map(a=>({...a,_kind:'個別'})),
-  ].filter(a=>a.title||a.body).sort((a,b)=>(b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||'')).slice(0,4);
+  ].filter(a=>a.title||a.body).sort((a,b)=>(b.postedAt||b.date||'').localeCompare(a.postedAt||a.date||'')).slice(0,50);
   const patName = (pid) => (appData.patients||[]).find(p=>p.id===pid)?.name || '';
   // ★ お知らせの既読管理は App 側で保持(サイドバーの新着バッジと共有)。 見たら薄いグレー(未読は色付き)。
   const isRead = isNoticeRead || (()=>false);
   const markRead = markNoticeRead || (()=>{});
   const [noticeDetail, setNoticeDetail] = React.useState(null);
   const openDetail = (d) => { setNoticeDetail(d); if (d) markRead(d.id); };
+  // ★ ホーム各カードの「もっと見る」開閉。 既定は上位のみ表示し、高さを揃える。
+  const [showAllDev, setShowAllDev] = React.useState(false);   // つむぎ運営からのお知らせ(上位3)
+  const [showAllExt, setShowAllExt] = React.useState(false);   // 家族・ケアマネからの更新(上位5)
+  const [showAllNews, setShowAllNews] = React.useState(false); // お知らせ(上位5)
+  const _moreBtnStyle = { width:'100%', marginTop:8, fontSize:12, fontWeight:'bold', color:'#64748b', background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'6px 0', cursor:'pointer' };
   const Card = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
   const Tile = ({icon, label, sub, color, view}) => (
     <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
@@ -10948,8 +10953,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           // ★ update-notes.json からライブ取得した更新内容(再読み込みなしで反映)
           const live = (devNotes||[]).map(a=>{ const mm=DEV_ANN_META[a.type]||DEV_ANN_META.info; return { id:a.id, date:a.date, m:{label:mm.label,emoji:mm.emoji,color:mm.color,bg:mm.bg}, title:a.title, body:a.body }; });
           const _seen=new Set();
-          const all = [...fromHq, ...live, ...builtin].filter(x=>{ if(!x.id||_seen.has(x.id)) return false; _seen.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,6);
+          const all = [...fromHq, ...live, ...builtin].filter(x=>{ if(!x.id||_seen.has(x.id)) return false; _seen.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,50);
           if (!all.length) return null;
+          const _devShown = showAllDev ? all : all.slice(0,3);
           return (
             <Card style={{borderColor:'#c7d2fe'}}>
               <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span>
@@ -10962,7 +10968,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                 )}
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                {all.map(a=>{ const _r=isRead(a.id); return (
+                {_devShown.map(a=>{ const _r=isRead(a.id); return (
                   <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a.m.emoji} ${a.m.label}`,badgeColor:a.m.color,date:a.date,title:a.title,body:a.body})}
                     style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'66'}`,background:_r?'white':a.m.bg,borderRadius:10,padding:'8px 12px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
@@ -10975,6 +10981,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   </button>
                 ); })}
               </div>
+              {all.length > 3 && (
+                <button onClick={()=>setShowAllDev(v=>!v)} style={_moreBtnStyle}>{showAllDev ? '閉じる' : `もっと見る（他 ${all.length-3} 件）`}</button>
+              )}
             </Card>
           );
         })()}
@@ -11010,7 +11019,8 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           </Card>
           {(() => {
             // ★ 家族・ケアマネがビューアから行った編集/添付/招待/登録の未確認通知を集約
-            const ext = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[]).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice).map(u => ({...u, _pid:p.id, _pname:p.name}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,8);
+            const ext = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[]).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice).map(u => ({...u, _pid:p.id, _pname:p.name}))).sort((a,b)=>String(b.at||'').localeCompare(String(a.at||''))).slice(0,50);
+            const _extShown = showAllExt ? ext : ext.slice(0,5);
             // ★ 常時表示: 更新が無くてもカードは出し、無い旨を表示する
             const _fmt = (iso)=>{ try{ const d=new Date(iso); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }catch{ return ''; } };
             const _unread = ext.filter(u=>!isRead(u.id)).length;
@@ -11021,7 +11031,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   <div style={{fontSize:12,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
                 ) : (<>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                  {ext.map(u=>{ const _r=isRead(u.id); const _c=u.by==='caremanager'?'#0891b2':'#7c3aed'; return (
+                  {_extShown.map(u=>{ const _r=isRead(u.id); const _c=u.by==='caremanager'?'#0891b2':'#7c3aed'; return (
                     <button key={u.id} onClick={()=>openDetail({id:u.id,badge:u.by==='caremanager'?'ケアマネ':'ご家族',badgeColor:_c,date:_fmt(u.at),title:`利用者：${u._pname} 様`,body:`更新内容：${(u.items||[]).join('・')||'更新'}${u.byName?`\n更新者：${u.byName}`:''}`,patientId:u._pid})} style={{textAlign:'left',background:_r?'#f8fafc':'#fffbeb',border:`1px solid ${_r?'#e2e8f0':'#fde68a'}`,borderRadius:10,padding:'8px 10px',cursor:'pointer',opacity:_r?0.72:1}}>
                       <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3,flexWrap:'wrap'}}>
                         <span style={{fontSize:9,fontWeight:'bold',color:'white',background:_r?'#94a3b8':_c,borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
@@ -11034,6 +11044,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                     </button>
                   ); })}
                 </div>
+                {ext.length > 5 && (
+                  <button onClick={()=>setShowAllExt(v=>!v)} style={_moreBtnStyle}>{showAllExt ? '閉じる' : `もっと見る（他 ${ext.length-5} 件）`}</button>
+                )}
                 <div style={{fontSize:10,color:'#a16207',marginTop:6}}>タップで詳細を表示（見ると既読＝グレーになります／既読は担当者ごと）。</div>
                 </>)}
               </Card>
@@ -11047,7 +11060,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
             {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
-                {news.map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
+                {(showAllNews ? news : news.slice(0,5)).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
                   <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                       <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
@@ -11064,6 +11077,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                     )}
                   </button>
                 ); })}
+                {news.length > 5 && (
+                  <button onClick={()=>setShowAllNews(v=>!v)} style={_moreBtnStyle}>{showAllNews ? '閉じる' : `もっと見る（他 ${news.length-5} 件）`}</button>
+                )}
               </div>
             )}
           </Card>
