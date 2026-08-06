@@ -11473,7 +11473,8 @@ function ScheduleView({ appData, onSave }) {
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>対象の利用者（任意・担当者会議など）</label>
             <select value={modal.patientId||''} onChange={e=>setModal(m=>({...m,patientId:e.target.value?Number(e.target.value):undefined}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:8,background:'white'}}>
               <option value="">— なし —</option>
-              {(appData.patients||[]).filter(p=>getPatientDisplayStatus(p)==='利用中').sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja')).map(p=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+              {/* ★ 休止中でも担当者会議等で予定を組むことがあるため、利用中と休止中の両方を選べるようにする(退所は除外) */}
+              {(appData.patients||[]).filter(p=>['利用中','休止'].includes(getPatientDisplayStatus(p))).sort((a,b)=>(a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja')).map(p=>(<option key={p.id} value={p.id}>{p.name}{getPatientDisplayStatus(p)==='休止'?'（休止中）':''}</option>))}
             </select>
             {modal.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===modal.patientId); if(!p) return null; return (
               <div style={{fontSize:11,color:'#475569',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'6px 10px',marginBottom:12}}>
