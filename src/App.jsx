@@ -19924,12 +19924,25 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const destDateStr = `${destD.getMonth()+1}月${destD.getDate()}日`;
       const destDowStr = dayNames[destD.getDay()];
       const existIdx = updatedRecords.findIndex(r=>r.patientId===id&&r.date===destDateStr);
-      const destRecord = {
-        id: existIdx>=0 ? updatedRecords[existIdx].id : Date.now()+Math.random(),
+      const _existDest = existIdx>=0 ? updatedRecords[existIdx] : null;
+      const _furiTokki = `${srcLabel}${furikaeAmpm!=='1日'?furikaeAmpm:''}分振替`;
+      // ★ 振替先の日に既に入力済みの記録がある場合は、体温/血圧/脈/気分/運動/整体などを保持したまま
+      //   状態だけ「振替」にする。 以前はここで全項目を空('')で上書きし、_savedAt も新しくしていたため、
+      //   その人がその日に来所して入力済みだったバイタル等が振替設定で消えていた(データ消失)。
+      const destRecord = _existDest ? {
+        ..._existDest,
+        patientId:id, name:srcPatient?.name||_existDest.name||'', kana:srcPatient?.kana||_existDest.kana||'',
+        date:destDateStr, year: destD.getFullYear(), dayOfWeek:destDowStr,
+        status:'振替', furikaeAmpm: furikaeAmpm,
+        // 既にメモ(特記)がある場合は残す。 空のときだけ振替の目印を入れる。
+        tokki: (_existDest.tokki && String(_existDest.tokki).trim()) ? _existDest.tokki : _furiTokki,
+        _savedAt: syncNow()
+      } : {
+        id: Date.now()+Math.random(),
         patientId:id, name:srcPatient?.name||'', kana:srcPatient?.kana||'',
         date:destDateStr, year: destD.getFullYear(), dayOfWeek:destDowStr,
         status:'振替', furikaeAmpm: furikaeAmpm,
-        tokki:`${srcLabel}${furikaeAmpm!=='1日'?furikaeAmpm:''}分振替`,
+        tokki:_furiTokki,
         temp:'',bpUpSt:'',bpDnSt:'',plSt:'',bpUpEn:'',bpDnEn:'',plEn:'',
         massage:'',exercises:{},actualTime:'',
         kibunArrival:'',kibunArrivalReason:'',kibunDeparture:'',kibunDepartureReason:'',done:false,
