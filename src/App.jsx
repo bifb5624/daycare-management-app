@@ -17848,6 +17848,18 @@ export default function App() {
       //   ※ 定義は function 宣言(巻き上げあり)。 上の contactBookConfig の刻印より前に使うため const にしない。
       if (newData.systemSettings && newData.systemSettings !== prev.systemSettings) {
         newData = { ...newData, systemSettings: _stampFieldTs(newData.systemSettings, prev.systemSettings, _now2) };
+        // ★ 事業所情報(facilityInfo)は入れ子オブジェクトのため、変更されたサブ項目だけ fi:<key> で項目別に刻む。
+        //   これで「別のサブ項目を編集した端末」が、他端末で登録済みの事業署名/住所/メール/提供時間等を巻き戻さない
+        //   (マージ側 supabase.js mergeObjFieldLevel の facilityInfo サブ項目マージとセット)。
+        { const _nfi = newData.systemSettings?.facilityInfo, _pfi = (prev.systemSettings || {}).facilityInfo || {};
+          if (_nfi && typeof _nfi === 'object') {
+            const _fts = { ...(newData.systemSettings._fieldTs || {}) }; let _fch = false;
+            new Set([...Object.keys(_nfi), ...Object.keys(_pfi)]).forEach(k => {
+              let c; try { c = JSON.stringify(_nfi[k]) !== JSON.stringify(_pfi[k]); } catch { c = true; }
+              if (c) { _fts['fi:' + k] = _now2; _fch = true; }
+            });
+            if (_fch) newData = { ...newData, systemSettings: { ...newData.systemSettings, _fieldTs: _fts } };
+          } }
       }
       if (newData.diarySettings && newData.diarySettings !== prev.diarySettings) {
         newData = { ...newData, diarySettings: _stampFieldTs(newData.diarySettings, prev.diarySettings, _now2) };
@@ -18341,7 +18353,7 @@ export default function App() {
         <div className="fixed inset-0 bg-slate-900/60 z-[95] flex items-center justify-center p-0 sm:p-4" onClick={()=>!bugReport.sending && setBugReport(null)}>
           <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-lg max-h-full sm:max-h-[92vh] flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
             <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-              <div className="font-bold text-slate-800">不具合を本部に報告</div>
+              <div className="font-bold text-slate-800">不具合を運営に報告</div>
               <button onClick={()=>!bugReport.sending && setBugReport(null)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-lg"><X size={18}/></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -18964,7 +18976,7 @@ export default function App() {
                 {/* ★ 不具合レポート (管理者のみ) */}
                 {activeRecorder && isMemberAdmin(activeRecorder, appData.systemSettings) && (
                   <button onClick={()=>setBugReport({desc:'',sending:false,sent:false,err:''})} className="w-full mt-2 flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-bold text-amber-200 hover:bg-amber-900/40 transition-colors">
-                    <span className="text-base"></span> 不具合を本部に報告
+                    <span className="text-base"></span> 不具合を運営に報告
                   </button>
                 )}
               </div>
@@ -32907,9 +32919,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const [officeSearch, setOfficeSearch] = useState('');   // ★ ケアマネ事業所の検索
   const [managerSearch, setManagerSearch] = useState(''); // ★ 担当ケアマネの検索
   const [facilityInfo, setFacilityInfo] = useState(appData.systemSettings?.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" });
-  // ★ 同意ポリシー(家族/事業所)の編集。 版を上げるとログイン/入場時に再同意を求める。
-  const [policyFamily, setPolicyFamily] = useState(() => appData.systemSettings?.policies?.family || { version: FAMILY_CONSENT_VERSION, date: FAMILY_CONSENT_DATE, text: POLICY_DEFAULT_FAMILY_TEXT });
-  const [policyOffice, setPolicyOffice] = useState(() => appData.systemSettings?.policies?.office || { version: OFFICE_CONSENT_VERSION, date: OFFICE_CONSENT_DATE, text: POLICY_DEFAULT_OFFICE_TEXT });
+  // ★ 同意ポリシーの編集UIは管理局(全店共通)専用へ移設済み(各種設定からは撤去)。
 
   // dirtyRef: facilityInfo等が変わったらdirtyをセット
   const setDirty = React.useCallback(() => { if (dirtyRef) dirtyRef.current = true; }, [dirtyRef]);
@@ -32930,6 +32940,49 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     if (_draftSig === _dirtyBaseRef.current) { if (dirtyRef) dirtyRef.current = false; return; } // 内容が基準と同じ=未編集
     setDirty();
   }, [_draftSig, setDirty, dirtyRef]);
+  // ★★ 各種設定「消える」問題の恒久対策・第1層: マウント時スナップショットの基準(ベースライン)。
+  //   保存時に「ユーザーがこの画面で実際に編集した項目だけ」を最新(_ss0)へ重ねるための比較基準。
+  const _setBaseRef = React.useRef(null);
+  const _captureSetBase = (s) => ({
+    fi: JSON.stringify(s.facilityInfo || {}),
+    si: JSON.stringify(s.serviceItems || []),
+    mi: (s.massageTypes || []).join('、'),
+    oi: (s.onyokuTypes || []).join('、'),
+    msi: (s.massageStaff || appSettings.massageStaff).join('、'),
+    cmo: JSON.stringify(s.cmOffices || []),
+    cmp: JSON.stringify(s.careManagers || []),
+    api: s.anthropicApiKey || '',
+  });
+  if (_setBaseRef.current === null) _setBaseRef.current = _captureSetBase(appData.systemSettings || {});
+  // ★★ 恒久対策・第2層: クラウド同期で systemSettings/diarySettings が更新されたら、
+  //   未編集(非dirty)のローカルstateを最新へ再同期する。 これが無いと「開いたまま放置した設定画面」が
+  //   古いスナップショットを持ち続け、後で保存した瞬間に他端末/他タブで登録済みの
+  //   事業所情報・項目管理・運動メニュー等を古い内容で上書きして消してしまう。
+  const _ssSyncRef = React.useRef(appData.systemSettings);
+  const _dsSyncRef = React.useRef(appData.diarySettings);
+  React.useEffect(() => {
+    const changed = _ssSyncRef.current !== appData.systemSettings || _dsSyncRef.current !== appData.diarySettings;
+    if (!changed) return;
+    _ssSyncRef.current = appData.systemSettings; _dsSyncRef.current = appData.diarySettings;
+    if (dirtyRef && dirtyRef.current) return; // 編集中は触らない(保存時の第3層ガードが守る)
+    const s = appData.systemSettings || {};
+    setFacilityInfo(s.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" });
+    setServiceItems(s.serviceItems || []);
+    setMassageInput((s.massageTypes || []).join('、'));
+    setOnyokuInput((s.onyokuTypes || []).join('、'));
+    setMassageStaffInput((s.massageStaff || appSettings.massageStaff).join('、'));
+    setCmOffices(s.cmOffices || []);
+    setCmPersons(s.careManagers || []);
+    setAnthropicApiKey(s.anthropicApiKey || '');
+    setExerciseItems(s.exerciseItems || appSettings.exerciseItems);
+    setExerciseItemsHistory(s.exerciseItemsHistory || []);
+    setExerciseQuickButtons(s.exerciseQuickButtons || ['分','回','kg']);
+    if (Array.isArray(s.individualExerciseItems)) setIndividualExerciseItems(s.individualExerciseItems);
+    _exBaseRef.current = { ex: JSON.stringify(s.exerciseItems || []), ind: JSON.stringify(s.individualExerciseItems || []), hist: JSON.stringify(s.exerciseItemsHistory || []), qb: JSON.stringify(s.exerciseQuickButtons || []) };
+    _setBaseRef.current = _captureSetBase(s);
+    if (appData.diarySettings) diarySettingsRef.current = appData.diarySettings;
+    _dirtyBaseRef.current = null; // draftSig を新しい内容で再基準化(未保存扱いにしない)
+  }, [appData.systemSettings, appData.diarySettings, dirtyRef]);
 
   const [fitnessItems, setFitnessItems] = useState(
     appData.systemSettings?.fitnessItems || appSettings.fitnessItems
@@ -32999,7 +33052,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
         schedulePM: _dsKeep(diarySettings.schedulePM, _ds0.schedulePM),
       };
     }
-    let _facilityInfo = facilityInfo;
+    // ★★ 恒久対策・第3層(事業所情報): サブ項目単位で「この画面で実際に編集した項目だけ」を
+    //   最新(_ss0Pre)へ重ねる。 これで別の項目を保存しても、他端末/後から登録した
+    //   事業署名・管理者・サ責・郵便番号・住所・メール・電話FAX・提供時間などが巻き戻らない。
+    const _ss0Pre = appData.systemSettings || {};
+    const _fiBase = (()=>{ try { return JSON.parse((_setBaseRef.current||{}).fi || '{}'); } catch { return {}; } })();
+    let _facilityInfo = { ...(_ss0Pre.facilityInfo || {}) };
+    new Set([...Object.keys(facilityInfo || {}), ...Object.keys(_fiBase)]).forEach(k => {
+      const lv = facilityInfo ? facilityInfo[k] : undefined;
+      let ch; try { ch = JSON.stringify(lv) !== JSON.stringify(_fiBase[k]); } catch { ch = true; }
+      if (ch) _facilityInfo[k] = lv; // 編集した項目のみ反映(空にした=意図的クリアも反映)
+    });
     const _nm = (n)=>normalizeName(n||'').trim();
     // ★ 管理者の相互連携: 事業所管理者(facilityInfo.manager) ⇄ 日誌の管理者(staff role='管理者') ⇄ スタッフ切替(storeMembers.isAdmin)
     //   事業所管理者名を優先。 未設定なら日誌の管理者名を採用。 決めた管理者を3箇所すべてに反映する。
@@ -33033,18 +33096,31 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     //   他端末が入れた APIキー・事業所情報・運動メニュー・職員リスト等を消してしまう。
     //   → cmOffices と同じ「空/既定なら appData 側を残す」ガードを全項目に適用する。
     const _ss0 = appData.systemSettings || {};
-    const _keepArr = (local, cur) => (Array.isArray(local) && local.length) ? local : (Array.isArray(cur) ? cur : (local || []));
-    const _keepStr = (local, cur) => (String(local ?? '').trim()) ? local : (cur ?? local ?? '');
-    // ★ 運動メニュー系: ユーザーが編集した(=マウント時と内容が違う)ならローカル(削除を反映)を必ず採用。
-    //   未編集なら現行appData(_ss0)を優先(マウント後にクラウド同期で増えた分の巻き戻り防止)。
+    // ★★ 恒久対策・第3層: 各項目とも「マウント時の基準(_setBaseRef)と比べて編集した時だけ」ローカルを採用。
+    //   未編集なら現行appData(_ss0=最新)を維持する。 従来の『空なら維持』ガードは、古い“非空”スナップショットの
+    //   上書き(=登録した項目管理・ケアマネ等が消える)を防げなかったための置き換え。
+    const _sb = _setBaseRef.current || {};
     const _exPick = (cur, curSaved, baseKey) => { let ed; try { ed = JSON.stringify(cur) !== _exBaseRef.current[baseKey]; } catch { ed = true; } return ed ? cur : (curSaved !== undefined ? curSaved : cur); };
-    // 事業所情報: 全項目が空(=未同期の既定)なら appData 側を維持
-    const _fiHasAny = !!(_facilityInfo && Object.keys(_facilityInfo).some(k => String(_facilityInfo[k] ?? '').trim()));
-    const _fiSafe = _fiHasAny ? _facilityInfo : (_ss0.facilityInfo || _facilityInfo);
-    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: { ...appData.systemSettings, _updatedAt: syncNow(), massageTypes: newMassage.length > 0 ? newMassage : ["無し"], onyokuTypes: newOnyoku.length > 0 ? newOnyoku : ["無し"], massageStaff: newMassageStaff.length > 0 ? newMassageStaff : ["ヘルプ"], cmOffices: (cmOffices&&cmOffices.length) ? cmOffices : (_ss0.cmOffices||[]), careManagers: (cmPersons&&cmPersons.length) ? cmPersons : (_ss0.careManagers||[]), facilityInfo: _fiSafe, exerciseItems: _exPick(exerciseItems, _ss0.exerciseItems, 'ex'), exerciseItemsHistory: _exPick(exerciseItemsHistory, _ss0.exerciseItemsHistory, 'hist'), individualExerciseItems: _exPick(individualExerciseItems, _ss0.individualExerciseItems, 'ind'), exerciseQuickButtons: _exPick(exerciseQuickButtons, _ss0.exerciseQuickButtons, 'qb'), anthropicApiKey: _keepStr(anthropicApiKey, _ss0.anthropicApiKey), serviceItems: _keepArr(serviceItems, _ss0.serviceItems) } }, { manual: true, message: '✓ 各種設定を保存しました' });
-    // ★ 保存したので未保存フラグを解除し、未保存判定の基準も現在の内容に取り直す
+    const _pickJson = (local, cur, baseJson, fallback) => { let ed; try { ed = JSON.stringify(local) !== baseJson; } catch { ed = true; } return ed ? local : (cur !== undefined ? cur : (local ?? fallback)); };
+    const _massageOut = massageInput !== _sb.mi ? (newMassage.length ? newMassage : ["無し"]) : (_ss0.massageTypes || (newMassage.length ? newMassage : ["無し"]));
+    const _onyokuOut = onyokuInput !== _sb.oi ? (newOnyoku.length ? newOnyoku : ["無し"]) : (_ss0.onyokuTypes || (newOnyoku.length ? newOnyoku : ["無し"]));
+    const _mstaffOut = massageStaffInput !== _sb.msi ? (newMassageStaff.length ? newMassageStaff : ["ヘルプ"]) : (_ss0.massageStaff || (newMassageStaff.length ? newMassageStaff : ["ヘルプ"]));
+    const _apiOut = anthropicApiKey !== _sb.api ? anthropicApiKey : (_ss0.anthropicApiKey ?? anthropicApiKey ?? '');
+    const _nextSS = { ...appData.systemSettings, _updatedAt: syncNow(),
+      massageTypes: _massageOut, onyokuTypes: _onyokuOut, massageStaff: _mstaffOut,
+      cmOffices: _pickJson(cmOffices, _ss0.cmOffices, _sb.cmo, []),
+      careManagers: _pickJson(cmPersons, _ss0.careManagers, _sb.cmp, []),
+      facilityInfo: _facilityInfo,
+      exerciseItems: _exPick(exerciseItems, _ss0.exerciseItems, 'ex'), exerciseItemsHistory: _exPick(exerciseItemsHistory, _ss0.exerciseItemsHistory, 'hist'),
+      individualExerciseItems: _exPick(individualExerciseItems, _ss0.individualExerciseItems, 'ind'), exerciseQuickButtons: _exPick(exerciseQuickButtons, _ss0.exerciseQuickButtons, 'qb'),
+      anthropicApiKey: _apiOut,
+      serviceItems: _pickJson(serviceItems, _ss0.serviceItems, _sb.si, []) };
+    onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: _nextSS }, { manual: true, message: '✓ 各種設定を保存しました' });
+    // ★ 保存したので未保存フラグを解除し、基準(ベースライン)も保存内容へ取り直す(連続保存でも安全)
     if (dirtyRef) dirtyRef.current = false;
     _dirtyBaseRef.current = null;
+    _setBaseRef.current = _captureSetBase(_nextSS);
+    _exBaseRef.current = { ex: JSON.stringify(_nextSS.exerciseItems || []), ind: JSON.stringify(_nextSS.individualExerciseItems || []), hist: JSON.stringify(_nextSS.exerciseItemsHistory || []), qb: JSON.stringify(_nextSS.exerciseQuickButtons || []) };
   };
   // ★ saveFnRef を navConfirm から呼べるように登録 (「保存する」ポップアップで実際に保存される)
   if (saveFnRef) saveFnRef.current = saveAll;
@@ -33672,15 +33748,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 ))}
               </div>
             </SectionCard>
-            {isSuperAdmin && (
-            <SectionCard title="同意ポリシー（利用規約・プライバシー・重要事項）の編集">
-              <div className="text-sm text-slate-600 bg-indigo-50 border border-indigo-200 rounded-xl p-4 leading-relaxed">
-                同意ポリシーの編集は<b className="text-indigo-700">「つむぎ管理局」の店舗選択画面</b>に移設し、<b>全店共通</b>で管理するようになりました。<br/>
-                一度ログアウトして<b>管理局アカウント</b>でログイン → 画面<b>一番下の「📜 同意ポリシー編集（全店共通）」</b>（折りたたみ）を開いて編集してください。家族・ケアマネ向けと事業所向けを<b>個別に保存</b>でき、<b>通知方法（お知らせ公開／ログイン時再同意）</b>の選択と<b>版の履歴</b>も使えます。<br/>
-                版を上げて保存すると、全店の家族・ケアマネ・スタッフに再同意を求め、全店の管理局お知らせに改定通知を自動掲載します。
-              </div>
-            </SectionCard>
-            )}
+            {/* ★ 同意ポリシーの編集は管理局(アプリ運営)専用のため、各事業所の各種設定には表示しない。
+                閲覧はサイドバー最下部の「利用規約・同意ポリシー」から。 */}
             <SectionCard title="テンキー補完ボタンの管理">
               <p className="text-xs text-slate-500 mb-3">運動入力テンキーの下部に表示される「+◯◯」ボタンを管理します。{ss.keypadDisabled===true && <span className="text-amber-600 font-bold">（テンキー非表示中は使われません）</span>}</p>
               <div className="flex flex-wrap gap-2 mb-4">

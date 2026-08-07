@@ -836,6 +836,22 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
       const keys = new Set([...Object.keys(lo), ...Object.keys(co)]);
       keys.forEach(k => {
         if (k === '_updatedAt' || k === '_fieldTs') return;
+        // ★ 事業所情報(facilityInfo)はサブ項目単位でマージ(fi:<key> の新しい方を採用)。
+        //   丸ごと新しい方だと、別のサブ項目を編集した端末が他端末の事業署名/住所/メール/提供時間等を
+        //   巻き戻して「登録したのに消える」事故になるため。 刻印の無いサブ項目は非空を優先(空欄で消さない)。
+        if (k === 'facilityInfo') {
+          const lfi = (lo.facilityInfo && typeof lo.facilityInfo === 'object') ? lo.facilityInfo : {};
+          const cfi = (co.facilityInfo && typeof co.facilityInfo === 'object') ? co.facilityInfo : {};
+          const bfi = (base === lo) ? lfi : cfi, ofi = (base === lo) ? cfi : lfi;
+          const m = { ...ofi, ...bfi }; // 既定: 新しい方を優先しつつ、相手にしか無いキーは残す
+          new Set([...Object.keys(lfi), ...Object.keys(cfi)]).forEach(kk => {
+            const lt = Number(lFts['fi:' + kk]) || 0, ct = Number(cFts['fi:' + kk]) || 0;
+            if (lt || ct) { m[kk] = (lt >= ct) ? lfi[kk] : cfi[kk]; return; } // 刻印あり=新しい方(明示クリア含む)
+            const bv = bfi[kk], ov = ofi[kk]; // 刻印なし=新しい側優先・空なら相手の非空で補完(空欄で消さない)
+            m[kk] = (bv !== '' && bv != null) ? bv : ((ov !== '' && ov != null) ? ov : bv);
+          });
+          out[k] = m; return;
+        }
         const lft = Number(lFts[k]) || 0, cft = Number(cFts[k]) || 0;
         if (lft || cft) { out[k] = (lft >= cft) ? lo[k] : co[k]; }
         else if (!(k in base)) { out[k] = (k in lo) ? lo[k] : co[k]; }
