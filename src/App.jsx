@@ -17547,6 +17547,7 @@ export default function App() {
   const [sharedAmpm, setSharedAmpm] = useState('AM'); // 'AM' or 'PM'
   const [pendingStaffSwitch, setPendingStaffSwitch] = useState(null); // サイドバーのスタッフ切替で管理者を選んだ→認証待ち
   const [bugReport, setBugReport] = useState(null); // {desc, sending, sent, err} | null  不具合レポート
+  const [staffPolicyView, setStaffPolicyView] = useState(false); // ★ 利用規約・同意ポリシーの閲覧(スタッフ用・タブ 'office'|'family')
   // 管理者パスワードを保存 (RecorderPicker/スタッフ切替 共通)
   const saveAdminAuth = (auth) => {
     // ★ 関数型更新で「最新の appData」に adminAuth を足す(古い店舗のスナップショットで上書きしない)
@@ -18399,6 +18400,34 @@ export default function App() {
           </div>
         </div>
       )}
+      {/* ★ 利用規約・同意ポリシーの閲覧モーダル(スタッフ用・表示のみ) */}
+      {staffPolicyView && (()=>{
+        const _tab = staffPolicyView === 'family' ? 'family' : 'office';
+        const _pol = getEffectivePolicy(_tab, appData.systemSettings) || {};
+        const _fi = appData.systemSettings?.facilityInfo || {};
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 z-[96] flex items-center justify-center p-0 sm:p-4" onClick={()=>setStaffPolicyView(false)}>
+            <div className="bg-white sm:rounded-2xl shadow-2xl w-full h-full sm:h-auto sm:max-w-2xl max-h-full sm:max-h-[90vh] flex flex-col overflow-hidden" onClick={e=>e.stopPropagation()}>
+              <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <div>
+                  <div className="font-bold text-slate-800">利用規約・同意ポリシー</div>
+                  <div className="text-[10px] text-slate-500 font-bold mt-0.5">第{_pol.version}版{_pol.date?`（${String(_pol.date).replace(/-/g,'/')}改定）`:''}　※編集は運営(管理局)が全店共通で行います</div>
+                </div>
+                <button onClick={()=>setStaffPolicyView(false)} className="p-1.5 text-slate-400 hover:bg-slate-200 rounded-lg"><X size={18}/></button>
+              </div>
+              <div className="px-5 pt-3 flex gap-2 shrink-0">
+                {[['office','事業所・スタッフ向け'],['family','ご家族・関係者向け']].map(([k,lb])=>(
+                  <button key={k} onClick={()=>setStaffPolicyView(k)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${_tab===k?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>{lb}</button>
+                ))}
+              </div>
+              <div className="flex-1 overflow-y-auto px-5 py-4 text-[12.5px] text-slate-700 leading-relaxed whitespace-pre-wrap">{renderPolicyText(_pol.text, _fi.name||'当事業所', _fi.phone||'')}</div>
+              <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 shrink-0">
+                <button onClick={()=>setStaffPolicyView(false)} className="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm">閉じる</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* グローバルプリントプレビュー */}
       {printPreviewContent && (() => {
           // ★ PreviewModalを毎回作り直さず、このIIFE内に直接JSXを描く(iframe再マウント=チカチカ防止)。 ifH/srcDocはApp直下のstateを使用
@@ -18980,6 +19009,10 @@ export default function App() {
                     <span className="text-base"></span> 不具合を運営に報告
                   </button>
                 )}
+                {/* ★ 利用規約・同意ポリシーの確認(全スタッフ・閲覧のみ。編集は運営=管理局専用) */}
+                <button onClick={()=>setStaffPolicyView('office')} className="w-full mt-1 flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-bold text-slate-400 hover:bg-slate-800 hover:text-white transition-colors">
+                  利用規約・同意ポリシー
+                </button>
               </div>
             </div>
           </div>
