@@ -17719,7 +17719,7 @@ export default function App() {
         let changed = false;
         // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
         //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
-        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','contactBookRenraku','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','contactBookRenraku','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));
@@ -18953,6 +18953,7 @@ export default function App() {
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<Users size={18} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
+              <SidebarItem icon={<ClipboardList size={18} />} label="実績登録" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
               {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
                 <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['keikaku_yotei','kinou_keikaku','tsusho_keikaku','life_hub'].includes(currentView)}>
                   <SidebarItem icon={<ClipboardList size={16} />} label="作成予定" active={currentView === 'keikaku_yotei'} onClick={() => navigateTo('keikaku_yotei')} />
@@ -18995,6 +18996,7 @@ export default function App() {
                  currentView === 'print' ? '連絡帳 作成・印刷' :
                  currentView === 'fitness' ? '体力測定' :
                  currentView === 'diary' ? '日誌' :
+                 currentView === 'jisseki' ? '実績登録' :
                  currentView === 'absence_fax' ? '休み連絡' :
                  currentView === 'general_fax' ? '各種連絡' :
                  currentView === 'monitoring' ? 'モニタリング' :
@@ -19095,6 +19097,7 @@ export default function App() {
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
              currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} deviceName={deviceName} updateDeviceName={updateDeviceName} lastSync={appData._lastSync} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
+             currentView === 'jisseki' ? <JissekiView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'diary' ? <DailyLogView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} dirtyRef={diaryDirtyRef} saveFnRef={diarySaveFnRef} /> :
              currentView === 'absence_fax' ? <AbsenceFaxView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={absenceDirtyRef} saveFnRef={absenceSaveFnRef} /> :
              currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
@@ -24825,6 +24828,170 @@ function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, perio
   );
 }
 
+// === 実績登録 (カイポケ等への実績転記支援) ===
+// 提供記録の実績(出席/振替/臨時)を利用者×日のマトリクスで表示し、サービスコードの登録・利用者への割当、
+// CSV出力・印刷(A4横)に対応する。 表示は読み取り専用(提供記録は書き換えない)。
+// 書き込みは systemSettings.serviceCodes(コード台帳) と patient.serviceCode(割当)のみ=どちらも項目単位保護。
+function JissekiView({ appData, onSave, onShowPrintPreview }) {
+  const [jMonth, setJMonth] = React.useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [codeOpen, setCodeOpen] = React.useState(false);
+  const [newCode, setNewCode] = React.useState({ code:'', name:'' });
+  const serviceCodes = appData.systemSettings?.serviceCodes || [];
+  const saveCodes = (list, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), serviceCodes: list, _updatedAt: syncNow() } }, { manual:true, message: msg });
+  const addCode = () => {
+    const c = newCode.code.trim(), n = newCode.name.trim();
+    if (!c) return;
+    if (serviceCodes.some(x=>x.code===c)) { alert('同じコードが既に登録されています'); return; }
+    saveCodes([...serviceCodes, { code:c, name:n }], '✓ サービスコードを登録しました');
+    setNewCode({ code:'', name:'' });
+  };
+  const delCode = (c) => { if(!window.confirm(`サービスコード「${c}」を削除しますか？(利用者への割当は残ります)`)) return; saveCodes(serviceCodes.filter(x=>x.code!==c), '✓ 削除しました'); };
+  const setPatientCode = (pid, code) => {
+    onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===pid ? { ...p, serviceCode: code } : p) }, { silent:true });
+  };
+  const [jy, jm] = jMonth.split('-').map(Number);
+  const dim = new Date(jy, jm, 0).getDate();
+  const days = Array.from({length:dim},(_,i)=>i+1);
+  const dowJp = ['日','月','火','水','木','金','土'];
+  const closedDays = appData.systemSettings?.facilityInfo?.closedDays || [0];
+  const holidaySet = new Set((appData.holidays||[]).map(h=>h.date||h));
+  const mStart = `${jy}-${String(jm).padStart(2,'0')}-01`;
+  const mEnd = `${jy}-${String(jm).padStart(2,'0')}-${String(dim).padStart(2,'0')}`;
+  // 月内の記録を利用者×日に整理(同一日複数=振替の重複はランクで1件に)
+  const byPat = new Map();
+  (appData.ticketRecords||[]).forEach(r => {
+    const m = String(r.date||'').match(/^(\d+)月(\d+)日$/);
+    if (!m || parseInt(m[1]) !== jm) return;
+    if (r.year != null && Number(r.year) !== jy) return;
+    const d = parseInt(m[2]);
+    if (!byPat.has(r.patientId)) byPat.set(r.patientId, new Map());
+    const dm = byPat.get(r.patientId);
+    const rank = (x)=>x.status==='出席'?0:x.status==='振替'?1:x.status==='臨時'?2:x.status==='欠席'?3:4;
+    const ex = dm.get(d);
+    if (!ex || rank(r) < rank(ex)) dm.set(d, r);
+  });
+  const rows = sortPatientsByKana((appData.patients||[]).filter(p=>{
+    if (!p || !p.name) return false;
+    if (p.startDate && String(p.startDate).slice(0,10) > mEnd) return false;
+    if (p.endDate && String(p.endDate).slice(0,10) < mStart) return false;
+    return true;
+  })).map(p => {
+    const dm = byPat.get(p.id) || new Map();
+    const cells = days.map(d => {
+      const r = dm.get(d); if (!r) return null;
+      const ds = `${jy}-${String(jm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dow = new Date(jy, jm-1, d).getDay();
+      const base = getScheduleOnDate(p, ds)?.[dow] || '';
+      const isBase = base==='AM'||base==='PM'||base==='1日';
+      if (r.status==='振替') return { t:'振', s:'振替', sub: r.furikaeAmpm || (/AM分/.test(r.tokki||'')?'AM':/PM分/.test(r.tokki||'')?'PM':'') };
+      if (r.status==='臨時') return { t:'臨', s:'臨時', sub:'' };
+      if (r.status==='出席') { if (isBase || ticketHasClinicalData(r)) return { t:'○', s:'出席', sub: base }; return null; }
+      if (r.status==='欠席') return isBase ? { t:'欠', s:'欠席', sub:(r.tokki||'').slice(0,12) } : null;
+      if (r.status==='休業') return isBase ? { t:'休', s:'休業', sub:'' } : null;
+      if (r.status==='休止') return isBase ? { t:'止', s:'休止', sub:'' } : null;
+      return null;
+    });
+    const jisseki = cells.filter(c=>c&&(c.s==='出席'||c.s==='振替'||c.s==='臨時')).length;
+    return { p, cells, jisseki };
+  });
+  const dayTotals = days.map((d,di)=>rows.reduce((n,r)=>{const c=r.cells[di];return n+((c&&(c.s==='出席'||c.s==='振替'||c.s==='臨時'))?1:0);},0));
+  const shiftJM = (delta)=>{ let y=jy, m=jm+delta; while(m<1){m+=12;y--;} while(m>12){m-=12;y++;} setJMonth(`${y}-${String(m).padStart(2,'0')}`); };
+  const dlCsv = () => {
+    const esc=(v)=>{const s2=String(v??'');return /[",\n]/.test(s2)?'"'+s2.replace(/"/g,'""')+'"':s2;};
+    const lines=[['氏名','被保険者番号','サービスコード',...days.map(d=>`${jm}/${d}`),'実績回数'].map(esc).join(',')];
+    rows.forEach(({p,cells,jisseki})=>{ lines.push([p.name, p.insuranceNo||'', p.serviceCode||'', ...cells.map(c=>c?c.t:''), jisseki].map(esc).join(',')); });
+    const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`実績表_${jy}${String(jm).padStart(2,'0')}.csv`; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  };
+  const markStyle=(c)=>({ 出席:{color:'#1d4ed8',fontWeight:'bold'}, 振替:{color:'#059669',fontWeight:'bold'}, 臨時:{color:'#0e7490',fontWeight:'bold'}, 欠席:{color:'#dc2626',fontWeight:'bold'}, 休業:{color:'#64748b'}, 休止:{color:'#b45309'} })[c.s]||{};
+  return (
+    <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
+      <div style={{maxWidth:1500,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:12}}>
+        {/* サービスコードの登録 */}
+        <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)'}}>
+          <button onClick={()=>setCodeOpen(o=>!o)} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'12px 16px',background:'transparent',border:'none',cursor:'pointer',textAlign:'left'}}>
+            <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>サービスコードの登録</span>
+            <span style={{fontSize:11,color:'#94a3b8'}}>（登録済み {serviceCodes.length} 件）</span>
+            <span style={{marginLeft:'auto',color:'#94a3b8'}}>{codeOpen?'▲':'▼'}</span>
+          </button>
+          {codeOpen && (
+            <div style={{padding:'0 16px 14px',display:'flex',flexDirection:'column',gap:8}}>
+              <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                <input value={newCode.code} onChange={e=>setNewCode(c=>({...c,code:e.target.value}))} placeholder="コード（例: 782341）" style={{padding:'6px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',width:170}}/>
+                <input value={newCode.name} onChange={e=>setNewCode(c=>({...c,name:e.target.value}))} placeholder="名称（例: 通所型サービスⅡ）" style={{padding:'6px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',flex:1,minWidth:180}}/>
+                <button onClick={addCode} disabled={!newCode.code.trim()} style={{padding:'6px 14px',background:'#2563eb',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13,opacity:newCode.code.trim()?1:0.4}}>追加</button>
+              </div>
+              {serviceCodes.length>0 && (
+                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                  {serviceCodes.map(sc=>(
+                    <span key={sc.code} style={{display:'inline-flex',alignItems:'center',gap:6,background:'#f1f5f9',border:'1px solid #e2e8f0',borderRadius:8,padding:'4px 10px',fontSize:12}}>
+                      <b style={{color:'#1e293b'}}>{sc.code}</b><span style={{color:'#64748b'}}>{sc.name}</span>
+                      <button onClick={()=>delCode(sc.code)} style={{border:'none',background:'transparent',color:'#dc2626',cursor:'pointer',fontWeight:'bold'}}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div style={{fontSize:10,color:'#94a3b8'}}>登録したコードは下の表で利用者ごとに割り当てられます（割当はCSVにも出力されます）。</div>
+            </div>
+          )}
+        </div>
+        {/* 実績表 */}
+        <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}}>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>月次実績表<span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8',marginLeft:6}}>（カイポケ等への実績転記用）</span></div>
+            <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:'auto'}}>
+              <button onClick={()=>shiftJM(-1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>← 前月</button>
+              <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:96,textAlign:'center'}}>{jy}年{jm}月</span>
+              <button onClick={()=>shiftJM(1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>翌月 →</button>
+              <button onClick={dlCsv} style={{padding:'4px 12px',background:'#0f766e',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>CSV出力</button>
+              {onShowPrintPreview && <button onClick={()=>onShowPrintPreview(`実績表_${jy}年${jm}月`,'A4 landscape','jisseki-print-area')} style={{padding:'4px 12px',background:'#334155',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>印刷/PDF</button>}
+            </div>
+          </div>
+          <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>○=出席　<span style={{color:'#059669',fontWeight:'bold'}}>振</span>=振替　<span style={{color:'#0e7490',fontWeight:'bold'}}>臨</span>=臨時　<span style={{color:'#dc2626',fontWeight:'bold'}}>欠</span>=欠席　休=休業　止=休止　※実績回数は 出席+振替+臨時 の日数。表は提供記録から自動集計（この画面から記録は変わりません）</div>
+          <div id="jisseki-print-area" style={{overflowX:'auto'}}>
+            <table style={{borderCollapse:'collapse',fontSize:11,whiteSpace:'nowrap',minWidth:'100%'}}>
+              <thead>
+                <tr>
+                  <th style={{position:'sticky',left:0,background:'#f8fafc',border:'1px solid #e2e8f0',padding:'4px 8px',textAlign:'left',zIndex:1}}>氏名</th>
+                  <th style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',background:'#f8fafc',color:'#475569'}}>サービスコード</th>
+                  {days.map(d=>{ const dow=new Date(jy,jm-1,d).getDay(); const ds=`${jy}-${String(jm).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const off=closedDays.includes(dow)||holidaySet.has(ds); return (
+                    <th key={d} style={{border:'1px solid #e2e8f0',padding:'2px 3px',textAlign:'center',background:off?'#f1f5f9':'#f8fafc',color:dow===0?'#dc2626':dow===6?'#2563eb':'#475569',minWidth:22}}>{d}<br/><span style={{fontSize:9,fontWeight:'normal'}}>{dowJp[dow]}</span></th>
+                  );})}
+                  <th style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',background:'#eef2ff',color:'#4338ca'}}>実績</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({p,cells,jisseki})=>(
+                  <tr key={p.id}>
+                    <td style={{position:'sticky',left:0,background:'white',border:'1px solid #e2e8f0',padding:'3px 8px',fontWeight:'bold',color:'#1e293b',zIndex:1}}>{p.name}</td>
+                    <td style={{border:'1px solid #e2e8f0',padding:'1px 3px',textAlign:'center'}}>
+                      <select value={p.serviceCode||''} onChange={e=>setPatientCode(p.id, e.target.value)} style={{border:'none',background:'transparent',fontSize:11,fontWeight:'bold',color:p.serviceCode?'#0f766e':'#cbd5e1',outline:'none',cursor:'pointer',maxWidth:120}}>
+                        <option value="">未設定</option>
+                        {serviceCodes.map(sc=>(<option key={sc.code} value={sc.code}>{sc.code}{sc.name?`（${sc.name}）`:''}</option>))}
+                        {p.serviceCode && !serviceCodes.some(sc=>sc.code===p.serviceCode) && <option value={p.serviceCode}>{p.serviceCode}</option>}
+                      </select>
+                    </td>
+                    {cells.map((c,i)=>(
+                      <td key={i} title={c?`${c.s}${c.sub?`（${c.sub}）`:''}`:''} style={{border:'1px solid #eef2f6',padding:'2px 3px',textAlign:'center',...(c?markStyle(c):{})}}>{c?c.t:''}</td>
+                    ))}
+                    <td style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',fontWeight:'bold',color:'#4338ca',background:'#f8faff'}}>{jisseki}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td style={{position:'sticky',left:0,background:'#f8fafc',border:'1px solid #e2e8f0',padding:'3px 8px',fontWeight:'bold',color:'#475569',zIndex:1}}>日別合計</td>
+                  <td style={{border:'1px solid #e2e8f0',background:'#f8fafc'}}></td>
+                  {dayTotals.map((n,i)=>(<td key={i} style={{border:'1px solid #e2e8f0',padding:'2px 3px',textAlign:'center',fontWeight:'bold',color:n?'#0f766e':'#cbd5e1',background:'#f8fafc'}}>{n||''}</td>))}
+                  <td style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',fontWeight:'bold',color:'#0f766e',background:'#f0fdfa'}}>{rows.reduce((s2,r)=>s2+r.jisseki,0)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   const [baseMonth, setBaseMonth] = React.useState(() => {
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -24837,8 +25004,6 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   // 印刷オプション
   const [printOptsModal, setPrintOptsModal] = React.useState(false);
   const [printOpts, setPrintOpts] = React.useState({ mode: 'detailed', period: 'current', rankingAll: true });
-  // ★ 月次実績表(カイポケ転記用)の対象月
-  const [jMonth, setJMonth] = React.useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
 
   // 印刷実行: 期間/モード/ランキング表示を一時切替して PDF を生成
   // 実装方針: clone + appendChild ではなく、各セクションを HTML 文字列として個別に
@@ -26166,112 +26331,6 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
 
 
       </div>
-      {/* ★ 月次実績表(カイポケ転記用)。 稼働の印刷(print-content-operation)には含めず、専用の印刷/CSVを持つ。
-          提供記録(出席/振替/臨時)を実績として利用者×日のマトリクスで表示 → カイポケの実績登録への転記を速くする。
-          日付整合ゲート: 出席は基本利用日 or 実データありのみ・欠席/休業/休止は基本利用日のみ(残骸を実績に混ぜない)。 */}
-      {(() => {
-        const [jy, jm] = jMonth.split('-').map(Number);
-        const dim = new Date(jy, jm, 0).getDate();
-        const days = Array.from({length:dim},(_,i)=>i+1);
-        const dowJp = ['日','月','火','水','木','金','土'];
-        const closedDays = appData.systemSettings?.facilityInfo?.closedDays || [0];
-        const holidaySet = new Set((appData.holidays||[]).map(h=>h.date||h));
-        const mStart = `${jy}-${String(jm).padStart(2,'0')}-01`;
-        const mEnd = `${jy}-${String(jm).padStart(2,'0')}-${String(dim).padStart(2,'0')}`;
-        // 月内の記録を利用者×日に整理(同一日複数=振替の重複はランクで1件に)
-        const byPat = new Map();
-        (appData.ticketRecords||[]).forEach(r => {
-          const m = String(r.date||'').match(/^(\d+)月(\d+)日$/);
-          if (!m || parseInt(m[1]) !== jm) return;
-          if (r.year != null && Number(r.year) !== jy) return;
-          const d = parseInt(m[2]);
-          if (!byPat.has(r.patientId)) byPat.set(r.patientId, new Map());
-          const dm = byPat.get(r.patientId);
-          const rank = (x)=>x.status==='出席'?0:x.status==='振替'?1:x.status==='臨時'?2:x.status==='欠席'?3:4;
-          const ex = dm.get(d);
-          if (!ex || rank(r) < rank(ex)) dm.set(d, r);
-        });
-        const rows = sortPatientsByKana((appData.patients||[]).filter(p=>{
-          if (!p || !p.name) return false;
-          if (p.startDate && String(p.startDate).slice(0,10) > mEnd) return false;
-          if (p.endDate && String(p.endDate).slice(0,10) < mStart) return false;
-          return true;
-        })).map(p => {
-          const dm = byPat.get(p.id) || new Map();
-          const cells = days.map(d => {
-            const r = dm.get(d); if (!r) return null;
-            const ds = `${jy}-${String(jm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-            const dow = new Date(jy, jm-1, d).getDay();
-            const base = getScheduleOnDate(p, ds)?.[dow] || '';
-            const isBase = base==='AM'||base==='PM'||base==='1日';
-            if (r.status==='振替') return { t:'振', s:'振替', sub: r.furikaeAmpm || (/AM分/.test(r.tokki||'')?'AM':/PM分/.test(r.tokki||'')?'PM':'') };
-            if (r.status==='臨時') return { t:'臨', s:'臨時', sub:'' };
-            if (r.status==='出席') { if (isBase || ticketHasClinicalData(r)) return { t:'○', s:'出席', sub: base }; return null; }
-            if (r.status==='欠席') return isBase ? { t:'欠', s:'欠席', sub:(r.tokki||'').slice(0,12) } : null;
-            if (r.status==='休業') return isBase ? { t:'休', s:'休業', sub:'' } : null;
-            if (r.status==='休止') return isBase ? { t:'止', s:'休止', sub:'' } : null;
-            return null;
-          });
-          const jisseki = cells.filter(c=>c&&(c.s==='出席'||c.s==='振替'||c.s==='臨時')).length;
-          return { p, cells, jisseki };
-        });
-        const dayTotals = days.map((d,di)=>rows.reduce((n,r)=>{const c=r.cells[di];return n+((c&&(c.s==='出席'||c.s==='振替'||c.s==='臨時'))?1:0);},0));
-        const shiftJM = (delta)=>{ let y=jy, m=jm+delta; while(m<1){m+=12;y--;} while(m>12){m-=12;y++;} setJMonth(`${y}-${String(m).padStart(2,'0')}`); };
-        const dlCsv = () => {
-          const esc=(v)=>{const s=String(v??'');return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;};
-          const lines=[['氏名','被保険者番号',...days.map(d=>`${jm}/${d}`),'実績回数'].map(esc).join(',')];
-          rows.forEach(({p,cells,jisseki})=>{ lines.push([p.name, p.insuranceNo||'', ...cells.map(c=>c?c.t:''), jisseki].map(esc).join(',')); });
-          const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
-          const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`実績表_${jy}${String(jm).padStart(2,'0')}.csv`; a.click();
-          setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-        };
-        const markStyle=(c)=>({ 出席:{color:'#1d4ed8',fontWeight:'bold'}, 振替:{color:'#059669',fontWeight:'bold'}, 臨時:{color:'#0e7490',fontWeight:'bold'}, 欠席:{color:'#dc2626',fontWeight:'bold'}, 休業:{color:'#64748b'}, 休止:{color:'#b45309'} })[c.s]||{};
-        return (
-          <div style={{padding:'0 20px 24px',maxWidth:1400,margin:'0 auto'}}>
-            <Card title="月次実績表（カイポケ等への実績転記用）" accent="#0f766e">
-              <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}}>
-                <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:'auto'}}>
-                  <button onClick={()=>shiftJM(-1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>← 前月</button>
-                  <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:96,textAlign:'center'}}>{jy}年{jm}月</span>
-                  <button onClick={()=>shiftJM(1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>翌月 →</button>
-                  <button onClick={dlCsv} style={{padding:'4px 12px',background:'#0f766e',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>CSV出力</button>
-                  {onShowPrintPreview && <button onClick={()=>onShowPrintPreview(`実績表_${jy}年${jm}月`,'A4 landscape','jisseki-print-area')} style={{padding:'4px 12px',background:'#334155',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>印刷/PDF</button>}
-                </div>
-              </div>
-              <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>○=出席　<span style={{color:'#059669',fontWeight:'bold'}}>振</span>=振替　<span style={{color:'#0e7490',fontWeight:'bold'}}>臨</span>=臨時　<span style={{color:'#dc2626',fontWeight:'bold'}}>欠</span>=欠席　休=休業　止=休止　※実績回数は 出席+振替+臨時 の日数です</div>
-              <div id="jisseki-print-area" style={{overflowX:'auto'}}>
-                <table style={{borderCollapse:'collapse',fontSize:11,whiteSpace:'nowrap',minWidth:'100%'}}>
-                  <thead>
-                    <tr>
-                      <th style={{position:'sticky',left:0,background:'#f8fafc',border:'1px solid #e2e8f0',padding:'4px 8px',textAlign:'left',zIndex:1}}>氏名</th>
-                      {days.map(d=>{ const dow=new Date(jy,jm-1,d).getDay(); const ds=`${jy}-${String(jm).padStart(2,'0')}-${String(d).padStart(2,'0')}`; const off=closedDays.includes(dow)||holidaySet.has(ds); return (
-                        <th key={d} style={{border:'1px solid #e2e8f0',padding:'2px 3px',textAlign:'center',background:off?'#f1f5f9':'#f8fafc',color:dow===0?'#dc2626':dow===6?'#2563eb':'#475569',minWidth:22}}>{d}<br/><span style={{fontSize:9,fontWeight:'normal'}}>{dowJp[dow]}</span></th>
-                      );})}
-                      <th style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',background:'#eef2ff',color:'#4338ca'}}>実績</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(({p,cells,jisseki})=>(
-                      <tr key={p.id}>
-                        <td style={{position:'sticky',left:0,background:'white',border:'1px solid #e2e8f0',padding:'3px 8px',fontWeight:'bold',color:'#1e293b',zIndex:1}}>{p.name}</td>
-                        {cells.map((c,i)=>(
-                          <td key={i} title={c?`${c.s}${c.sub?`（${c.sub}）`:''}`:''} style={{border:'1px solid #eef2f6',padding:'2px 3px',textAlign:'center',...(c?markStyle(c):{})}}>{c?c.t:''}</td>
-                        ))}
-                        <td style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',fontWeight:'bold',color:'#4338ca',background:'#f8faff'}}>{jisseki}</td>
-                      </tr>
-                    ))}
-                    <tr>
-                      <td style={{position:'sticky',left:0,background:'#f8fafc',border:'1px solid #e2e8f0',padding:'3px 8px',fontWeight:'bold',color:'#475569',zIndex:1}}>日別合計</td>
-                      {dayTotals.map((n,i)=>(<td key={i} style={{border:'1px solid #e2e8f0',padding:'2px 3px',textAlign:'center',fontWeight:'bold',color:n?'#0f766e':'#cbd5e1',background:'#f8fafc'}}>{n||''}</td>))}
-                      <td style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',fontWeight:'bold',color:'#0f766e',background:'#f0fdfa'}}>{rows.reduce((s,r)=>s+r.jisseki,0)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </div>
-        );
-      })()}
     </div>
   ); } catch(e) { return <div style={{padding:20,color:"red",fontFamily:"monospace",background:"#fff1f2",margin:16,borderRadius:8,border:"2px solid red"}}><b>稼働エラー:</b><pre style={{marginTop:8,whiteSpace:"pre-wrap"}}>{e?.message||String(e)}</pre></div>; }
 }

@@ -644,7 +644,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   const FAMILY_CONTACT_FIELDS = new Set(['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail']);
   // ★ 利用者の「フィールド単位で時刻(_fieldTs)保護」する項目。 利用者を1項目編集して _savedAt 全体が
   //   更新されても、これらの項目は触っていなければ古い端末の保存で巻き戻らない(基本利用日/送迎/緊急連絡先)。
-  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','contactBookRenraku', ...FAMILY_CONTACT_FIELDS]);
+  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','contactBookRenraku', ...FAMILY_CONTACT_FIELDS]);
   // ★ 削除済み書類の墓石を両端末ぶん合算する。 _delDocs = { "<書類id>": 削除時刻(ms) }
   //   和集合(union)マージは「追加を失わない」代わりに削除を必ず復活させるため、墓石で除外する。
   const _mergeDocTombs = (...srcs) => {
