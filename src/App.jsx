@@ -21,6 +21,7 @@ import {
   supabaseSubscribeStoreRealtime,
   supabaseSyncStateForStore,
   supabaseMergeAndSyncStateForStore,
+  scrubAmnestyTombstones,
   syncNow,
   syncHealth,
   syncLog,
@@ -16961,8 +16962,12 @@ export default function App() {
           try {
             const _lt = (prev && prev.deletedIds) || {};
             const _ct = merged.deletedIds || {};
-            const _mt = {};
+            let _mt = {};
             new Set([...Object.keys(_lt), ...Object.keys(_ct)]).forEach(k => { _mt[k] = { ...(_ct[k] || {}), ...(_lt[k] || {}) }; });
+            // ★ 墓石アムネスティ: 南水元に混入した他店の墓石(カットオフ前)は pull 時にも読み捨てる。
+            //   これが無いと、端末に残った墓石が復元済みクラウドの利用者をローカルで再削除し、
+            //   次の push でクラウドからも消してしまう(定義は lib/supabase.js scrubAmnestyTombstones 参照)。
+            _mt = scrubAmnestyTombstones(newStoreId, _mt);
             merged.deletedIds = _mt;
             Object.keys(_mt).forEach(k => {
               const tm = _mt[k];

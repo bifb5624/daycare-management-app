@@ -492,6 +492,31 @@ export async function supabaseSyncStateForStore(storeId, data) {
 // ★ 記録単位でマージしてから保存 (複数端末の同時編集でデータが消えないように)。
 //   read-modify-write: クラウド最新を取得 → 記録配列を id 単位で「新しい _savedAt 優先」で統合 → 保存。
 //   別々の利用者/日付/項目を同時に編集しても、お互いの記録が消えない (同じ記録の同時編集だけ後勝ち)。
+// ★ 墓石アムネスティ(2026-08-07 南水元データ消失事故の復旧措置):
+//   試作店で 7/17 に一括削除された193名分の墓石(利用者id 1〜193 + 紐づく記録墓石)が
+//   8/7 01:25 に南水元のキーへ混入し、南水元の利用者47名(id 31〜77)が全端末で削除され続けた。
+//   バックアップから利用者を書き戻しても、端末に残った墓石が pull/push の和集合マージで
+//   再削除するため、南水元に限り「カットオフ時刻より古い墓石」を全種類読み捨てる。
+//   カットオフ以後の正規の削除操作は新しい時刻が付くので、通常運用に影響しない。
+const TOMB_AMNESTY_STORE = 'store_minamimizumoto';
+const TOMB_AMNESTY_CUTOFF = 1786078800000; // 2026-08-07T05:00:00Z (JST 14:00)
+export const scrubAmnestyTombstones = (storeId, tomb) => {
+  if (storeId !== TOMB_AMNESTY_STORE || !tomb || typeof tomb !== 'object') return tomb;
+  let changed = false;
+  const out = {};
+  Object.keys(tomb).forEach(k => {
+    const m = tomb[k];
+    if (!m || typeof m !== 'object') { out[k] = m; return; }
+    const kept = {};
+    Object.keys(m).forEach(id => {
+      const t = Number(m[id]) || 0;
+      if (t >= TOMB_AMNESTY_CUTOFF) kept[id] = m[id]; else changed = true;
+    });
+    out[k] = kept;
+  });
+  return changed ? out : tomb;
+};
+
 export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   if (!supabase || !storeId) return false;
   // id 単位マージ: 同じ id は _savedAt が新しい方を採用。 片方にしか無い id は残す。
@@ -784,7 +809,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     const _casRes = await supabaseCasUpdate(storeId, (cloud) => {
     // クラウドが空(=新規店舗) ならそのまま(初回作成)
     if (!cloud || Object.keys(cloud).length === 0) {
-      return sanitizeForSync(localData);
+      const _seed = sanitizeForSync(localData);
+      if (_seed && _seed.deletedIds) _seed.deletedIds = scrubAmnestyTombstones(storeId, _seed.deletedIds);
+      return _seed;
     }
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
@@ -794,10 +821,13 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
     const localTomb = (localData && localData.deletedIds) || {};
     const cloudTomb = (cloud && cloud.deletedIds) || {};
-    const mergedTomb = {};
-    ARRAY_KEYS.forEach(k => { mergedTomb[k] = { ...(cloudTomb[k] || {}), ...(localTomb[k] || {}) }; });
+    const _rawTomb = {};
+    ARRAY_KEYS.forEach(k => { _rawTomb[k] = { ...(cloudTomb[k] || {}), ...(localTomb[k] || {}) }; });
     // ★ 利用者本体の墓石も local+cloud で統合 (削除した利用者を別端末の push で復活させない)。
-    mergedTomb.patients = { ...(cloudTomb.patients || {}), ...(localTomb.patients || {}) };
+    _rawTomb.patients = { ...(cloudTomb.patients || {}), ...(localTomb.patients || {}) };
+    // ★ 墓石アムネスティ: 南水元に混入した他店の墓石(カットオフ前)を無効化してから、
+    //   以降の除外フィルタ・push 内容の両方に使う(定義は scrubAmnestyTombstones 参照)
+    const mergedTomb = scrubAmnestyTombstones(storeId, _rawTomb);
     const merged = { ...localData, deletedIds: mergedTomb };
     // ★ 提供記録・日誌はフィールド単位でマージ (別端末で違う項目を入力しても消えない)。 他はid単位。
     const FIELD_MERGE_KEYS = new Set(['ticketRecords','dailyLogs']);
