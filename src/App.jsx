@@ -377,7 +377,7 @@ ${body}</body></html>`;
       if (include.tickets) {
         setProgress('提供記録をエクスポート中...');
         const facility = appData.systemSettings?.facilityInfo || {};
-        const exerciseItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems || [];
+        const exerciseItems = effExerciseItems(appData.systemSettings);
         const dowJp = ['日','月','火','水','木','金','土'];
         const moodLabel = { excellent:'🤩', good:'😊', normal:'😐', bad:'😞', terrible:'😫' };
         const dir = root.folder('02_提供記録');
@@ -1937,7 +1937,7 @@ const normalizeRecordMonth = (dateStr, currentYear) => {
 
 // その日付に有効だった予定運動メニュー項目を返す (時系列バージョニング)
 const getExerciseItemsForDate = (systemSettings, dateStr, currentYear) => {
-  const current = systemSettings?.exerciseItems || appSettings.exerciseItems;
+  const current = effExerciseItems(systemSettings);
   const history = systemSettings?.exerciseItemsHistory || [];
   if (!history.length) return current;
   const ymd = normalizeRecordMonth(dateStr, currentYear);
@@ -1950,6 +1950,12 @@ const getExerciseItemsForDate = (systemSettings, dateStr, currentYear) => {
   }
   return current;
 };
+
+// ★ 有効な運動メニュー項目。 空配列([])は「未設定」とみなし既定へフォールバックする。
+//   設定の不具合で exerciseItems が空([])で上書きされると、|| では []がtruthyのため既定に落ちず、
+//   利用者マスタの基準値・提供記録の運動列が全員分「消えた」ように見えていた。
+//   利用者側のデータ(plannedExercises等)は残っているため、既定項目の表示で基準値も復活する。
+const effExerciseItems = (systemSettings) => { const v = systemSettings && systemSettings.exerciseItems; return (Array.isArray(v) && v.length) ? v : appSettings.exerciseItems; };
 
 const appSettings = {
   statusOptions: [
@@ -17508,6 +17514,26 @@ export default function App() {
     window.addEventListener('focus', onFocus);
     return () => { stopped = true; clearInterval(t); window.removeEventListener('focus', onFocus); };
   }, []);
+  // ★ 管理者名の自動連携: スタッフ切替/日誌で登録した「管理者」を事業所情報(管理者名)へ常に反映する。
+  //   初回に管理者を登録しただけで事業所情報の管理者名が埋まり、サービス提供責任者も未設定なら管理者を既定にする。
+  //   (管理者名は各種設定では表示のみ。変更はスタッフ切替/日誌の管理者を変える)
+  useEffect(() => {
+    try {
+      const _sm = (appData.storeMembers||[]).find(m => m && m.isAdmin && m.name && m.name.trim());
+      const _ds = (appData.diarySettings?.staff||[]).find(x => x && x.role==='管理者' && x.name && x.name.trim());
+      const adminName = ((_sm?.name) || (_ds?.name) || '').trim();
+      if (!adminName) return;
+      const fi = appData.systemSettings?.facilityInfo || {};
+      const needMgr = (fi.manager||'').trim() !== adminName;
+      const needSR = !String(fi.serviceResponsible||'').trim();
+      if (!needMgr && !needSR) return;
+      const pp = adminName.split(/[\s\u3000]+/); const last = pp[0]||adminName, first = pp.slice(1).join(' ');
+      const nfi = { ...fi };
+      if (needMgr) { nfi.manager = adminName; nfi.managerLast = last; nfi.managerFirst = first; }
+      if (needSR) { nfi.serviceResponsible = adminName; nfi.serviceResponsibleLast = last; nfi.serviceResponsibleFirst = first; }
+      handleSaveToCloud({ ...appData, systemSettings: { ...(appData.systemSettings||{}), facilityInfo: nfi } }, { silent: true });
+    } catch {}
+  }, [appData.storeMembers, appData.diarySettings, appData.systemSettings?.facilityInfo]);
   // ★ データ消失対策: アプリ切替/タブ離脱/スリープ移行時に、開いている入力画面の未保存データを自動保存。
   //   入力画面は「保存」を押すまでローカル保持のため、押さずに離れると消える。 これを背景化時に拾う。
   useEffect(() => {
@@ -17720,7 +17746,7 @@ export default function App() {
         let changed = false;
         // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
         //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
-        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','contactBookRenraku','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','serviceCodes','contactBookRenraku','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));
@@ -19858,7 +19884,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   // ★ 直前スナップショットとの差分を「氏名＋変更した項目名」で返す。
   const _snapChanges = (newerRecs, olderRecs) => {
     const om = {}; (olderRecs||[]).forEach(r=>{ if(r) om[r.patientId]=r; });
-    const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems || []);
+    const _exItems = (effExerciseItems(appData.systemSettings));
     const _exName = (id) => (_exItems.find(x=>x.id===id)?.name) || String(id);
     const LBL = { status:'状態', massage:'介護整体', tokki:'特記', kibunArrival:'通所時の気分', kibunDeparture:'帰宅時の気分',
       temp_AM:'体温', temp_PM:'体温', bpUpSt_AM:'開始血圧', bpDnSt_AM:'開始血圧', bpUpSt_PM:'開始血圧', bpDnSt_PM:'開始血圧',
@@ -20186,7 +20212,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const openKeypad = (recordId, field, currentValue, isAbsent) => {
     if (isAbsent || !_keypadOn) return;
     kpConfirmRef.current = false; // 新しいセルを開いたら未確定に
-    const isEx = !!(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(i => i.id === field);
+    const isEx = !!(effExerciseItems(appData.systemSettings)).find(i => i.id === field);
     setKeypad({ isOpen: true, recordId, field, value: currentValue || "", isFirstInput: !currentValue, mode: isEx ? 'exercise' : 'record' });
   };
   // ★ PC Enter: 1回目は確定(キーパッドは開いたまま)、続けてEnterで右のセルへ移動(Tab相当)
@@ -20221,7 +20247,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     setKeypad(prev => ({ ...prev, value: formatted, isFirstInput: false }));
     // ★ 運動メニュー項目: keypad で「3」確定 → 内部値も「3分」として保存 (defaultUnit を本体に含める)
     //   既存値で末尾が既に単位なら二重付与しない。 空のときは付けない。
-    const _exItems = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
+    const _exItems = (effExerciseItems(appData.systemSettings));
     const _exItm = _exItems.find(i => i.id === keypad.field);
     if (_exItm && _exItm.type === 'individual') {
       // ★ 個別運動: オブジェクト構造 {itemId,value} を保持して value のみ更新 (テンキー対応)
@@ -20273,7 +20299,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     const _ampm = timeFilter || 'AM';
     // ★ 血圧は統合フィールド bpSt_combo / bpEn_combo で巡回
     const baseFields = [`temp_${_ampm}`, `bpSt_combo_${_ampm}`, `plSt_${_ampm}`, `bpEn_combo_${_ampm}`, `plEn_${_ampm}`];
-    const exFields = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems).filter(item => item.useKeypad).map(item => item.id);
+    const exFields = (effExerciseItems(appData.systemSettings)).filter(item => item.useKeypad).map(item => item.id);
     const allFields = [...baseFields, ...exFields];
     let currentArray = filterMode === 'single' ? localPatients : localTicketRecords;
     const currentIndex = currentArray.findIndex(p => p.id === keypad.recordId);
@@ -20794,7 +20820,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       <col style={{width:'58px'}}/>{/* 体温 */}
                       <col style={{width:'120px'}}/>{/* 開始 血圧+脈 */}
                       <col style={{width:'120px'}}/>{/* 終了 血圧+脈 */}
-                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => <col key={item.id} style={{width:'58px'}}/>)}
+                      {(effExerciseItems(appData.systemSettings)).map(item => <col key={item.id} style={{width:'58px'}}/>)}
                       <col style={{width:'62px'}}/>{/* 介護整体 */}
                       <col style={{width:'260px'}}/>{/* 特記 */}
                     </colgroup>
@@ -20806,7 +20832,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">体温</th>
                         <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">開始 血圧/脈</th>
                         <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap">{secondBpLabel(appData)} 血圧/脈</th>
-                        {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => (
+                        {(effExerciseItems(appData.systemSettings)).map(item => (
                           <th key={item.id} className={`px-0.5 py-2 font-bold text-center border text-[11px] truncate ${item.type==='individual' ? 'bg-emerald-800 text-emerald-50 border-emerald-700' : 'border-slate-700'}`}>{item.name}</th>
                         ))}
                         <th className="px-1 py-2 font-bold text-center border border-slate-700 whitespace-nowrap text-xs">介護整体</th>
@@ -20843,7 +20869,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             <td className="px-1 py-2 text-center border border-slate-300 font-bold text-slate-800">{rec?.temp||''}</td>
                             <td className="px-1 py-2 text-center border border-slate-300 font-bold whitespace-nowrap">{bpCell(rec?.bpUpSt, rec?.bpDnSt, rec?.plSt)}</td>
                             <td className="px-1 py-2 text-center border border-slate-300 font-bold whitespace-nowrap">{bpCell(rec?.bpUpEn, rec?.bpDnEn, rec?.plEn)}</td>
-                            {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => {
+                            {(effExerciseItems(appData.systemSettings)).map(item => {
                               let v = rec?.exercises ? rec.exercises[item.id] : '';
                               if (v == null) v = '';
                               if (typeof v === 'object') v = '';
@@ -20881,7 +20907,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             const isPause = !!getPauseReasonOnDate(masterData, selectedDate)
               || (getPatientDisplayStatus(masterData) === '休止' && !(masterData.pauseHistory||[]).length);
             const config = getStatusConfig(p.status);
-            const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+            const exItems = effExerciseItems(appData.systemSettings);
             const tf = (timeFilter==='AM'||timeFilter==='PM') ? timeFilter : 'AM';
             const dis = isAbsent||isReadOnly||isPause;
             const vT = p[`temp_${tf}`]||'';
@@ -20982,7 +21008,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             <col style={{width:'60px'}} />{/* 体温 */}
             <col style={{width:'145px'}} />{/* 開始 血圧 + 脈 (75+60+gap) */}
             <col style={{width:'145px'}} />{/* 終了 血圧 + 脈 */}
-            {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(item => (
+            {(effExerciseItems(appData.systemSettings)).map(item => (
               <col key={item.id} style={{width:'60px'}} />/* 体温と同じ幅 */
             ))}
             <col style={{width:'60px'}} />
@@ -20998,7 +21024,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800 text-xs">体温</th>
               <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800">開始 血圧/脈</th>
               <th className="px-1 py-3 font-bold text-center border border-slate-700 whitespace-nowrap sticky top-0 z-40 bg-slate-800">{secondBpLabel(appData)} 血圧/脈</th>
-              {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map((item) => (
+              {(effExerciseItems(appData.systemSettings)).map((item) => (
                 <th key={item.id} className={`px-1 py-3 font-medium text-center border whitespace-nowrap sticky top-0 z-40 text-xs ${item.type==='individual' ? 'bg-emerald-800 text-emerald-50 border-emerald-700' : 'bg-slate-800 border-slate-700 text-white'}`}>
                   {item.name}
                 </th>
@@ -21197,7 +21223,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     );})()}
                   </td>
 
-                  {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map((item) => {
+                  {(effExerciseItems(appData.systemSettings)).map((item) => {
                     // type='individual' の場合はプルダウン+入力の特殊セル
                     if (item.type === 'individual') {
                       const pid = p.patientId || p.id;
@@ -22260,7 +22286,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         // 運動トレンド: 3ヶ月モードはグラフで描画（全項目を半分ずつ 2 ページに分割）
                         const exSec = perClone.querySelector('#sec-exercise');
                         if(exSec){
-                          const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+                          const allExItems = effExerciseItems(appData.systemSettings);
                           // ◯=その月の設定数値を参照 / 数値=そのまま / ×・ー=除外
                           const resolveExVal = (r, exItem)=>{
                             let raw = r.exercises?.[exItem.id];
@@ -22899,7 +22925,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </div>
                     {/* ★ 今回の運動メニュー (latest.exercises) + 前回比 */}
                     {(() => {
-                      const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+                      const exItems = effExerciseItems(appData.systemSettings);
                       const exVals = latest.exercises || {};
                       const allIndItems = appData.systemSettings?.individualExerciseItems || [];
                       // 個別運動スロット {itemId,value} の場合、選択された運動メニューを返す
@@ -23828,7 +23854,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         {!familyMode && <div id="sec-exercise" style={{scrollMarginTop:170,marginBottom:16}}>
 <div style={{fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:10,paddingBottom:6,borderBottom:'2px solid #e2e8f0'}}>運動トレンド</div>
           {(() => {
-            const allExItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+            const allExItems = effExerciseItems(appData.systemSettings);
             const _selExId = selExId || (allExItems.length>0?allExItems[0].id:null);
             const selEx = allExItems.find(e=>e.id===_selExId);
             if(!selEx) return null;
@@ -23854,7 +23880,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               // ★ id が変わっていても同名の項目から拾う(店舗ごとに項目を作り直すと id が変わり、
               //   その店舗だけ「記録なし」になっていた)。 連絡帳と同じ解決規則に揃える。
               let raw = resolveExerciseValue(r.exercises, selEx.id,
-                appData.systemSettings?.exerciseItems || appSettings.exerciseItems, appSettings.exerciseItems);
+                effExerciseItems(appData.systemSettings), appSettings.exerciseItems);
               if (raw && typeof raw === 'object') { // 個別運動スロット {itemId,value}: ○は基準値、数値はそのまま
                 const _val = String(raw.value ?? '').trim();
                 if (_val === '○' || _val === '◯') {
@@ -23880,7 +23906,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 const _mo = mm ? String(+mm[1]).padStart(2,'0') : '01';
                 const _plan = getPlannedExercisesForDate(selectedPatient, `${ry}-${_mo}-${_dd}`) || {};
                 const pv = resolveExerciseValue(_plan, selEx.id,
-                  appData.systemSettings?.exerciseItems || appSettings.exerciseItems, appSettings.exerciseItems);
+                  effExerciseItems(appData.systemSettings), appSettings.exerciseItems);
                 // ★ ○ は「実施した」という記録そのもの。 その月の規定値が未設定/ーでも実施の事実は消さず
                 //   ○ のまま返す(従来は '' を返しており、規定値が無い月の実施記録が
                 //   「記録なし」として分析個人から消えていた)。 規定値が数値ならその数値を採用する。
@@ -24430,7 +24456,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <thead>
                 <tr style={{backgroundColor:'#f8fafc',borderBottom:'1px solid #94a3b8'}}>
                   {/* ★ 項目名を中央配置 (左寄せ → center) */}
-                  {['日付','状態','気分(通)','気分(帰)','体温','開始 血圧/脈',`${secondBpLabel(appData)} 血圧/脈`,...(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(e=>e.name),'介護整体','特記'].map(h=>(
+                  {['日付','状態','気分(通)','気分(帰)','体温','開始 血圧/脈',`${secondBpLabel(appData)} 血圧/脈`,...(effExerciseItems(appData.systemSettings)).map(e=>e.name),'介護整体','特記'].map(h=>(
                     <th key={h} style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap',fontSize:14}}>{h}</th>
                   ))}
                 </tr>
@@ -24462,7 +24488,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       <td style={{padding:'8px 10px',textAlign:'center',fontWeight:'bold',color:'#475569',whiteSpace:'nowrap'}}>
                         {r.bpUpEn?`${r.bpUpEn}/${r.bpDnEn}`:'-'}{r.plEn&&<span style={{color:'#334155',marginLeft:3,fontSize:14}}>({r.plEn})</span>}
                       </td>
-                      {(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).map(ex=>{
+                      {(effExerciseItems(appData.systemSettings)).map(ex=>{
                         let rawV = r.exercises?.[ex.id];
                         // ★ 個別運動スロット {itemId,value}: value を取り出す(そのまま String すると [object Object] になる)。
                         //   value が ○ のときは選んだ個別運動メニューの基準値(defaultValue)に置換。
@@ -24491,7 +24517,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </tr>
                   );
                 })}
-                {detailRecs.length===0&&<tr><td colSpan={7+(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).length} style={{padding:'40px',textAlign:'center',color:'#000',fontWeight:'bold'}}>記録がありません</td></tr>}
+                {detailRecs.length===0&&<tr><td colSpan={7+(effExerciseItems(appData.systemSettings)).length} style={{padding:'40px',textAlign:'center',color:'#000',fontWeight:'bold'}}>記録がありません</td></tr>}
               </tbody>
             </table>
           </div>
@@ -24862,13 +24888,18 @@ function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, perio
 }
 
 // === 実績登録 (カイポケ等への実績転記支援) ===
-// 提供記録の実績(出席/振替/臨時)を利用者×日のマトリクスで表示し、サービスコードの登録・利用者への割当、
-// CSV出力・印刷(A4横)に対応する。 表示は読み取り専用(提供記録は書き換えない)。
-// 書き込みは systemSettings.serviceCodes(コード台帳) と patient.serviceCode(割当)のみ=どちらも項目単位保護。
+// 提供記録の実績(出席/振替/臨時)を「月間一覧」と「利用者ごと」で表示し、サービスコードの登録(手入力+CSV取込)・
+// 利用者への複数コード割当、CSV出力・印刷(A4横)に対応する。 実績表示は読み取り専用(提供記録は書き換えない)。
+// 書き込みは systemSettings.serviceCodes(コード台帳) と patient.serviceCodes(割当)のみ=どちらも項目単位保護。
+// ※画面構成はつむぎ独自仕様(他社ソフトの複製ではない)。
 function JissekiView({ appData, onSave, onShowPrintPreview }) {
+  const [tab, setTab] = React.useState('month'); // 'month'=月間一覧 | 'patient'=利用者ごと
+  const [selPid, setSelPid] = React.useState(null);
   const [jMonth, setJMonth] = React.useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [codeOpen, setCodeOpen] = React.useState(false);
   const [newCode, setNewCode] = React.useState({ code:'', name:'' });
+  const [csvPreview, setCsvPreview] = React.useState(null); // {rows:[{code,name,units,sel}], fileName}
+  const fileRef = React.useRef(null);
   const serviceCodes = appData.systemSettings?.serviceCodes || [];
   const saveCodes = (list, msg) => onSave({ ...appData, systemSettings: { ...(appData.systemSettings||{}), serviceCodes: list, _updatedAt: syncNow() } }, { manual:true, message: msg });
   const addCode = () => {
@@ -24879,9 +24910,45 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
     setNewCode({ code:'', name:'' });
   };
   const delCode = (c) => { if(!window.confirm(`サービスコード「${c}」を削除しますか？(利用者への割当は残ります)`)) return; saveCodes(serviceCodes.filter(x=>x.code!==c), '✓ 削除しました'); };
-  const setPatientCode = (pid, code) => {
-    onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===pid ? { ...p, serviceCode: code } : p) }, { silent:true });
+  const codeName = (c) => { const f=serviceCodes.find(x=>x.code===c); return f ? (f.name||'') : ''; };
+  // 利用者の割当コード(複数)。 旧単数 serviceCode からの移行も吸収
+  const patCodes = (p) => Array.isArray(p.serviceCodes) ? p.serviceCodes : (p.serviceCode ? [p.serviceCode] : []);
+  const setPatCodes = (pid, codes) => onSave({ ...appData, patients: (appData.patients||[]).map(p => p.id===pid ? { ...p, serviceCodes: codes } : p) }, { silent:true });
+  // ★ サービスコードCSV取込(国/自治体のサービスコード表)。 文字コードはUTF-8/Shift_JIS両対応。
+  //   列は自動判定: 「種類2桁(英数)+項目4桁」の隣接列 or 6桁1列をコード、日本語の列を名称、末尾の数値列を単位数とみなす。
+  const handleCsvFile = async (file) => {
+    try {
+      const buf = await file.arrayBuffer();
+      let text = new TextDecoder('utf-8', { fatal:false }).decode(buf);
+      if ((text.match(/�/g)||[]).length > 2) { try { text = new TextDecoder('shift-jis').decode(buf); } catch {} }
+      const parseLine = (l) => { const out=[]; let cur='', q=false; for (let i=0;i<l.length;i++){ const ch=l[i]; if(q){ if(ch==='"'){ if(l[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=ch; } else { if(ch==='"') q=true; else if(ch===','){ out.push(cur); cur=''; } else cur+=ch; } } out.push(cur); return out.map(x=>x.trim()); };
+      const rows=[]; const seen=new Set();
+      text.split(/\r?\n/).forEach(l => {
+        if (!l.trim()) return;
+        const c = parseLine(l);
+        let code=''; let codeIdx=-1;
+        for (let i=0;i<c.length;i++) {
+          if (/^[0-9A-Z]{2}$/.test(c[i]) && /^\d{4}$/.test(c[i+1]||'')) { code=c[i]+c[i+1]; codeIdx=i; break; }
+          if (/^[0-9A-Z]\d{5}$/.test(c[i])) { code=c[i]; codeIdx=i; break; }
+        }
+        if (!code || seen.has(code)) return;
+        const name = c.find((x,i)=> i!==codeIdx && i!==codeIdx+1 && /[ぁ-んァ-ヶ一-龠]/.test(x) && x.replace(/[^ぁ-んァ-ヶ一-龠a-zA-Z0-9ⅠⅡⅢⅣⅤ]/g,'').length>=2) || '';
+        let units=''; for (let i=c.length-1;i>=0;i--){ if (i!==codeIdx && i!==codeIdx+1 && /^\d{1,5}$/.test(c[i])) { units=c[i]; break; } }
+        seen.add(code);
+        rows.push({ code, name, units, sel:true });
+      });
+      if (!rows.length) { alert('サービスコードが見つかりませんでした。国/自治体のサービスコード表CSVを選択してください。'); return; }
+      setCsvPreview({ rows, fileName: file.name });
+    } catch(e) { alert('CSVの読み込みに失敗しました: ' + (e?.message||e)); }
   };
+  const importCsv = () => {
+    const sel = csvPreview.rows.filter(r=>r.sel);
+    const map = new Map(serviceCodes.map(x=>[x.code, x]));
+    sel.forEach(r => map.set(r.code, { code:r.code, name:r.name, ...(r.units?{units:r.units}:{}) }));
+    saveCodes([...map.values()].sort((a,b)=>String(a.code).localeCompare(String(b.code))), `✓ ${sel.length}件のサービスコードを取り込みました`);
+    setCsvPreview(null);
+  };
+  // === 月データ ===
   const [jy, jm] = jMonth.split('-').map(Number);
   const dim = new Date(jy, jm, 0).getDate();
   const days = Array.from({length:dim},(_,i)=>i+1);
@@ -24890,7 +24957,6 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
   const holidaySet = new Set((appData.holidays||[]).map(h=>h.date||h));
   const mStart = `${jy}-${String(jm).padStart(2,'0')}-01`;
   const mEnd = `${jy}-${String(jm).padStart(2,'0')}-${String(dim).padStart(2,'0')}`;
-  // 月内の記録を利用者×日に整理(同一日複数=振替の重複はランクで1件に)
   const byPat = new Map();
   (appData.ticketRecords||[]).forEach(r => {
     const m = String(r.date||'').match(/^(\d+)月(\d+)日$/);
@@ -24903,27 +24969,27 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
     const ex = dm.get(d);
     if (!ex || rank(r) < rank(ex)) dm.set(d, r);
   });
+  const calcCell = (p, d) => {
+    const dm = byPat.get(p.id); const r = dm && dm.get(d); if (!r) return null;
+    const ds = `${jy}-${String(jm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dow = new Date(jy, jm-1, d).getDay();
+    const base = getScheduleOnDate(p, ds)?.[dow] || '';
+    const isBase = base==='AM'||base==='PM'||base==='1日';
+    if (r.status==='振替') return { t:'振', s:'振替', sub: r.furikaeAmpm || (/AM分/.test(r.tokki||'')?'AM':/PM分/.test(r.tokki||'')?'PM':''), tokki:r.tokki||'' };
+    if (r.status==='臨時') return { t:'臨', s:'臨時', sub:'', tokki:r.tokki||'' };
+    if (r.status==='出席') { if (isBase || ticketHasClinicalData(r)) return { t:'○', s:'出席', sub: base, tokki:r.tokki||'' }; return null; }
+    if (r.status==='欠席') return isBase ? { t:'欠', s:'欠席', sub:(r.tokki||'').slice(0,20), tokki:r.tokki||'' } : null;
+    if (r.status==='休業') return isBase ? { t:'休', s:'休業', sub:'', tokki:'' } : null;
+    if (r.status==='休止') return isBase ? { t:'止', s:'休止', sub:'', tokki:'' } : null;
+    return null;
+  };
   const rows = sortPatientsByKana((appData.patients||[]).filter(p=>{
     if (!p || !p.name) return false;
     if (p.startDate && String(p.startDate).slice(0,10) > mEnd) return false;
     if (p.endDate && String(p.endDate).slice(0,10) < mStart) return false;
     return true;
   })).map(p => {
-    const dm = byPat.get(p.id) || new Map();
-    const cells = days.map(d => {
-      const r = dm.get(d); if (!r) return null;
-      const ds = `${jy}-${String(jm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const dow = new Date(jy, jm-1, d).getDay();
-      const base = getScheduleOnDate(p, ds)?.[dow] || '';
-      const isBase = base==='AM'||base==='PM'||base==='1日';
-      if (r.status==='振替') return { t:'振', s:'振替', sub: r.furikaeAmpm || (/AM分/.test(r.tokki||'')?'AM':/PM分/.test(r.tokki||'')?'PM':'') };
-      if (r.status==='臨時') return { t:'臨', s:'臨時', sub:'' };
-      if (r.status==='出席') { if (isBase || ticketHasClinicalData(r)) return { t:'○', s:'出席', sub: base }; return null; }
-      if (r.status==='欠席') return isBase ? { t:'欠', s:'欠席', sub:(r.tokki||'').slice(0,12) } : null;
-      if (r.status==='休業') return isBase ? { t:'休', s:'休業', sub:'' } : null;
-      if (r.status==='休止') return isBase ? { t:'止', s:'休止', sub:'' } : null;
-      return null;
-    });
+    const cells = days.map(d => calcCell(p, d));
     const jisseki = cells.filter(c=>c&&(c.s==='出席'||c.s==='振替'||c.s==='臨時')).length;
     return { p, cells, jisseki };
   });
@@ -24932,15 +24998,30 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
   const dlCsv = () => {
     const esc=(v)=>{const s2=String(v??'');return /[",\n]/.test(s2)?'"'+s2.replace(/"/g,'""')+'"':s2;};
     const lines=[['氏名','被保険者番号','サービスコード',...days.map(d=>`${jm}/${d}`),'実績回数'].map(esc).join(',')];
-    rows.forEach(({p,cells,jisseki})=>{ lines.push([p.name, p.insuranceNo||'', p.serviceCode||'', ...cells.map(c=>c?c.t:''), jisseki].map(esc).join(',')); });
+    rows.forEach(({p,cells,jisseki})=>{ lines.push([p.name, p.insuranceNo||'', patCodes(p).join(';'), ...cells.map(c=>c?c.t:''), jisseki].map(esc).join(',')); });
     const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`実績表_${jy}${String(jm).padStart(2,'0')}.csv`; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),1000);
   };
   const markStyle=(c)=>({ 出席:{color:'#1d4ed8',fontWeight:'bold'}, 振替:{color:'#059669',fontWeight:'bold'}, 臨時:{color:'#0e7490',fontWeight:'bold'}, 欠席:{color:'#dc2626',fontWeight:'bold'}, 休業:{color:'#64748b'}, 休止:{color:'#b45309'} })[c.s]||{};
+  const selRow = selPid != null ? rows.find(r=>r.p.id===selPid) : null;
+  const monthNav = (
+    <div style={{display:'flex',alignItems:'center',gap:6}}>
+      <button onClick={()=>shiftJM(-1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>← 前月</button>
+      <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:96,textAlign:'center'}}>{jy}年{jm}月</span>
+      <button onClick={()=>shiftJM(1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>翌月 →</button>
+    </div>
+  );
   return (
     <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
       <div style={{maxWidth:1500,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:12}}>
+        {/* タブ */}
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          {[['month','月間一覧'],['patient','利用者ごと']].map(([k,lb])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{padding:'8px 18px',borderRadius:10,fontWeight:'bold',fontSize:13,cursor:'pointer',border:'1px solid',...(tab===k?{background:'#0f766e',color:'white',borderColor:'#0f766e'}:{background:'white',color:'#475569',borderColor:'#cbd5e1'})}}>{lb}</button>
+          ))}
+          <div style={{marginLeft:'auto'}}>{monthNav}</div>
+        </div>
         {/* サービスコードの登録 */}
         <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)'}}>
           <button onClick={()=>setCodeOpen(o=>!o)} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'12px 16px',background:'transparent',border:'none',cursor:'pointer',textAlign:'left'}}>
@@ -24951,37 +25032,37 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
           {codeOpen && (
             <div style={{padding:'0 16px 14px',display:'flex',flexDirection:'column',gap:8}}>
               <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
-                <input value={newCode.code} onChange={e=>setNewCode(c=>({...c,code:e.target.value}))} placeholder="コード（例: 782341）" style={{padding:'6px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',width:170}}/>
-                <input value={newCode.name} onChange={e=>setNewCode(c=>({...c,name:e.target.value}))} placeholder="名称（例: 通所型サービスⅡ）" style={{padding:'6px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',flex:1,minWidth:180}}/>
+                <input value={newCode.code} onChange={e=>setNewCode(c=>({...c,code:e.target.value}))} placeholder="コード（例: 782341 / A61234）" style={{padding:'6px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',width:190}}/>
+                <input value={newCode.name} onChange={e=>setNewCode(c=>({...c,name:e.target.value}))} placeholder="名称（例: 通所型サービス21）" style={{padding:'6px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',flex:1,minWidth:180}}/>
                 <button onClick={addCode} disabled={!newCode.code.trim()} style={{padding:'6px 14px',background:'#2563eb',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13,opacity:newCode.code.trim()?1:0.4}}>追加</button>
+                <button onClick={()=>fileRef.current && fileRef.current.click()} style={{padding:'6px 14px',background:'#7c3aed',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>CSVから取込</button>
+                <input ref={fileRef} type="file" accept=".csv,text/csv" style={{display:'none'}} onChange={e=>{ const f=e.target.files&&e.target.files[0]; if(f) handleCsvFile(f); e.target.value=''; }}/>
               </div>
               {serviceCodes.length>0 && (
-                <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                <div style={{display:'flex',flexWrap:'wrap',gap:6,maxHeight:180,overflowY:'auto'}}>
                   {serviceCodes.map(sc=>(
                     <span key={sc.code} style={{display:'inline-flex',alignItems:'center',gap:6,background:'#f1f5f9',border:'1px solid #e2e8f0',borderRadius:8,padding:'4px 10px',fontSize:12}}>
-                      <b style={{color:'#1e293b'}}>{sc.code}</b><span style={{color:'#64748b'}}>{sc.name}</span>
+                      <b style={{color:'#1e293b'}}>{sc.code}</b><span style={{color:'#64748b'}}>{sc.name}</span>{sc.units && <span style={{color:'#94a3b8',fontSize:10}}>{sc.units}単位</span>}
                       <button onClick={()=>delCode(sc.code)} style={{border:'none',background:'transparent',color:'#dc2626',cursor:'pointer',fontWeight:'bold'}}>✕</button>
                     </span>
                   ))}
                 </div>
               )}
-              <div style={{fontSize:10,color:'#94a3b8'}}>登録したコードは下の表で利用者ごとに割り当てられます（割当はCSVにも出力されます）。</div>
+              <div style={{fontSize:10,color:'#94a3b8'}}>国・自治体のサービスコード表CSV(UTF-8/Shift_JIS)を取り込めます。登録したコードは利用者ごとに複数割り当てられ、CSVにも出力されます。</div>
             </div>
           )}
         </div>
-        {/* 実績表 */}
+        {/* ===== 月間一覧 ===== */}
+        {tab==='month' && (
         <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
           <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>月次実績表<span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8',marginLeft:6}}>（カイポケ等への実績転記用）</span></div>
             <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:'auto'}}>
-              <button onClick={()=>shiftJM(-1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>← 前月</button>
-              <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:96,textAlign:'center'}}>{jy}年{jm}月</span>
-              <button onClick={()=>shiftJM(1)} style={{padding:'4px 10px',background:'white',border:'1px solid #cbd5e1',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:13}}>翌月 →</button>
               <button onClick={dlCsv} style={{padding:'4px 12px',background:'#0f766e',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>CSV出力</button>
               {onShowPrintPreview && <button onClick={()=>onShowPrintPreview(`実績表_${jy}年${jm}月`,'A4 landscape','jisseki-print-area')} style={{padding:'4px 12px',background:'#334155',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>印刷/PDF</button>}
             </div>
           </div>
-          <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>○=出席　<span style={{color:'#059669',fontWeight:'bold'}}>振</span>=振替　<span style={{color:'#0e7490',fontWeight:'bold'}}>臨</span>=臨時　<span style={{color:'#dc2626',fontWeight:'bold'}}>欠</span>=欠席　休=休業　止=休止　※実績回数は 出席+振替+臨時 の日数。表は提供記録から自動集計（この画面から記録は変わりません）</div>
+          <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>○=出席　<span style={{color:'#059669',fontWeight:'bold'}}>振</span>=振替　<span style={{color:'#0e7490',fontWeight:'bold'}}>臨</span>=臨時　<span style={{color:'#dc2626',fontWeight:'bold'}}>欠</span>=欠席　休=休業　止=休止　※氏名クリックで利用者ごとの詳細へ。実績回数は 出席+振替+臨時 の日数</div>
           <div id="jisseki-print-area" style={{overflowX:'auto'}}>
             <table style={{borderCollapse:'collapse',fontSize:11,whiteSpace:'nowrap',minWidth:'100%'}}>
               <thead>
@@ -24995,22 +25076,20 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({p,cells,jisseki})=>(
+                {rows.map(({p,cells,jisseki})=>{ const _codes=patCodes(p); return (
                   <tr key={p.id}>
-                    <td style={{position:'sticky',left:0,background:'white',border:'1px solid #e2e8f0',padding:'3px 8px',fontWeight:'bold',color:'#1e293b',zIndex:1}}>{p.name}</td>
-                    <td style={{border:'1px solid #e2e8f0',padding:'1px 3px',textAlign:'center'}}>
-                      <select value={p.serviceCode||''} onChange={e=>setPatientCode(p.id, e.target.value)} style={{border:'none',background:'transparent',fontSize:11,fontWeight:'bold',color:p.serviceCode?'#0f766e':'#cbd5e1',outline:'none',cursor:'pointer',maxWidth:120}}>
-                        <option value="">未設定</option>
-                        {serviceCodes.map(sc=>(<option key={sc.code} value={sc.code}>{sc.code}{sc.name?`（${sc.name}）`:''}</option>))}
-                        {p.serviceCode && !serviceCodes.some(sc=>sc.code===p.serviceCode) && <option value={p.serviceCode}>{p.serviceCode}</option>}
-                      </select>
+                    <td style={{position:'sticky',left:0,background:'white',border:'1px solid #e2e8f0',padding:'3px 8px',zIndex:1}}>
+                      <button onClick={()=>{ setSelPid(p.id); setTab('patient'); }} style={{border:'none',background:'transparent',padding:0,fontWeight:'bold',color:'#1d4ed8',cursor:'pointer',fontSize:11,textDecoration:'underline'}}>{p.name}</button>
+                    </td>
+                    <td title={_codes.map(c=>`${c} ${codeName(c)}`).join('\n')} style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',fontSize:10,color:_codes.length?'#0f766e':'#cbd5e1',fontWeight:'bold',maxWidth:110,overflow:'hidden',textOverflow:'ellipsis'}}>
+                      {_codes.length ? _codes.join(' / ') : '未設定'}
                     </td>
                     {cells.map((c,i)=>(
                       <td key={i} title={c?`${c.s}${c.sub?`（${c.sub}）`:''}`:''} style={{border:'1px solid #eef2f6',padding:'2px 3px',textAlign:'center',...(c?markStyle(c):{})}}>{c?c.t:''}</td>
                     ))}
                     <td style={{border:'1px solid #e2e8f0',padding:'2px 6px',textAlign:'center',fontWeight:'bold',color:'#4338ca',background:'#f8faff'}}>{jisseki}</td>
                   </tr>
-                ))}
+                ); })}
                 <tr>
                   <td style={{position:'sticky',left:0,background:'#f8fafc',border:'1px solid #e2e8f0',padding:'3px 8px',fontWeight:'bold',color:'#475569',zIndex:1}}>日別合計</td>
                   <td style={{border:'1px solid #e2e8f0',background:'#f8fafc'}}></td>
@@ -25021,6 +25100,95 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
             </table>
           </div>
         </div>
+        )}
+        {/* ===== 利用者ごと ===== */}
+        {tab==='patient' && (
+        <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:12}}>
+            <select value={selPid ?? ''} onChange={e=>setSelPid(e.target.value?Number(e.target.value)||e.target.value:null)} style={{padding:'8px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,fontWeight:'bold',outline:'none',background:'white',minWidth:200}}>
+              <option value="">利用者を選択…</option>
+              {rows.map(({p})=>(<option key={p.id} value={p.id}>{p.name}</option>))}
+            </select>
+            {selRow && <span style={{fontSize:12,color:'#64748b'}}>実績 <b style={{color:'#4338ca',fontSize:15}}>{selRow.jisseki}</b> 回（{jy}年{jm}月）</span>}
+          </div>
+          {!selRow ? (
+            <div style={{fontSize:13,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'20px',textAlign:'center'}}>利用者を選択すると、その方の当月実績とサービスコード割当を表示します。</div>
+          ) : (()=>{ const p=selRow.p; const _codes=patCodes(p); return (
+            <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              {/* サービスコード割当(複数) */}
+              <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:12,padding:'12px 14px'}}>
+                <div style={{fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:8}}>サービスコード割当<span style={{fontWeight:'normal',color:'#94a3b8',marginLeft:6}}>（複数可・請求時に使用するコード）</span></div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
+                  {_codes.map(c=>(
+                    <span key={c} style={{display:'inline-flex',alignItems:'center',gap:6,background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:8,padding:'5px 10px',fontSize:12}}>
+                      <b style={{color:'#065f46'}}>{c}</b><span style={{color:'#047857'}}>{codeName(c)}</span>
+                      <button onClick={()=>setPatCodes(p.id, _codes.filter(x=>x!==c))} style={{border:'none',background:'transparent',color:'#dc2626',cursor:'pointer',fontWeight:'bold'}}>✕</button>
+                    </span>
+                  ))}
+                  <select value="" onChange={e=>{ const v=e.target.value; if(v && !_codes.includes(v)) setPatCodes(p.id, [..._codes, v]); }} style={{padding:'5px 10px',border:'1px dashed #94a3b8',borderRadius:8,fontSize:12,fontWeight:'bold',color:'#475569',background:'white',outline:'none',cursor:'pointer'}}>
+                    <option value="">＋ コードを追加…</option>
+                    {serviceCodes.filter(sc=>!_codes.includes(sc.code)).map(sc=>(<option key={sc.code} value={sc.code}>{sc.code}{sc.name?`（${sc.name}）`:''}</option>))}
+                  </select>
+                  {serviceCodes.length===0 && <span style={{fontSize:11,color:'#94a3b8'}}>※先に上の「サービスコードの登録」でコードを登録してください</span>}
+                </div>
+              </div>
+              {/* 日別実績(実績のある日+欠席等) */}
+              <div style={{overflowX:'auto'}}>
+                <table style={{borderCollapse:'collapse',fontSize:12,minWidth:520}}>
+                  <thead>
+                    <tr>
+                      {['日付','曜日','状態','時間帯','サービス内容(割当コード)','備考'].map(h=>(<th key={h} style={{border:'1px solid #e2e8f0',padding:'5px 10px',background:'#f8fafc',color:'#475569',fontSize:11,whiteSpace:'nowrap'}}>{h}</th>))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {days.map((d,di)=>{ const c=selRow.cells[di]; if(!c) return null; const dow=new Date(jy,jm-1,d).getDay(); const isJ=(c.s==='出席'||c.s==='振替'||c.s==='臨時'); return (
+                      <tr key={d} style={{background:isJ?'white':'#fafafa'}}>
+                        <td style={{border:'1px solid #eef2f6',padding:'4px 10px',fontWeight:'bold',whiteSpace:'nowrap'}}>{jm}/{d}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'4px 10px',textAlign:'center',color:dow===0?'#dc2626':dow===6?'#2563eb':'#475569'}}>{dowJp[dow]}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'4px 10px',textAlign:'center',...markStyle(c)}}>{c.s}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'4px 10px',textAlign:'center',color:'#475569'}}>{isJ ? (c.sub||'—') : ''}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'4px 10px',fontSize:11,color:isJ?'#0f766e':'#cbd5e1'}}>{isJ ? (_codes.length ? _codes.map(cc=>`${cc} ${codeName(cc)}`).join(' ／ ') : '未設定') : ''}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'4px 10px',fontSize:11,color:'#64748b',maxWidth:220,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} title={c.tokki||''}>{c.s==='欠席' ? (c.tokki||'') : ''}</td>
+                      </tr>
+                    ); })}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{fontSize:10,color:'#94a3b8'}}>※実績（状態・時間帯）は提供記録から自動集計です。修正は提供記録入力から行ってください。</div>
+            </div>
+          ); })()}
+        </div>
+        )}
+        {/* CSV取込プレビュー */}
+        {csvPreview && (
+          <div onClick={()=>setCsvPreview(null)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:640,maxWidth:'96vw',maxHeight:'86vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+              <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <div><div style={{fontSize:15,fontWeight:'bold',color:'#1e293b'}}>サービスコードCSV取込</div><div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{csvPreview.fileName}／{csvPreview.rows.length}件を検出（チェックした行を取り込みます）</div></div>
+                <button onClick={()=>setCsvPreview(null)} style={{background:'#f1f5f9',border:'none',borderRadius:16,width:32,height:32,fontSize:15,fontWeight:'bold',color:'#475569',cursor:'pointer'}}>✕</button>
+              </div>
+              <div style={{flex:1,overflow:'auto',padding:'10px 18px'}}>
+                <table style={{borderCollapse:'collapse',fontSize:12,width:'100%'}}>
+                  <thead><tr>{['','コード','名称','単位数'].map(h=>(<th key={h} style={{border:'1px solid #e2e8f0',padding:'4px 8px',background:'#f8fafc',color:'#475569',fontSize:11}}>{h}</th>))}</tr></thead>
+                  <tbody>
+                    {csvPreview.rows.map((r,i)=>(
+                      <tr key={r.code}>
+                        <td style={{border:'1px solid #eef2f6',padding:'2px 8px',textAlign:'center'}}><input type="checkbox" checked={r.sel} onChange={e=>setCsvPreview(cp=>({...cp, rows: cp.rows.map((x,xi)=>xi===i?{...x,sel:e.target.checked}:x)}))}/></td>
+                        <td style={{border:'1px solid #eef2f6',padding:'2px 8px',fontWeight:'bold'}}>{r.code}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'2px 8px'}}>{r.name||<span style={{color:'#cbd5e1'}}>（名称なし）</span>}</td>
+                        <td style={{border:'1px solid #eef2f6',padding:'2px 8px',textAlign:'right'}}>{r.units||''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{padding:'12px 18px',borderTop:'1px solid #e2e8f0',display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <button onClick={()=>setCsvPreview(null)} style={{padding:'9px 18px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontWeight:'bold',cursor:'pointer',fontSize:13}}>キャンセル</button>
+                <button onClick={importCsv} disabled={!csvPreview.rows.some(r=>r.sel)} style={{padding:'9px 18px',background:'#7c3aed',color:'white',border:'none',borderRadius:10,fontWeight:'bold',cursor:'pointer',fontSize:13,opacity:csvPreview.rows.some(r=>r.sel)?1:0.4}}>取り込む（{csvPreview.rows.filter(r=>r.sel).length}件）</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -26530,7 +26698,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
   const getSchedText = (p) => { if(!p?.scheduleAmPm) return ''; const dn=['日','月','火','水','木','金','土']; return p.scheduleAmPm.map((v,i)=>v?`${dn[i]}(${v})`:'').filter(Boolean).join('　'); };
   if (!sp) return <div className="p-8 text-center text-slate-500 font-bold">利用者データなし</div>;
   // ★ その月(tY/tM)に有効だった運動項目で描画 (項目を変えても過去月は当時の項目構成のまま=列ズレ/エラー防止)
-  const ex = getExerciseItemsForDate(appData.systemSettings, `${tY}-${String(tM).padStart(2,'0')}-01`, tY) || appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+  const ex = getExerciseItemsForDate(appData.systemSettings, `${tY}-${String(tM).padStart(2,'0')}-01`, tY) || effExerciseItems(appData.systemSettings);
   // ★ 設定数値(運動メニューの予定値・その月の値)。 数値だけなら単位を自動付与。
   const plannedM = getPlannedExercisesForMonth(sp, tY, tM);
   const _planUnit = (v, unit) => { const s = String(v ?? '').trim(); if (!s) return ''; return (/^[0-9０-９.]+$/.test(s) && unit) ? s + unit : s; };
@@ -26548,7 +26716,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
     if (months.length === 0) months.push({ y: tY, m: tM });
     return months.map(({y,m}) => {
       const mRecords = generateMonthlySchedule([sp], y, m, appData.monthlyShifts, appData.ticketRecords || [], appData.holidays, closedDaysTV).sort((a,b)=>a.dayNum-b.dayNum);
-      const mEx = getExerciseItemsForDate(appData.systemSettings, `${y}-${String(m).padStart(2,'0')}-01`, y) || appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+      const mEx = getExerciseItemsForDate(appData.systemSettings, `${y}-${String(m).padStart(2,'0')}-01`, y) || effExerciseItems(appData.systemSettings);
       const mPlanned = getPlannedExercisesForMonth(sp, y, m);
       const mPages = []; for (let i=0;i<mRecords.length;i+=PER_PAGE) mPages.push(mRecords.slice(i, i+PER_PAGE));
       if (mPages.length===0) mPages.push([]);
@@ -27990,7 +28158,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       </div>
       
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { handleOverrideBlur(keypad.recordId, keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleKeypadTab} />
-      {isConfigOpen && <ContactBookConfigModal config={appData.contactBookConfig} exerciseItems={appData.systemSettings?.exerciseItems || appSettings.exerciseItems} onClose={() => setIsConfigOpen(false)} onSave={handleSaveConfig} />}
+      {isConfigOpen && <ContactBookConfigModal config={appData.contactBookConfig} exerciseItems={effExerciseItems(appData.systemSettings)} onClose={() => setIsConfigOpen(false)} onSave={handleSaveConfig} />}
       {renrakuModal && <RenrakuModal appData={appData} patientId={renrakuModal.patientId} dayPatientIds={displayRecords.map(r=>r.patientId)} onClose={()=>setRenrakuModal(null)} onSave={(d)=>{ markClean(); onSave(d, { manual: true, message: '✓ 連絡事項を保存しました' }); }} />}
     </div>
   );
@@ -28052,7 +28220,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   // ★ 提供記録連動 + 単位表示の準備
   //    exerciseItemMap: id → item を引ける map (appData) と name fallback 用 index
   //    ★ name は normalize('NFKC') で半角/全角カナを統一して比較 (「①ﾊﾞｲｸ」=「①バイク」)
-  const _exItems = appData?.systemSettings?.exerciseItems || appSettings.exerciseItems;
+  const _exItems = effExerciseItems(appData?.systemSettings);
   const _normalizeName = (s) => (s || '').normalize('NFKC');
   const exerciseItemMap = React.useMemo(() => {
     const m = {};
@@ -29751,7 +29919,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const dd = new Date(fd);
     // ★ 履歴の from は「選んだ日付」。 提供記録入力のグレー数値は当日から反映、月別提供記録の設定数値は月初判定なので翌月から反映される。
     const effFrom = fd;
-    const exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems || [];
+    const exItems = effExerciseItems(appData.systemSettings);
     const indItems = appData.systemSettings?.individualExerciseItems || [];
     const nameOf = (k) => (exItems.find(i=>i.id===k)?.name) || k;
     const indNameOf = (k) => (indItems.find(i=>i.id===k)?.name) || k;
@@ -30875,7 +31043,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 return(<div key={si.id} className="flex-1 min-w-[120px]"><label className="block text-sm font-bold text-slate-600 mb-1">{si.label}</label><select disabled={isOff} value={localPatient[fkey]||''} onChange={e=>updateLP(fkey,e.target.value)} className="w-full px-3 py-3 bg-slate-50 border border-slate-300 rounded-xl font-bold text-base outline-none cursor-pointer disabled:opacity-60">{opts.map(o=><option key={o} value={o}>{o}</option>)}</select></div>);
               })}</div>
               {/* ★ 個別運動(type:'individual')のスロットはここに基準値を持たせない。 基準値は下の「個別運動メニュー」で管理(重複解消)。 */}
-              <div><h3 className="text-sm font-bold text-slate-600 mb-3">運動メニュー</h3><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">{(appData.systemSettings?.exerciseItems || appSettings.exerciseItems).filter(item => item.type !== 'individual').map(item => { const isActive = keypad.isOpen && keypad.exerciseId === item.id; return (<div key={item.id} className={`p-2.5 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' : 'bg-slate-50 border-slate-200'}`}><label className="block text-[12px] font-bold text-slate-500 mb-1 text-center truncate">{item.name}{(item.defaultUnit || item.defaultUnit2) && item.type !== 'individual' && <span className="text-[9px] text-slate-400 font-normal ml-1">({[item.defaultUnit, item.defaultUnit2].filter(Boolean).join('/')})</span>}</label><input type="text" inputMode="text" readOnly={_mKeypadOn} disabled={isOff} value={(localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || ""}
+              <div><h3 className="text-sm font-bold text-slate-600 mb-3">運動メニュー</h3><div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">{(effExerciseItems(appData.systemSettings)).filter(item => item.type !== 'individual').map(item => { const isActive = keypad.isOpen && keypad.exerciseId === item.id; return (<div key={item.id} className={`p-2.5 rounded-xl border ${isActive ? 'bg-blue-50 border-blue-500 ring-2 ring-blue-300' : 'bg-slate-50 border-slate-200'}`}><label className="block text-[12px] font-bold text-slate-500 mb-1 text-center truncate">{item.name}{(item.defaultUnit || item.defaultUnit2) && item.type !== 'individual' && <span className="text-[9px] text-slate-400 font-normal ml-1">({[item.defaultUnit, item.defaultUnit2].filter(Boolean).join('/')})</span>}</label><input type="text" inputMode="text" readOnly={_mKeypadOn} disabled={isOff} value={(localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || ""}
                 onClick={() => { if (!isOff && _mKeypadOn) setKeypad({ isOpen: true, field: 'plannedExercise', exerciseId: item.id, value: (localPatient.plannedExercises && localPatient.plannedExercises[item.id]) || "", isFirstInput: true, mode: 'exercise' }); }}
                 onChange={_mKeypadOn ? undefined : (e)=>updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [item.id]: e.target.value })}
                 onBlur={_mKeypadOn ? undefined : (e)=>{ let v=(e.target.value||'').trim(); if(v && item.defaultUnit && /[0-9０-９]/.test(v) && !v.endsWith(item.defaultUnit)) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [item.id]: `${v}${item.defaultUnit}` }); }}
@@ -30927,7 +31095,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     </div>
                     {/* ★ 個別運動スロットの既定: 提供記録の「個別運動①②③」で、最初からこの運動が選ばれた状態にする */}
                     {(() => {
-                      const slots = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems).filter(it => it.type === 'individual');
+                      const slots = (effExerciseItems(appData.systemSettings)).filter(it => it.type === 'individual');
                       if (slots.length === 0) return null;
                       const enabledMenu = indItems.filter(it => patIndEx.some(x => x.itemId === it.id));
                       const slotDefaults = localPatient.individualExerciseSlotDefaults || {};
@@ -31043,11 +31211,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         </>) : (<div className="flex h-full items-center justify-center text-slate-400 font-bold">左から利用者を選択してください</div>)}
       </div>
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode}
-        unitSep={(()=>{ const _src = keypad.field==='individualDefault' ? (appData.systemSettings?.individualExerciseItems||[]) : (appData.systemSettings?.exerciseItems || appSettings.exerciseItems); const _it=_src.find(e => e.id === keypad.exerciseId); return (_it&&_it.unitSep)||''; })()}
+        unitSep={(()=>{ const _src = keypad.field==='individualDefault' ? (appData.systemSettings?.individualExerciseItems||[]) : (effExerciseItems(appData.systemSettings)); const _it=_src.find(e => e.id === keypad.exerciseId); return (_it&&_it.unitSep)||''; })()}
         onClose={() => {
         // ★ 運動メニューの入力を閉じる時、単位(1〜2単位)を自動付与 (例: 10 → 10分 / 5×10 → 5kg×10回)
         if (keypad.field === 'plannedExercise' && localPatient) {
-          const _it = (appData.systemSettings?.exerciseItems || appSettings.exerciseItems).find(e => e.id === keypad.exerciseId);
+          const _it = (effExerciseItems(appData.systemSettings)).find(e => e.id === keypad.exerciseId);
           const _raw = String(keypad.value ?? '').trim();
           const _fin = applyExUnits(_raw, _it);
           if (_fin !== _raw) updateLP('plannedExercises', { ...(localPatient.plannedExercises || {}), [keypad.exerciseId]: _fin });
@@ -32925,7 +33093,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const canAdmin = adminUnlocked || !_hasAnyAdmin || !!isSuperAdmin;
   const [showSettingsAdminGate, setShowSettingsAdminGate] = useState(false);
   const settingsSaveAdminAuth = (auth) => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth:{ ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }); };
-  const [exerciseItems, setExerciseItems] = useState(appData.systemSettings?.exerciseItems || appSettings.exerciseItems);
+  const [exerciseItems, setExerciseItems] = useState(effExerciseItems(appData.systemSettings));
   const [newExItem, setNewExItem] = useState({ name: '', defaultUnit: '', defaultUnit2: '' });
   // 個別運動メニュー (利用者ごとに自由に組み合わせる項目: 平行棒・屋外歩行・体操 等)
   const [individualExerciseItems, setIndividualExerciseItems] = useState(appData.systemSettings?.individualExerciseItems || [
@@ -33066,7 +33234,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     setCmOffices(s.cmOffices || []);
     setCmPersons(s.careManagers || []);
     setAnthropicApiKey(s.anthropicApiKey || '');
-    setExerciseItems(s.exerciseItems || appSettings.exerciseItems);
+    setExerciseItems(effExerciseItems(s));
     setExerciseItemsHistory(s.exerciseItemsHistory || []);
     setExerciseQuickButtons(s.exerciseQuickButtons || ['分','回','kg']);
     if (Array.isArray(s.individualExerciseItems)) setIndividualExerciseItems(s.individualExerciseItems);
@@ -33161,9 +33329,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     let _staff = [...(diarySettings.staff||[])];
     const _fiMgr = (_facilityInfo.manager||'').trim();
     const _diaryAdmin = _staff.find(s=>s.role==='管理者' && s.name && s.name.trim());
-    const _adminName = _fiMgr || (_diaryAdmin?.name || '');
+    // ★ 管理者名の真実はスタッフ切替/日誌の「管理者」。 事業所情報の管理者名は表示専用(自動連動)。
+    const _smAdmin = (appData.storeMembers||[]).find(m => m && m.isAdmin && m.name && m.name.trim());
+    const _adminName = ((_smAdmin?.name) || (_diaryAdmin?.name) || _fiMgr || '').trim();
     if (_adminName) {
-      if (_fiMgr !== _adminName) _facilityInfo = { ..._facilityInfo, manager: _adminName };
+      if (_fiMgr !== _adminName) { const _pp=_adminName.split(/[\s\u3000]+/); _facilityInfo = { ..._facilityInfo, manager: _adminName, managerLast: _pp[0]||_adminName, managerFirst: _pp.slice(1).join(' ') }; }
+      // ★ サービス提供責任者: 未設定なら管理者を既定にする(後から自由に変更可)
+      if (!String(_facilityInfo.serviceResponsible||'').trim()) { const _pp2=_adminName.split(/[\s\u3000]+/); _facilityInfo = { ..._facilityInfo, serviceResponsible: _adminName, serviceResponsibleLast: _pp2[0]||_adminName, serviceResponsibleFirst: _pp2.slice(1).join(' ') }; }
       // 日誌: 管理者名の在籍者を「管理者」に(他は変更しない)
       if (!_staff.some(s=>_nm(s.name)===_nm(_adminName) && s.role==='管理者')) {
         _staff = _staff.map(s => _nm(s.name)===_nm(_adminName) ? { ...s, role:'管理者' } : s);
@@ -33449,19 +33621,20 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   </div>
                   <div className="text-[11px] text-slate-500 mt-2">※ 「LIFE・加算」画面のCSV出力はここの値を使います。保険者番号は利用者ごとに異なる場合、各利用者の画面で個別に上書きできます。参考元では事業所番号等を空欄で運用した実績もありますが、可能なら登録してください。</div>
                 </div>
-                {/* ★ 管理者名: 姓・名 を分割入力 (内部の manager フィールドにも結合形式で保存して既存表示と互換) */}
+                {/* ★ 管理者名: スタッフ切替/日誌の「管理者」と自動連動(表示のみ・ここでは編集不可)。
+                    初回に管理者を登録すると自動で反映される。 変更はスタッフ切替/日誌の管理者を変更する。 */}
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input type="text" value={facilityInfo.managerLast || ""}
-                      onChange={e => { const last = e.target.value; const first = facilityInfo.managerFirst || ""; setFacilityInfo({...facilityInfo, managerLast: last, manager: `${last} ${first}`.trim()}); }}
-                      placeholder="姓 (例: 佐藤)"
-                      className="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
-                    <input type="text" value={facilityInfo.managerFirst || ""}
-                      onChange={e => { const first = e.target.value; const last = facilityInfo.managerLast || ""; setFacilityInfo({...facilityInfo, managerFirst: first, manager: `${last} ${first}`.trim()}); }}
-                      placeholder="名 (例: 健一)"
-                      className="px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
-                  </div>
+                  <label className="block text-sm font-bold text-slate-600 mb-1.5">管理者名 <span className="text-[10px] font-normal text-slate-400">（スタッフ切替・日誌の管理者と自動連動）</span></label>
+                  {(() => {
+                    const _sm = (appData.storeMembers||[]).find(m => m && m.isAdmin && m.name && m.name.trim());
+                    const _dsA = (appData.diarySettings?.staff||[]).find(x => x && x.role==='管理者' && x.name && x.name.trim());
+                    const _mgr = ((_sm?.name) || (_dsA?.name) || facilityInfo.manager || '').trim();
+                    return (
+                      <div className="px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-sm text-slate-700">
+                        {_mgr || <span className="text-slate-400 font-normal">未設定（スタッフ切替で管理者を登録すると表示されます）</span>}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">郵便番号</label>
@@ -39682,7 +39855,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       ? d.fitnessRecs.map(r => { const vals=(d.fitnessItems||[]).map(it=> r.values?.[it.id]?`${it.name}:${r.values[it.id]}${it.unit||''}`:null).filter(Boolean).join('、'); return `${r.date}（${vals||'データあり'}）`; }).join(' / ')
       : '記録なし（体力測定を行わない事業所もあるため、運動の記録から評価してください）';
     // ★ 運動の記録(運動メニュー)と前月からの変化を集計 (体力測定に依存せず評価できるように)
-    const _exItems = appData.systemSettings?.exerciseItems || appSettings.exerciseItems;
+    const _exItems = effExerciseItems(appData.systemSettings);
     const _allInd = appData.systemSettings?.individualExerciseItems || [];
     const _monthAttended = (mm) => (appData.ticketRecords||[]).filter(r => { const _m=r.date?.match(/(\d+)月/); return r.patientId===patient.id && _m && parseInt(_m[1])===mm && (r.status==='出席'||(r.status&&r.status.startsWith('振'))); });
     const _exDoneNames = (recs) => { const s=new Set(); recs.forEach(r=>_exItems.forEach(it=>{ const v=r.exercises?.[it.id]; let nm=it.name, has=false; if(v&&typeof v==='object'){ const _v=String(v.value??'').trim(); has=(_v&&!['×','✕','x','ー','-'].includes(_v))||!!v.itemId; const sel=_allInd.find(x=>x.id===v.itemId); if(sel)nm=`${it.name}(${sel.name})`; } else { const _v=String(v??'').trim(); has=!!_v&&!['×','✕','x','ー','-'].includes(_v); } if(has)s.add(nm); })); return s; };
