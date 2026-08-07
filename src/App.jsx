@@ -29839,10 +29839,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ この利用者IDに紐づく全データ (提供記録・気分・体力測定・お知らせ・写真等) を除去 + 墓石付与。
     //   → 削除後にCSV等で同じIDが再利用されても、前の利用者のデータが誤って紐づかない。
     const _cleaned = stripPatientData(appData, new Set([pid]));
+    // ★ 削除操作は必ず変更ログに明示的に残す(誰が消したか後から追跡できるように)
+    const _delName = (appData.patients||[]).find(p=>p.id===pid)?.name || String(pid);
+    const _delEntry = { id:`al_${Date.now()}_del`, at: Date.now(), device: (localStorage.getItem('tsumugiDeviceName')||'名称未設定の端末'), cat:'利用者マスタ', detail:`【削除】${_delName}（関連記録含む）` };
     onSave({
       ...appData,
       patients: (appData.patients||[]).filter(p => p.id !== pid),
       ..._cleaned,
+      auditLog: [_delEntry, ...(Array.isArray(appData.auditLog)?appData.auditLog:[])].slice(0,300),
     });
     setEditingPatientId(null);
     setLocalPatient(null);
@@ -34987,7 +34991,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 const idSet = new Set(ids);
                 const remain = (appData.patients||[]).filter(p=>!ids.includes(p.id));
                 const cleaned = stripPatientData(appData, idSet);
-                onSave({ ...appData, patients: remain, ...cleaned }, { manual:true, message:`✓ ${ids.length}名の利用者と関連データを削除しました`, allowEmpty:true });
+                // ★ 一括削除は必ず変更ログに明示的に残す(件数と氏名先頭。誰が消したか追跡できるように)
+                const _bdEntry = { id:`al_${Date.now()}_bulkdel`, at: Date.now(), device: (localStorage.getItem('tsumugiDeviceName')||'名称未設定の端末'), cat:'利用者マスタ', detail:`【一括削除】${ids.length}名（${names.slice(0,3).join('、')}${names.length>3?' 他':''}）` };
+                onSave({ ...appData, patients: remain, ...cleaned, auditLog: [_bdEntry, ...(Array.isArray(appData.auditLog)?appData.auditLog:[])].slice(0,300) }, { manual:true, message:`✓ ${ids.length}名の利用者と関連データを削除しました`, allowEmpty:true });
                 setBulkDelPatients(new Set());
               };
               const doDeleteOffices = () => {
