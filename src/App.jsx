@@ -1955,7 +1955,20 @@ const getExerciseItemsForDate = (systemSettings, dateStr, currentYear) => {
 //   設定の不具合で exerciseItems が空([])で上書きされると、|| では []がtruthyのため既定に落ちず、
 //   利用者マスタの基準値・提供記録の運動列が全員分「消えた」ように見えていた。
 //   利用者側のデータ(plannedExercises等)は残っているため、既定項目の表示で基準値も復活する。
-const effExerciseItems = (systemSettings) => { const v = systemSettings && systemSettings.exerciseItems; return (Array.isArray(v) && v.length) ? v : appSettings.exerciseItems; };
+const effExerciseItems = (systemSettings) => {
+  const v = systemSettings && systemSettings.exerciseItems;
+  if (Array.isArray(v) && v.length) return v;
+  // ★ 全項目を意図的に削除した店舗(exerciseItemsCleared)は空のまま尊重(勝手に復活させない)
+  if (systemSettings && systemSettings.exerciseItemsCleared) return [];
+  // ★ 空/未設定は、まず「変更履歴(exerciseItemsHistory)」に残る直近の項目リストから復元する。
+  //   店舗独自の項目名とid(基準値 plannedExercises のキー)が戻るため、利用者の基準値も正しく復活する。
+  const hist = systemSettings && systemSettings.exerciseItemsHistory;
+  if (Array.isArray(hist) && hist.length) {
+    const sorted = [...hist].sort((a,b)=>String(a && a.effectiveTo || '').localeCompare(String(b && b.effectiveTo || '')));
+    for (let i = sorted.length - 1; i >= 0; i--) { const it = sorted[i] && sorted[i].items; if (Array.isArray(it) && it.length) return it; }
+  }
+  return appSettings.exerciseItems;
+};
 
 const appSettings = {
   statusOptions: [
@@ -17215,26 +17228,25 @@ export default function App() {
     const pats = appData.patients || [];
     const now = new Date();
     const expired = pats.filter(p => {
-      const ay = p.autoDeleteYears != null ? p.autoDeleteYears : (p.autoDeleteAfter5Years ? 5 : 0);
-      if (!ay || !p.endDate) return false;
+      const ay = Number(p.autoDeleteYears != null ? p.autoDeleteYears : (p.autoDeleteAfter5Years ? 5 : 0));
+      // ★ 防護: 年数は 2 or 5 のみ有効(想定外の値では絶対に削除しない)
+      if (ay !== 2 && ay !== 5) return false;
+      if (!p.endDate) return false;
       const d = new Date(p.endDate); if (isNaN(d.getTime())) return false;
+      // ★ 防護: 桁違い等の不正な終了日(2020年より前/未来の年)では削除しない(日付入力の不具合残骸で誤削除しないため)
+      const _ey = d.getFullYear();
+      if (_ey < 2020 || _ey > now.getFullYear()) { console.warn('[自動削除] 保護: 終了日が不正なため削除をスキップ', p.id, p.endDate); return false; }
       d.setFullYear(d.getFullYear() + ay);
       return d <= now;
     });
     if (!expired.length) return;
     const ids = new Set(expired.map(p => p.id));
     console.log(`[自動削除] 退所後の保存期間を過ぎた利用者 ${expired.length} 名を削除しました`);
-    setAppData(prev => ({
-      ...prev,
-      patients: (prev.patients||[]).filter(p => !ids.has(p.id)),
-      ticketRecords: (prev.ticketRecords||[]).filter(r => !ids.has(r.patientId)),
-      fitnessRecords: (prev.fitnessRecords||[]).filter(r => !ids.has(r.patientId)),
-      monitoringRecords: (prev.monitoringRecords||[]).filter(r => !ids.has(r.patientId)),
-      kinouKeikakuRecords: (prev.kinouKeikakuRecords||[]).filter(r => !ids.has(r.patientId)),
-      tsushoKeikakuRecords: (prev.tsushoKeikakuRecords||[]).filter(r => !ids.has(r.patientId)),
-      seikatsuKinouRecords: (prev.seikatsuKinouRecords||[]).filter(r => !ids.has(r.patientId)),
-      kyomiKanshinRecords: (prev.kyomiKanshinRecords||[]).filter(r => !ids.has(r.patientId)),
-    }));
+    // ★ stripPatientData で関連データ+墓石(deletedIds)も一括処理(他端末からの復活・不整合を防ぐ)
+    setAppData(prev => {
+      const cleaned = stripPatientData(prev, ids);
+      return { ...prev, ...cleaned, patients: (prev.patients||[]).filter(p => !ids.has(p.id)) };
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // 家族側 (別タブの /family) で familyAccounts / familyInvites / 利用者の緊急連絡先が
@@ -17519,6 +17531,9 @@ export default function App() {
   //   (管理者名は各種設定では表示のみ。変更はスタッフ切替/日誌の管理者を変える)
   useEffect(() => {
     try {
+      // ★ 安全ゲート: クラウドから読み込んだデータ(_sbStoreId付き)になるまでは書かない。
+      //   起動直後のローカルスナップショット(空/古い)を全量pushして他端末の登録を巻き戻さないため。
+      if (!appData._sbStoreId) return;
       const _sm = (appData.storeMembers||[]).find(m => m && m.isAdmin && m.name && m.name.trim());
       const _ds = (appData.diarySettings?.staff||[]).find(x => x && x.role==='管理者' && x.name && x.name.trim());
       const adminName = ((_sm?.name) || (_ds?.name) || '').trim();
@@ -33379,6 +33394,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       individualExerciseItems: _exPick(individualExerciseItems, _ss0.individualExerciseItems, 'ind'), exerciseQuickButtons: _exPick(exerciseQuickButtons, _ss0.exerciseQuickButtons, 'qb'),
       anthropicApiKey: _apiOut,
       serviceItems: _pickJson(serviceItems, _ss0.serviceItems, _sb.si, []) };
+    // ★ 運動メニューを「全部削除」した場合は意図的クリアとして記録(表示側が既定/履歴で勝手に復活させない)。
+    //   1件でも項目があればフラグ解除。
+    _nextSS.exerciseItemsCleared = !((_nextSS.exerciseItems || []).length);
     onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: _nextSS }, { manual: true, message: '✓ 各種設定を保存しました' });
     // ★ 保存したので未保存フラグを解除し、基準(ベースライン)も保存内容へ取り直す(連続保存でも安全)
     if (dirtyRef) dirtyRef.current = false;
