@@ -16960,7 +16960,12 @@ export default function App() {
           //   これが無いと、削除→push完了前のpullで墓石ごと巻き戻り、
           //   「削除が2〜3回押さないと反映されない/復活する」事象が起きていた(店舗報告)。
           try {
-            const _lt = (prev && prev.deletedIds) || {};
+            // ★★ 店舗一致ガード(2026-08-07 南水元事故の根本対策): ローカル墓石の和集合は
+            //   「直前のデータが同じ店舗のもの」のときだけ行う。 これが無いと、店舗切替直後や
+            //   放置復帰の自動pullで“前の店舗の墓石”が新しい店舗に混入し、idが重なる利用者・記録が
+            //   全端末で削除される(試作店の墓石193個→南水元の利用者47名全削除の直接原因)。
+            //   下の記録保持ブロック群は元々 prev._sbStoreId === newStoreId を確認しており、ここだけ漏れていた。
+            const _lt = (prev && prev._sbStoreId === newStoreId && prev.deletedIds) || {};
             const _ct = merged.deletedIds || {};
             let _mt = {};
             new Set([...Object.keys(_lt), ...Object.keys(_ct)]).forEach(k => { _mt[k] = { ...(_ct[k] || {}), ...(_lt[k] || {}) }; });
@@ -33117,10 +33122,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const canAdmin = adminUnlocked || !_hasAnyAdmin || !!isSuperAdmin;
   const [showSettingsAdminGate, setShowSettingsAdminGate] = useState(false);
   const settingsSaveAdminAuth = (auth) => { onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), adminAuth:{ ...(appData.systemSettings?.adminAuth||{}), ...auth, setAt: Date.now() } } }); };
-  const [exerciseItems, setExerciseItems] = useState(effExerciseItems(appData.systemSettings));
+  const [exerciseItems, _setExerciseItemsSync] = useState(effExerciseItems(appData.systemSettings));
   const [newExItem, setNewExItem] = useState({ name: '', defaultUnit: '', defaultUnit2: '' });
   // 個別運動メニュー (利用者ごとに自由に組み合わせる項目: 平行棒・屋外歩行・体操 等)
-  const [individualExerciseItems, setIndividualExerciseItems] = useState(appData.systemSettings?.individualExerciseItems || [
+  const [individualExerciseItems, _setIndividualExerciseItemsSync] = useState(appData.systemSettings?.individualExerciseItems || [
     {id:'ie_walk', name:'屋外歩行', defaultUnit:'分'},
     {id:'ie_bar', name:'平行棒', defaultUnit:'往復'},
     {id:'ie_stepper', name:'ステッパー', defaultUnit:'回'},
@@ -33133,7 +33138,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const [exerciseApplyFrom, setExerciseApplyFrom] = useState(() => {
     const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   });
-  const [exerciseItemsHistory, setExerciseItemsHistory] = useState(appData.systemSettings?.exerciseItemsHistory || []);
+  const [exerciseItemsHistory, _setExerciseItemsHistorySync] = useState(appData.systemSettings?.exerciseItemsHistory || []);
   // ★ 運動メニュー系の「マウント時点の内容」。 保存時に「ユーザーが編集したか」を判定し、
   //   編集済みなら削除を含めローカルを必ず保存(空でもクラウドに戻さない)。 未編集なら現行appData優先(古い巻き戻り防止)。
   const _exBaseRef = React.useRef(null);
@@ -33144,7 +33149,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       hist: JSON.stringify(_s.exerciseItemsHistory || []), qb: JSON.stringify(_s.exerciseQuickButtons || []),
     };
   }
-  const [exerciseQuickButtons, setExerciseQuickButtons] = useState(appData.systemSettings?.exerciseQuickButtons || ['分','回','kg']);
+  const [exerciseQuickButtons, _setExerciseQuickButtonsSync] = useState(appData.systemSettings?.exerciseQuickButtons || ['分','回','kg']);
   const [newQuickBtn, setNewQuickBtn] = useState('');
   const isComposingRef = React.useRef(false);
   const [cmOffices, setCmOffices] = useState(appData.systemSettings?.cmOffices || []);
@@ -33208,6 +33213,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   // dirtyRef: facilityInfo等が変わったらdirtyをセット
   const setDirty = React.useCallback(() => { if (dirtyRef) dirtyRef.current = true; }, [dirtyRef]);
 
+  // ★ 運動メニュー系のユーザー操作用セッター: 必ず「未保存(dirty)」を立ててから反映する。
+  //   (2026-08-07修正) クラウド定期受信の再同期(下の第2層)が dirty 基準(_dirtyBaseRef)を null に
+  //   リセットした直後に項目を追加/削除すると、署名effectが「編集後の内容」をそのまま新基準にして
+  //   dirty が立たず、次の受信で巻き戻っていた(「1回目の追加/削除だけ元に戻り、2回目は効く」の原因)。
+  //   操作した瞬間に dirty を立てれば再同期はスキップされ、1回目から確実に反映される。
+  //   クラウド同期由来の反映は _set*Sync(生セッター)を使い、dirty を立てない。
+  const setExerciseItems = React.useCallback((v) => { if (dirtyRef) dirtyRef.current = true; _setExerciseItemsSync(v); }, [dirtyRef]);
+  const setIndividualExerciseItems = React.useCallback((v) => { if (dirtyRef) dirtyRef.current = true; _setIndividualExerciseItemsSync(v); }, [dirtyRef]);
+  const setExerciseItemsHistory = React.useCallback((v) => { if (dirtyRef) dirtyRef.current = true; _setExerciseItemsHistorySync(v); }, [dirtyRef]);
+  const setExerciseQuickButtons = React.useCallback((v) => { if (dirtyRef) dirtyRef.current = true; _setExerciseQuickButtonsSync(v); }, [dirtyRef]);
+
   // ★ facilityInfo等の変化を監視。 ただし「参照が変わった」だけで未保存にすると、クラウド同期で値が来ただけ/
   //   開いただけでも「未保存のデータがあります」と出てしまう。 → 内容の署名(JSON)を基準と比較し、
   //   実際に中身が変わった時だけ未保存にする(戻したら未保存も解除)。
@@ -33258,10 +33274,11 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     setCmOffices(s.cmOffices || []);
     setCmPersons(s.careManagers || []);
     setAnthropicApiKey(s.anthropicApiKey || '');
-    setExerciseItems(effExerciseItems(s));
-    setExerciseItemsHistory(s.exerciseItemsHistory || []);
-    setExerciseQuickButtons(s.exerciseQuickButtons || ['分','回','kg']);
-    if (Array.isArray(s.individualExerciseItems)) setIndividualExerciseItems(s.individualExerciseItems);
+    // ★ クラウド同期由来の反映は生セッター(_set*Sync)を使う: dirty を立てない(ユーザー編集と区別)
+    _setExerciseItemsSync(effExerciseItems(s));
+    _setExerciseItemsHistorySync(s.exerciseItemsHistory || []);
+    _setExerciseQuickButtonsSync(s.exerciseQuickButtons || ['分','回','kg']);
+    if (Array.isArray(s.individualExerciseItems)) _setIndividualExerciseItemsSync(s.individualExerciseItems);
     _exBaseRef.current = { ex: JSON.stringify(s.exerciseItems || []), ind: JSON.stringify(s.individualExerciseItems || []), hist: JSON.stringify(s.exerciseItemsHistory || []), qb: JSON.stringify(s.exerciseQuickButtons || []) };
     _setBaseRef.current = _captureSetBase(s);
     if (appData.diarySettings) diarySettingsRef.current = appData.diarySettings;

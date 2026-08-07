@@ -519,6 +519,15 @@ export const scrubAmnestyTombstones = (storeId, tomb) => {
 
 export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   if (!supabase || !storeId) return false;
+  // ★★ 店舗ゲート(2026-08-07 南水元事故の再発防止・二重防御の2枚目):
+  //   ローカルデータに刻まれた店舗ID(_sbStoreId=最後にpullで反映した店舗)が保存先と食い違う場合、
+  //   別店舗のスナップショットを丸ごと書き込む事故(墓石混入・利用者消失)になるため push を拒否する。
+  //   _sbStoreId が無い旧データ/初回シードは従来どおり許可(後方互換)。
+  if (localData && localData._sbStoreId && localData._sbStoreId !== storeId) {
+    try { syncLog('push-blocked-store-mismatch', { to: storeId, from: localData._sbStoreId }); } catch {}
+    try { console.warn('[supabase] push blocked: store mismatch', localData._sbStoreId, '->', storeId); } catch {}
+    return false;
+  }
   // id 単位マージ: 同じ id は _savedAt が新しい方を採用。 片方にしか無い id は残す。
   const mergeById = (localArr, cloudArr) => {
     const l = Array.isArray(localArr) ? localArr : [];
