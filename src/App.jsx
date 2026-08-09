@@ -18218,10 +18218,12 @@ export default function App() {
       onSelectStore={(store) => {
         const updated = { ...staffSession, storeId: store.id, storeName: store.name, storeShortName: store.short_name || store.name };
         sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
-        setStaffSession(updated);
         // ★ super_admin(つむぎ管理局)は記録に本部名を入れない。 一旦クリアし、店舗データ読込後に店舗の管理者を自動選択
         sessionStorage.removeItem('tsumugiActiveRecorder');
-        setActiveRecorder(null);
+        // ★ 店舗へ入る時は「完全リロード」方式(2026-08-09): セッションに入店先を保存してから
+        //   ページを再読み込みし、新しい店舗として起動し直す。 メモリ内の持ち越しが物理的にゼロになり、
+        //   店舗間データ混入バグの類を根絶する(既存4重ガードに加えた最終防御)。
+        window.location.reload();
       }}
       onLogout={handleLogout}
     />;
@@ -18300,26 +18302,15 @@ export default function App() {
       }}
       onLogout={handleLogout}
       onBackToStores={staffSession.role === 'super_admin' ? (() => {
-        // ★ 店舗選択に戻る: 店舗データを完全クリアして混入防止
+        // ★ 店舗選択に戻る: 「完全リロード」方式(2026-08-09)で持ち越しゼロにして混入防止
         storeTransitionRef.current = true;
-        dataLoadedForStoreRef.current = null;
         const updated = { ...staffSession, storeId: null, storeName: '', storeShortName: '' };
         sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
         sessionStorage.removeItem('tsumugiActiveRecorder');
         try { localStorage.removeItem('daycareAppData_v3'); } catch {}
         try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
         try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
-        setStaffSession(updated);
-        setActiveRecorder(null);
-        setAppData({
-          patients: [], ticketRecords: [], familyAnnouncements: [],
-          familyPersonalAnnouncements: [], familyPhotos: [],
-          monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
-          contactBooks: [], familyAccounts: [], familyInvites: [],
-          systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
-          storeMembers: [],
-          contactBookConfig: { items: [] },
-        });
+        window.location.reload();
       }) : null}
     />;
   }
@@ -18850,14 +18841,13 @@ export default function App() {
                     {/* ★ 本部(つむぎ管理局)の店舗一覧画面へ戻る */}
                     <button onClick={() => {
                       setAdminStoreDropdownOpen(false);
+                      // ★ 店舗一覧へ戻る時も「完全リロード」方式(2026-08-09・持ち越しゼロ)
                       storeTransitionRef.current = true;
-                      dataLoadedForStoreRef.current = null;
                       const updated = { ...staffSession, storeId: null, storeName: undefined, storeShortName: undefined };
                       sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
                       sessionStorage.removeItem('tsumugiActiveRecorder');
                       try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
-                      setStaffSession(updated);
-                      setActiveRecorder(null);
+                      window.location.reload();
                     }} className="w-full text-left px-4 py-2.5 text-[11px] font-bold text-white bg-amber-700/50 hover:bg-amber-700/80 border-b border-amber-700/40 flex items-center gap-1.5">
                       <span></span><span>つむぎ管理局トップ（店舗一覧）へ戻る</span>
                     </button>
@@ -18880,29 +18870,18 @@ export default function App() {
                               onClick={() => {
                                 setAdminStoreDropdownOpen(false);
                                 if (isCurrent) return;
-                                // ★ 別店舗に直接切替 (完全データクリア)
+                                // ★ 別店舗への切替は「完全リロード」方式(2026-08-09): セッションに切替先を
+                                //   保存してからページを再読み込みし、新店舗として起動し直す。 メモリ内の
+                                //   持ち越しが物理的にゼロになり、店舗間データ混入の類を根絶する。
+                                //   push封鎖フラグを立ててから保存し、リロードまでの一瞬の自動保存も防ぐ。
                                 storeTransitionRef.current = true;
-                                dataLoadedForStoreRef.current = null;
-                                pendingPullForStoreRef.current = s.id;
                                 const updated = { ...staffSession, storeId: s.id, storeName: s.name, storeShortName: s.short_name || s.name };
                                 sessionStorage.setItem('tsumugiStaffSession', JSON.stringify(updated));
                                 sessionStorage.removeItem('tsumugiActiveRecorder');
                                 try { localStorage.removeItem('daycareAppData_v3'); } catch {}
                                 try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
                                 try { localStorage.removeItem('tsumugiLastStoreId'); } catch {}
-                                setStaffSession(updated);
-                                // ★ つむぎ管理局は記録に本部名を入れない。 クリアし店舗の管理者を自動選択(下のeffect)
-                                sessionStorage.removeItem('tsumugiActiveRecorder');
-                                setActiveRecorder(null);
-                                setAppData({
-                                  patients: [], ticketRecords: [], familyAnnouncements: [],
-                                  familyPersonalAnnouncements: [], familyPhotos: [],
-                                  monitoringRecords: [], fitnessRecords: [], dailyLogs: [],
-                                  contactBooks: [], familyAccounts: [], familyInvites: [],
-                                  systemSettings: {}, diarySettings: { staff: [], cars: [], scheduleAM: [], schedulePM: [] },
-                                  storeMembers: [],
-                                  contactBookConfig: { items: [] },
-                                });
+                                window.location.reload();
                               }}
                               className={`w-full text-left px-4 py-2 text-[11px] font-bold flex items-center justify-between border-b border-amber-700/20 ${
                                 isCurrent
