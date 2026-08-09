@@ -315,13 +315,17 @@ export async function supabaseListInvitesAndAccountsForPatient(patientId, storeI
 // =========================================================
 // 患者IDから家族アカウント一覧 (親が他家族追加時の重複防止)
 // =========================================================
-export async function supabaseListFamilyByPatient(patientId) {
+export async function supabaseListFamilyByPatient(patientId, storeId) {
   if (!supabase) return [];
+  // ★ 店舗IDを必須化(2026-08-09): 利用者IDは店舗間で重複するため、patient_id だけの検索は
+  //   別店舗(別法人)の家族アカウントが混入する。 storeId 無しの呼び出しは安全のため空を返す。
+  if (!storeId) { console.warn('[supabase] listFamilyByPatient called without storeId — returning empty'); return []; }
   try {
     const { data } = await supabase
       .from('family_accounts')
       .select('*')
       .eq('patient_id', String(patientId))
+      .eq('store_id', storeId)
       .is('deleted_at', null);
     return data || [];
   } catch { return []; }
@@ -500,6 +504,20 @@ export async function supabaseSyncStateForStore(storeId, data) {
 //   カットオフ以後の正規の削除操作は新しい時刻が付くので、通常運用に影響しない。
 const TOMB_AMNESTY_STORE = 'store_minamimizumoto';
 const TOMB_AMNESTY_CUTOFF = 1786078800000; // 2026-08-07T05:00:00Z (JST 14:00)
+// ★ 墓石の店舗タグ検証(2026-08-09 構造的防御):
+//   同期を通った墓石(deletedIds)には出所店舗タグ(_store)を刻む。 検証時にタグが保存先店舗と
+//   食い違う墓石一式は丸ごと読み捨てる = 万一将来のバグで他店の墓石がメモリ内に紛れ込んでも、
+//   構造的に受け付けない(南水元事故と同型の混入への最終防壁)。 タグ無しの旧データは許容(後方互換)。
+//   ※ _store は「idのマップ」ではなく文字列なので、キー巡回処理では必ずスキップすること。
+export const validateTombStore = (storeId, tomb) => {
+  if (!tomb || typeof tomb !== 'object') return tomb;
+  if (tomb._store && tomb._store !== storeId) {
+    try { syncLog('tomb-rejected-store-mismatch', { at: storeId, tagged: tomb._store }); } catch {}
+    return {};
+  }
+  return tomb;
+};
+
 export const scrubAmnestyTombstones = (storeId, tomb) => {
   if (storeId !== TOMB_AMNESTY_STORE || !tomb || typeof tomb !== 'object') return tomb;
   let changed = false;
@@ -819,7 +837,10 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // クラウドが空(=新規店舗) ならそのまま(初回作成)
     if (!cloud || Object.keys(cloud).length === 0) {
       const _seed = sanitizeForSync(localData);
-      if (_seed && _seed.deletedIds) _seed.deletedIds = scrubAmnestyTombstones(storeId, _seed.deletedIds);
+      if (_seed && _seed.deletedIds) {
+        _seed.deletedIds = scrubAmnestyTombstones(storeId, validateTombStore(storeId, _seed.deletedIds));
+        _seed.deletedIds = { ..._seed.deletedIds, _store: storeId }; // ★ 店舗タグ刻印
+      }
       return _seed;
     }
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
@@ -828,8 +849,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory','auditLog'];
     // ★ 削除した記録の墓石(tombstone)を local+cloud で統合。 これが無いと「id単位の和集合マージ」で
     //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
-    const localTomb = (localData && localData.deletedIds) || {};
-    const cloudTomb = (cloud && cloud.deletedIds) || {};
+    // ★ 店舗タグ検証: 他店タグ付きの墓石一式は和集合前に読み捨てる(validateTombStore 参照)
+    const localTomb = validateTombStore(storeId, (localData && localData.deletedIds) || {});
+    const cloudTomb = validateTombStore(storeId, (cloud && cloud.deletedIds) || {});
     const _rawTomb = {};
     ARRAY_KEYS.forEach(k => { _rawTomb[k] = { ...(cloudTomb[k] || {}), ...(localTomb[k] || {}) }; });
     // ★ 利用者本体の墓石も local+cloud で統合 (削除した利用者を別端末の push で復活させない)。
@@ -837,6 +859,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // ★ 墓石アムネスティ: 南水元に混入した他店の墓石(カットオフ前)を無効化してから、
     //   以降の除外フィルタ・push 内容の両方に使う(定義は scrubAmnestyTombstones 参照)
     const mergedTomb = scrubAmnestyTombstones(storeId, _rawTomb);
+    mergedTomb._store = storeId; // ★ 出所店舗タグを刻印(以後この墓石は他店では受理されない)
     const merged = { ...localData, deletedIds: mergedTomb };
     // ★ 提供記録・日誌はフィールド単位でマージ (別端末で違う項目を入力しても消えない)。 他はid単位。
     const FIELD_MERGE_KEYS = new Set(['ticketRecords','dailyLogs']);

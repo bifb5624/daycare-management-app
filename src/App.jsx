@@ -22,6 +22,7 @@ import {
   supabaseSyncStateForStore,
   supabaseMergeAndSyncStateForStore,
   scrubAmnestyTombstones,
+  validateTombStore,
   syncNow,
   syncHealth,
   syncLog,
@@ -16955,7 +16956,12 @@ export default function App() {
         const _isFirstLoad = dataLoadedForStoreRef.current !== newStoreId;
         let _mergedForPush = null;
         setAppData(prev => {
-          const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: prev.familyAccounts || [], familyInvites: prev.familyInvites || [] };
+          // ★ 店舗切替時は「前の店舗のメモリ内データ」を一切持ち越さない(2026-08-09 店舗間干渉の総点検)。
+          //   _keepPrevSide: prevが同じ店舗のもの(または起動直後で店舗未確定)のときだけ持ち越しを許可。
+          //   家族アカウント/招待は利用者IDで紐づくため、別店舗の同じIDの利用者に他店の家族が表示される
+          //   混入(法人間の情報漏えい)になり得る。 切替時は空にして各画面のテーブル再取得に任せる。
+          const _keepPrevSide = !!prev && (!prev._sbStoreId || prev._sbStoreId === newStoreId);
+          const merged = { ...row.data, _sbStoreId: newStoreId, familyAccounts: (_keepPrevSide && prev.familyAccounts) || [], familyInvites: (_keepPrevSide && prev.familyInvites) || [] };
           // ★ 墓石(deletedIds)は local と cloud の和集合を常に保持し、削除済みIDを各配列から除外する。
           //   これが無いと、削除→push完了前のpullで墓石ごと巻き戻り、
           //   「削除が2〜3回押さないと反映されない/復活する」事象が起きていた(店舗報告)。
@@ -16965,16 +16971,20 @@ export default function App() {
             //   放置復帰の自動pullで“前の店舗の墓石”が新しい店舗に混入し、idが重なる利用者・記録が
             //   全端末で削除される(試作店の墓石193個→南水元の利用者47名全削除の直接原因)。
             //   下の記録保持ブロック群は元々 prev._sbStoreId === newStoreId を確認しており、ここだけ漏れていた。
-            const _lt = (prev && prev._sbStoreId === newStoreId && prev.deletedIds) || {};
-            const _ct = merged.deletedIds || {};
+            // ★ 店舗タグ検証: 他店タグ付きの墓石一式は和集合前に読み捨てる(validateTombStore 参照)。
+            //   _store はidマップではなく文字列タグなので、キー巡回では必ずスキップする。
+            const _lt = validateTombStore(newStoreId, (prev && prev._sbStoreId === newStoreId && prev.deletedIds) || {});
+            const _ct = validateTombStore(newStoreId, merged.deletedIds || {});
             let _mt = {};
-            new Set([...Object.keys(_lt), ...Object.keys(_ct)]).forEach(k => { _mt[k] = { ...(_ct[k] || {}), ...(_lt[k] || {}) }; });
+            new Set([...Object.keys(_lt), ...Object.keys(_ct)]).forEach(k => { if (k === '_store') return; _mt[k] = { ...(_ct[k] || {}), ...(_lt[k] || {}) }; });
             // ★ 墓石アムネスティ: 南水元に混入した他店の墓石(カットオフ前)は pull 時にも読み捨てる。
             //   これが無いと、端末に残った墓石が復元済みクラウドの利用者をローカルで再削除し、
             //   次の push でクラウドからも消してしまう(定義は lib/supabase.js scrubAmnestyTombstones 参照)。
             _mt = scrubAmnestyTombstones(newStoreId, _mt);
+            _mt._store = newStoreId; // ★ 出所店舗タグを刻印
             merged.deletedIds = _mt;
             Object.keys(_mt).forEach(k => {
+              if (k === '_store') return;
               const tm = _mt[k];
               if (!tm || !Object.keys(tm).length || !Array.isArray(merged[k])) return;
               merged[k] = merged[k].filter(r => !(r && r.id != null && tm[String(r.id)]));
@@ -16994,7 +17004,10 @@ export default function App() {
             //   pull が走ると、クラウド巨大JSON側の古い/空の提供記録が取り込まれ「3秒後に全消滅」する
             //   破壊サイクルが起きていた(実ログ: boot直後 rec:20 → 3秒後 rec:0)。 クラウドの提供記録は
             //   テーブル方式では一切信用しない。
-            merged.ticketRecords = (prev && Array.isArray(prev.ticketRecords)) ? prev.ticketRecords : [];
+            // ★ ただし店舗切替時(prev._sbStoreIdが別店舗)は持ち越さない。 前店舗の提供記録が新店舗の
+            //   画面に残り、編集すると新店舗のテーブルへ書かれる混入経路になるため(2026-08-09 総点検)。
+            //   起動直後(prev._sbStoreId未確定)は従来どおり保持し、boot読込が新店舗の記録で埋める。
+            merged.ticketRecords = (_keepPrevSide && prev && Array.isArray(prev.ticketRecords)) ? prev.ticketRecords : [];
             try { if (window.__tsumugiKeepN !== prev.ticketRecords.length) { window.__tsumugiKeepN = prev.ticketRecords.length; syncLog('pull-keep-tbl', { n: prev.ticketRecords.length }); } } catch {}
           }
           // ★ 提供記録は巨大JSON方式。 クラウド(merged)をベースに、端末内の「クラウドに無い/
