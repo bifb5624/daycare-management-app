@@ -21019,9 +21019,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 <div className="grid grid-cols-3 gap-2 mb-2">
                   {(() => { const vPlSt=p[`plSt_${tf}`]||'', vPlEn=p[`plEn_${tf}`]||''; return [
                     ['体温',`temp_${tf}`,vT,getTempColorClass(vT),vT?`${vT}℃`:'＋'],
-                    ['開始 血圧',`bpSt_combo_${tf}`,(vBuSt&&vBdSt)?`${vBuSt}/${vBdSt}`:'','text-slate-800',(vBuSt||vBdSt)?`${vBuSt}/${vBdSt}`:'＋'],
+                    // ★ 血圧の自動スラッシュ表示をやめる(2026-08-10): 上だけ入力の段階では「126」とだけ表示し、
+                    //   スラッシュは自分で「/」を打った(=下の値がある)時だけ表示する。 従来は「126/」と自動表示され、
+                    //   スラッシュ入力済みと誤認して下の値を続けると「1264」と上に連結される事故になっていた。
+                    ['開始 血圧',`bpSt_combo_${tf}`,(vBuSt||vBdSt)?`${vBuSt}${vBdSt?`/${vBdSt}`:''}`:'','text-slate-800',(vBuSt||vBdSt)?`${vBuSt}${vBdSt?`/${vBdSt}`:''}`:'＋'],
                     ['開始 脈',`plSt_${tf}`,vPlSt,getPulseColorClass(vPlSt,true),vPlSt?`${vPlSt}`:'＋'],
-                    [`${secondBpLabel(appData)} 血圧`,`bpEn_combo_${tf}`,(vBuEn&&vBdEn)?`${vBuEn}/${vBdEn}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}/${vBdEn}`:'＋'],
+                    [`${secondBpLabel(appData)} 血圧`,`bpEn_combo_${tf}`,(vBuEn||vBdEn)?`${vBuEn}${vBdEn?`/${vBdEn}`:''}`:'','text-slate-800',(vBuEn||vBdEn)?`${vBuEn}${vBdEn?`/${vBdEn}`:''}`:'＋'],
                     ['終了 脈',`plEn_${tf}`,vPlEn,getPulseColorClass(vPlEn,true),vPlEn?`${vPlEn}`:'＋']
                   ]; })().map(([lbl,field,cur,colorCls,shown])=>{
                     const isBp = typeof field==='string' && field.includes('_combo_');
@@ -21036,10 +21039,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         </div>
                       );
                     }
+                    // ★ テンキー入力中の血圧枠は「打った内容そのまま」(スラッシュを打てばスラッシュも見える)を表示
+                    const _kpActive = isBp && keypad.isOpen && keypad.recordId === p.id && keypad.field === field;
+                    const _shown2 = _kpActive ? ((keypad.value || '') || '＋') : shown;
                     return (
                     <button key={field} disabled={dis} onClick={()=>{openKeypad(p.id,field,cur,isAbsent);setActiveCell(`${p.id}-${field}`);}} className="rounded-lg border border-slate-300 bg-white py-1.5 px-1 disabled:opacity-40 flex flex-col items-center">
                       <span className="text-[10px] font-bold text-slate-500">{lbl}</span>
-                      <span className={`text-base font-bold ${colorCls}`}>{shown}</span>
+                      <span className={`text-base font-bold ${colorCls}`}>{_shown2}</span>
                     </button>
                     );
                   })}
