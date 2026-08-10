@@ -14077,19 +14077,21 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   setFamilyDisplayMode(mode ? mode : ((p==='1'||p==='3') ? 'daily' : 'auto'));
                 }}
                   style={{padding:'3px 4px',border:'1px solid #c4dba0',borderRadius:6,fontSize:11,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
+                  {/* ★ macOS/iOSのネイティブメニューはoptgroup見出しのCSSを無視して薄く表示するため、
+                      選択肢の文字自体に「日別・」「月平均・」を含めてどの環境でも読めるようにする(2026-08-11) */}
                   <optgroup label="日別で表示">
-                    <option value="1">1ヶ月</option>
-                    <option value="3">3ヶ月</option>
-                    <option value="6:daily">半年</option>
-                    <option value="12:daily">1年</option>
-                    <option value="all:daily">全期間</option>
-                    <option value="custom:daily">期間を指定</option>
+                    <option value="1">日別・1ヶ月</option>
+                    <option value="3">日別・3ヶ月</option>
+                    <option value="6:daily">日別・半年</option>
+                    <option value="12:daily">日別・1年</option>
+                    <option value="all:daily">日別・全期間</option>
+                    <option value="custom:daily">日別・期間を指定</option>
                   </optgroup>
                   <optgroup label="月平均で表示">
-                    <option value="6">半年</option>
-                    <option value="12">1年</option>
-                    <option value="all">全期間</option>
-                    <option value="custom">期間を指定</option>
+                    <option value="6">月平均・半年</option>
+                    <option value="12">月平均・1年</option>
+                    <option value="all">月平均・全期間</option>
+                    <option value="custom">月平均・期間を指定</option>
                   </optgroup>
                 </select>
                 {/* ★ 期間を指定(2026-08-10): 見たい年月の範囲を自由に選べる(例: 6月だけ→6月〜6月)。
