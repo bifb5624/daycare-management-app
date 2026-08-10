@@ -12549,11 +12549,39 @@ function FamilyView() {
       if (!sbData) return;
       setData(prev => {
         const merged = { ...prev, ...sbData };
+        // ★ 提供記録はテーブル(ticket_records)が正(2026-08-10): 巨大JSON側はカットオーバー以降
+        //   凍結スナップショットのため、15秒ごとの受信で手元(テーブル由来)の記録を古いJSONで上書きしない。
+        if (TABLE_ENABLED && Array.isArray(prev.ticketRecords) && prev.ticketRecords.length) merged.ticketRecords = prev.ticketRecords;
         try { localStorage.setItem('daycareAppData_v3', JSON.stringify(merged)); } catch {}
         return merged;
       });
     }, 15000, familyStoreId);
     return stop;
+  }, [familyStoreId]);
+  // ★ 提供記録テーブルの読込(2026-08-10): 家族・ケアマネ閲覧はこれまで巨大JSONしか読んでおらず、
+  //   テーブル方式カットオーバー(8/3)以降のバイタル・気分・記録が表示されなかった(グラフが8/3で止まる)。
+  //   テーブルから店舗の記録を取得して重ねる(起動時+60秒ごと)。削除済み(deleted)は除外・手元からも落とす。
+  useEffect(() => {
+    if (!isSupabaseEnabled || !familyStoreId || !TABLE_ENABLED) return;
+    let stopped = false;
+    const load = async () => {
+      try {
+        const all = await fetchTicketRecordsSince(familyStoreId, '1970-01-01T00:00:00+00:00');
+        if (stopped || !all || !all.length) return;
+        setData(prev => {
+          const map = new Map((Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).filter(r=>r&&r.id!=null).map(r => [String(r.id), r]));
+          all.forEach(x => {
+            if (!x || !x.rec || x.rec.id == null) return;
+            if (x.deleted) { map.delete(String(x.rec.id)); return; }
+            map.set(String(x.rec.id), x.rec);   // テーブルの行を優先(最新)
+          });
+          return { ...prev, ticketRecords: [...map.values()] };
+        });
+      } catch (e) { console.warn('[family] ticket_records fetch failed', e); }
+    };
+    load();
+    const t = setInterval(load, 60000);
+    return () => { stopped = true; clearInterval(t); };
   }, [familyStoreId]);
   const [linkedFamilyAccounts, setLinkedFamilyAccounts] = useState(() => {
     try { const s = sessionStorage.getItem('familyLinkedAccounts'); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -13756,7 +13784,10 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
 function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSwitchPatient, editingRef, familyStoreId }) {
   const [tab, setTab] = useState('news');
   // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
-  const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','all'
+  const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','all','custom'
+  // ★ 期間を指定(custom)の年月レンジ(2026-08-10・ケアマネ要望)。既定=先月〜今月
+  const [familyCustomFrom, setFamilyCustomFrom] = useState(() => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
+  const [familyCustomTo, setFamilyCustomTo] = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [familyDisplayMode, setFamilyDisplayMode] = useState('auto'); // 'auto' (月平均) | 'daily' (日別)
   const pid = parseInt(patientId, 10);
   const patient = (data.patients||[]).find(p => p.id === pid || p.id === patientId);
@@ -14055,7 +14086,18 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   <option value="12:daily">1年 (日別)</option>
                   <option value="all">全期間 (月平均)</option>
                   <option value="all:daily">全期間 (日別)</option>
+                  <option value="custom">期間を指定</option>
                 </select>
+                {/* ★ 期間を指定(2026-08-10): 見たい年月の範囲を自由に選べる(例: 6月だけ→6月〜6月) */}
+                {familyPeriod === 'custom' && (
+                  <span style={{display:'flex',alignItems:'center',gap:3}}>
+                    <input type="month" max="9999-12" value={familyCustomFrom} onChange={e=>setFamilyCustomFrom(e.target.value)}
+                      style={{padding:'2px 3px',border:'1px solid #c4dba0',borderRadius:6,fontSize:10,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none'}}/>
+                    <span style={{fontSize:10,color:'#3d5021'}}>〜</span>
+                    <input type="month" max="9999-12" value={familyCustomTo} onChange={e=>setFamilyCustomTo(e.target.value)}
+                      style={{padding:'2px 3px',border:'1px solid #c4dba0',borderRadius:6,fontSize:10,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none'}}/>
+                  </span>
+                )}
               </div>
               {onSwitchPatient && (
                 <button onClick={onSwitchPatient} style={hdrBtnStyle}>利用者切替</button>
@@ -14110,6 +14152,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             cmViewerMode={isCmAccount}
             selfMode={isSelfAccount}
             externalPeriod={familyPeriod}
+            externalCustomFrom={familyCustomFrom}
+            externalCustomTo={familyCustomTo}
             externalDisplayMode={familyDisplayMode}
             hidePatientSelector={true}
             navigateTo={()=>{}}
@@ -21923,7 +21967,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 }
 
 // === PersonalDashboardView (簡易版) ===
-function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, selfMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null, externalDisplayMode = null }) {
+function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatientChange, isSidebarOpen, onShowPrintPreview, familyMode = false, cmViewerMode = false, selfMode = false, hidePatientSelector = false, stickyTopOffset = null, externalPeriod = null, externalDisplayMode = null, externalCustomFrom = null, externalCustomTo = null }) {
   // ★ ケアマネ閲覧モード = 事業所と同じフルセット内容を読取専用で表示。 縦型 (スマホ) でも見やすく縦並びに
   const compactMode = familyMode || cmViewerMode; // 基本指標を縦並びにする判定
   // familyMode 時の sticky top 既定値: stickyTopOffset 未指定なら 56 (FamilyView 内)
@@ -21961,6 +22005,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   React.useEffect(() => {
     if (externalPeriod && externalPeriod !== period) setPeriod(externalPeriod);
   }, [externalPeriod]);
+  // ★ 期間を指定(custom)の年月レンジも親から同期(2026-08-10・家族/ケアマネの自由期間選択)
+  React.useEffect(() => { if (externalCustomFrom) setCustomFrom(externalCustomFrom); }, [externalCustomFrom]);
+  React.useEffect(() => { if (externalCustomTo) setCustomTo(externalCustomTo); }, [externalCustomTo]);
   const [customFrom, setCustomFrom] = useState(() => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [customTo, setCustomTo]   = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   // セクション選択（プレビュー用） [id, label, size]
