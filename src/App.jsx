@@ -17175,6 +17175,56 @@ export default function App() {
               if (_docChg) _mergedForPush = merged;
             } catch (e) { console.warn('[pull preserve] docs failed', e); }
           }
+          // ★★ 「一瞬戻る」ちらつきの恒久対策(2026-08-10): pull は利用者マスタ/月間シフトを丸ごと
+          //   クラウドの内容に置換するため、保存(push)が届く前の受信で古い内容に一瞬巻き戻り、
+          //   push完了後の受信で再び新しい内容へ..というちらつきが起きていた(休止履歴の削除が
+          //   一瞬復活する・変更が一瞬消える等)。 記録・設定と同様「手元の方が新しい項目は保持」する。
+          if (prev && prev._sbStoreId === newStoreId) {
+            try {
+              // 利用者マスタ: _savedAt が新しい手元を維持(push未達分)。 クラウドに無い手元の利用者も
+              // 墓石に無ければ維持(新規追加直後の消失防止)。
+              if (Array.isArray(prev.patients) && Array.isArray(merged.patients)) {
+                const _pTomb = (merged.deletedIds && merged.deletedIds.patients) || {};
+                const _byId = new Map(prev.patients.filter(p=>p&&p.id!=null).map(p => [String(p.id), p]));
+                let _kept = 0;
+                merged.patients = merged.patients.map(cp => {
+                  if (!cp || cp.id == null) return cp;
+                  const lp = _byId.get(String(cp.id));
+                  if (!lp) return cp;
+                  const lt = Number(lp._savedAt) || 0, ct = Number(cp._savedAt) || 0;
+                  if (lt > ct) { _kept++; return lp; }
+                  return cp;
+                });
+                const _cloudIds = new Set(merged.patients.filter(p=>p&&p.id!=null).map(p=>String(p.id)));
+                prev.patients.forEach(lp => {
+                  if (!lp || lp.id == null) return;
+                  const k = String(lp.id);
+                  if (!_cloudIds.has(k) && !_pTomb[k]) { merged.patients.push(lp); _kept++; }
+                });
+                if (_kept) { _mergedForPush = merged; syncLog('pull-preserve-pat', { kept: _kept }); }
+              }
+              // 月間シフト: 利用者×月の時刻(_msTs)が新しい手元を維持(振替・取り消し直後の一瞬巻き戻り防止)
+              if (prev.monthlyShifts && typeof prev.monthlyShifts === 'object') {
+                merged.monthlyShifts = { ...(merged.monthlyShifts || {}) };
+                const lTs = (prev._msTs && typeof prev._msTs === 'object') ? prev._msTs : {};
+                const cTs = (merged._msTs && typeof merged._msTs === 'object') ? merged._msTs : {};
+                let _keptMs = 0;
+                Object.keys(prev.monthlyShifts).forEach(mk => {
+                  const lm = prev.monthlyShifts[mk]; if (!lm || typeof lm !== 'object') return;
+                  Object.keys(lm).forEach(pid => {
+                    const lt = Number(lTs[mk] && lTs[mk][pid]) || 0, ct = Number(cTs[mk] && cTs[mk][pid]) || 0;
+                    if (lt > ct) {
+                      merged.monthlyShifts[mk] = { ...(merged.monthlyShifts[mk] || {}), [pid]: lm[pid] };
+                      merged._msTs = { ...(merged._msTs || {}) };
+                      merged._msTs[mk] = { ...(merged._msTs[mk] || {}), [pid]: lt };
+                      _keptMs++;
+                    }
+                  });
+                });
+                if (_keptMs) { _mergedForPush = merged; syncLog('pull-preserve-ms', { kept: _keptMs }); }
+              }
+            } catch (e) { console.warn('[pull preserve] patients/shifts failed', e); }
+          }
           return merged;
         });
         // ★ 端末内の新しい記録を保持した場合は、クラウドにも反映(失敗していた保存を再送し、次回pullで消えないように)。
