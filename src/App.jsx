@@ -14069,32 +14069,39 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               {/* ★ 期間 (左・コンパクト) */}
               <div style={{height:38,boxSizing:'border-box',display:'flex',flexDirection:'row',alignItems:'center',gap:5,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'0 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
                 <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>期間</span>
-                <select value={familyPeriod} onChange={e=>{
-                  const v = e.target.value;
-                  setFamilyPeriod(v);
-                  // 値に :daily / :auto が付いていれば displayMode も同期 (例: "6:daily" → period=6 + daily)
-                  const [p, mode] = v.split(':');
+                {/* ★ 「日別」「月平均」のグループ分けに再編成(2026-08-10): 半年/1年で分けるより見やすい。
+                    選択値は period+displayMode の組み合わせから逆算して常に正しい項目にチェックが付く。 */}
+                <select value={(familyPeriod==='1'||familyPeriod==='3') ? familyPeriod : (familyDisplayMode==='daily' ? `${familyPeriod}:daily` : familyPeriod)} onChange={e=>{
+                  const [p, mode] = e.target.value.split(':');
                   setFamilyPeriod(p);
-                  if (mode) setFamilyDisplayMode(mode);
+                  setFamilyDisplayMode(mode ? mode : ((p==='1'||p==='3') ? 'daily' : 'auto'));
                 }}
                   style={{padding:'3px 4px',border:'1px solid #c4dba0',borderRadius:6,fontSize:11,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
-                  <option value="1">1ヶ月 (日別)</option>
-                  <option value="3">3ヶ月 (日別)</option>
-                  <option value="6">半年 (月平均)</option>
-                  <option value="6:daily">半年 (日別)</option>
-                  <option value="12">1年 (月平均)</option>
-                  <option value="12:daily">1年 (日別)</option>
-                  <option value="all">全期間 (月平均)</option>
-                  <option value="all:daily">全期間 (日別)</option>
-                  <option value="custom">期間を指定</option>
+                  <optgroup label="日別で表示">
+                    <option value="1">1ヶ月</option>
+                    <option value="3">3ヶ月</option>
+                    <option value="6:daily">半年</option>
+                    <option value="12:daily">1年</option>
+                    <option value="all:daily">全期間</option>
+                    <option value="custom:daily">期間を指定</option>
+                  </optgroup>
+                  <optgroup label="月平均で表示">
+                    <option value="6">半年</option>
+                    <option value="12">1年</option>
+                    <option value="all">全期間</option>
+                    <option value="custom">期間を指定</option>
+                  </optgroup>
                 </select>
-                {/* ★ 期間を指定(2026-08-10): 見たい年月の範囲を自由に選べる(例: 6月だけ→6月〜6月) */}
+                {/* ★ 期間を指定(2026-08-10): 見たい年月の範囲を自由に選べる(例: 6月だけ→6月〜6月)。
+                    逆転入力は自動で揃える。開始未指定=終了の1年前から、終了未指定=今月まで。 */}
                 {familyPeriod === 'custom' && (
                   <span style={{display:'flex',alignItems:'center',gap:3}}>
-                    <input type="month" max="9999-12" value={familyCustomFrom} onChange={e=>setFamilyCustomFrom(e.target.value)}
+                    <input type="month" max={familyCustomTo || '9999-12'} value={familyCustomFrom} title="開始月(未指定の場合は終了月の1年前から)"
+                      onChange={e=>{ const v=e.target.value; setFamilyCustomFrom(v); if (v && familyCustomTo && v > familyCustomTo) setFamilyCustomTo(v); }}
                       style={{padding:'2px 3px',border:'1px solid #c4dba0',borderRadius:6,fontSize:10,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none'}}/>
                     <span style={{fontSize:10,color:'#3d5021'}}>〜</span>
-                    <input type="month" max="9999-12" value={familyCustomTo} onChange={e=>setFamilyCustomTo(e.target.value)}
+                    <input type="month" min={familyCustomFrom || undefined} max="9999-12" value={familyCustomTo} title="終了月(未指定の場合は今月まで)"
+                      onChange={e=>{ const v=e.target.value; setFamilyCustomTo(v); if (v && familyCustomFrom && v < familyCustomFrom) setFamilyCustomFrom(v); }}
                       style={{padding:'2px 3px',border:'1px solid #c4dba0',borderRadius:6,fontSize:10,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none'}}/>
                   </span>
                 )}
@@ -22039,13 +22046,21 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
   const [showPrintOptionsPopup, setShowPrintOptionsPopup] = useState(false);
   const selectedPatient = (appData.patients||[]).find(p => p.id === selectedPatientId || String(p.id) === String(selectedPatientId)) || (appData.patients||[])[0];
 
+  // ★ 期間を指定(custom)の実効レンジ(2026-08-10): 終了未指定=今月まで、開始未指定=終了の11ヶ月前から(1年分)。
+  //   逆転(開始>終了)は開始月のみの1ヶ月として扱う(全期間が出てしまう誤動作の防止)。
+  const _customRange = useMemo(() => {
+    const _now = new Date();
+    const _ct = customTo || `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}`;
+    const _cf = customFrom || (() => { const [ty,tm] = _ct.split('-').map(Number); let y=ty, m=tm-11; while (m<=0) { m+=12; y--; } return `${y}-${String(m).padStart(2,'0')}`; })();
+    return (_cf > _ct) ? { from: _cf, to: _cf } : { from: _cf, to: _ct };
+  }, [customFrom, customTo]);
   const targetMonths = useMemo(() => {
     if (period === 'all') return null;
     if (period === 'custom') {
-      const [fY, fM] = customFrom.split('-').map(Number);
-      const [tY2, tM2] = customTo.split('-').map(Number);
-      const months = []; let y = fY, m = fM;
-      while (y < tY2 || (y === tY2 && m <= tM2)) { months.push(m); m++; if (m > 12) { m = 1; y++; } }
+      const [fY, fM] = _customRange.from.split('-').map(Number);
+      const [tY2, tM2] = _customRange.to.split('-').map(Number);
+      const months = []; let y = fY, m = fM, g = 0;
+      while ((y < tY2 || (y === tY2 && m <= tM2)) && g < 600) { months.push(m); m++; if (m > 12) { m = 1; y++; } g++; }
       return months;
     }
     const [bY, bM] = baseMonth.split('-').map(Number);
@@ -22060,10 +22075,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     if (period === 'all') return null;
     const set = new Set();
     if (period === 'custom') {
-      const [fY, fM] = customFrom.split('-').map(Number);
-      const [tY2, tM2] = customTo.split('-').map(Number);
-      let y = fY, m = fM;
-      while (y < tY2 || (y === tY2 && m <= tM2)) { set.add(`${y}-${m}`); m++; if (m > 12) { m = 1; y++; } }
+      const [fY, fM] = _customRange.from.split('-').map(Number);
+      const [tY2, tM2] = _customRange.to.split('-').map(Number);
+      let y = fY, m = fM, g = 0;
+      while ((y < tY2 || (y === tY2 && m <= tM2)) && g < 600) { set.add(`${y}-${m}`); m++; if (m > 12) { m = 1; y++; } g++; }
       return set;
     }
     const [bY, bM] = baseMonth.split('-').map(Number);
@@ -22147,14 +22162,24 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     });
     // 12ヶ月分を必ず生成（データない月は0で埋める）
     const [bY2,bM2] = baseMonth.split('-').map(Number);
+    const _emptyM = (m) => ({month:m,tusho:0,kesseki:0,kyugyo:0,furikae:0,kyushi:0,temps:[],bpUps:[],bpDns:[],pulses:[]});
+    // ★ 期間を指定(custom): 指定した年月範囲の月だけを表示(2026-08-10)。
+    //   従来は parseInt('custom')=NaN→12ヶ月固定で、1月〜8月指定でも12ヶ月分出ていた。表示は最大24ヶ月。
+    if (period === 'custom') {
+      const [fY,fM] = _customRange.from.split('-').map(Number);
+      const [tY3,tM3] = _customRange.to.split('-').map(Number);
+      const result = []; let y=fY, m=fM, g=0;
+      while ((y<tY3 || (y===tY3 && m<=tM3)) && g<24) { result.push(map[m] || _emptyM(m)); m++; if(m>12){m=1;y++;} g++; }
+      return result;
+    }
     const n2 = parseInt(period,10)||12;
     const result = [];
     for(let i=n2-1; i>=0; i--){
       let m = bM2 - i; while(m<=0) m+=12;
-      result.push(map[m] || {month:m,tusho:0,kesseki:0,kyugyo:0,furikae:0,kyushi:0,temps:[],bpUps:[],bpDns:[],pulses:[]});
+      result.push(map[m] || _emptyM(m));
     }
     return result;
-  }, [records, baseMonth, period]);
+  }, [records, baseMonth, period, _customRange]);
   if (!selectedPatient) return <div className="p-8 text-center text-slate-500 font-bold">利用者データがありません</div>;
 
   const temps  = validRecs.filter(r=>r.temp).map(r=>Number(r.temp));
