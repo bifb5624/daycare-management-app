@@ -31108,7 +31108,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                               {h.toDate ? (
                                 <span className="text-slate-500 shrink-0 flex items-center gap-1">{fD(h.toDate)}{!isOff && <button onClick={()=>{const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:''}; commitLP({pauseHistory: newHist}, '✓ 終了日をクリアしました（保存済み）');}} className="text-slate-300 hover:text-red-400 text-[10px]" title="終了日をクリア">✕</button>}</span>
                               ) : (
-                                !isOff ? (<input type="date" value="" onChange={e=>{if(!e.target.value)return; const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:e.target.value}; commitLP({pauseHistory: newHist}, '✓ 終了日を設定しました（保存済み）');}} className="text-[10px] border border-slate-300 rounded px-1.5 py-0.5 bg-white shrink-0" title="終了日を入力" style={{maxWidth:120}} />) : <span className="text-slate-400 shrink-0">現在</span>
+                                // ★ OS標準の日付入力は年が6桁入ってしまうため、独自入力(年4桁制限)に置換(2026-08-10)
+                                !isOff ? (<span className="shrink-0"><SmartDateInput value="" width={150} onChange={e=>{if(!e.target.value)return; const newHist=[...localPatient.pauseHistory]; newHist[origIdx]={...newHist[origIdx], toDate:e.target.value}; commitLP({pauseHistory: newHist}, '✓ 終了日を設定しました（保存済み）');}} /></span>) : <span className="text-slate-400 shrink-0">現在</span>
                               )}
                               {showCurrent && <span className="text-[9px] bg-orange-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">現在</span>}
                               {!isOff && <button onClick={()=>setPauseEditModal({origIdx, reason:h.reason||'', fromDate:h.fromDate||'', toDate:h.toDate||''})} className="text-slate-300 hover:text-blue-500 shrink-0" title="この休止履歴を編集"><Edit3 size={13}/></button>}
@@ -31363,10 +31364,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div><label className="text-xs font-bold text-slate-500 block mb-1">休止の理由</label>
                 <input type="text" value={pauseEditModal.reason} onChange={e=>setPauseEditModal(m=>({...m, reason:e.target.value}))} placeholder="例: 入院、自宅療養" className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none"/></div>
               <div><label className="text-xs font-bold text-slate-500 block mb-1">開始日</label>
-                <input type="date" value={pauseEditModal.fromDate} onChange={e=>setPauseEditModal(m=>({...m, fromDate:e.target.value}))} className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none"/></div>
+                <SmartDateInput value={pauseEditModal.fromDate} onChange={e=>setPauseEditModal(m=>({...m, fromDate:e.target.value}))} /></div>
               <div><label className="text-xs font-bold text-slate-500 block mb-1">終了日 <span className="font-normal text-slate-400">（空欄＝休止中）</span></label>
                 <div className="flex items-center gap-2">
-                  <input type="date" value={pauseEditModal.toDate} onChange={e=>setPauseEditModal(m=>({...m, toDate:e.target.value}))} className="flex-1 p-3 bg-slate-50 border border-slate-300 rounded-xl font-bold outline-none"/>
+                  <span className="flex-1"><SmartDateInput value={pauseEditModal.toDate} onChange={e=>setPauseEditModal(m=>({...m, toDate:e.target.value}))} /></span>
                   {pauseEditModal.toDate && <button onClick={()=>setPauseEditModal(m=>({...m, toDate:''}))} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold">クリア</button>}
                 </div>
               </div>
