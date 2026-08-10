@@ -11024,7 +11024,13 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           <Card>
             <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
               <span style={{display:'flex',alignItems:'center',gap:6}}><Clock size={16}/>本日のスケジュール</span>
-              <button onClick={()=>navigateTo('schedule')} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'#eef2ff',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>カレンダー →</button>
+              <span style={{display:'flex',alignItems:'center',gap:6}}>
+                {todayEvents.some(e => !isRead(e.id)) && (
+                  <button onClick={()=>{ todayEvents.forEach(e => { if (!isRead(e.id)) markRead(e.id); }); }}
+                    style={{fontSize:11,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:8,padding:'3px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>すべて既読にする</button>
+                )}
+                <button onClick={()=>navigateTo('schedule')} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'#eef2ff',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>カレンダー →</button>
+              </span>
             </div>
             {todayEvents.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>今日の予定はありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
@@ -11058,7 +11064,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
             const _unread = ext.filter(u=>!isRead(u.id)).length;
             return (
               <Card>
-                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:_unread?'#f59e0b':'#cbd5e1',borderRadius:999,padding:'1px 7px'}}>{_unread}</span></div>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#b45309',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>🔔 家族・ケアマネからの更新<span style={{fontSize:10,fontWeight:'bold',color:'white',background:_unread?'#f59e0b':'#cbd5e1',borderRadius:999,padding:'1px 7px'}}>{_unread}</span>
+                  {_unread > 0 && (
+                    <button onClick={()=>{ ext.forEach(u => { if (!isRead(u.id)) markRead(u.id); }); }}
+                      style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:'#b45309',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:'4px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>
+                      すべて既読にする
+                    </button>
+                  )}
+                </div>
                 {ext.length===0 ? (
                   <div style={{fontSize:12,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
                 ) : (<>
@@ -16517,6 +16530,18 @@ export default function App() {
     const arr = (appData.noticeReads || {})[_noticeStaffKey] || [];
     return arr.includes(String(id));
   }, [appData.noticeReads, _noticeStaffKey]);
+  // ★ 既読のクラウド即時push(2026-08-10): これまで既読は setAppData のみで、次に何かを保存する
+  //   端末でしかクラウドへ届かず、「iPadで既読にしてもMacでは未読のまま」になっていた。
+  //   既読を付けたら800msデバウンスで silent push し、同じスタッフの他端末へ数秒で反映させる。
+  //   保存関数は後方で定義されるため ref 経由で参照する(_noticeSaveRef)。
+  const _noticeSaveRef = React.useRef(null);
+  const _noticePushTimerRef = React.useRef(null);
+  const _schedNoticePush = React.useCallback(() => {
+    if (_noticePushTimerRef.current) clearTimeout(_noticePushTimerRef.current);
+    _noticePushTimerRef.current = setTimeout(() => {
+      try { _noticeSaveRef.current && _noticeSaveRef.current(appDataRef.current, { silent: true }); } catch (e) { console.warn('[noticeReads] push failed', e); }
+    }, 800);
+  }, []);
   const markNoticeRead = React.useCallback((id) => {
     if (id == null) return;
     setAppData(prev => {
@@ -16525,7 +16550,8 @@ export default function App() {
       if (arr.includes(String(id))) return prev;   // 変化なし → 保存もしない
       return { ...prev, noticeReads: { ...map, [_noticeStaffKey]: [...arr, String(id)].slice(-1000) } };
     });
-  }, [_noticeStaffKey]);
+    _schedNoticePush();
+  }, [_noticeStaffKey, _schedNoticePush]);
   // 旧データ(端末ローカル)を一度だけクラウドへ移行する
   const _noticeMigratedRef = React.useRef(false);
   useEffect(() => {
@@ -18054,6 +18080,8 @@ export default function App() {
       }
     }
   };
+  // ★ 既読push(markNoticeRead)から最新の保存関数を参照するための橋渡し(毎レンダー更新)
+  _noticeSaveRef.current = handleSaveToCloud;
 
   // ★ 旧データ(base64)を Supabase Storage へ自動移行して localStorage 容量を空ける。
   //   Storage化以前に保存した画像/PDF が base64 のまま残り「容量超過」になるのを解消。
@@ -30013,6 +30041,42 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (opts.silent) onSave(next2, { silent: true });
     else onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
   };
+  // ★ サービス提供内容(規定値)の変更を「過去全ての記録」に反映(2026-08-10)。
+  //   従来の「指定せず保存」は現在値だけ更新し履歴を触らなかったため、過去に日付指定の変更履歴が
+  //   ある利用者では履歴側が優先され、提供記録入力のグレー数値に新値が反映されなかった。
+  //   → 変更した項目だけを全履歴エントリに遡って書き換える(他項目の日付つき履歴は壊さない)。
+  const applyPlannedExAllPast = () => {
+    const ctx = plannedExModal;
+    if (!ctx) return;
+    const { pat, next, prevPlanned, prevIndividual } = ctx;
+    const pat2 = { ...pat };
+    // 運動メニュー: 変更キーを特定し、全履歴エントリの values を新値で上書き(空=中止はキー削除)
+    const prevV = prevPlanned || {}, newV = pat.plannedExercises || {};
+    const _tr = (v) => (v == null ? '' : String(v)).trim();
+    const changedP = [...new Set([...Object.keys(prevV), ...Object.keys(newV)])].filter(k => _tr(prevV[k]) !== _tr(newV[k]));
+    if (changedP.length && Array.isArray(pat.plannedExercisesHistory) && pat.plannedExercisesHistory.length) {
+      pat2.plannedExercisesHistory = pat.plannedExercisesHistory.map(h => {
+        const values = { ...(h.values || {}) };
+        changedP.forEach(k => { const nv = _tr(newV[k]); if (nv) values[k] = newV[k]; else delete values[k]; });
+        return { ...h, values };
+      });
+    }
+    // 個別運動: 変更itemIdを特定し、全履歴エントリ内の該当項目の規定値を書き換え
+    const _indMap = (arr) => { const r = {}; (Array.isArray(arr) ? arr : []).forEach(x => { if (x && x.itemId) r[x.itemId] = _tr(x.defaultValue); }); return r; };
+    const pIM = _indMap(prevIndividual), nIM = _indMap(pat.individualExercises);
+    const changedI = [...new Set([...Object.keys(pIM), ...Object.keys(nIM)])].filter(k => (pIM[k] || '') !== (nIM[k] || ''));
+    if (changedI.length && Array.isArray(pat.individualExercisesHistory) && pat.individualExercisesHistory.length) {
+      pat2.individualExercisesHistory = pat.individualExercisesHistory.map(h => {
+        const values = (Array.isArray(h.values) ? h.values : []).map(x => (x && x.itemId && changedI.includes(x.itemId)) ? { ...x, defaultValue: nIM[x.itemId] || '' } : x);
+        return { ...h, values };
+      });
+    }
+    const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
+    setLocalPatient(pat2);
+    _pendingExBaseRef.current = null;
+    setPlannedExModal(null);
+    onSave(next2, { manual: true, message: '✓ 保存しました（過去全ての記録に反映）' });
+  };
 
   // ★ 自動保存: 基本情報/サービス提供内容/月間スケジュールの変更を、入力が止まって約1.5秒後に自動でクラウド保存。
   //   保存ボタンの押し忘れを防ぐ。 dirty のときだけ発火し、保存で dirty=false になるのでループしない。
@@ -31348,14 +31412,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
             <h3 className="text-base font-bold text-slate-800 mb-1">サービス提供内容の変更を反映</h3>
-            <p className="text-xs text-slate-500 mb-4">運動メニュー／個別運動の設定値が変わりました。<b>変更日</b>を選んでください。<br/>・<b>提供記録入力のグレー数値</b>＝選んだ<b>日から</b>新値<br/>・<b>月別提供記録の設定数値</b>＝<b>翌月から</b>新値（当月は旧値のまま）<br/>・<b>備考</b>＝選んだ日付で「◯/◯ 重さ 3→4に変更」と自動記載</p>
+            <p className="text-xs text-slate-500 mb-4">運動メニュー／個別運動の設定値が変わりました。反映方法を選んでください。</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-3 text-[11px] text-slate-600 leading-relaxed">
+              <b className="text-slate-800">過去全ての記録に反映</b>：これまでの全期間の表示（提供記録入力のグレー数値・月別の設定数値）が新しい値になります。入力の誤りを直す時に。<br/>
+              <b className="text-slate-800">日付を指定して反映</b>：選んだ日から新しい値（それ以前は旧値のまま）。月別の設定数値は翌月から。備考に「◯/◯ 重さ 3→4に変更」と自動記載されます。
+            </div>
             <div className="flex items-center gap-2 mb-5">
               <span className="text-sm text-slate-500">変更日：</span>
               <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
             </div>
             <div className="flex justify-end gap-3">
-              <button onClick={()=>{ const m=plannedExModal; _pendingExBaseRef.current=null; setPlannedExModal(null); onSave(m.next, { manual:true, message:'✓ 保存しました（反映日は未指定）' }); }} className="px-4 py-2 rounded-xl font-bold text-slate-500 hover:bg-slate-100 text-sm" title="反映日を指定せず、今の値をそのまま保存します（履歴・備考に日付は残しません）">指定せず保存</button>
-              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">この変更日で保存</button>
+              <button onClick={applyPlannedExAllPast} className="px-4 py-2 rounded-xl font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-sm" title="変更した項目を過去の全期間にさかのぼって反映します（他の項目の日付つき変更履歴はそのまま残ります）">過去全ての記録に反映</button>
+              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">日付を指定して反映</button>
             </div>
           </div>
         </div>
