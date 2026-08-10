@@ -16757,11 +16757,29 @@ export default function App() {
       syncLog('rows-apply', { n: items.length });   // ★診断: テーブルから受信して手元へ反映開始
       setAppData(prev => {
         const map = new Map((Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).map(r => [String(r.id), r]));
+        const _tombRec = (prev.deletedIds && prev.deletedIds.ticketRecords) || {};
         let changed = false;
         items.forEach(({ rec, deleted, updated_at }) => {
           const id = String(rec.id);
           if (updated_at && (!_lastTblSyncRef.current || updated_at > _lastTblSyncRef.current)) _lastTblSyncRef.current = updated_at;
-          if (deleted) return;   // ★ 削除は当面反映しない(データ消失防止)。 誤削除が全端末へ伝播するのを止める
+          if (deleted) {
+            // ★ 削除の伝搬(2026-08-10): 従来は無視していたため、取り消した振替が他端末に表示され続け、
+            //   その端末の保存で復活し得た。 明示削除(deleted_at)は手元にも反映する。
+            //   ただし手元の記録に臨床データ(バイタル等)があり、削除時刻より新しい保存が載っている場合は
+            //   保持する(入力消失防止・その端末の次回保存で再登録され意図どおり残る)。
+            const ex = map.get(id);
+            if (ex) {
+              const _delT = updated_at ? Date.parse(updated_at) || 0 : 0;
+              const _keep = ticketHasClinicalData(ex) && (Number(ex._savedAt) || 0) > _delT;
+              if (!_keep) { map.delete(id); changed = true; }
+            }
+            return;
+          }
+          // ★ 墓石ガード(2026-08-10): この端末で削除済み(墓石が行の更新時刻より新しい)の行は受け入れない。
+          //   削除を知らない他端末の再upsertで、取り消した振替が蘇るのを防ぐ。 墓石より新しい行=意図的な
+          //   再作成は通常どおり受け入れる。
+          const _tT = Number(_tombRec[id]) || 0;
+          if (_tT && (!updated_at || _tT >= (Date.parse(updated_at) || 0))) return;
           const ex = map.get(id);
           if (!ex) { map.set(id, rec); changed = true; return; }
           const m = _mergeRecTs(ex, rec);
@@ -16793,8 +16811,13 @@ export default function App() {
           // ★ テーブルを土台にしつつ、手元(localStorage由来)の記録も非空優先で統合する。
           //   どちらの非空も残す = テーブルの部分データで手元を消さない、手元の古い空でテーブルを消さない。
           const map = new Map(rows.map(r => [String(r.id), r]));
+          // ★ 墓石ガード(2026-08-10): 削除済み(墓石)の記録は手元キャッシュから復活させない。
+          //   テーブルでは deleted_at 済みでも、localStorage由来の手元に残った行がここで再統合され、
+          //   取り消した振替が再読み込み後も表示され続けるのを防ぐ。
+          const _tombRec2 = (prev.deletedIds && prev.deletedIds.ticketRecords) || {};
           (Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).forEach(lr => {
             if (!lr || lr.id == null) return;
+            if (_tombRec2[String(lr.id)]) return;
             const ex = map.get(String(lr.id));
             if (!ex) { map.set(String(lr.id), lr); return; }
             const m = _mergeRecTs(ex, lr);         // 手元(lr)を項目時刻つきで重ねる(新しい方が勝つ)
@@ -17976,8 +17999,12 @@ export default function App() {
           const _prevRecs = (appData && appData.ticketRecords) || [];
           const _rows = diffRecordRows(_prevRecs, newData.ticketRecords);
           if (_rows.length) upsertTicketRows(staffSession.storeId, _rows);
-          // ★ 削除は当面行わない(データ消失防止)。 保存時に appData.ticketRecords が部分的だと
-          //   『newDataに無い=削除』と誤判定し、他日の記録まで消してしまう事故を防ぐ。
+          // ★ 削除の反映(2026-08-10): 「明示的に指定された記録idだけ」テーブルにも削除(deleted_at)を立てる。
+          //   配列差分からの推測削除は誤爆リスクがあるため従来どおり行わない。 これが無いと、振替の
+          //   取り消し等で墓石に積んでもテーブルの行が生き残り、数秒後の受信や再読み込みで必ず復活していた
+          //   (取り消しが効かない事象の根本原因)。 呼び出し元が options.deleteRecordIds で明示する。
+          const _delIds = Array.isArray(options.deleteRecordIds) ? options.deleteRecordIds.filter(x => x != null).map(String) : [];
+          if (_delIds.length) { deleteTicketRecords(staffSession.storeId, _delIds); syncLog('rows-delete', { n: _delIds.length, id: _delIds[0] }); }
         } catch (e) { console.warn('[ticket_records] 書き込みに失敗', e); syncLog('rows-write-error', { err: String(e && e.message || e).slice(0,120) }); }
       }
       if (_canPush) {
@@ -20514,7 +20541,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       _saveDelTomb.ticketRecords = { ...(_saveDelTomb.ticketRecords||{}) };
       _cancelTomb.forEach(rid => { _saveDelTomb.ticketRecords[rid] = Date.now(); });
       // ★ 手動は manual(トースト表示)、自動保存は silent(即時push・トーストなし)
-      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts, ...(_cancelTomb.length ? { deletedIds: _saveDelTomb } : {}) }, auto ? { silent: true } : { manual: true, message: '✓ 保存しました' });
+      // ★ 取り消しで削除した記録idはテーブル(ticket_records)にも削除を伝える(options.deleteRecordIds)。
+      //   墓石(deletedIds)だけではテーブルの行が生き残り、受信/再読込で復活していた(2026-08-10修正)。
+      onSave({ ...appData, ticketRecords: updatedTicketRecords, monthlyShifts: newShifts, ...(_cancelTomb.length ? { deletedIds: _saveDelTomb } : {}) },
+        { ...(auto ? { silent: true } : { manual: true, message: '✓ 保存しました' }), ...(_cancelTomb.length ? { deleteRecordIds: _cancelTomb } : {}) });
       try { _pushRecSnap(updatedTicketRecords); } catch {}
       setPendingCancellations([]);
       setPendingFurikaeShifts([]);
