@@ -22911,7 +22911,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const tokkiText = tokkiOv.text || latest.tokki || '';
           // 利用者本人の休止情報 (現在休止中の場合)
           const _patient = (appData.patients||[]).find(p => p.id === selectedPatientId);
-          const isOnPause = _patient && _patient.status === '休止';
+          // ★ 日付判定つきの表示ステータスで判定(終了日を過ぎた休止は表示しない・2026-08-10)
+          const isOnPause = _patient && getPatientDisplayStatus(_patient) === '休止';
           const lastPause = isOnPause ? [...(_patient.pauseHistory||[])].pop() : null;
           // 体力測定: 測定したら表示 (本日に限らず最新の測定記録を表示)
           const fitnessOnDay = (() => {
@@ -29572,6 +29573,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [pauseModal, setPauseModal] = useState({ isOpen: false, reason: "", fromDate: "" });
   const [isPauseHistoryOpen, setIsPauseHistoryOpen] = useState(false);
   const [pauseEditModal, setPauseEditModal] = useState(null); // {origIdx, reason, fromDate, toDate} 休止履歴の編集
+  const [resumeModal, setResumeModal] = useState(null); // {resumeDate} 利用再開日の入力(2026-08-10)
   const [patientStatusFilter, setPatientStatusFilter] = useState('利用中');
   const [nameSearchQuery, setNameSearchQuery] = useState('');
   const [activeKanaFilter, setActiveKanaFilter] = useState('all');
@@ -30099,11 +30101,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const handleStatusChange = (val) => {
     if (val === '休止') setPauseModal({ isOpen: true, reason: "", fromDate: new Date().toISOString().split('T')[0] });
     else if (val === '利用中' && localPatient.status === '休止') {
-      // ★ 休止→利用中(再開): 最新の未終了の休止に「終了日=今日」を記録し、休止期間を確定する
-      const today = new Date().toISOString().split('T')[0];
-      const hist = [...(localPatient.pauseHistory || [])];
-      for (let i = hist.length - 1; i >= 0; i--) { if (!hist[i].toDate) { hist[i] = { ...hist[i], toDate: today }; break; } }
-      commitLP({ status: '利用中', pauseHistory: hist }, '✓ 利用を再開しました（保存済み）');
+      // ★ 休止→利用中(再開): 「いつから再開するか」を聞くモーダルを出す(2026-08-10)。
+      //   再開日を入れると、最新の未終了の休止に終了日=再開日の前日を自動記録する。
+      setResumeModal({ resumeDate: new Date().toISOString().split('T')[0] });
     } else commitLP({ status: val }, '✓ 状態を変更しました（保存済み）');
   };
   const updateSched = (i, v) => { if (!localPatient) return; const oldV = localPatient.scheduleAmPm?.[i] || ''; if(oldV === v) return; const t=new Date(); const ds=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`; setSchedModal({dayIndex:i, newVal:v, oldVal:oldV, applyFrom:ds, vY:t.getFullYear(), vM:t.getMonth()}); };
@@ -31072,7 +31072,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               {/* ★ 休止情報・休止履歴 (現在休止中の表示＋開始日/終了日の編集・削除。 休止の設定は下の月間スケジュールから) */}
               {(localPatient.status === '休止' || (localPatient.pauseHistory||[]).length > 0) && (() => {
                 const l = latPause(localPatient);
-                const onPause = localPatient.status === '休止';
+                // ★ 「現在休止中」は日付判定つきの表示ステータスで決める(2026-08-10)。
+                //   status直参照だと、終了日(例8/9)を過ぎても再開ボタンを押すまでバナーが消えなかった。
+                //   終了日を過ぎたら自動で「過去の休止履歴あり」表示に切り替わる。
+                const onPause = getPatientDisplayStatus(localPatient) === '休止';
                 return (
                   <div className={`rounded-2xl border-2 overflow-hidden ${onPause ? 'border-orange-300 bg-orange-50' : 'border-slate-200 bg-slate-50'}`}>
                     {onPause ? (
@@ -31385,6 +31388,38 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   setPauseEditModal(null);
                 }} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">保存</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ★ 利用再開日の入力モーダル(2026-08-10): 再開日を入れると休止の終了日=前日を自動記録 */}
+      {resumeModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-bold text-slate-800 mb-1">利用を再開</h3>
+            <p className="text-xs text-slate-500 mb-4">いつから利用を再開しますか？<br/>休止の終了日には<b>再開日の前日</b>が自動で記録されます。<br/>未来の日付にすると、その日までは休止のまま・当日から自動で再開されます。</p>
+            <div className="flex items-center gap-2 mb-5">
+              <span className="text-sm text-slate-500 shrink-0">再開日：</span>
+              <SmartDateInput value={resumeModal.resumeDate} onChange={e=>setResumeModal(m=>({...m, resumeDate:e.target.value}))} />
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={()=>setResumeModal(null)} className="px-5 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200">キャンセル</button>
+              <button onClick={()=>{
+                const rd = resumeModal.resumeDate;
+                if (!rd) { alert('再開日を入力してください'); return; }
+                const d = new Date(rd); d.setDate(d.getDate()-1);
+                const toIso = d.toISOString().split('T')[0];
+                const hist = [...(localPatient.pauseHistory || [])];
+                for (let i = hist.length - 1; i >= 0; i--) {
+                  if (!hist[i].toDate) { hist[i] = { ...hist[i], toDate: (hist[i].fromDate && toIso < hist[i].fromDate) ? hist[i].fromDate : toIso }; break; }
+                }
+                // ★ 再開日が未来なら status は「休止」のまま(それまでは休止扱い)。 終了日を過ぎると
+                //   表示ステータスが自動で「利用中」に切り替わる。 今日以前なら即「利用中」。
+                const _todayIso = new Date().toISOString().split('T')[0];
+                const _st = rd > _todayIso ? '休止' : '利用中';
+                commitLP({ status: _st, statusUpdatedAt: Date.now(), pauseHistory: hist }, `✓ ${rd.replace(/-/g,'/')} から利用再開に設定しました（保存済み）`);
+                setResumeModal(null);
+              }} className="px-8 py-2 bg-orange-600 text-white rounded-xl font-bold shadow-lg active:scale-95">再開する</button>
             </div>
           </div>
         </div>
