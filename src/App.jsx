@@ -31089,7 +31089,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                         </div>
                         {!isOff && (
                           <div className="flex gap-2">
-                            <button onClick={() => handleStatusChange('利用中')} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold">利用を再開</button>
+                            <button onClick={() => handleStatusChange('利用中')} className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-xs font-bold">再開日を設定</button>
                           </div>
                         )}
                       </div>
@@ -31396,7 +31396,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       {resumeModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-bold text-slate-800 mb-1">利用を再開</h3>
+            <h3 className="text-base font-bold text-slate-800 mb-1">再開日の設定</h3>
             <p className="text-xs text-slate-500 mb-4">いつから利用を再開しますか？<br/>休止の終了日には<b>再開日の前日</b>が自動で記録されます。<br/>未来の日付にすると、その日までは休止のまま・当日から自動で再開されます。</p>
             <div className="flex items-center gap-2 mb-5">
               <span className="text-sm text-slate-500 shrink-0">再開日：</span>
