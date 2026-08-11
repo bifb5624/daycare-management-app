@@ -21046,10 +21046,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           OS/ブラウザ設定で非表示になり得るため、つまみを自前で描画して常時表示する。
           つまみのドラッグ・レールのクリックで表が横スクロールし、表のスクロールにも追従する。 */}
       <div className="bg-slate-200 border border-slate-300 rounded-t-xl"
-           style={{height:18,flexShrink:0,marginBottom:-1,position:'relative',overflow:'hidden',cursor:'pointer'}}
+           style={{height:11,flexShrink:0,marginBottom:-1,position:'relative',overflow:'hidden',cursor:'pointer'}}
            onPointerDown={(e)=>{ if (e.target !== e.currentTarget) return; const el = tableScrollRef.current; if (!el) return; const r = e.currentTarget.getBoundingClientRect(); el.scrollLeft = ((e.clientX - r.left) / Math.max(1, r.width)) * el.scrollWidth - el.clientWidth / 2; }}>
         <div onPointerDown={_hbarDown} onPointerMove={_hbarMove} onPointerUp={_hbarUp} onPointerCancel={_hbarUp}
-             style={{position:'absolute',top:3,bottom:3,left:`${Math.min(hbar.pos*100, 100 - Math.max(6, hbar.ratio*100))}%`,width:`${Math.max(6, hbar.ratio*100)}%`,background:'#64748b',borderRadius:8,cursor:'grab',touchAction:'none'}}/>
+             style={{position:'absolute',top:2,bottom:2,left:`${Math.min(hbar.pos*100, 100 - Math.max(6, hbar.ratio*100))}%`,width:`${Math.max(6, hbar.ratio*100)}%`,background:'#64748b',borderRadius:6,cursor:'grab',touchAction:'none'}}/>
       </div>
       <div ref={el=>{ tableScrollRef.current=el; tableContainerRef.current=el; }} onScroll={_syncFromTable}
            draggable={false} onDragStart={e=>e.preventDefault()}
