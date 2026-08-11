@@ -1091,7 +1091,11 @@ const buildPrimaryContact = (p) => {
 };
 // ★ ケアマネ由来の連絡先は緊急連絡先(家族)には出さない。 事業所名/事業所電話/FAX を持つ or 続柄がケアマネ系。
 const isCmContact = (c) => !!(c && (c.cmOffice || c.officePhone || c.officeFax || /ケアマネ|介護支援|居宅/.test(String(c.relation||''))));
-const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim && !isCmContact(prim) ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c))) ]; };
+// ★ 続柄「本人」は緊急連絡先に出さない(2026-08-11): ご本人が閲覧用に登録したアカウントが
+//   緊急連絡先として表示されるのは不自然なため(登録時は除外済みだが、旧データや登録者情報の
+//   編集経由で入った分もここで一括ガード)。
+const isSelfContact = (c) => !!(c && String(c.relation||'').includes('本人'));
+const getAllContacts = (p) => { const prim = buildPrimaryContact(p); return [ ...(prim && !isCmContact(prim) && !isSelfContact(prim) ? [prim] : []), ...(((p && p.emergencyContacts) || []).filter(c => !isCmContact(c) && !isSelfContact(c))) ]; };
 // ★ 同期の診断パネル (?syncdebug=1 のときだけ表示)。 iPad ではコンソールが見られないため、
 //   保存/受信/競合/失敗の履歴を画面で確認できるようにする。 通常運用では一切描画されない。
 function SyncDebugPanel() {
@@ -14734,8 +14738,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               <button onClick={async ()=>{
                 setMyInfoForm(f=>({...f, saving:true, savedMsg:''}));
                 const isParent = loggedAcc?.role === 'parent';
+                // ★ 続柄「本人」は代表家族(緊急連絡先)に書かない(2026-08-11)。 ご本人の閲覧用アカウントが
+                //   緊急連絡先に載るのを防ぐ(表示側 getAllContacts でもガード済み)。
+                const _isSelfRel = String(myInfoForm.relation||'').includes('本人');
                 let updatedPatient;
-                if (isParent) {
+                if (isParent && _isSelfRel) {
+                  updatedPatient = { ...patient }; // 本人: 代表家族欄には触れない
+                } else if (isParent) {
                   updatedPatient = {
                     ...patient,
                     familyName: `${myInfoForm.lastName||''} ${myInfoForm.firstName||''}`.trim() || myInfoForm.name,
@@ -22196,21 +22205,30 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     const _emptyM = (m) => ({month:m,tusho:0,kesseki:0,kyugyo:0,furikae:0,kyushi:0,temps:[],bpUps:[],bpDns:[],pulses:[]});
     // ★ 期間を指定(custom): 指定した年月範囲の月だけを表示(2026-08-10)。
     //   従来は parseInt('custom')=NaN→12ヶ月固定で、1月〜8月指定でも12ヶ月分出ていた。表示は最大24ヶ月。
+    let result = [];
     if (period === 'custom') {
       const [fY,fM] = _customRange.from.split('-').map(Number);
       const [tY3,tM3] = _customRange.to.split('-').map(Number);
-      const result = []; let y=fY, m=fM, g=0;
-      while ((y<tY3 || (y===tY3 && m<=tM3)) && g<24) { result.push(map[m] || _emptyM(m)); m++; if(m>12){m=1;y++;} g++; }
-      return result;
+      let y=fY, m=fM, g=0;
+      while ((y<tY3 || (y===tY3 && m<=tM3)) && g<24) { result.push({ ...(map[m] || _emptyM(m)), _ym: `${y}-${String(m).padStart(2,'0')}` }); m++; if(m>12){m=1;y++;} g++; }
+    } else {
+      const n2 = parseInt(period,10)||12;
+      for(let i=n2-1; i>=0; i--){
+        let m = bM2 - i, y = bY2; while(m<=0){ m+=12; y--; }
+        result.push({ ...(map[m] || _emptyM(m)), _ym: `${y}-${String(m).padStart(2,'0')}` });
+      }
     }
-    const n2 = parseInt(period,10)||12;
-    const result = [];
-    for(let i=n2-1; i>=0; i--){
-      let m = bM2 - i; while(m<=0) m+=12;
-      result.push(map[m] || _emptyM(m));
-    }
-    return result;
-  }, [records, baseMonth, period, _customRange]);
+    // ★ 利用開始前の月は表示しない(2026-08-11): 利用開始日より前の月を除外し、除外した数を
+    //   _preTrimmed に持たせて表示側で「利用開始前のため表示していません」と注記する。
+    //   開始日が未設定の利用者は「先頭から続く全ゼロの月」を除外(最低1ヶ月は残す)。
+    const _startYM = (selectedPatient && selectedPatient.startDate) ? String(selectedPatient.startDate).slice(0,7) : null;
+    let out = result;
+    if (_startYM) out = result.filter(r => !r._ym || r._ym >= _startYM);
+    else { out = result.slice(); while (out.length > 1 && !out[0].tusho && !out[0].kesseki && !out[0].kyugyo && !out[0].furikae && !out[0].kyushi) out.shift(); }
+    if (!out.length) out = result.slice(-1); // 全て開始前でも直近1ヶ月は残す(空テーブル防止)
+    out._preTrimmed = result.length - out.length;
+    return out;
+  }, [records, baseMonth, period, _customRange, selectedPatient?.startDate]);
   if (!selectedPatient) return <div className="p-8 text-center text-slate-500 font-bold">利用者データがありません</div>;
 
   const temps  = validRecs.filter(r=>r.temp).map(r=>Number(r.temp));
@@ -23418,7 +23436,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
 
                 {/* 月別通所状況 */}
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #94a3b8'}}>
-                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>月別通所状況</div>
+                  <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>月別通所状況
+                    {(monthlyData._preTrimmed > 0) && (
+                      <span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8',marginLeft:8}}>
+                        ※ 利用開始{selectedPatient?.startDate ? `（${String(selectedPatient.startDate).slice(0,10).replace(/-/g,'/')}）` : ''}前の月は表示していません
+                      </span>
+                    )}
+                  </div>
                   {(()=>{
                     const maxBar=Math.max(...monthlyData.map(m=>m.tusho+m.kesseki+(m.kyushi||0)),1);
                     const mkPie=(tusho,kesseki,furikae,kyushi)=>{
