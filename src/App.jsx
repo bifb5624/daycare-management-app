@@ -19800,6 +19800,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     // ★ 施設の休業日(各種設定>休業日)判定(2026-08-11): この日は利用者の状態を自動で「休業」にする
     const _selIsoHd = (() => { const d = new Date(selectedDate); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
     const _isHolidaySel = (appData.holidays || []).some(h => (h && (h.date || h)) === _selIsoHd);
+    // ★ 休業日の名称(例: 夏季休業)を特記に自動記載するため取得(2026-08-11)
+    const _holidayNameSel = (() => { if (!_isHolidaySel) return ''; const h = (appData.holidays || []).find(x => (x && (x.date || x)) === _selIsoHd); return (h && h.name) ? h.name : ''; })();
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
     
@@ -19954,6 +19956,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          //   バイタル等の実データが入力済みの記録は触らない(休業日設定の誤りで入力を隠さない保護)。
          if (_isHolidaySel && pData.status !== '休止' && pData.status !== '休業' && !ticketHasClinicalData(pData)) {
              pData.status = '休業';
+         }
+         // ★ 休業の特記に休業日の名称(例: 夏季休業)を自動記載(2026-08-11)。 既に特記がある場合は触らない。
+         if (_isHolidaySel && pData.status === '休業' && _holidayNameSel && !(pData.tokki && String(pData.tokki).trim())) {
+             pData.tokki = _holidayNameSel;
          }
          return pData;
       })
