@@ -21027,9 +21027,17 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 
       <style>{`#record-table tbody tr { min-height: 32px !important; } #record-table tbody tr td { min-height: 32px !important; padding-top: 2px !important; padding-bottom: 2px !important; box-sizing: border-box !important; } /* 個別運動列: 他の列と同じ行高に収める (min-height強制を外す) */ #record-table tbody tr td[data-ind-cell] { min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; vertical-align: middle !important; }  #record-table tr.readonly-row input:disabled, #record-table tr.readonly-row button:disabled, #record-table tr.readonly-row textarea:disabled, #record-table tr.readonly-row select:disabled { opacity: 1 !important; color: #000 !important; -webkit-text-fill-color: #000 !important; } /* 列見出しを縦スクロール時も常に上部固定 + 行高を狭く */ #record-table thead th { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important; padding-top: 4px !important; padding-bottom: 4px !important; line-height: 1.1 !important; font-size: 11px !important; }`}</style>
       {/* 画面上部の横スクロールバー: 下のテーブルスクロールと scrollLeft を同期 */}
+      {/* ★ OS設定(スクロールバー自動非表示)に関係なく常に見えるよう、バーの見た目を明示指定(2026-08-11) */}
+      <style>{`
+        .record-topscroll::-webkit-scrollbar { height: 12px; display: block; }
+        .record-topscroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 6px; }
+        .record-topscroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; border: 2px solid #e2e8f0; }
+        .record-topscroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .record-topscroll { scrollbar-width: auto; scrollbar-color: #94a3b8 #e2e8f0; }
+      `}</style>
       <div ref={topScrollRef} onScroll={_syncFromTop}
-           className="bg-slate-100 border border-slate-300 rounded-t-xl"
-           style={{overflowX:'auto',overflowY:'hidden',height:14,flexShrink:0,marginBottom:-1}}>
+           className="record-topscroll bg-slate-100 border border-slate-300 rounded-t-xl"
+           style={{overflowX:'scroll',overflowY:'hidden',height:16,flexShrink:0,marginBottom:-1}}>
         <div style={{width: tableScrollWidth, height: 1}}/>
       </div>
       <div ref={el=>{ tableScrollRef.current=el; tableContainerRef.current=el; }} onScroll={_syncFromTable}
