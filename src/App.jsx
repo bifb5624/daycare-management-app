@@ -22428,13 +22428,15 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <button key={v} onClick={()=>setPeriod(v)} style={{padding:'6px 10px',fontSize:12,fontWeight:'bold',color:period===v?'#1e293b':'#334155',background:period===v?'white':'transparent',border:'none',cursor:'pointer',borderRight:'1px solid rgba(255,255,255,0.4)',transition:'all 0.15s'}}>{l}</button>
             ))}
           </div>
+          {/* ★ 家族側と同仕様に統一(2026-08-11): 年4桁上限・開始>終了の逆転防止(min/max+相互クランプ)。
+              片側未指定の既定(開始=終了の1年前/終了=今月)は共通ロジック(_customRange)で適用済み。 */}
           {period!=='custom'&&
-            <input type="month" value={baseMonth} onChange={e=>setBaseMonth(e.target.value)}
+            <input type="month" max="9999-12" value={baseMonth} onChange={e=>setBaseMonth(e.target.value)}
               style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>}
           {period==='custom'&&<>
-            <input type="month" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+            <input type="month" max={customTo || '9999-12'} value={customFrom} title="開始月(未指定の場合は終了月の1年前から)" onChange={e=>{ const v=e.target.value; setCustomFrom(v); if (v && customTo && v > customTo) setCustomTo(v); }} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
             <span style={{color:'#1e293b',fontWeight:'bold'}}>〜</span>
-            <input type="month" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+            <input type="month" min={customFrom || undefined} max="9999-12" value={customTo} title="終了月(未指定の場合は今月まで)" onChange={e=>{ const v=e.target.value; setCustomTo(v); if (v && customFrom && v < customFrom) setCustomFrom(v); }} style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.6)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
           </>}
           </>)}
           {/* ★ 期間ラベル: compactMode (家族・ケアマネ) では親ヘッダで持つので非表示 */}
@@ -29667,6 +29669,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
   // ★ アカウント管理モーダルを開いた時 + 10秒ごと、Supabase から最新の家族招待/アカウントを取得
   //   (登録した家族の状態が「未使用」のまま固まらないように)
+  // ★ 揺れ防止(2026-08-11): サーバー応答が前回と同じなら onSave しない。 従来は10秒ごとに
+  //   無条件で onSave(全体保存)が走り、モーダルが再構築されて画面が上下に揺れ続けていた。
+  const _famListSigRef = React.useRef('');
   React.useEffect(() => {
     if (!familyShareModal || !isSupabaseEnabled) return;
     const pat = familyShareModal.patient;
@@ -29697,6 +29702,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             role: a.role||'member', lastLogin: a.last_login||null,
             _fromSupabase: true,
           }));
+        // ★ サーバー応答が前回反映分と同一ならスキップ(モーダルの揺れ・無駄な保存を防止)
+        const _sig = JSON.stringify([mappedInv, mappedAcc]);
+        if (_sig === _famListSigRef.current) return;
+        _famListSigRef.current = _sig;
         onSave({ ...appData,
           familyInvites: [...localInv, ...mappedInv],
           familyAccounts: [...localAcc, ...mappedAcc],
@@ -42949,20 +42958,20 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-bold text-amber-900">フェイスシート</div>
                 <div className="flex gap-2">
+                  {/* ★ 「新規作成」廃止(2026-08-11): フェイスシートは全利用者に最初から用意されている
+                      扱いとし、常に「編集・追記」で開く(利用者マスタや家族編集の内容が自動反映されるため)。 */}
                   <button onClick={()=>setFaceSheetChoice(true)}
                     className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold">
-                    {Object.keys(faceSheet).length === 0 ? '+ 新規作成' : '編集'}
+                    編集・追記
                   </button>
-                  {Object.keys(faceSheet).length > 0 && (
-                    <button onClick={()=>setPdfPreviewFaceSheet(true)}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">PDF</button>
-                  )}
+                  <button onClick={()=>setPdfPreviewFaceSheet(true)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">PDF</button>
                 </div>
               </div>
               <div className="text-[11px] text-amber-700 leading-relaxed">
                 利用者の基本情報・家族・連絡先・介護保険・医療・ケアマネ情報をまとめた書式です。<br/>
                 {Object.keys(faceSheet).length === 0
-                  ? '「新規作成」から入力してください。'
+                  ? 'まだ未入力の項目があります。「編集・追記」から入力してください（基本情報・ご家族登録の内容は自動で反映されます）。'
                   : `作成済 (最終更新: ${faceSheet.updatedAt ? new Date(faceSheet.updatedAt).toLocaleDateString('ja-JP') : '不明'}${faceSheet.updatedBy?` / ${faceSheet.updatedBy}`:''})`
                 }
                 {(personalFile.faceSheetHistory||[]).length > 0 && (
