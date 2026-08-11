@@ -21145,8 +21145,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     // ★ テンキー入力中の血圧枠は「打った内容そのまま」(スラッシュを打てばスラッシュも見える)を表示
                     const _kpActive = isBp && keypad.isOpen && keypad.recordId === p.id && keypad.field === field;
                     const _shown2 = _kpActive ? ((keypad.value || '') || '＋') : shown;
+                    // ★ 選択中セルのハイライト(2026-08-11): PC版と同じ青枠リングでどこを入力中か分かるように
                     return (
-                    <button key={field} disabled={dis} onClick={()=>{openKeypad(p.id,field,cur,isAbsent);setActiveCell(`${p.id}-${field}`);}} className="rounded-lg border border-slate-300 bg-white py-1.5 px-1 disabled:opacity-40 flex flex-col items-center">
+                    <button key={field} disabled={dis} onClick={()=>{openKeypad(p.id,field,cur,isAbsent);setActiveCell(`${p.id}-${field}`);}} className={`rounded-lg border py-1.5 px-1 disabled:opacity-40 flex flex-col items-center ${activeCell===`${p.id}-${field}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-300 bg-white'}`}>
                       <span className="text-[10px] font-bold text-slate-500">{lbl}</span>
                       <span className={`text-base font-bold ${colorCls}`}>{_shown2}</span>
                     </button>
@@ -21166,7 +21167,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       );
                     }
                     return (
-                    <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className="rounded-lg border border-slate-200 bg-slate-50 py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0">
+                    <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className={`rounded-lg border py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50'}`}>
                       <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
                       <span className="text-sm font-bold text-blue-700">{disp||<span className="text-slate-500">{ph||'＋'}</span>}</span>
                     </button>
