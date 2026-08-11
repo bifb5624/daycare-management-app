@@ -11104,10 +11104,12 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
                 {_pageSlice(news, newsPage, 5).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
-                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:a.date,title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
+                  // ★ 見出しの日付は「投稿日(postedAt)」を優先(2026-08-11): 予定から配信したお知らせは
+                  //   date=会議等の開催日のため、見出しが未来日に見えていた。開催日は本文に記載済み。
+                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:(a.postedAt?String(a.postedAt).slice(0,10):(a.date||'')),title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                       <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
-                      <span style={{fontSize:10,color:'#94a3b8'}}>{a.date||''}</span>
+                      <span style={{fontSize:10,color:'#94a3b8'}}>{a.postedAt ? String(a.postedAt).slice(0,10) : (a.date||'')}</span>
                     </div>
                     <div style={{fontSize:13,fontWeight:'bold',color:_c}}>{a.title||'(写真)'}</div>
                     {a.body && <div style={{fontSize:11,color:'#475569',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
@@ -13785,6 +13787,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [tab, setTab] = useState('news');
   // ★ ヘッダの期間セレクター (お知らせ/通所記録の両方を絞り込み)
   const [familyPeriod, setFamilyPeriod] = useState('1'); // '1','3','6','12','all','custom'
+  const [periodMenuOpen, setPeriodMenuOpen] = useState(false); // ★ 期間の独自ドロップダウン(2026-08-11)
   // ★ 期間を指定(custom)の年月レンジ(2026-08-10・ケアマネ要望)。既定=先月〜今月
   const [familyCustomFrom, setFamilyCustomFrom] = useState(() => { const d=new Date(); d.setMonth(d.getMonth()-1); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
   const [familyCustomTo, setFamilyCustomTo] = useState(() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; });
@@ -14069,31 +14072,47 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               {/* ★ 期間 (左・コンパクト) */}
               <div style={{height:38,boxSizing:'border-box',display:'flex',flexDirection:'row',alignItems:'center',gap:5,background:'white',border:'1px solid #94c456',borderRadius:10,padding:'0 8px',boxShadow:'0 2px 6px rgba(0,0,0,0.08)'}}>
                 <span style={{fontSize:11,color:'#3d5021',fontWeight:'bold'}}>期間</span>
-                {/* ★ 「日別」「月平均」のグループ分けに再編成(2026-08-10): 半年/1年で分けるより見やすい。
-                    選択値は period+displayMode の組み合わせから逆算して常に正しい項目にチェックが付く。 */}
-                <select value={(familyPeriod==='1'||familyPeriod==='3') ? familyPeriod : (familyDisplayMode==='daily' ? `${familyPeriod}:daily` : familyPeriod)} onChange={e=>{
-                  const [p, mode] = e.target.value.split(':');
-                  setFamilyPeriod(p);
-                  setFamilyDisplayMode(mode ? mode : ((p==='1'||p==='3') ? 'daily' : 'auto'));
-                }}
-                  style={{padding:'3px 4px',border:'1px solid #c4dba0',borderRadius:6,fontSize:11,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer'}}>
-                  {/* ★ macOS/iOSのネイティブメニューはoptgroup見出しのCSSを無視して薄く表示するため、
-                      選択肢の文字自体に「日別・」「月平均・」を含めてどの環境でも読めるようにする(2026-08-11) */}
-                  <optgroup label="日別で表示">
-                    <option value="1">日別・1ヶ月</option>
-                    <option value="3">日別・3ヶ月</option>
-                    <option value="6:daily">日別・半年</option>
-                    <option value="12:daily">日別・1年</option>
-                    <option value="all:daily">日別・全期間</option>
-                    <option value="custom:daily">日別・期間を指定</option>
-                  </optgroup>
-                  <optgroup label="月平均で表示">
-                    <option value="6">月平均・半年</option>
-                    <option value="12">月平均・1年</option>
-                    <option value="all">月平均・全期間</option>
-                    <option value="custom">月平均・期間を指定</option>
-                  </optgroup>
-                </select>
+                {/* ★ 期間の独自ドロップダウン(2026-08-11): ネイティブメニューはグループ見出しの色を
+                    変更できず薄くて読みづらいため、独自パネルに置換。見出し「日別で表示」「月平均で表示」は
+                    濃い緑バーの選択不可オブジェクトとして配置し、その下に期間の選択肢を並べる。 */}
+                {(() => {
+                  const _plabel = { '1':'1ヶ月', '3':'3ヶ月', '6':'半年', '12':'1年', 'all':'全期間', 'custom':'期間を指定' };
+                  const _isDaily = familyPeriod==='1' || familyPeriod==='3' || familyDisplayMode==='daily';
+                  const _curVal = (familyPeriod==='1'||familyPeriod==='3') ? familyPeriod : (familyDisplayMode==='daily' ? `${familyPeriod}:daily` : familyPeriod);
+                  const _groups = [
+                    ['日別で表示', [['1','1ヶ月'],['3','3ヶ月'],['6:daily','半年'],['12:daily','1年'],['all:daily','全期間'],['custom:daily','期間を指定']]],
+                    ['月平均で表示', [['6','半年'],['12','1年'],['all','全期間'],['custom','期間を指定']]],
+                  ];
+                  return (
+                    <span style={{position:'relative',display:'inline-block'}}>
+                      <button onClick={()=>setPeriodMenuOpen(o=>!o)}
+                        style={{padding:'3px 8px',border:'1px solid #c4dba0',borderRadius:6,fontSize:11,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer',whiteSpace:'nowrap'}}>
+                        {_isDaily?'日別':'月平均'}・{_plabel[familyPeriod]||familyPeriod} ▾
+                      </button>
+                      {periodMenuOpen && (
+                        <>
+                          <div onClick={()=>setPeriodMenuOpen(false)} style={{position:'fixed',inset:0,zIndex:59}} />
+                          <div style={{position:'absolute',top:'115%',right:0,zIndex:60,background:'white',border:'1px solid #c4dba0',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.18)',padding:6,minWidth:170,maxHeight:'70vh',overflowY:'auto'}}>
+                            {_groups.map(([gl, opts]) => (
+                              <div key={gl}>
+                                <div style={{fontSize:11,fontWeight:'bold',color:'white',background:'#7ba23f',borderRadius:6,padding:'4px 9px',margin:'4px 0'}}>{gl}</div>
+                                {opts.map(([val, lb]) => {
+                                  const on = _curVal === val;
+                                  return (
+                                    <button key={val} onClick={()=>{ const [p, mode] = val.split(':'); setFamilyPeriod(p); setFamilyDisplayMode(mode ? mode : ((p==='1'||p==='3') ? 'daily' : 'auto')); setPeriodMenuOpen(false); }}
+                                      style={{display:'block',width:'100%',textAlign:'left',padding:'6px 10px',borderRadius:6,fontSize:12,fontWeight:'bold',color:on?'#3d5021':'#475569',background:on?'#eaf2dc':'transparent',border:'none',cursor:'pointer'}}>
+                                      {on ? '✓ ' : ''}{lb}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </span>
+                  );
+                })()}
                 {/* ★ 期間を指定(2026-08-10): 見たい年月の範囲を自由に選べる(例: 6月だけ→6月〜6月)。
                     逆転入力は自動で揃える。開始未指定=終了の1年前から、終了未指定=今月まで。 */}
                 {familyPeriod === 'custom' && (
