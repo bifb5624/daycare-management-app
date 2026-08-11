@@ -1350,16 +1350,29 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
         patientPatch.docUpdates.forEach(u => { if (u && u.id && !_seenDu.has(u.id)) { mergedDocUpdates = [...mergedDocUpdates, u]; _seenDu.add(u.id); } });
         mergedDocUpdates = mergedDocUpdates.slice(-50);
       }
+      // ★ フェイスシートの部分更新(2026-08-11): personalFile を丸ごと送ると事業所側の書類・会議記録等を
+      //   家族端末の古いコピーで巻き戻すため、専用キー faceSheetPatch で指定サブ項目だけを重ねる。
+      //   pf:faceSheet の _fieldTs を刻印し、端末間マージで巻き戻らないようにする。
+      let mergedPersonalFile = p.personalFile;
+      let _pfTs = null;
+      if (patientPatch.faceSheetPatch && typeof patientPatch.faceSheetPatch === 'object') {
+        const fsp = {};
+        Object.keys(patientPatch.faceSheetPatch).forEach(k => { const v = patientPatch.faceSheetPatch[k]; if (v !== undefined && v !== null && v !== '') fsp[k] = v; });
+        if (Object.keys(fsp).length) {
+          mergedPersonalFile = { ...(p.personalFile || {}), faceSheet: { ...((p.personalFile || {}).faceSheet || {}), ...fsp } };
+          _pfTs = { ...(p._fieldTs || {}), 'pf:faceSheet': Date.now() };
+        }
+      }
       const filteredPatch = {};
       Object.keys(patientPatch).forEach(k => {
-        if (k === 'emergencyContacts' || k === 'relatedParties' || k === 'docUpdates') return;
+        if (k === 'emergencyContacts' || k === 'relatedParties' || k === 'docUpdates' || k === 'faceSheetPatch') return;
         const v = patientPatch[k];
         if (v === undefined || v === null || v === '') return;
         // 別人が代表フィールドを上書きしようとした場合のみスキップ (本人/初回はそのまま反映)
         if (FAMILY_PRIMARY.includes(k) && isDifferentPerson) return;
         filteredPatch[k] = v;
       });
-      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated, docUpdates: mergedDocUpdates };
+      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated, docUpdates: mergedDocUpdates, personalFile: mergedPersonalFile, ...(_pfTs ? { _fieldTs: _pfTs } : {}) };
     });
     // ★ ケアマネ事業所/担当者マスタ (systemSettings) も、家族(関係者)登録で増えた分を統合 (重複は追加しない)
     let nextSettings = currentData.systemSettings || {};

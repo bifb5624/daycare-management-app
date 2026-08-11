@@ -14602,6 +14602,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         const _storeId = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
                         if (_storeId) {
                           try {
+                            // ★ (2026-08-11修正) email/かかりつけ医/医療機関/連絡先がパッチから漏れており、
+                            //   通知には出るのに事業所側・フェイスシートに反映されなかった。faceSheetPatchで
+                            //   フェイスシートの医療欄にも部分同期する(personalFile丸ごとは送らない)。
                             await supabaseMergePatientFromFamily(_storeId, patient.id, {
                               name: updatedPatient.name,
                               kana: updatedPatient.kana,
@@ -14610,10 +14613,15 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                               careLevel: updatedPatient.careLevel,
                               hihokenNum: updatedPatient.hihokenNum,
                               phone: updatedPatient.phone,
+                              email: updatedPatient.email,
+                              doctor: updatedPatient.doctor,
+                              medicalInstitution: updatedPatient.medicalInstitution,
+                              medicalContact: updatedPatient.medicalContact,
                               address: updatedPatient.address,
                               kiou: updatedPatient.kiou,
                               ryui: updatedPatient.ryui,
                               docUpdates: updatedPatient.docUpdates,
+                              faceSheetPatch: { chronicDiseases: updatedPatient.doctor, medicalInstitution: updatedPatient.medicalInstitution, medicalContact: updatedPatient.medicalContact },
                             });
                           } catch (e) { console.warn('[supabase] patient sync failed', e); }
                         }
