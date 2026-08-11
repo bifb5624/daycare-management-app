@@ -21212,10 +21212,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     return (
                     <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className={`rounded-lg border py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50'}`}>
                       <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
-                      {/* ★ ○/×/－だけのセルには基準値を薄く並記(2026-08-11): 記号を消さなくても基準値を確認できる */}
-                      <span className="text-sm font-bold text-blue-700">{disp
-                        ? <>{disp}{(/^[○×〇\-－ー]+$/.test(String(disp).trim()) && ph) ? <span className="text-slate-400 font-bold text-[11px] ml-1" style={{opacity:0.6}}>{ph}</span> : null}</>
-                        : <span className="text-slate-500">{ph||'＋'}</span>}</span>
+                      {/* ★ ○/×/－のセルを選択中だけ、記号を薄くして基準値を透かし表示(2026-08-11)。
+                          未選択時は従来どおり記号のみ。記号を消さなくても基準値を確認できる。 */}
+                      {(() => {
+                        const _isMarkOnly = disp && /^[○×〇\-－ー]+$/.test(String(disp).trim());
+                        const _cellActive = activeCell === `${p.id}-${item.id}`;
+                        if (_isMarkOnly && _cellActive && ph) {
+                          return <span className="text-sm font-bold"><span className="text-blue-700" style={{opacity:0.35}}>{disp}</span><span className="text-slate-500 ml-1" style={{opacity:0.75}}>{ph}</span></span>;
+                        }
+                        return <span className="text-sm font-bold text-blue-700">{disp || <span className="text-slate-500">{ph||'＋'}</span>}</span>;
+                      })()}
                     </button>
                     );})}
                 </div>}
