@@ -19645,11 +19645,26 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const topScrollRef = useRef(null);
   const tableScrollRef = useRef(null);
   const [tableScrollWidth, setTableScrollWidth] = useState(0);
+  // ★ 自前描画の横スクロールバー(2026-08-11): ネイティブのスクロールバーはOS/ブラウザ設定で
+  //   非表示・オーバーレイ化されて見えないことがあるため、つまみを自前で描画して常時表示する。
+  const [hbar, setHbar] = useState({ ratio: 1, pos: 0 });   // ratio=表示幅/全幅, pos=scrollLeft/全幅
+  const _hbarDragRef = useRef(null);
+  const _updateHbar = () => {
+    const el = tableScrollRef.current; if (!el) return;
+    const sw = Math.max(1, el.scrollWidth);
+    const ratio = Math.min(1, el.clientWidth / sw);
+    const pos = el.scrollLeft / sw;
+    setHbar(prev => (Math.abs(prev.ratio - ratio) > 0.004 || Math.abs(prev.pos - pos) > 0.004) ? { ratio, pos } : prev);
+  };
+  const _hbarDown = (e) => { const el = tableScrollRef.current; if (!el) return; _hbarDragRef.current = { x: e.clientX, left: el.scrollLeft }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch {} e.stopPropagation(); };
+  const _hbarMove = (e) => { const d = _hbarDragRef.current; const el = tableScrollRef.current; if (!d || !el) return; const track = e.currentTarget.parentElement; if (!track) return; const scale = el.scrollWidth / Math.max(1, track.clientWidth); el.scrollLeft = d.left + (e.clientX - d.x) * scale; };
+  const _hbarUp = () => { _hbarDragRef.current = null; };
   const _syncingRef = useRef(false);
   useEffect(() => {
     const measure = () => {
       const el = tableScrollRef.current;
       if (el) setTableScrollWidth(el.scrollWidth);
+      _updateHbar();
     };
     measure();
     let ro;
@@ -19669,6 +19684,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (tbl.scrollLeft !== e.currentTarget.scrollLeft) { _syncingRef.current = true; tbl.scrollLeft = e.currentTarget.scrollLeft; }
   };
   const _syncFromTable = (e) => {
+    _updateHbar();   // ★ 自前バーのつまみ位置を追従(2026-08-11)
     if (_syncingRef.current) { _syncingRef.current = false; return; }
     const top = topScrollRef.current; if (!top) return;
     if (top.scrollLeft !== e.currentTarget.scrollLeft) { _syncingRef.current = true; top.scrollLeft = e.currentTarget.scrollLeft; }
@@ -21026,19 +21042,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       )}
 
       <style>{`#record-table tbody tr { min-height: 32px !important; } #record-table tbody tr td { min-height: 32px !important; padding-top: 2px !important; padding-bottom: 2px !important; box-sizing: border-box !important; } /* 個別運動列: 他の列と同じ行高に収める (min-height強制を外す) */ #record-table tbody tr td[data-ind-cell] { min-height: 0 !important; height: auto !important; max-height: none !important; overflow: visible !important; vertical-align: middle !important; }  #record-table tr.readonly-row input:disabled, #record-table tr.readonly-row button:disabled, #record-table tr.readonly-row textarea:disabled, #record-table tr.readonly-row select:disabled { opacity: 1 !important; color: #000 !important; -webkit-text-fill-color: #000 !important; } /* 列見出しを縦スクロール時も常に上部固定 + 行高を狭く */ #record-table thead th { position: -webkit-sticky !important; position: sticky !important; top: 0 !important; height: 32px !important; min-height: 32px !important; max-height: 32px !important; padding-top: 4px !important; padding-bottom: 4px !important; line-height: 1.1 !important; font-size: 11px !important; }`}</style>
-      {/* 画面上部の横スクロールバー: 下のテーブルスクロールと scrollLeft を同期 */}
-      {/* ★ OS設定(スクロールバー自動非表示)に関係なく常に見えるよう、バーの見た目を明示指定(2026-08-11) */}
-      <style>{`
-        .record-topscroll::-webkit-scrollbar { height: 12px; display: block; }
-        .record-topscroll::-webkit-scrollbar-track { background: #e2e8f0; border-radius: 6px; }
-        .record-topscroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; border: 2px solid #e2e8f0; }
-        .record-topscroll::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        .record-topscroll { scrollbar-width: auto; scrollbar-color: #94a3b8 #e2e8f0; }
-      `}</style>
-      <div ref={topScrollRef} onScroll={_syncFromTop}
-           className="record-topscroll bg-slate-100 border border-slate-300 rounded-t-xl"
-           style={{overflowX:'scroll',overflowY:'hidden',height:16,flexShrink:0,marginBottom:-1}}>
-        <div style={{width: tableScrollWidth, height: 1}}/>
+      {/* ★ 画面上部の横スクロールバー(自前描画・2026-08-11): ネイティブのスクロールバーは
+          OS/ブラウザ設定で非表示になり得るため、つまみを自前で描画して常時表示する。
+          つまみのドラッグ・レールのクリックで表が横スクロールし、表のスクロールにも追従する。 */}
+      <div className="bg-slate-200 border border-slate-300 rounded-t-xl"
+           style={{height:18,flexShrink:0,marginBottom:-1,position:'relative',overflow:'hidden',cursor:'pointer'}}
+           onPointerDown={(e)=>{ if (e.target !== e.currentTarget) return; const el = tableScrollRef.current; if (!el) return; const r = e.currentTarget.getBoundingClientRect(); el.scrollLeft = ((e.clientX - r.left) / Math.max(1, r.width)) * el.scrollWidth - el.clientWidth / 2; }}>
+        <div onPointerDown={_hbarDown} onPointerMove={_hbarMove} onPointerUp={_hbarUp} onPointerCancel={_hbarUp}
+             style={{position:'absolute',top:3,bottom:3,left:`${Math.min(hbar.pos*100, 100 - Math.max(6, hbar.ratio*100))}%`,width:`${Math.max(6, hbar.ratio*100)}%`,background:'#64748b',borderRadius:8,cursor:'grab',touchAction:'none'}}/>
       </div>
       <div ref={el=>{ tableScrollRef.current=el; tableContainerRef.current=el; }} onScroll={_syncFromTable}
            draggable={false} onDragStart={e=>e.preventDefault()}
