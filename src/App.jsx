@@ -9634,15 +9634,18 @@ const initialData = {
 const getStatusConfig = (label) => appSettings.statusOptions.find(opt => opt.label === label) || appSettings.statusOptions[0];
 
 const getPauseReasonOnDate = (p, dateStr) => {
-    if (!p || p.status !== '休止' || !p.pauseHistory || p.pauseHistory.length === 0) return null;
+    // ★ 期間ベースの休止判定(2026-08-11): 従来は「現在のステータスが休止」を前提にしていたため、
+    //   利用を再開した瞬間に過去の休止期間の表示(月間スケジュールの「休止」・提供記録の休止表記)まで
+    //   全て消えて出席予定に戻ってしまっていた。 終了日つきの休止履歴はステータスに関係なく
+    //   「期間内=休止」で判定する。 終了日なし(無期限)の履歴だけは、現在休止中の時のみ有効
+    //   (古い未終了の残骸で全期間が休止になるのを防ぐ)。
+    if (!p || !p.pauseHistory || p.pauseHistory.length === 0) return null;
     const targetDate = new Date(dateStr);
     const sorted = [...p.pauseHistory].sort((a, b) => new Date(b.fromDate) - new Date(a.fromDate));
-    // ★ fromDate <= 対象日 <= toDate(設定があれば) の「期間内」だけ休止扱い。
-    //   toDate 未設定は無期限休止。 これが無いと開始日以降が丸ごと休止になってしまう(期間指定が効かない)。
     const match = sorted.find(h => {
-        if (new Date(h.fromDate) > targetDate) return false;
-        if (h.toDate) { const td = new Date(h.toDate); td.setHours(23, 59, 59, 999); if (targetDate > td) return false; }
-        return true;
+        if (!h.fromDate || new Date(h.fromDate) > targetDate) return false;
+        if (h.toDate) { const td = new Date(h.toDate); td.setHours(23, 59, 59, 999); return targetDate <= td; }
+        return p.status === '休止';
     });
     return match ? { reason: match.reason, fromDate: match.fromDate } : null;
 };
@@ -19935,9 +19938,14 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
              //   出席に戻った時に、過去の休止ラベルが特記に焼き付いて残らない。
              pData.tokki = `${pauseInfo.reason}（${pauseInfo.fromDate.replace(/-/g,'/')}〜）`;
              pData._pauseAuto = true;
-         } else if (pData.tokki && /（\d{4}\/\d{1,2}\/\d{1,2}〜）\s*$/.test(pData.tokki)) {
-             // ★ 休止期間が終わった(出席等に戻った)のに、過去に焼き付いた休止ラベルが残っている → 消す。
-             pData.tokki = '';
+         } else {
+             // ★ 休止期間外なのに記録に「休止」が残っている(休止中に自動保存された残骸) → 出席に戻す(2026-08-11)。
+             //   これが無いと、休止の終了日を過ぎても提供記録入力が休止のままになる。
+             if (pData.status === '休止') pData.status = '出席';
+             if (pData.tokki && /（\d{4}\/\d{1,2}\/\d{1,2}〜）\s*$/.test(pData.tokki)) {
+                 // ★ 休止期間が終わった(出席等に戻った)のに、過去に焼き付いた休止ラベルが残っている → 消す。
+                 pData.tokki = '';
+             }
          }
          return pData;
       })
