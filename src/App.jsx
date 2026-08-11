@@ -20443,6 +20443,12 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         formatted = digits.slice(0, 2) + '.' + digits.slice(2);
       }
     }
+    // ★ 運動セル: ○/×/－が入った状態で数字を打ったら記号を自動で消して数値だけにする(2026-08-11)。
+    //   従来は「○3」のように連結され、記号を一度消してから入力し直す必要があった。
+    {
+      const _exItm0 = (effExerciseItems(appData.systemSettings)).find(i => i.id === keypad.field);
+      if (_exItm0 && /^[○×〇\-－ー]+[\d.]/.test(formatted)) formatted = formatted.replace(/^[○×〇\-－ー]+/, '');
+    }
     // ★ 血圧 統合フィールド (bpSt_combo_AM/PM, bpEn_combo_AM/PM): 「上/下」を split して両フィールドに保存
     if (typeof keypad.field === 'string' && (keypad.field.startsWith('bpSt_combo_') || keypad.field.startsWith('bpEn_combo_'))) {
       const ampm = keypad.field.endsWith('_PM') ? 'PM' : 'AM';
@@ -21206,7 +21212,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     return (
                     <button key={item.id} disabled={dis} onClick={()=>{openKeypad(p.id,item.id,(typeof v==='object'?'':v)||'',isAbsent);setActiveCell(`${p.id}-${item.id}`);}} className={`rounded-lg border py-1.5 px-1 disabled:opacity-40 flex flex-col items-center min-w-0 ${activeCell===`${p.id}-${item.id}` ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50'}`}>
                       <span className="text-[10px] font-bold text-slate-500 truncate w-full text-center">{item.name}</span>
-                      <span className="text-sm font-bold text-blue-700">{disp||<span className="text-slate-500">{ph||'＋'}</span>}</span>
+                      {/* ★ ○/×/－だけのセルには基準値を薄く並記(2026-08-11): 記号を消さなくても基準値を確認できる */}
+                      <span className="text-sm font-bold text-blue-700">{disp
+                        ? <>{disp}{(/^[○×〇\-－ー]+$/.test(String(disp).trim()) && ph) ? <span className="text-slate-400 font-bold text-[11px] ml-1" style={{opacity:0.6}}>{ph}</span> : null}</>
+                        : <span className="text-slate-500">{ph||'＋'}</span>}</span>
                     </button>
                     );})}
                 </div>}
