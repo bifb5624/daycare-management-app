@@ -19797,6 +19797,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     //   日付が変わった時は必ず作り直す(前の日の編集中フラグが残って表示人数がおかしくなるのを防ぐ)。
     if (!_dateChanged && dirtyRef?.current) { if (TABLE_ENABLED) syncLog('seed-skip-dirty', {}); return; }
     const dayOfWeek = new Date(selectedDate).getDay();
+    // ★ 施設の休業日(各種設定>休業日)判定(2026-08-11): この日は利用者の状態を自動で「休業」にする
+    const _selIsoHd = (() => { const d = new Date(selectedDate); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+    const _isHolidaySel = (appData.holidays || []).some(h => (h && (h.date || h)) === _selIsoHd);
     const monthKey = `${new Date(selectedDate).getFullYear()}-${String(new Date(selectedDate).getMonth() + 1).padStart(2, '0')}`;
     const dayNum = new Date(selectedDate).getDate();
     
@@ -19947,6 +19950,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                  pData.tokki = '';
              }
          }
+         // ★ 施設の休業日は状態を自動で「休業」にする(2026-08-11)。 休止中の人は休止のまま。
+         //   バイタル等の実データが入力済みの記録は触らない(休業日設定の誤りで入力を隠さない保護)。
+         if (_isHolidaySel && pData.status !== '休止' && pData.status !== '休業' && !ticketHasClinicalData(pData)) {
+             pData.status = '休業';
+         }
          return pData;
       })
       .sort((a, b) => {
@@ -19980,7 +19988,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (dirtyRef) dirtyRef.current = false;
     // ★ patients (基本利用日 等の変更) / monthlyShifts / ticketRecords も依存に追加するが、
     //   ユーザーが編集中 (dirty) の時はリセットしない (打ち消されるバグ防止)
-  }, [selectedDate, _patSig, appData.monthlyShifts, _trSig]);
+  }, [selectedDate, _patSig, appData.monthlyShifts, _trSig, appData.holidays]);
 
   const updateRecord = (id, field, value) => {
     if (filterMode === 'single') setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
