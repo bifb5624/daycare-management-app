@@ -14100,7 +14100,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                                   const on = _curVal === val;
                                   return (
                                     <button key={val} onClick={()=>{ const [p, mode] = val.split(':'); setFamilyPeriod(p); setFamilyDisplayMode(mode ? mode : ((p==='1'||p==='3') ? 'daily' : 'auto')); setPeriodMenuOpen(false); }}
-                                      style={{display:'block',width:'100%',textAlign:'left',padding:'6px 10px',borderRadius:6,fontSize:12,fontWeight:'bold',color:on?'#3d5021':'#475569',background:on?'#eaf2dc':'transparent',border:'none',cursor:'pointer'}}>
+                                      className={on ? 'bg-lime-100' : 'hover:bg-lime-50'}
+                                      style={{display:'block',width:'100%',textAlign:'left',padding:'6px 10px',borderRadius:6,fontSize:12,fontWeight:'bold',color:on?'#3d5021':'#475569',border:'none',cursor:'pointer'}}>
                                       {on ? '✓ ' : ''}{lb}
                                     </button>
                                   );
