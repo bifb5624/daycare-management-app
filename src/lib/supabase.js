@@ -288,7 +288,10 @@ export async function supabaseGetInviteByCode(code) {
 // 患者の招待 + 家族アカウント一覧を取得 (アカウント発行画面の自動更新用)
 // ★ 必ず store_id でも絞り込む (別店舗の同じ patient_id の家族が混入するバグの修正)
 export async function supabaseListInvitesAndAccountsForPatient(patientId, storeId) {
-  if (!supabase) return { invites: [], accounts: [] };
+  // ★ 失敗時は null を返す(2026-08-11): 従来はエラーでも空配列を「正常」として返しており、
+  //   呼び出し側(アカウント管理モーダル)が空で上書き→登録済みアカウントが消えたり
+  //   表示/非表示を繰り返す(点滅)原因になっていた。 null なら呼び出し側は何もしない。
+  if (!supabase) return null;
   try {
     let invQ = supabase.from('family_invites').select('*').eq('patient_id', String(patientId));
     let accQ = supabase.from('family_accounts').select('*').eq('patient_id', String(patientId)).is('deleted_at', null);
@@ -297,18 +300,19 @@ export async function supabaseListInvitesAndAccountsForPatient(patientId, storeI
       invQ = invQ.eq('store_id', storeId);
       accQ = accQ.eq('store_id', storeId);
     } else {
-      // storeId 未指定の場合は安全のため空を返す (誤った全件取得を防止)
-      console.warn('[supabase] listInvitesAndAccountsForPatient called without storeId — returning empty');
-      return { invites: [], accounts: [] };
+      // storeId 未指定の場合は安全のため何もしない (誤った全件取得を防止)
+      console.warn('[supabase] listInvitesAndAccountsForPatient called without storeId');
+      return null;
     }
     const [inv, acc] = await Promise.all([
       invQ.order('created_at', { ascending: false }),
       accQ.order('created_at', { ascending: false }),
     ]);
+    if (inv.error || acc.error) { console.warn('[supabase] listInvitesAndAccounts query error', inv.error || acc.error); return null; }
     return { invites: inv.data || [], accounts: acc.data || [] };
   } catch (e) {
     console.warn('[supabase] listInvitesAndAccountsForPatient failed', e);
-    return { invites: [], accounts: [] };
+    return null;
   }
 }
 

@@ -20425,7 +20425,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (isAbsent || !_keypadOn) return;
     kpConfirmRef.current = false; // 新しいセルを開いたら未確定に
     const isEx = !!(effExerciseItems(appData.systemSettings)).find(i => i.id === field);
-    setKeypad({ isOpen: true, recordId, field, value: currentValue || "", isFirstInput: !currentValue, mode: isEx ? 'exercise' : 'record' });
+    // ★ openedValue=開いた時点の値(2026-08-11): 「既に○が入っているセルを開いた時だけ」基準値を
+    //   透かし表示するための判定に使う(○を入力した直後は透かしを出さない)。
+    setKeypad({ isOpen: true, recordId, field, value: currentValue || "", openedValue: currentValue || "", isFirstInput: !currentValue, mode: isEx ? 'exercise' : 'record' });
   };
   // ★ PC Enter: 1回目は確定(キーパッドは開いたまま)、続けてEnterで右のセルへ移動(Tab相当)
   const handleKeypadEnter = () => {
@@ -21216,7 +21218,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           未選択時は従来どおり記号のみ。記号を消さなくても基準値を確認できる。 */}
                       {(() => {
                         const _isMarkOnly = disp && /^[○×〇\-－ー]+$/.test(String(disp).trim());
-                        const _cellActive = activeCell === `${p.id}-${item.id}`;
+                        // ★ 「開いた時点で既に記号だった」セルだけ透かす(○を入力した直後は出さない・2026-08-11)
+                        const _cellActive = activeCell === `${p.id}-${item.id}` && keypad.isOpen && keypad.recordId === p.id && keypad.field === item.id && /^[○×〇\-－ー]+$/.test(String(keypad.openedValue||'').trim());
                         if (_isMarkOnly && _cellActive && ph) {
                           return <span className="text-sm font-bold"><span className="text-blue-700" style={{opacity:0.35}}>{disp}</span><span className="text-slate-500 ml-1" style={{opacity:0.75}}>{ph}</span></span>;
                         }
@@ -21547,7 +21550,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         // ★ 選択中の○/×/ーセルは記号を薄くして基準値を透かし表示(2026-08-11)。
                         //   ○を消さなくても「基準値何だったっけ」が確認できる。未選択時は従来表示。
                         const _cellVal = String(((item.useKeypad && _keypadOn) ? displayVal : _vstr) || '').trim();
-                        const _ghost = isActive && !!placeholderText && /^[○×〇ー\-－]+$/.test(_cellVal);
+                        // ★ 「開いた時点で既に記号だった」セルだけ透かす(○を入力した直後は出さない・2026-08-11)
+                        const _openedMark = keypad.isOpen && keypad.recordId === p.id && keypad.field === item.id && /^[○×〇ー\-－]+$/.test(String(keypad.openedValue||'').trim());
+                        const _ghost = isActive && _openedMark && !!placeholderText && /^[○×〇ー\-－]+$/.test(_cellVal);
                         return (
                         <span style={{position:'relative',display:'inline-block'}}>
                         <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad && _keypadOn} value={(item.useKeypad && _keypadOn) ? displayVal : _vstr}
@@ -29693,9 +29698,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
   // ★ アカウント管理モーダルを開いた時 + 10秒ごと、Supabase から最新の家族招待/アカウントを取得
   //   (登録した家族の状態が「未使用」のまま固まらないように)
-  // ★ 揺れ防止(2026-08-11): サーバー応答が前回と同じなら onSave しない。 従来は10秒ごとに
+  // ★ 揺れ防止(2026-08-11): 「今の画面内容」と同じなら onSave しない。 従来は10秒ごとに
   //   無条件で onSave(全体保存)が走り、モーダルが再構築されて画面が上下に揺れ続けていた。
-  const _famListSigRef = React.useRef('');
+  //   比較・保存のベースは常に最新の appData を使う(閉包の古いスナップショット参照によるループ防止)。
+  const _famAppDataRef = React.useRef(appData);
+  _famAppDataRef.current = appData;
   React.useEffect(() => {
     if (!familyShareModal || !isSupabaseEnabled) return;
     const pat = familyShareModal.patient;
@@ -29705,10 +29712,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (!_storeId) return; // 店舗未確定なら何もしない
     const refresh = async () => {
       try {
-        const { invites, accounts } = await supabaseListInvitesAndAccountsForPatient(pat.id, _storeId);
-        // 該当 patient の invites/accounts をローカルにマージ (他患者のは保持)
-        const localInv = (appData.familyInvites||[]).filter(i => i.patientId !== pat.id);
-        const localAcc = (appData.familyAccounts||[]).filter(a => a.patientId !== pat.id);
+        const _res = await supabaseListInvitesAndAccountsForPatient(pat.id, _storeId);
+        if (!_res) return; // ★ 取得失敗(null)は何もしない: 空で上書きして消える/点滅するのを防ぐ(2026-08-11)
+        const { invites, accounts } = _res;
+        // 該当 patient の invites/accounts をローカルにマージ (他患者のは保持・最新appData基準)
+        const _cur0 = _famAppDataRef.current || {};
+        const localInv = (_cur0.familyInvites||[]).filter(i => i.patientId !== pat.id);
+        const localAcc = (_cur0.familyAccounts||[]).filter(a => a.patientId !== pat.id);
         const mappedInv = invites.map(i => ({
           id: i.id, code: i.code, patientId: pat.id,
           email: i.email||'', relation: i.relation||'',
@@ -29726,11 +29736,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             role: a.role||'member', lastLogin: a.last_login||null,
             _fromSupabase: true,
           }));
-        // ★ サーバー応答が前回反映分と同一ならスキップ(モーダルの揺れ・無駄な保存を防止)
-        const _sig = JSON.stringify([mappedInv, mappedAcc]);
-        if (_sig === _famListSigRef.current) return;
-        _famListSigRef.current = _sig;
-        onSave({ ...appData,
+        // ★ 「今の画面内容」と比較して同じならスキップ(揺れ・無駄な保存の防止)。
+        //   前回応答との比較ではなく現在値との比較にすることで、別経路で一覧が消えた場合も
+        //   次の更新で確実に復元される(2026-08-11)。
+        const _curInv = JSON.stringify((_cur0.familyInvites||[]).filter(i => i.patientId === pat.id));
+        const _curAcc = JSON.stringify((_cur0.familyAccounts||[]).filter(a => a.patientId === pat.id));
+        if (_curInv === JSON.stringify(mappedInv) && _curAcc === JSON.stringify(mappedAcc)) return;
+        onSave({ ..._cur0,
           familyInvites: [...localInv, ...mappedInv],
           familyAccounts: [...localAcc, ...mappedAcc],
         });
