@@ -21543,7 +21543,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                               isReadOnly ? 'bg-transparent border-slate-300' : 'bg-white text-slate-400 hover:bg-slate-100 border-slate-300 shadow-sm'}`}>
                           {val}
                         </button>
-                      ) : (
+                      ) : (() => {
+                        // ★ 選択中の○/×/ーセルは記号を薄くして基準値を透かし表示(2026-08-11)。
+                        //   ○を消さなくても「基準値何だったっけ」が確認できる。未選択時は従来表示。
+                        const _cellVal = String(((item.useKeypad && _keypadOn) ? displayVal : _vstr) || '').trim();
+                        const _ghost = isActive && !!placeholderText && /^[○×〇ー\-－]+$/.test(_cellVal);
+                        return (
+                        <span style={{position:'relative',display:'inline-block'}}>
                         <input type="text" disabled={isAbsent || isReadOnly || isPause} readOnly={item.useKeypad && _keypadOn} value={(item.useKeypad && _keypadOn) ? displayVal : _vstr}
                           onClick={() => { if(item.useKeypad && _keypadOn) { openKeypad(p.id, item.id, val, isAbsent); setActiveCell(cellKey); } }}
                           onChange={(e) => {
@@ -21552,10 +21558,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             updateExercise(p.id, item.id, e.target.value);
                           }}
                           onBlur={(e) => { if (item.useKeypad && _keypadOn) return; updateExercise(p.id, item.id, applyExUnits(e.target.value, item)); }}
-                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (_fitLen > 9 ? 8 : _fitLen > 7 ? 9 : _fitLen > 5 ? 10 : _fitLen > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? '1.1px currentColor' : undefined, color: _isDash ? '#94a3b8' : undefined, lineHeight: 1}}
+                          style={{width:64,height:42,boxSizing:'border-box',padding:'0 1px',textAlign:'center',fontSize: _isCircle ? 25 : _isCross ? 18 : _isDash ? 20 : (_fitLen > 9 ? 8 : _fitLen > 7 ? 9 : _fitLen > 5 ? 10 : _fitLen > 3 ? 12 : 14), fontWeight: _isCircle ? 900 : _isSym ? 400 : 'bold', WebkitTextStroke: _isCircle ? (_ghost ? '1.1px rgba(59,130,246,0.28)' : '1.1px currentColor') : undefined, color: _ghost ? 'rgba(59,130,246,0.28)' : (_isDash ? '#94a3b8' : undefined), lineHeight: 1}}
                           className={`border rounded-lg outline-none placeholder-slate-300 disabled:bg-transparent disabled:opacity-60 ${item.useKeypad && _keypadOn && !isReadOnly ? 'cursor-pointer' : ''} ${isReadOnly ? 'border-transparent shadow-none' : isActive ? 'border-blue-500 ring-2 ring-blue-300 bg-blue-50' : 'bg-white border-slate-300 shadow-inner'}`}
                           placeholder={placeholderText} />
-                      )}
+                        {_ghost && <span style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',pointerEvents:'none',fontSize:12,fontWeight:'bold',color:'#64748b'}}>{placeholderText}</span>}
+                        </span>
+                        );
+                      })()}
                     </td>
                   )})}
 
