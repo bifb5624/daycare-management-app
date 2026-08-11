@@ -17543,6 +17543,10 @@ export default function App() {
   // ★ iPhone (768px 未満) はサイドバーを初期非表示、それ以外は表示
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window === 'undefined') return true;
+    // ★ ユーザーが開閉ボタンで選んだ状態を記憶して復元(2026-08-11)。 従来は毎回「画面幅>=768」で
+    //   自動判定していたため、再読み込みや更新のたびに設定が初期化され「常に表示にしているのに
+    //   表示されない」ことがあった。 記憶が無い端末は従来どおり画面幅で判定。
+    try { const s = localStorage.getItem('tsumugiSidebarOpen'); if (s === '1') return true; if (s === '0') return false; } catch {}
     return window.innerWidth >= 768;
   });
   // ★ iOS Safari 対策: サイドバー開閉で flex レイアウトが変わると position:sticky が再計算されず、
@@ -19262,7 +19266,7 @@ export default function App() {
       <div id="appMainArea" className="flex-1 flex flex-col overflow-hidden bg-slate-50 relative min-w-0">
           <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-6 z-10 shadow-sm flex-shrink-0">
             <div className="flex items-center min-w-0 flex-1">
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
+              <button onClick={() => { const nv = !isSidebarOpen; try { localStorage.setItem('tsumugiSidebarOpen', nv ? '1' : '0'); } catch {} setIsSidebarOpen(nv); }} className="p-2 mr-2 md:mr-4 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors outline-none flex-shrink-0"><Menu size={22} /></button>
               <h1 className="text-base md:text-lg font-bold text-slate-700 truncate whitespace-nowrap">
                 {currentView === 'dashboard' ? 'ホーム' :
                  currentView === 'record' ? `サービス提供記録 入力　${formatDateDisplay(selectedDate)}` :
