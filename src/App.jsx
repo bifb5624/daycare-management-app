@@ -10928,6 +10928,19 @@ function RosterView({ appData, onSave }) {
   );
 }
 // === ホーム / ダッシュボード ===
+// ★ Card/Tile は必ずモジュールレベルで定義する(2026-08-12)。 DashboardView 内で定義すると
+//   4秒ごとの同期のたびにコンポーネントの同一性が変わり、React がホームのDOM全体を
+//   作り直す → タップ中のボタンが破棄されてクリック不発・添付サムネイルが読込やり直しでチカチカしていた。
+const DashCard = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
+const DashTile = ({icon, label, sub, color, view, navigateTo}) => (
+  <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
+    onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,0.1)';e.currentTarget.style.transform='translateY(-2px)';}}
+    onMouseLeave={e=>{e.currentTarget.style.boxShadow='none';e.currentTarget.style.transform='none';}}>
+    <div style={{width:44,height:44,borderRadius:12,background:color,display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}>{icon}</div>
+    <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{label}</div>
+    {sub && <div style={{fontSize:10,color:'#94a3b8'}}>{sub}</div>}
+  </button>
+);
 function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes, isNoticeRead, markNoticeRead }) {
   const now = new Date();
   const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
@@ -10962,16 +10975,8 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
       </div>
     );
   };
-  const Card = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
-  const Tile = ({icon, label, sub, color, view}) => (
-    <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
-      onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,0.1)';e.currentTarget.style.transform='translateY(-2px)';}}
-      onMouseLeave={e=>{e.currentTarget.style.boxShadow='none';e.currentTarget.style.transform='none';}}>
-      <div style={{width:44,height:44,borderRadius:12,background:color,display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}>{icon}</div>
-      <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{label}</div>
-      {sub && <div style={{fontSize:10,color:'#94a3b8'}}>{sub}</div>}
-    </button>
-  );
+  // ★ 同一参照の別名なので再レンダーしても DOM は再利用される(内部で定義し直さないこと)
+  const Card = DashCard;
   return (
     // ★ ホームは縮小 transform を使わず等倍で表示する(親ラッパー側で dashboard を transform 対象外に)。
     //   これにより transform 内の入れ子スクロールで起きる iOS/一部環境のタップ座標ズレを根本回避。
@@ -11138,14 +11143,14 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
         <Card>
           <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>記録・入力</div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10}}>
-            <Tile icon={<ClipboardList size={22}/>} label="提供記録入力" color="#3b82f6" view="record"/>
-            <Tile icon={<Printer size={22}/>} label="連絡帳" color="#0ea5e9" view="print"/>
-            <Tile icon={<PenTool size={22}/>} label="日誌" color="#8b5cf6" view="diary"/>
-            <Tile icon={<Activity size={22}/>} label="体力測定" color="#10b981" view="fitness"/>
-            <Tile icon={<FileText size={22}/>} label="休み連絡" color="#f59e0b" view="absence_fax"/>
-            <Tile icon={<FileText size={22}/>} label="各種連絡" color="#f97316" view="general_fax"/>
-            <Tile icon={<ClipboardList size={22}/>} label="モニタリング" color="#0891b2" view="monitoring"/>
-            <Tile icon={<Users size={22}/>} label="利用者マスタ" color="#64748b" view="master"/>
+            <DashTile navigateTo={navigateTo} icon={<ClipboardList size={22}/>} label="提供記録入力" color="#3b82f6" view="record"/>
+            <DashTile navigateTo={navigateTo} icon={<Printer size={22}/>} label="連絡帳" color="#0ea5e9" view="print"/>
+            <DashTile navigateTo={navigateTo} icon={<PenTool size={22}/>} label="日誌" color="#8b5cf6" view="diary"/>
+            <DashTile navigateTo={navigateTo} icon={<Activity size={22}/>} label="体力測定" color="#10b981" view="fitness"/>
+            <DashTile navigateTo={navigateTo} icon={<FileText size={22}/>} label="休み連絡" color="#f59e0b" view="absence_fax"/>
+            <DashTile navigateTo={navigateTo} icon={<FileText size={22}/>} label="各種連絡" color="#f97316" view="general_fax"/>
+            <DashTile navigateTo={navigateTo} icon={<ClipboardList size={22}/>} label="モニタリング" color="#0891b2" view="monitoring"/>
+            <DashTile navigateTo={navigateTo} icon={<Users size={22}/>} label="利用者マスタ" color="#64748b" view="master"/>
           </div>
         </Card>
         {/* 計画書 (アドオン) */}
@@ -11153,20 +11158,20 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           <Card>
             <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>計画書（アドオン）</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
-              {hasAddon(appData,'kinou_keikaku') && <Tile icon={<FileText size={22}/>} label="個別機能訓練計画書" color="#6366f1" view="kinou_keikaku"/>}
-              {hasAddon(appData,'tsusho_keikaku') && <Tile icon={<FileText size={22}/>} label="通所介護計画書" color="#0891b2" view="tsusho_keikaku"/>}
-              {hasAddon(appData,'seikatsu_kinou') && <Tile icon={<FileText size={22}/>} label="生活機能" color="#8b5cf6" view="seikatsu_kinou"/>}
-              {hasAddon(appData,'kyomi_kanshin') && <Tile icon={<FileText size={22}/>} label="興味関心" color="#ec4899" view="kyomi_kanshin"/>}
+              {hasAddon(appData,'kinou_keikaku') && <DashTile navigateTo={navigateTo} icon={<FileText size={22}/>} label="個別機能訓練計画書" color="#6366f1" view="kinou_keikaku"/>}
+              {hasAddon(appData,'tsusho_keikaku') && <DashTile navigateTo={navigateTo} icon={<FileText size={22}/>} label="通所介護計画書" color="#0891b2" view="tsusho_keikaku"/>}
+              {hasAddon(appData,'seikatsu_kinou') && <DashTile navigateTo={navigateTo} icon={<FileText size={22}/>} label="生活機能" color="#8b5cf6" view="seikatsu_kinou"/>}
+              {hasAddon(appData,'kyomi_kanshin') && <DashTile navigateTo={navigateTo} icon={<FileText size={22}/>} label="興味関心" color="#ec4899" view="kyomi_kanshin"/>}
             </div>
           </Card>
         )}
         {/* 分析・家族・設定 */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10}}>
-          <Tile icon={<BarChart3 size={22}/>} label="分析（個人）" color="#2563eb" view="dash_personal"/>
-          <Tile icon={<TrendingUp size={22}/>} label="分析（稼働）" color="#16a34a" view="dash_operation"/>
-          <Tile icon={<QrCode size={22}/>} label="家族関係者 投稿" color="#db2777" view="family_admin"/>
-          <Tile icon={<CalendarRange size={22}/>} label="スケジュール" color="#7c3aed" view="schedule"/>
-          <Tile icon={<Settings size={22}/>} label="各種設定" color="#475569" view="settings"/>
+          <DashTile navigateTo={navigateTo} icon={<BarChart3 size={22}/>} label="分析（個人）" color="#2563eb" view="dash_personal"/>
+          <DashTile navigateTo={navigateTo} icon={<TrendingUp size={22}/>} label="分析（稼働）" color="#16a34a" view="dash_operation"/>
+          <DashTile navigateTo={navigateTo} icon={<QrCode size={22}/>} label="家族関係者 投稿" color="#db2777" view="family_admin"/>
+          <DashTile navigateTo={navigateTo} icon={<CalendarRange size={22}/>} label="スケジュール" color="#7c3aed" view="schedule"/>
+          <DashTile navigateTo={navigateTo} icon={<Settings size={22}/>} label="各種設定" color="#475569" view="settings"/>
         </div>
       </div>
       {/* ★ お知らせ詳細モーダル */}
@@ -42437,8 +42442,16 @@ function useSignedUrl(file) {
   return src;
 }
 // 画像表示 (署名URL対応)
+// ★ PDF添付は <img> に流し込まない(2026-08-12): 読込→失敗を繰り返して空白がチカチカしていた。
+//   サムネイル枠に「PDF」と表示する(クリックでのプレビューは従来どおり)。
 function StoredImage({ file, alt, className, style, onClick }) {
   const src = useSignedUrl(file);
+  const isPdf = (((file?.type)||'')+'').includes('pdf') || /\.pdf(\?|$)/i.test(file?.name || file?.url || file?.storagePath || '');
+  if (isPdf) return (
+    <div className={className} style={{background:'#f1f5f9',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:2,color:'#64748b',border:'1px solid #e2e8f0',cursor:onClick?'pointer':undefined,...(style||{})}} onClick={onClick} title={file?.name||'PDF'}>
+      <span style={{fontSize:11,fontWeight:'bold',letterSpacing:'0.5px'}}>PDF</span>
+    </div>
+  );
   return src ? <img src={src} alt={alt||''} className={className} style={style} onClick={onClick}/> : <div className={className} style={{background:'#f1f5f9',...(style||{})}} onClick={onClick}/>;
 }
 // 開く/ダウンロード リンク (署名URL対応)
