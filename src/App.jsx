@@ -39182,13 +39182,36 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
     setEditing(e => ({ ...(e || blank()), items: { ...((e||{}).items||{}), ...sug } }));
     markDirty();
   };
-  const save = () => {
+  // ★ LIFE提出に必要な必須項目の未入力リスト(2026-08-12)。 画面の色分け・保存ブロックに使う。
+  const _lifeMissing = React.useMemo(() => {
+    if (!editing) return [];
+    const m = [];
+    if (!editing.evalDate) m.push('評価日');
+    BARTHEL_ITEMS.forEach(it => { const v = editing.items?.[it.key]; if (v === undefined || v === null || v === '') m.push(`ADL: ${it.label}`); });
+    if (addons.kasan_kagaku) {
+      const sci = editing.science || {};
+      if (!String(sci.height ?? '').trim()) m.push('身長');
+      if (!String(sci.weight ?? '').trim()) m.push('体重');
+      [['denture','義歯の使用'],['choke','むせ'],['stains_on_teeth','歯の汚れ'],['condition_of_gums','歯肉の腫れ・出血']].forEach(([k, lb]) => {
+        const v = sci[k]; if (v === undefined || v === null || v === '') m.push(lb);
+      });
+    }
+    return m;
+  }, [editing, addons.kasan_kagaku]);
+  // ★ 必須未入力チェックつき保存(2026-08-12): 必須が埋まっていないと通常保存は不可。
+  //   asDraft=true(一時保存)は未入力のまま保存できる(_draftフラグつき・LIFE提出前に完成させる前提)。
+  const save = (asDraft = false) => {
     if (!editing) return;
+    if (!asDraft && _lifeMissing.length) {
+      alert(`必須項目が未入力のため保存できません（「一時保存」は可能です）:\n・${_lifeMissing.slice(0,12).join('\n・')}${_lifeMissing.length>12?`\nほか${_lifeMissing.length-12}件`:''}`);
+      return;
+    }
     const rec = { ...editing, total: barthelTotal(editing.items), _savedAt: syncNow() };
+    if (asDraft && _lifeMissing.length) rec._draft = true; else delete rec._draft;
     const list = [...(appData.adlRecords||[])];
     const i = list.findIndex(r=>r.id===rec.id);
     if (i>=0) list[i]=rec; else list.push(rec);
-    onSave({ ...appData, adlRecords:list }, { manual:true, message:'✓ ADL評価（Barthel）を保存しました' });
+    onSave({ ...appData, adlRecords:list }, { manual:true, message: (asDraft && _lifeMissing.length) ? '✓ 一時保存しました（必須未入力あり・後で完成させてください）' : '✓ ADL評価（Barthel）を保存しました' });
     if (dirtyRef) dirtyRef.current=false;
     setEditing(null);
   };
@@ -39212,7 +39235,13 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
         {!editing && <button onClick={()=>setEditing(blank())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ ADL評価を新規作成</button>}
         {editing && <>
           <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
-          <button onClick={save} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存</button>
+          {_lifeMissing.length > 0 && (
+            <button onClick={()=>save(true)} className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold shadow active:scale-95" title="必須項目が未入力でも保存できます(後で完成させてください)">一時保存</button>
+          )}
+          <button onClick={()=>save(false)} className={`px-5 py-2 rounded-lg text-sm font-bold shadow active:scale-95 text-white ${_lifeMissing.length ? 'bg-slate-400 hover:bg-slate-500' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+            title={_lifeMissing.length ? `必須項目が${_lifeMissing.length}件未入力です` : ''}>
+            保存{_lifeMissing.length ? `（必須残${_lifeMissing.length}）` : ''}
+          </button>
         </>}
       </div>
 
@@ -39327,7 +39356,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   </button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div><label className="block text-xs font-bold text-slate-500 mb-1">評価日</label><input type="date" value={editing.evalDate} onChange={e=>{setEditing(x=>({...x,evalDate:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">評価日<span className="ml-1 text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5">必須</span></label><input type="date" value={editing.evalDate} onChange={e=>{setEditing(x=>({...x,evalDate:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
                   <div><label className="block text-xs font-bold text-slate-500 mb-1">評価者</label><input value={editing.evaluator} onChange={e=>{setEditing(x=>({...x,evaluator:e.target.value}));markDirty();}} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
                   {addons.kasan_adl && (
                     <div><label className="block text-xs font-bold text-slate-500 mb-1">ADL維持等 対象月区分</label>
@@ -39344,16 +39373,17 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   return <div className="text-[10px] text-slate-400 -mt-1">ADL維持等の目安：利用開始 {patient.startDate} → 初月 {im}／6か月後 {sm}（実際の評価月に合わせて区分を選択）</div>;
                 })()}
                 <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg">
-                  {BARTHEL_ITEMS.map(it=>(
-                    <div key={it.key} className="flex items-center gap-3 px-3 py-2 flex-wrap">
-                      <div className="w-40 text-sm font-bold text-slate-700 shrink-0">{it.label}</div>
+                  {/* ★ 必須項目の色分け(2026-08-12): 未入力のADL項目は薄い赤背景+必須バッジで一目で分かる */}
+                  {BARTHEL_ITEMS.map(it=>{ const _unset = editing.items?.[it.key] === undefined || editing.items?.[it.key] === null || editing.items?.[it.key] === ''; return (
+                    <div key={it.key} className={`flex items-center gap-3 px-3 py-2 flex-wrap ${_unset ? 'bg-rose-50' : ''}`}>
+                      <div className="w-40 text-sm font-bold text-slate-700 shrink-0">{it.label}{_unset && <span className="ml-1 text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5 align-middle">必須</span>}</div>
                       <div className="flex gap-1.5 flex-wrap">
                         {it.opts.map(([sc,lb])=>{ const on=Number(editing.items?.[it.key])===sc; return (
                           <button key={sc} onClick={()=>setItem(it.key,sc)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border ${on?'bg-blue-600 text-white border-blue-600':'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>{sc}点 {lb}</button>
                         ); })}
                       </div>
                     </div>
-                  ))}
+                  ); })}
                 </div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">備考</label><textarea value={editing.note} onChange={e=>{setEditing(x=>({...x,note:e.target.value}));markDirty();}} rows={2} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-none"/></div>
                 {addons.kasan_kagaku && (() => {
@@ -39365,14 +39395,15 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
                   <div className="border-t border-slate-200 pt-3 mt-1 space-y-3">
                     <div className="text-sm font-bold text-purple-700">科学的介護推進体制加算（LIFE提出）固有項目</div>
                     <div className="flex items-center gap-3 flex-wrap"><div className="w-40 text-xs font-bold text-slate-500">評価時点</div>{seg('status',[['利用開始時','利用開始時'],['利用中','利用中'],['利用終了時','利用終了時']], sci.status||'利用中')}</div>
+                    {/* ★ 必須項目の色分け(2026-08-12): 未入力の必須欄は薄い赤背景+必須バッジ */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">身長(cm)</label><input type="number" step="0.1" value={sci.height??''} onChange={e=>setSci('height', e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
-                      <div><label className="block text-xs font-bold text-slate-500 mb-1">体重(kg)</label><input type="number" step="0.1" value={sci.weight??''} onChange={e=>setSci('weight', e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">身長(cm){!String(sci.height??'').trim() && <span className="ml-1 text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5">必須</span>}</label><input type="number" step="0.1" value={sci.height??''} onChange={e=>setSci('height', e.target.value)} className={`w-full px-3 py-2 border rounded-lg text-sm outline-none ${!String(sci.height??'').trim() ? 'bg-rose-50 border-rose-300' : 'bg-white border-slate-300'}`}/></div>
+                      <div><label className="block text-xs font-bold text-slate-500 mb-1">体重(kg){!String(sci.weight??'').trim() && <span className="ml-1 text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5">必須</span>}</label><input type="number" step="0.1" value={sci.weight??''} onChange={e=>setSci('weight', e.target.value)} className={`w-full px-3 py-2 border rounded-lg text-sm outline-none ${!String(sci.weight??'').trim() ? 'bg-rose-50 border-rose-300' : 'bg-white border-slate-300'}`}/></div>
                     </div>
                     <div className="space-y-2">
-                      {[['denture','義歯の使用'],['choke','むせ'],['stains_on_teeth','歯の汚れ'],['condition_of_gums','歯肉の腫れ・出血']].map(([k,lb])=>(
-                        <div key={k} className="flex items-center gap-3 flex-wrap"><div className="w-40 text-xs font-bold text-slate-500">{lb}</div>{seg(k,YN,sci[k])}</div>
-                      ))}
+                      {[['denture','義歯の使用'],['choke','むせ'],['stains_on_teeth','歯の汚れ'],['condition_of_gums','歯肉の腫れ・出血']].map(([k,lb])=>{ const _unset = sci[k] === undefined || sci[k] === null || sci[k] === ''; return (
+                        <div key={k} className={`flex items-center gap-3 flex-wrap rounded-lg px-1 ${_unset ? 'bg-rose-50' : ''}`}><div className="w-40 text-xs font-bold text-slate-500">{lb}{_unset && <span className="ml-1 text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5">必須</span>}</div>{seg(k,YN,sci[k])}</div>
+                      ); })}
                       <div className="flex items-center gap-3 flex-wrap"><div className="w-40 text-xs font-bold text-slate-500">褥瘡(任意)</div>{seg('bedsore',YN,sci.bedsore)}</div>
                     </div>
                     <div>
