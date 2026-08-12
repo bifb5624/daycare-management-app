@@ -15622,9 +15622,12 @@ function DiseaseMasterPanel() {
       for (const line of lines) {
         if (!line.trim()) continue;
         const cells = line.split(',').map(c => c.replace(/^\s*"?|"?\s*$/g, ''));
-        // コード=3〜7桁の数字列 / 名称=日本語を含む最初の列 (ヘッダ行や様式の説明行は自動で読み飛ばされる)
+        // コード=3〜7桁の数字列(最初の該当列=傷病名コード。移行先コード列より先に来る) /
+        // 名称=漢字・ひらがな・全角カナを含む最初の列を優先(厚労省マスタは半角カナの省略名称列が
+        // 正式名称より前にあるため、全角日本語を先に探し、無ければ半角カナ等にフォールバック)
         const code = cells.find(c => /^\d{3,7}$/.test(c));
-        const name = cells.find(c => c && !/^\d+$/.test(c) && /[^\x20-\x7E]/.test(c));
+        const name = cells.find(c => c && !/^\d+$/.test(c) && /[぀-ヿ一-鿿]/.test(c))
+                  || cells.find(c => c && !/^\d+$/.test(c) && /[^\x20-\x7E]/.test(c));
         if (!code || !name) { skipped++; continue; }
         if (seen.has(code)) continue;
         seen.add(code);
