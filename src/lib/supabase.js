@@ -1212,6 +1212,35 @@ export async function supabaseSaveGlobalPolicies(policies) {
 }
 
 // =========================================================
+// 全店共通 LIFE傷病名マスタ (つむぎ管理局がCSV取込 → 予約キーに保存し、全店の病名検索が読む)
+//   ★ 置き換え式: 常に最新1版だけを保持する(取込を繰り返しても古い版は残らず、容量は増えない)。
+//   ★ 店舗の同期(pull/push)とは独立した専用キーなので、同期速度・店舗データ容量には影響しない。
+//   ★ 過去に計画書へ入力済みのコード・病名はレコード側(rec.life)に保存されるため、
+//     マスタを入れ替えても表示・CSV出力は変わらない(マスタは検索候補にだけ使う)。
+// =========================================================
+export const DISEASE_MASTER_KEY = '__tsumugi_disease_master__';
+export async function supabaseLoadDiseaseMaster() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('app_state')
+      .select('data')
+      .eq('key', DISEASE_MASTER_KEY)
+      .maybeSingle();
+    if (error) { console.warn('[supabase] loadDiseaseMaster error', error); return null; }
+    const d = data && data.data;
+    return (d && Array.isArray(d.items) && d.items.length) ? d : null;
+  } catch (e) { console.warn('[supabase] loadDiseaseMaster exception', e); return null; }
+}
+export async function supabaseSaveDiseaseMaster(payload) {
+  if (!supabase) return false;
+  try {
+    const res = await supabaseCasUpdate(DISEASE_MASTER_KEY, () => payload); // 常に丸ごと置き換え
+    return !!(res && res.ok);
+  } catch (e) { console.warn('[supabase] saveDiseaseMaster exception', e); return false; }
+}
+
+// =========================================================
 // システムお知らせ (本部 → 全店舗 / 個別店舗)
 // =========================================================
 export async function supabaseListSystemNotices(storeId) {

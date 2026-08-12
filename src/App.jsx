@@ -30,6 +30,8 @@ import {
   markOplogWritable,
   getSyncLog,
   clearSyncLog,
+  supabaseLoadDiseaseMaster,
+  supabaseSaveDiseaseMaster,
 } from './lib/supabase';
 import {
   OPLOG_ENABLED,
@@ -15597,6 +15599,86 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdm
 // 本部管理者用 店舗選択 + 店舗追加 + スタッフ追加画面
 // ===========================================
 // ★ 本部 → 店舗お知らせ管理パネル (メンテナンス通知等)
+// ★ LIFE傷病名マスタ管理(つむぎ管理局専用)。 CSVを取り込み、予約キーに置き換え保存 → 全店の病名検索が自動で使う。
+//   ・置き換え式: 取込のたびに丸ごと差し替え(古い版は残らない=容量は増えない)
+//   ・過去に計画書へ入力済みのコード/病名はレコード側に保存済みなので、入替の影響を受けない
+function DiseaseMasterPanel() {
+  const [open, setOpen] = React.useState(false);
+  const [cur, setCur] = React.useState(undefined);      // undefined=未読込 / null=未登録(同梱使用) / {count,updatedAt,source}
+  const [preview, setPreview] = React.useState(null);   // {items,count,source,skipped}
+  const [busy, setBusy] = React.useState(false);
+  React.useEffect(() => { if (!open || cur !== undefined) return; supabaseLoadDiseaseMaster().then(d => setCur(d ? { count: d.count || (d.items||[]).length, updatedAt: d.updatedAt || '', source: d.source || '' } : null)); }, [open, cur]);
+  const parseCsv = async (f) => {
+    if (!f) return;
+    setBusy(true); setPreview(null);
+    try {
+      // ★ 厚労省配布CSVはShift_JISが多い。 UTF-8で読めなければShift_JISで再読込。
+      const buf = await f.arrayBuffer();
+      let text;
+      try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+      catch { text = new TextDecoder('shift_jis').decode(buf); }
+      const lines = text.split(/\r?\n/);
+      const items = []; const seen = new Set(); let skipped = 0;
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const cells = line.split(',').map(c => c.replace(/^\s*"?|"?\s*$/g, ''));
+        // コード=3〜7桁の数字列 / 名称=日本語を含む最初の列 (ヘッダ行や様式の説明行は自動で読み飛ばされる)
+        const code = cells.find(c => /^\d{3,7}$/.test(c));
+        const name = cells.find(c => c && !/^\d+$/.test(c) && /[^\x20-\x7E]/.test(c));
+        if (!code || !name) { skipped++; continue; }
+        if (seen.has(code)) continue;
+        seen.add(code);
+        items.push([code, name]);
+        if (items.length > 100000) throw new Error('10万件を超えています。ファイルをご確認ください。');
+      }
+      if (!items.length) { alert('コードと病名の組を読み取れませんでした。CSVの形式(コード列=3〜7桁の数字・名称列=日本語)をご確認ください。'); setBusy(false); return; }
+      setPreview({ items, count: items.length, source: f.name, skipped });
+    } catch (e) { alert('読み込みに失敗しました: ' + (e?.message || e)); }
+    setBusy(false);
+  };
+  const save = async () => {
+    if (!preview) return;
+    if (!window.confirm(`傷病名マスタを ${preview.count.toLocaleString()}件 で置き換えます。\n(現在のマスタは残りません。全店の病名検索に自動反映されます)\nよろしいですか？`)) return;
+    setBusy(true);
+    const ok = await supabaseSaveDiseaseMaster({ updatedAt: new Date().toISOString().slice(0,10), count: preview.count, source: preview.source, items: preview.items });
+    setBusy(false);
+    if (ok) { alert('保存しました。全店舗の病名検索に反映されます(各端末は次に病名検索を開いた時から)。'); setCur(undefined); setPreview(null); }
+    else alert('保存に失敗しました。通信状態を確認してもう一度お試しください。');
+  };
+  return (
+    <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
+      <button onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',background:'none',border:'none',cursor:'pointer',padding:0}}>
+        <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>LIFE傷病名マスタ管理</div>
+        <span style={{fontSize:12,color:'#94a3b8'}}>{open?'閉じる ▲':'開く ▼'}</span>
+      </button>
+      {open && (
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:12,color:'#475569',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px',marginBottom:12,lineHeight:1.7}}>
+            現在: {cur===undefined ? '確認中…' : cur ? <b>取込済みマスタを使用中（{Number(cur.count).toLocaleString()}件／{cur.updatedAt||'日付不明'} 更新{cur.source?`／${cur.source}`:''}）</b> : <b>アプリ同梱マスタを使用中（約2.7万件）</b>}<br/>
+            厚労省の傷病名マスタCSVを取り込むと、<b>個別機能訓練加算のアドオンを有効にしている全店舗の病名検索に自動反映</b>されます。
+            取込は<b>置き換え式</b>で古い版は残らないため、繰り返し更新しても容量は増えません。
+            過去に計画書へ入力済みのコード・病名は各計画書に保存されているため、マスタを入れ替えても変わらず、エラーにもなりません。
+          </div>
+          <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
+            <input type="file" accept=".csv,.txt" disabled={busy} onChange={e=>{ parseCsv(e.target.files?.[0]); e.target.value=''; }} style={{fontSize:12}}/>
+            {busy && <span style={{fontSize:12,color:'#94a3b8'}}>処理中…</span>}
+          </div>
+          {preview && (
+            <div style={{marginTop:12,border:'1px solid #cbd5e1',borderRadius:10,padding:'10px 12px',background:'#fefce8'}}>
+              <div style={{fontSize:13,fontWeight:'bold',color:'#334155'}}>読み取り結果: {preview.count.toLocaleString()}件（{preview.source}）{preview.skipped>0 && <span style={{fontWeight:'normal',color:'#94a3b8'}}>／読み飛ばし{preview.skipped.toLocaleString()}行</span>}</div>
+              <div style={{fontSize:11,color:'#64748b',margin:'6px 0'}}>先頭5件: {preview.items.slice(0,5).map(([c,n])=>`${n}(${c})`).join('、 ')}</div>
+              <div style={{display:'flex',gap:8}}>
+                <button onClick={save} disabled={busy} style={{padding:'8px 16px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>この内容で置き換え保存</button>
+                <button onClick={()=>setPreview(null)} disabled={busy} style={{padding:'8px 16px',background:'#f1f5f9',color:'#475569',border:'1px solid #cbd5e1',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ★ J: 全店共通の同意ポリシー編集(つむぎ管理局専用)。 予約レコードに1つだけ保存し、各店が読む。
 //   版(バージョン)を上げると、全店の管理局お知らせ(system_notices)に改定通知を自動掲載(I5)。
 function GlobalPolicyPanel({ staffSession }) {
@@ -16174,6 +16256,8 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         </div>
         {/* ★ J: 全店共通ポリシー編集 (一番下・折りたたみ) */}
         <GlobalPolicyPanel staffSession={staffSession}/>
+        {/* LIFE傷病名マスタのCSV取込(全店共通・置き換え式) */}
+        <DiseaseMasterPanel/>
       </div>
       {/* 店舗追加モーダル */}
       {/* ★ 店舗情報の編集 (後から店舗名・短縮名・法人名・住所・電話・FAXを変更) */}
@@ -37242,10 +37326,17 @@ const KYOMI_DEFAULT = ['自分でトイレに行く','一人でお風呂に入�
 let _lifeDiseasePromise = null;
 const loadLifeDiseaseMaster = () => {
   if (!_lifeDiseasePromise) {
-    _lifeDiseasePromise = fetch('/life-disease-master.json')
-      .then(r => r.ok ? r.json() : { items: [] })
-      .then(j => (Array.isArray(j.items) ? j.items : []))
-      .catch(() => { _lifeDiseasePromise = null; return []; });
+    // ★ 管理局がCSV取込した全店共通マスタ(置き換え式)を優先し、無ければ同梱ファイルを使う(2026-08-12)。
+    //   読み込みは病名検索を最初に使った時の1回だけ(メモリキャッシュ)。端末保存はしないので容量を圧迫しない。
+    _lifeDiseasePromise = (async () => {
+      try {
+        const g = await supabaseLoadDiseaseMaster();
+        if (g && Array.isArray(g.items) && g.items.length) return g.items;
+      } catch {}
+      const r = await fetch('/life-disease-master.json');
+      const j = r.ok ? await r.json() : { items: [] };
+      return Array.isArray(j.items) ? j.items : [];
+    })().catch(() => { _lifeDiseasePromise = null; return []; });
   }
   return _lifeDiseasePromise;
 };
