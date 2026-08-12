@@ -37737,7 +37737,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             #kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%}
             #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere}
             #kk-print-area *{max-width:100%}
-            #kk-print-area .kkgrow{flex:1 1 0;min-height:0;display:flex;flex-direction:column}
+            #kk-print-area .kkgrow{flex:1 1 0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
             #kk-print-area .kkgrow>table{height:100%}
             #kk-print-area .kkfix{flex:0 0 auto}`}</style>
           <div className="kkfix" style={{fontSize:'10px'}}>別紙様式３－３</div>
@@ -37790,15 +37790,23 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           <table style={{width:'100%',borderCollapse:'collapse'}}>
             <thead><tr>{['プログラム内容（何を目的に（〜のために）〜する）','留意点','頻度','時間','主な実施者'].map((h,i)=><th key={h} style={{...lab,textAlign:'center',width:i===0?'40%':i===1?'24%':'12%'}}>{h}</th>)}</tr></thead>
             <tbody>
-              {Array.from({length:Math.max(4,(pr.programs||[]).length)}).map((_,i)=>{ const p=(pr.programs||[])[i]||{}; return (
-                <tr key={i}>
-                  <td style={cell}>{['①','②','③','④','⑤','⑥','⑦','⑧'][i]||''} {p.content||''}</td>
-                  <td style={cell}>{p.point||''}</td>
-                  <td style={{...cell,textAlign:'center'}}>{p.freqWeek?`週${String(p.freqWeek).replace(/[週回]/g,'')}回`:'週　回'}</td>
-                  <td style={{...cell,textAlign:'center'}}>{p.time||'　分'}</td>
-                  <td style={cell}>{p.person||''}</td>
-                </tr>
-              ); })}
+              {/* ★ 行数が多い時は自動でコンパクト化(2026-08-12): 運動メニュー自動読込で8行超になると
+                  A4伸縮レイアウトから溢れて下のセクションに文字が重なっていた。行数に応じて
+                  文字サイズ・余白を縮めて枠内に収める(番号も⑮まで対応)。 */}
+              {(() => {
+                const _rows = Math.max(4, (pr.programs||[]).length);
+                const _pc = _rows > 6 ? { ...cell, padding: '0 3px', fontSize: _rows > 9 ? '7px' : '8px', lineHeight: 1.2 } : cell;
+                const NUM = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮'];
+                return Array.from({length:_rows}).map((_,i)=>{ const p=(pr.programs||[])[i]||{}; return (
+                  <tr key={i}>
+                    <td style={_pc}>{NUM[i]||''} {p.content||''}</td>
+                    <td style={_pc}>{p.point||''}</td>
+                    <td style={{..._pc,textAlign:'center'}}>{p.freqWeek?`週${String(p.freqWeek).replace(/[週回]/g,'')}回`:'週　回'}</td>
+                    <td style={{..._pc,textAlign:'center'}}>{p.time||'　分'}</td>
+                    <td style={_pc}>{p.person||''}</td>
+                  </tr>
+                ); });
+              })()}
             </tbody>
           </table></div>
           <table className="kkfix" style={{width:'100%',borderCollapse:'collapse',marginTop:'-1px'}}><tbody>
