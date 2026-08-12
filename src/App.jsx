@@ -15631,7 +15631,9 @@ function DiseaseMasterPanel() {
         if (!code || !name) { skipped++; continue; }
         if (seen.has(code)) continue;
         seen.add(code);
-        items.push([code, name]);
+        // ★ カナ名称列(半角カナのみの列)があれば3要素目に保持 → 病名検索で「のうこうそく」等の読みでもヒットする
+        const kana = cells.find(c => c && c !== name && /[ｦ-ﾟ]/.test(c) && /^[ｦ-ﾟ0-9()\-・･\s]+$/.test(c));
+        items.push(kana ? [code, name, kana] : [code, name]);
         if (items.length > 100000) throw new Error('10万件を超えています。ファイルをご確認ください。');
       }
       if (!items.length) { alert('コードと病名の組を読み取れませんでした。CSVの形式(コード列=3〜7桁の数字・名称列=日本語)をご確認ください。'); setBusy(false); return; }
@@ -37343,44 +37345,68 @@ const loadLifeDiseaseMaster = () => {
   }
   return _lifeDiseasePromise;
 };
-// 検索用正規化: 全角英数→半角(NFKC)・ひらがな→カタカナ(マスタの病名はカタカナ+漢字のため)
+// 検索用正規化: 全角英数→半角(NFKC・半角カナ→全角カナも含む)・ひらがな→カタカナ(マスタの病名はカタカナ+漢字のため)
 const _dzNorm = (s) => String(s || '').normalize('NFKC').replace(/[ぁ-ん]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
-// ★ 病名検索ボックス: 名前で検索→候補から選ぶとコードが自動入力される(コード手入力も従来どおり可)
+// ★ 通所介護でよく使う病名(空欄でクリックした時の候補)。 マスタから同名を探して表示するのでコードは常にマスタ準拠。
+const LIFE_COMMON_DISEASES = ['脳梗塞','脳梗塞後遺症','脳出血','くも膜下出血','変形性膝関節症','変形性腰椎症','腰部脊柱管狭窄症','腰痛症','骨粗鬆症','大腿骨頸部骨折','圧迫骨折','パーキンソン病','関節リウマチ','アルツハイマー型認知症','血管性認知症','慢性心不全','高血圧症','糖尿病','慢性閉塞性肺疾患','廃用症候群'];
+// ★ 病名検索ボックス: 名前・読み仮名(カナ名称)・キーワード(「脳」「腰」等の一文字でも可)で検索→
+//   候補から選ぶとコードが自動入力される(コード手入力も従来どおり可)。 前方一致・短い病名を優先表示。
 function LifeDiseaseSearch({ onPick }) {
   const [q, setQ] = React.useState('');
   const [hits, setHits] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [open, setOpen] = React.useState(false);
+  const [commonMode, setCommonMode] = React.useState(false);
   const _seq = React.useRef(0);
-  const search = async (raw) => {
-    setQ(raw);
-    const query = _dzNorm(raw.trim());
-    if (!query) { setHits([]); setOpen(false); return; }
+  // 空欄でフォーカス → よく使う病名を候補表示(コードを覚えていなくても選ぶだけ)
+  const showCommon = async () => {
     const my = ++_seq.current;
-    setLoading(true); setOpen(true);
+    setLoading(true); setOpen(true); setCommonMode(true);
     const items = await loadLifeDiseaseMaster();
-    if (my !== _seq.current) return; // 追い越された古い検索は捨てる
+    if (my !== _seq.current) return;
     const out = [];
-    for (const it of items) {
-      if (_dzNorm(it[1]).includes(query) || String(it[0]).startsWith(raw.trim())) { out.push(it); if (out.length >= 30) break; }
+    for (const nm of LIFE_COMMON_DISEASES) {
+      const hit = items.find(it => it[1] === nm) || items.find(it => String(it[1]).startsWith(nm));
+      if (hit && !out.includes(hit)) out.push(hit);
     }
     setHits(out); setLoading(false);
   };
+  const search = async (raw) => {
+    setQ(raw);
+    const query = _dzNorm(raw.trim());
+    if (!query) { setHits([]); setOpen(false); setCommonMode(false); if (document.activeElement && document.activeElement.tagName==='INPUT') showCommon(); return; }
+    const my = ++_seq.current;
+    setLoading(true); setOpen(true); setCommonMode(false);
+    const items = await loadLifeDiseaseMaster();
+    if (my !== _seq.current) return; // 追い越された古い検索は捨てる
+    // ★ 「脳」「腰」等のキーワードは部分一致で全該当を拾い、①前方一致 ②名前が短い順 に並べて先頭30件を表示
+    const matches = [];
+    for (const it of items) {
+      const nm = _dzNorm(it[1]); const kn = it[2] ? _dzNorm(it[2]) : '';
+      if (nm.includes(query) || (kn && kn.includes(query)) || String(it[0]).startsWith(raw.trim())) {
+        matches.push([it, (nm.startsWith(query) || (kn && kn.startsWith(query))) ? 0 : 1, String(it[1]).length]);
+        if (matches.length >= 400) break;
+      }
+    }
+    matches.sort((a,b) => a[1]-b[1] || a[2]-b[2]);
+    setHits(matches.slice(0,30).map(m => m[0])); setLoading(false);
+  };
   return (
     <div className="relative flex-1 min-w-[220px]">
-      <input value={q} onChange={e=>search(e.target.value)} onFocus={()=>{ if(hits.length) setOpen(true); }} onBlur={()=>setTimeout(()=>setOpen(false),200)}
-        placeholder="病名で検索（例: 脳梗塞・こつそしょう）" className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none"/>
+      <input value={q} onChange={e=>search(e.target.value)} onFocus={()=>{ if(hits.length) setOpen(true); else if(!q.trim()) showCommon(); }} onBlur={()=>setTimeout(()=>setOpen(false),200)}
+        placeholder="病名・キーワードで検索（例: 脳・腰・こつそしょう）" className="w-full px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none"/>
       {open && (
         <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-300 rounded-lg shadow-xl max-h-56 overflow-auto">
+          {commonMode && !loading && hits.length > 0 && <div className="px-3 py-1.5 text-[10px] font-bold text-purple-600 bg-purple-50 sticky top-0">よく使う病名（「脳」「腰」など一文字でも検索できます）</div>}
           {loading ? <div className="px-3 py-2 text-[11px] text-slate-400">傷病名マスタを読み込み中…（初回のみ）</div>
-            : hits.length === 0 ? <div className="px-3 py-2 text-[11px] text-slate-400">該当なし（漢字・カタカナなど別の表記でお試しください）</div>
+            : hits.length === 0 ? <div className="px-3 py-2 text-[11px] text-slate-400">該当なし（漢字・カタカナ・ひらがなの読みなど別の表記でお試しください）</div>
             : hits.map(([c, n]) => (
               <button key={`${c}_${n}`} type="button" onMouseDown={(e)=>{ e.preventDefault(); onPick(c, n); setQ(''); setOpen(false); }}
                 className="block w-full text-left px-3 py-1.5 text-xs hover:bg-purple-50 border-b border-slate-100 last:border-b-0">
                 <span className="font-bold text-slate-700">{n}</span><span className="text-[10px] text-slate-400 ml-2">{c}</span>
               </button>
             ))}
-          {!loading && hits.length >= 30 && <div className="px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50">先頭30件のみ表示。続きは語を足して絞り込んでください。</div>}
+          {!loading && !commonMode && hits.length >= 30 && <div className="px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50">該当が多いため先頭30件のみ表示（見つからない時は語を足して絞り込んでください）。</div>}
         </div>
       )}
     </div>
