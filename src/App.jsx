@@ -37598,7 +37598,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                   {/* 傷病名コード: 病名検索(2.7万件マスタ)→選ぶとコード自動入力。 手入力も従来どおり可 */}
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-slate-600 w-40">傷病名（任意）</span>
+                      <span className="text-xs font-bold text-slate-600 w-40">傷病名（原則入力）</span>
                       <LifeDiseaseSearch onPick={(c,n)=>setLife({diseaseCode:c, diseaseName:n})}/>
                       <input value={L.diseaseCode||''} onChange={e=>setLife({diseaseCode:e.target.value.replace(/[^0-9]/g,'').slice(0,7), diseaseName:''})} placeholder="コード直接入力" title="傷病名コード（7桁・未コード化は999）" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-32"/>
                     </div>
@@ -37608,7 +37608,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                         <button type="button" onClick={()=>setLife({diseaseCode:'', diseaseName:''})} className="text-red-500 hover:text-red-600 font-bold">✕ クリア</button>
                       </div>
                     ) : (
-                      <div className="text-[10px] text-slate-400 mt-1 ml-[10.5rem]">病名で検索して選ぶとコードが自動で入ります（未コード化は 999）</div>
+                      <div className="text-[10px] text-slate-400 mt-1 ml-[10.5rem]">病名で検索して選ぶとコードが自動で入ります。LIFE仕様では原則入力（該当する病名がどうしても無い場合は「未コード化傷病名」を選択、記録不可の場合のみ空欄可）</div>
                     )}
                   </div>
                   {/* 合併症23分類 */}
@@ -39027,7 +39027,9 @@ const buildIdua2024Row = (patient, rec, sci, settings, targetYm) => {
   row.user_family_request = r.kazokuKibou || '';
   row.social_participation = r.shakaiSanka || '';
   row.housing_environment = r.kyotakuKankyo || '';
-  row.disease_name_code = L.diseaseCode || '';
+  // ★ 傷病名コードは7桁固定(レセ電算)。 マスタ由来のコードは先頭ゼロが落ちている場合がある
+  //   (999=未コード化→正式は0000999 等290件)ためCSV出力時にゼロ埋めする(2026-08-12)。
+  row.disease_name_code = L.diseaseCode ? String(L.diseaseCode).padStart(7,'0') : '';
   const on = lifeSplitYmd(r.hasshoDate); row.onset_date_year=on.y; row.onset_date_month=on.m; row.onset_date_day=on.d;
   const ad = lifeSplitYmd(r.nyuinDate); row.latest_admission_date_year=ad.y; row.latest_admission_date_month=ad.m; row.latest_admission_date_day=ad.d;
   const di = lifeSplitYmd(r.taiinDate); row.latest_discharge_date_year=di.y; row.latest_discharge_date_month=di.m; row.latest_discharge_date_day=di.d;
