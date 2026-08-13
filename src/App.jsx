@@ -37189,15 +37189,29 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
 // ★ 計画書の日付欄: カレンダーで選ぶと和暦(令和○年○月○日)で保存する。 直接手入力もできる。
 //   value は和暦文字列。 内部の <input type=date> は parseJpDate で ISO に戻して表示する。
+// ★ カレンダー選択ボタン(2026-08-13): ネイティブの date 入力を細幅(w-8/w-9)で直接見せると
+//   日付文字列が見切れて表示が壊れるため、アイコンボタンの上に透明な date 入力を重ねる。
+function CalendarPickBtn({ iso, onPick, size }) {
+  const xs = size === 'xs';
+  return (
+    <div className={`relative ${xs?'w-8':'w-9'} self-stretch shrink-0`} title="カレンダーで選ぶ">
+      <div className={`w-full h-full ${xs?'min-h-[26px] rounded':'min-h-[38px] rounded-lg'} bg-slate-50 border border-slate-300 flex items-center justify-center text-slate-500 pointer-events-none`}>
+        <CalendarCheck size={xs?14:16}/>
+      </div>
+      <input type="date" value={iso||''} onChange={e=>onPick(e.target.value)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" style={{colorScheme:'light'}}/>
+    </div>
+  );
+}
 function KKDateField({ label, value, onChange, ph }) {
   const iso = (() => { const d = parseJpDate(value); if (!d) return ''; return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const toReiwaStr = (i) => { if(!i) return ''; const d=new Date(i); if(isNaN(d.getTime())) return i; const r=d.getFullYear()-2018; return `令和${r}年${d.getMonth()+1}月${d.getDate()}日`; };
   return (
     <div>
       {label ? <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:4}}>{label}</label> : null}
-      <div className="flex items-center gap-1.5">
+      {/* ★ 幅上限(2026-08-13): グリッド幅いっぱいに伸びて「令和○年○月○日」に対して枠が広すぎたため 220px に制限 */}
+      <div className="flex items-center gap-1.5 max-w-[220px]">
         <input value={value||''} onChange={e=>onChange(e.target.value)} placeholder={ph||'令和○年○月○日'} className="flex-1 min-w-0 px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-400"/>
-        <input type="date" value={iso} onChange={e=>onChange(e.target.value ? toReiwaStr(e.target.value) : '')} title="カレンダーで選ぶ" className="w-9 px-1 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none cursor-pointer shrink-0" style={{colorScheme:'light'}}/>
+        <CalendarPickBtn iso={iso} onPick={v=>onChange(v ? toReiwaStr(v) : '')}/>
       </div>
     </div>
   );
@@ -38106,7 +38120,8 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     <div className="flex items-center gap-2 py-1 border-b border-slate-100">
       <span className="text-xs text-slate-700 flex-1 min-w-0">{name}</span>
       {COLS.map(([k,l])=>(
-        <label key={k} className="flex items-center gap-1 text-[10px] text-slate-500 w-16 justify-center shrink-0">
+        // ★ ラベルは必ず1行(2026-08-13): w-16固定幅では「してみたい」等が折り返していた
+        <label key={k} className="flex items-center gap-1 text-[10px] text-slate-500 whitespace-nowrap shrink-0">
           <input type="checkbox" checked={!!vals?.[k]} onChange={()=>onTog(k)} className="accent-blue-500"/>{l}
         </label>
       ))}
@@ -38502,8 +38517,8 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                 <div key={k} className="mb-3 last:mb-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="text-xs font-bold text-slate-600 w-16">{t}</span>
-                    <div className="flex items-center gap-1"><input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-36"/><input type="date" value={(()=>{const d=parseJpDate(editing[k+'SetDate'])||parseJpMonth(editing[k+'SetDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;upd({[k+'SetDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/></div>
-                    <div className="flex items-center gap-1"><input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/><input type="date" value={(()=>{const d=parseJpDate(editing[k+'DueDate'])||parseJpMonth(editing[k+'DueDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;upd({[k+'DueDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/></div>
+                    <div className="flex items-center gap-1"><input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-36"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing[k+'SetDate'])||parseJpMonth(editing[k+'SetDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({[k+'SetDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/></div>
+                    <div className="flex items-center gap-1"><input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing[k+'DueDate'])||parseJpMonth(editing[k+'DueDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({[k+'DueDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/></div>
                     {k==='long' && <button onClick={copyLongPeriodToServices} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap">期間を①〜⑤へコピー</button>}
                     <span className="text-[11px] text-slate-400 ml-1">達成度</span>
                     {TK_ACHIEVE.map(o=>(
@@ -38523,10 +38538,10 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-base font-bold text-blue-700">{TK_MARU[i]}</span>
                       <input value={sv.from||''} onChange={e=>updSvc(i,{from:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-20"/>
-                      <input type="date" value={(()=>{const d=parseJpDate(sv.from);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;updSvc(i,{from:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/>
+                      <CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(sv.from);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{updSvc(i,{from:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/>
                       <span className="text-xs text-slate-400">〜</span>
                       <input value={sv.to||''} onChange={e=>updSvc(i,{to:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-20"/>
-                      <input type="date" value={(()=>{const d=parseJpDate(sv.to);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;updSvc(i,{to:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダー" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/>
+                      <CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(sv.to);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{updSvc(i,{to:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/>
                     </div>
                     <KKField label="目的とケアの提供方針・内容" value={sv.content} onChange={v=>updSvc(i,{content:v})} rows={2}/>
                     <div className="grid md:grid-cols-3 gap-3 mt-2">
@@ -38598,7 +38613,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <label className="text-xs font-bold text-slate-600">実施後の変化（総括）</label>
-                  <div className="flex items-center gap-1"><input value={editing.saihyokaDate||''} onChange={e=>upd({saihyokaDate:e.target.value})} placeholder="再評価日(令和○年○月○日)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-44"/><input type="date" value={(()=>{const d=parseJpDate(editing.saihyokaDate);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onChange={e=>{const v=e.target.value;upd({saihyokaDate:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}} title="カレンダーで選ぶ" className="w-8 px-1 py-1 bg-slate-50 border border-slate-300 rounded text-xs cursor-pointer" style={{colorScheme:'light'}}/></div>
+                  <div className="flex items-center gap-1"><input value={editing.saihyokaDate||''} onChange={e=>upd({saihyokaDate:e.target.value})} placeholder="再評価日(令和○年○月○日)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-44"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing.saihyokaDate);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({saihyokaDate:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/></div>
                 </div>
                 <KKField label="" value={editing.soukatsu} onChange={v=>upd({soukatsu:v})} rows={3}/>
               </div>
