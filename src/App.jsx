@@ -37437,6 +37437,11 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const facility = appData.systemSettings?.facilityInfo || {};
   const records = (appData.kinouKeikakuRecords||[]).filter(r => r.patientId === pid)
     .sort((a,b) => (b.createdDate||'').localeCompare(a.createdDate||''));
+  // ★ 前回計画書の評価を新しい計画書の編集中に一緒に入力できるようにする(2026-08-13)。
+  //   達成度は「前回の計画書」側に記入・保存される(送付セット印刷でも評価入りで出力)。
+  const [prevEvalPatch, setPrevEvalPatch] = React.useState(null);
+  const _prevRec = editing ? (records.filter(r => r.id !== editing.id && ((r.createdAt||0) < (editing.createdAt||Number.MAX_SAFE_INTEGER)))[0] || null) : null;
+  React.useEffect(() => { setPrevEvalPatch(null); }, [editing?.id]);
 
   const _age = (bd) => { if(!bd) return ''; const d=new Date(bd), n=new Date(); let a=n.getFullYear()-d.getFullYear(); if(n.getMonth()<d.getMonth()||(n.getMonth()===d.getMonth()&&n.getDate()<d.getDate()))a--; return a; };
   const toReiwa = (iso) => { if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return iso; const r=d.getFullYear()-2018; return `令和${r}年${d.getMonth()+1}月${d.getDate()}日`; };
@@ -37504,7 +37509,13 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     const idx = list.findIndex(r => r.id === editing.id);
     const rec = { ...editing, _savedAt: syncNow() };
     if (idx >= 0) list[idx] = rec; else list.push(rec);
+    // ★ 前回計画書の評価(達成度)も同時保存: 評価は前回レコード側に書き込む
+    if (prevEvalPatch && _prevRec) {
+      const pi = list.findIndex(r => r.id === _prevRec.id);
+      if (pi >= 0) list[pi] = { ...list[pi], ...prevEvalPatch, _savedAt: syncNow() };
+    }
     onSave({ ...appData, kinouKeikakuRecords: list }, { manual:true, message: close ? '✓ 個別機能訓練計画書を保存しました' : '✓ 一時保存しました' });
+    setPrevEvalPatch(null);
     if (dirtyRef) dirtyRef.current = false;
     if (close) setEditing(null);
     else setEditing(rec); // 保存済みレコードで編集を継続(以降は上書き保存)
@@ -37573,6 +37584,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           <button onClick={()=>saveRecord(true)} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存して閉じる</button>
         </>}
         {printRec && <button onClick={()=>onShowPrintPreview('個別機能訓練計画書','A4','kk-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">印刷/PDF</button>}
+        {printRec && <button onClick={()=>onShowPrintPreview('ケアマネ送付セット（個別機能訓練計画書）','A4','kk-fax-set')} title="送付状(変更点一覧つき)+今回の計画書+前回の計画書(評価入り)をまとめて印刷します" className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">ケアマネ送付セット</button>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
@@ -37601,7 +37613,47 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                 </button>
               </div>
             </div>
+            {/* ★ 前回計画書の評価(新計画書の作成と同時に入力できる。 保存先は前回レコード側) */}
+            {_prevRec && (
+              <div className="bg-amber-50 rounded-xl border border-amber-300 p-4">
+                <div className="text-sm font-bold text-amber-700 mb-1">前回計画書の評価（作成日: {_prevRec.createdDate||'—'}）</div>
+                <div className="text-[11px] text-amber-900 opacity-70 mb-3">前回の計画書の目標達成度をここで入力できます。保存すると前回の計画書側に記入され、「ケアマネ送付セット」の印刷にも評価入りで反映されます。</div>
+                <div className="grid md:grid-cols-2 gap-3">
+                  {[['shortAchieve','短期目標','shortKinou'],['longAchieve','長期目標','longKinou']].map(([k,lb,txt])=>(
+                    <div key={k} className="bg-white rounded-lg border border-amber-200 p-3">
+                      <div className="text-xs font-bold text-slate-600 mb-1">{lb}の達成度</div>
+                      <div className="text-[11px] text-slate-500 mb-2 whitespace-pre-wrap">{String(_prevRec[txt]||'（目標の記載なし）').slice(0,120)}</div>
+                      <select value={(prevEvalPatch && prevEvalPatch[k] !== undefined) ? prevEvalPatch[k] : (_prevRec[k]||'')} onChange={e=>{ setPrevEvalPatch(p=>({ ...(p||{}), [k]: e.target.value })); markDirty(); }} className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none bg-white">
+                        <option value="">未評価</option><option>達成</option><option>一部</option><option>未達</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {/* 基本情報 */}
+            {/* ★ 前回計画書の評価(新計画書の作成と同時に入力。 保存先は前回レコード側) */}
+            {_prevRec && (
+              <div className="bg-amber-50 rounded-xl border border-amber-300 p-4">
+                <div className="text-sm font-bold text-amber-700 mb-1">前回計画書の評価（作成日: {_prevRec.createdDate||'—'}）</div>
+                <div className="text-[11px] text-amber-900 opacity-70 mb-3">前回の計画書の達成度・総括をここで入力できます。保存すると前回の計画書側に記入され、「ケアマネ送付セット」の印刷にも評価入りで反映されます。（サービス内容ごとの実施・達成の細かな評価は、一覧から前回分を「編集」して入力してください）</div>
+                <div className="grid md:grid-cols-2 gap-3 mb-3">
+                  {[['shortAchieve','短期目標','shortGoal'],['longAchieve','長期目標','longGoal']].map(([k,lb,txt])=>(
+                    <div key={k} className="bg-white rounded-lg border border-amber-200 p-3">
+                      <div className="text-xs font-bold text-slate-600 mb-1">{lb}の達成度</div>
+                      <div className="text-[11px] text-slate-500 mb-2 whitespace-pre-wrap">{String(_prevRec[txt]||'（目標の記載なし）').slice(0,120)}</div>
+                      <select value={(prevEvalPatch && prevEvalPatch[k] !== undefined) ? prevEvalPatch[k] : (_prevRec[k]||'')} onChange={e=>{ setPrevEvalPatch(p=>({ ...(p||{}), [k]: e.target.value })); markDirty(); }} className="px-3 py-1.5 border border-slate-300 rounded-lg text-sm outline-none bg-white">
+                        <option value="">未評価</option><option>達成</option><option>一部</option><option>未達</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <div className="bg-white rounded-lg border border-amber-200 p-3">
+                  <div className="text-xs font-bold text-slate-600 mb-1">総括（前回計画の評価まとめ）</div>
+                  <textarea value={(prevEvalPatch && prevEvalPatch.soukatsu !== undefined) ? prevEvalPatch.soukatsu : (_prevRec.soukatsu||'')} onChange={e=>{ setPrevEvalPatch(p=>({ ...(p||{}), soukatsu: e.target.value })); markDirty(); }} rows={2} placeholder="例: 短期目標はおおむね達成。歩行の安定が見られたため、次期は屋外歩行を目標に加える。" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none resize-none"/>
+                </div>
+              </div>
+            )}
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="text-sm font-bold text-blue-700 mb-3">基本情報（{patient?.name} 様／{patient?.gender||''}／{_age(patient?.birthDate)}歳／{patient?.careLevel||''}）</div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -37867,15 +37919,16 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         const lab={...cell,background:'#f3f4f6',fontWeight:'bold'};
         const sec={fontWeight:'bold',fontSize:'12px',margin:'8px 0 3px',borderBottom:'2px solid #000',paddingBottom:'1px'};
         const scale=(opts,sel)=>opts.map(o=><span key={o} style={{marginRight:6,padding:sel===o?'0 3px':'0',fontWeight:sel===o?'bold':'normal',border:sel===o?'1.5px solid #000':'none',borderRadius:sel===o?'3px':0}}>{o}</span>);
-        const pr=printRec; const bd=patient?.birthDate?new Date(patient.birthDate):null;
-        return (
-        <div id="kk-print-area" style={{display:'none',background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'6mm 7mm 4mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
-          {/* ★ 2026-08-12: flexでA4を使い切る方式を廃止。 display:flex!important が画面上でも
-              display:none を打ち消して印刷シートが常時表示され(一覧が隠れる/上下が潰れる)、
-              印刷でも空欄行が不自然に間延びしていた。 紙の様式らしい固定行高(tr height)で自然に組む。 */}
-          <style>{`#kk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%}
-            #kk-print-area td,#kk-print-area th{word-break:break-word;overflow-wrap:anywhere}
-            #kk-print-area *{max-width:100%}`}</style>
+        const bd=patient?.birthDate?new Date(patient.birthDate):null;
+        // ★ 2026-08-13: シート描画を関数化し、通常印刷(kk-print-area)とケアマネ送付セット
+        //   (kk-fax-set: 送付状+今回+前回[評価入り])で共用する。 A4固定行高の組みは従来どおり。
+        const KK_CSS = `.kk-sheet table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%}
+            .kk-sheet td,.kk-sheet th{word-break:break-word;overflow-wrap:anywhere}
+            .kk-sheet *{max-width:100%}
+            .kk-sheet{page-break-after:always;break-after:page}
+            .kk-sheet:last-child{page-break-after:auto;break-after:auto}`;
+        const sheet = (pr) => (
+        <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'6mm 7mm 4mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
           <div className="kkfix" style={{fontSize:'10px'}}>別紙様式３－３</div>
           <div className="kkfix" style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
@@ -37967,6 +38020,59 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           </tbody></table>
         </div>
         );
+        // ★ ケアマネ送付セット(2026-08-13): 前回計画書(評価入り)と変更点一覧つき送付状を自動生成。
+        //   printRecが未保存の編集中でも、直前の保存済みレコードを「前回」とみなす。
+        const _pi = records.findIndex(r=>r.id===printRec.id);
+        let prevForSet = _pi>=0 ? (records[_pi+1]||null) : (records.find(r=>r.id!==printRec.id)||null);
+        if (prevForSet && _prevRec && prevForSet.id===_prevRec.id && prevEvalPatch) prevForSet = { ...prevForSet, ...prevEvalPatch }; // 未保存の評価も反映
+        const _progTxt = (r)=> (r.programs||[]).filter(p=>String(p.content||'').trim()).map((p,i)=>`${i+1}. ${p.content}${p.time?`（${p.time}）`:''}`).join('\n');
+        const KK_DIFF_FIELDS = [['短期目標（機能）','shortKinou'],['短期目標（活動）','shortKatsudo'],['短期目標（参加）','shortSanka'],['長期目標（機能）','longKinou'],['長期目標（活動）','longKatsudo'],['長期目標（参加）','longSanka'],['機能訓練実施上の留意事項','ryuiPoint'],['利用者本人の希望','honninKibou'],['家族の希望','kazokuKibou'],['時間外に実施すること','jikangaiJisshi'],['特記事項','tokki']];
+        const diffRows = prevForSet ? [
+          ...KK_DIFF_FIELDS.map(([lb,k])=>({lb, a:String(prevForSet[k]||'').trim(), b:String(printRec[k]||'').trim()})),
+          {lb:'訓練プログラム', a:_progTxt(prevForSet), b:_progTxt(printRec)},
+        ].filter(x=>x.a!==x.b) : [];
+        const _tD=new Date(); const _wk=`令和${_tD.getFullYear()-2018}年${_tD.getMonth()+1}月${_tD.getDate()}日`;
+        const dcell={border:'1px solid #94a3b8',padding:'4px 6px',verticalAlign:'top',whiteSpace:'pre-wrap',fontSize:'10px',wordBreak:'break-word'};
+        const cover = (
+          <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'14mm 16mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.6,fontSize:'12px'}}>
+            <div style={{textAlign:'right',fontSize:'11px'}}>{_wk}</div>
+            <div style={{fontSize:'13px',marginTop:'8mm',fontWeight:'bold'}}>{patient?.cmOffice||'居宅介護支援事業所'}<br/>{patient?.cmName?`${patient.cmName} 様`:'ご担当者 様'}</div>
+            {patient?.cmFax && <div style={{fontSize:'11px',color:'#333'}}>FAX: {patient.cmFax}</div>}
+            <div style={{textAlign:'right',fontSize:'11px',marginTop:'6mm'}}>{facility.name||''}<br/>{facility.address||''}<br/>TEL: {facility.phone||''}{facility.fax?`　FAX: ${facility.fax}`:''}</div>
+            <div style={{textAlign:'center',fontSize:'16px',fontWeight:'bold',margin:'10mm 0 6mm',borderBottom:'2px solid #000',paddingBottom:'2mm'}}>個別機能訓練計画書 送付のご案内</div>
+            <div>いつもお世話になっております。<b>{patient?.name} 様</b>の個別機能訓練計画書を{prevForSet?'見直し・更新':'作成'}いたしましたので、下記のとおり送付いたします。ご査収のほどよろしくお願いいたします。</div>
+            <div style={{marginTop:'6mm',fontWeight:'bold'}}>【送付書類】</div>
+            <div style={{paddingLeft:'4mm'}}>
+              1. 個別機能訓練計画書（今回分／作成日: {printRec.createdDate||'—'}）<br/>
+              {prevForSet ? <>2. 前回の個別機能訓練計画書（評価記入済／作成日: {prevForSet.createdDate||'—'}）</> : null}
+            </div>
+            {prevForSet && (
+              <div style={{marginTop:'5mm'}}>
+                <div style={{fontWeight:'bold'}}>【前回計画の評価】</div>
+                <div style={{paddingLeft:'4mm'}}>短期目標: {prevForSet.shortAchieve||'未評価'}　／　長期目標: {prevForSet.longAchieve||'未評価'}</div>
+              </div>
+            )}
+            {prevForSet && (
+              <div style={{marginTop:'5mm'}}>
+                <div style={{fontWeight:'bold',marginBottom:'2mm'}}>【前回からの主な変更点】</div>
+                {diffRows.length===0 ? (
+                  <div style={{paddingLeft:'4mm'}}>目標・訓練プログラム等の変更はありません（日付・評価の更新のみ）。</div>
+                ) : (
+                  <table style={{width:'100%',borderCollapse:'collapse'}}>
+                    <thead><tr><th style={{...dcell,background:'#f1f5f9',width:'22%'}}>項目</th><th style={{...dcell,background:'#f1f5f9'}}>前回</th><th style={{...dcell,background:'#f1f5f9'}}>今回</th></tr></thead>
+                    <tbody>{diffRows.slice(0,12).map((d,i)=>(<tr key={i}><td style={{...dcell,fontWeight:'bold'}}>{d.lb}</td><td style={dcell}>{d.a||'（記載なし）'}</td><td style={dcell}>{d.b||'（記載なし）'}</td></tr>))}</tbody>
+                  </table>
+                )}
+                {diffRows.length>12 && <div style={{fontSize:'10px',color:'#333'}}>※ 変更点が多いため主要{12}件のみ記載。詳細は同封の計画書をご参照ください。</div>}
+              </div>
+            )}
+            <div style={{marginTop:'8mm',fontSize:'11px',color:'#333'}}>ご不明な点がございましたら、上記までご連絡ください。</div>
+          </div>
+        );
+        return (<>
+          <div id="kk-print-area" style={{display:'none'}}><style>{KK_CSS}</style>{sheet(printRec)}</div>
+          <div id="kk-fax-set" style={{display:'none'}}><style>{KK_CSS}</style>{cover}{sheet(printRec)}{prevForSet ? sheet(prevForSet) : null}</div>
+        </>);
       })()}
     </div>
   );
@@ -38238,6 +38344,10 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const patient = (appData.patients||[]).find(p => p.id === pid);
   const facility = appData.systemSettings?.facilityInfo || {};
   const records = (appData.tsushoKeikakuRecords||[]).filter(r => r.patientId === pid).sort((a,b)=>(b.createdDate||'').localeCompare(a.createdDate||''));
+  // ★ 前回計画書の評価を新しい計画書の編集中に一緒に入力(2026-08-13)。 保存先は前回レコード側。
+  const [prevEvalPatch, setPrevEvalPatch] = React.useState(null);
+  const _prevRec = editing ? (records.filter(r => r.id !== editing.id && ((r.createdAt||0) < (editing.createdAt||Number.MAX_SAFE_INTEGER)))[0] || null) : null;
+  React.useEffect(() => { setPrevEvalPatch(null); }, [editing?.id]);
   const _age = (bd)=>{ if(!bd) return ''; const d=new Date(bd),n=new Date(); let a=n.getFullYear()-d.getFullYear(); if(n.getMonth()<d.getMonth()||(n.getMonth()===d.getMonth()&&n.getDate()<d.getDate()))a--; return a; };
   const toReiwa = (iso)=>{ if(!iso) return ''; const d=new Date(iso); if(isNaN(d.getTime())) return iso; const r=d.getFullYear()-2018; return `令和${r}年${d.getMonth()+1}月${d.getDate()}日`; };
   const blankProg = ()=>({ item:'', content:'', freqWeek:'', time:'' });
@@ -38386,7 +38496,13 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     const idx=list.findIndex(r=>r.id===editing.id);
     const rec={...editing,_savedAt:syncNow()};
     if(idx>=0) list[idx]=rec; else list.push(rec);
+    // ★ 前回計画書の評価(達成度・総括・再評価日)も同時保存: 前回レコード側へ書き込む
+    if (prevEvalPatch && _prevRec) {
+      const pi = list.findIndex(r => r.id === _prevRec.id);
+      if (pi >= 0) list[pi] = { ...list[pi], ...prevEvalPatch, _savedAt: syncNow() };
+    }
     onSave({...appData, tsushoKeikakuRecords:list}, {manual:true, message: close ? '✓ 通所介護計画書を保存しました' : '✓ 一時保存しました'});
+    setPrevEvalPatch(null);
     if(dirtyRef) dirtyRef.current=false;
     if(close) setEditing(null);
     else setEditing(rec); // 保存済みレコードで編集を継続(以降は上書き保存になる)
@@ -38447,6 +38563,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
           <button onClick={()=>saveRecord(true)} className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold shadow active:scale-95">保存して閉じる</button>
         </>}
         {printRec && <button onClick={()=>onShowPrintPreview('通所介護計画書','A4','tk-print-area')} className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg text-sm font-bold shadow active:scale-95">印刷/PDF</button>}
+        {printRec && <button onClick={()=>onShowPrintPreview('ケアマネ送付セット（通所介護計画書）','A4','tk-fax-set')} title="送付状(変更点一覧つき)+今回の計画書+前回の計画書(評価入り)をまとめて印刷します" className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">ケアマネ送付セット</button>}
       </div>
       <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
         {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : editing ? (
@@ -38681,7 +38798,9 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
       {printRec && (() => {
         // ★ 別紙様式３－４ 準拠のA4 1枚。flex比率で縦を配分し、下部に余白が残らないようにする。
         // 一覧から直接印刷する旧レコードも様式3-4の構造へ引き上げてから描画する
-        const rec = _migrate(printRec);
+        // ★ 2026-08-13: シートHTML生成を関数化し、通常印刷とケアマネ送付セットで共用する
+        const buildSheetHtml = (rec0) => {
+        const rec = _migrate(rec0);
         const esc=(s)=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const B='1px solid #000';
         // cs=利用者入力を出す枠(pre-wrapで改行保持) / csm=HTMLを組むだけの枠
@@ -38811,7 +38930,42 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
           +`<div style="flex:52 1 0;min-height:0;margin-top:1.2mm;">${bottom}</div>`
           +footer
           +`</div>`;
-        return <div id="tk-print-area" style={{display:'none'}} dangerouslySetInnerHTML={{__html:html}}/>;
+        return html;
+        };
+        // ★ ケアマネ送付セット: 送付状(変更点一覧つき)+今回の計画書+前回の計画書(評価入り)
+        const esc2=(s)=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        const _pi = records.findIndex(r=>r.id===printRec.id);
+        let prevForSet = _pi>=0 ? (records[_pi+1]||null) : (records.find(r=>r.id!==printRec.id)||null);
+        if (prevForSet && _prevRec && prevForSet.id===_prevRec.id && prevEvalPatch) prevForSet = { ...prevForSet, ...prevEvalPatch };
+        const TK_DIFF = [['長期目標','longGoal'],['短期目標','shortGoal'],['健康状態','kenkoJotai'],['特記事項','tokki']];
+        const _svcTxt=(r)=>(_migrate(r).services||[]).filter(s=>String(s.content||'').trim()).map((s,i)=>`${i+1}. ${s.content}`).join('\n');
+        const diffRows = prevForSet ? [
+          ...TK_DIFF.map(([lb,k])=>({lb, a:String(prevForSet[k]||'').trim(), b:String(printRec[k]||'').trim()})),
+          {lb:'サービス提供内容', a:_svcTxt(prevForSet), b:_svcTxt(printRec)},
+        ].filter(x=>x.a!==x.b) : [];
+        const _tD=new Date(); const _wk=`令和${_tD.getFullYear()-2018}年${_tD.getMonth()+1}月${_tD.getDate()}日`;
+        const _dc='border:1px solid #94a3b8;padding:4px 6px;vertical-align:top;white-space:pre-wrap;font-size:10px;word-break:break-word;';
+        const coverHtml = `<div style="page-break-after:always;break-after:page;background:#fff;color:#000;width:210mm;min-height:296mm;padding:14mm 16mm;box-sizing:border-box;font-family:'Hiragino Sans','Yu Gothic',sans-serif;line-height:1.6;font-size:12px;">`
+          +`<div style="text-align:right;font-size:11px;">${esc2(_wk)}</div>`
+          +`<div style="font-size:13px;margin-top:8mm;font-weight:bold;">${esc2(patient?.cmOffice||'居宅介護支援事業所')}<br>${patient?.cmName?esc2(patient.cmName)+' 様':'ご担当者 様'}</div>`
+          +(patient?.cmFax?`<div style="font-size:11px;color:#333;">FAX: ${esc2(patient.cmFax)}</div>`:'')
+          +`<div style="text-align:right;font-size:11px;margin-top:6mm;">${esc2(facility.name||'')}<br>${esc2(facility.address||'')}<br>TEL: ${esc2(facility.phone||'')}${facility.fax?'　FAX: '+esc2(facility.fax):''}</div>`
+          +`<div style="text-align:center;font-size:16px;font-weight:bold;margin:10mm 0 6mm;border-bottom:2px solid #000;padding-bottom:2mm;">通所介護計画書 送付のご案内</div>`
+          +`<div>いつもお世話になっております。<b>${esc2(patient?.name||'')} 様</b>の通所介護計画書を${prevForSet?'見直し・更新':'作成'}いたしましたので、下記のとおり送付いたします。ご査収のほどよろしくお願いいたします。</div>`
+          +`<div style="margin-top:6mm;font-weight:bold;">【送付書類】</div>`
+          +`<div style="padding-left:4mm;">1. 通所介護計画書（今回分／作成日: ${esc2(printRec.createdDate||'—')}）${prevForSet?`<br>2. 前回の通所介護計画書（評価記入済／作成日: ${esc2(prevForSet.createdDate||'—')}）`:''}</div>`
+          +(prevForSet?`<div style="margin-top:5mm;"><div style="font-weight:bold;">【前回計画の評価】</div><div style="padding-left:4mm;">短期目標: ${esc2(prevForSet.shortAchieve||'未評価')}　／　長期目標: ${esc2(prevForSet.longAchieve||'未評価')}${prevForSet.soukatsu?`<br>総括: ${esc2(prevForSet.soukatsu)}`:''}</div></div>`:'')
+          +(prevForSet?(diffRows.length===0
+            ?`<div style="margin-top:5mm;"><div style="font-weight:bold;">【前回からの主な変更点】</div><div style="padding-left:4mm;">目標・サービス内容等の変更はありません（日付・評価の更新のみ）。</div></div>`
+            :`<div style="margin-top:5mm;"><div style="font-weight:bold;margin-bottom:2mm;">【前回からの主な変更点】</div><table style="width:100%;border-collapse:collapse;"><tr><th style="${_dc}background:#f1f5f9;width:22%;">項目</th><th style="${_dc}background:#f1f5f9;">前回</th><th style="${_dc}background:#f1f5f9;">今回</th></tr>${diffRows.slice(0,12).map(d=>`<tr><td style="${_dc}font-weight:bold;">${esc2(d.lb)}</td><td style="${_dc}">${esc2(d.a||'（記載なし）')}</td><td style="${_dc}">${esc2(d.b||'（記載なし）')}</td></tr>`).join('')}</table>${diffRows.length>12?'<div style="font-size:10px;color:#333;">※ 変更点が多いため主要12件のみ記載。詳細は同封の計画書をご参照ください。</div>':''}</div>`):'')
+          +`<div style="margin-top:8mm;font-size:11px;color:#333;">ご不明な点がございましたら、上記までご連絡ください。</div>`
+          +`</div>`;
+        const _wrapPage=(h)=>`<div style="page-break-after:always;break-after:page;">${h}</div>`;
+        const setHtml = coverHtml + _wrapPage(buildSheetHtml(printRec)) + (prevForSet ? buildSheetHtml(prevForSet) : '');
+        return (<>
+          <div id="tk-print-area" style={{display:'none'}} dangerouslySetInnerHTML={{__html:buildSheetHtml(printRec)}}/>
+          <div id="tk-fax-set" style={{display:'none'}} dangerouslySetInnerHTML={{__html:setHtml}}/>
+        </>);
       })()}
     </div>
   );
