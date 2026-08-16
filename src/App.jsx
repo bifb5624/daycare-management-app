@@ -22611,8 +22611,10 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           {!compactMode && (
             <span style={{background:'white',color:familyMode?'#3d5021':'#1e40af',borderRadius:8,padding:'6px 12px',fontSize:11,fontWeight:'bold',whiteSpace:'nowrap'}}>{rangeLabel}</span>
           )}
-          {/* 3ヶ月超の場合、月平均/毎日表示の切替 */}
-          {(period==='all' || parseInt(period,10)>=6) && (
+          {/* 3ヶ月超の場合、月平均/毎日表示の切替
+              ★ 家族・ケアマネ画面(compactMode)では非表示(2026-08-16): 親ヘッダの期間メニューに
+                「日別・○○/月平均・○○」の選択が組み込まれており、このトグルは重複だった。 */}
+          {!compactMode && (period==='all' || parseInt(period,10)>=6) && (
             <div style={{display:'flex',background:'rgba(255,255,255,0.15)',borderRadius:10,overflow:'hidden',border:'1px solid rgba(255,255,255,0.3)'}}>
               {[['auto','月平均'],['daily','毎日']].map(([v,l])=>(
                 <button key={v} onClick={()=>setDisplayMode(v)}
