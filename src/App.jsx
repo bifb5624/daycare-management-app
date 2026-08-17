@@ -9741,6 +9741,28 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
     return { date: "未定", time: "　時　分", isFurikae: false };
 };
 
+// ★ 指定曜日のお迎え時間(2026-08-17): 登録済み送迎時間(曜日)→施設提供時間から自動(開始10分前・時のみ)→既定。
+//   次回「日付」を手修正した場合に、時間を自動候補日(別曜日)ではなく表示中の日付の曜日で出すために使う。
+const getPickupTimeForDow = (patient, dow, appData) => {
+  if (patient == null || dow == null) return '';
+  const _regT = (patient.pickupType === 'fixed' || patient.pickupType === 'partial') ? (patient.pickupTimes?.[dow] || '') : '';
+  if (String(_regT).includes(':')) {
+    const pts = String(_regT).split(':');
+    const h = pts[0] && pts[0] !== '--' ? pts[0] : '　　';
+    const m = pts[1] && pts[1] !== '--' ? pts[1] : '　　';
+    return `${h}時${m}分`;
+  }
+  if (_regT) return String(_regT);
+  if (patient.pickupType === 'flexible') return '　時　分';
+  const base = patient.scheduleAmPm?.[dow] || '';
+  const ampm = base === 'PM' ? 'PM' : 'AM';   // 1日/AM/未設定はAM扱い
+  const _fi = appData?.systemSettings?.facilityInfo || {};
+  const raw = ampm === 'AM' ? (_fi.serviceTimeAM || '') : (_fi.serviceTimePM || '');
+  const m = String(raw).split(/[～〜]/)[0].trim().match(/(\d{1,2}):(\d{2})/);
+  if (m) { let t = parseInt(m[1],10)*60 + parseInt(m[2],10) - 10; if (t < 0) t += 24*60; return `${Math.floor(t/60)}時`; }
+  return ampm === 'AM' ? '8時' : '13時';
+};
+
 // ★ 厚労省バイタルサイン基準値に合わせた色判定 (正常値は黒)
 // 血圧: 正常 100~129/60~84 / I度 130~139/85~89 / II度 140~159/90~99 / III度 160+/100+ / 低血圧 <90
 const getBpColorClass = (upStr, dnStr) => {
@@ -28030,10 +28052,18 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           displayRecords.forEach(r => {
               const p = (appData.patients||[]).find(pt => pt.id === r.patientId);
               const info = getNextVisitInfo(p, selectedDate, appData.monthlyShifts, appData);
-              initialOverrides[r.id] = {
-                  nextDateOverride: _hasNum(r.nextDateOverride) ? r.nextDateOverride : info.date,
-                  nextTimeOverride: _hasNum(r.nextTimeOverride) ? r.nextTimeOverride : info.time
-              };
+              const _dispDate = _hasNum(r.nextDateOverride) ? r.nextDateOverride : info.date;
+              // ★ 時間の自動表示は「表示中の日付」の曜日で計算(2026-08-17・印刷側と同ロジック)
+              let _dispTime;
+              if (_hasNum(r.nextTimeOverride)) _dispTime = r.nextTimeOverride;
+              else {
+                  const _dm = String(_dispDate || '').match(/(\d+)月(\d+)日/);
+                  if (_dm && p) {
+                      const _y = r.year || new Date(selectedDate).getFullYear();
+                      _dispTime = getPickupTimeForDow(p, new Date(_y, parseInt(_dm[1],10)-1, parseInt(_dm[2],10)).getDay(), appData) || info.time;
+                  } else _dispTime = info.time;
+              }
+              initialOverrides[r.id] = { nextDateOverride: _dispDate, nextTimeOverride: _dispTime };
           });
           setLocalOverrides(initialOverrides);
           // 開いた時点の表示値を基準として控える (差分のあった項目だけ保存するため)
@@ -28525,13 +28555,24 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                     // ★ 触った側(日付 or 時間)だけを更新する。 両方を毎回書くと、時間を入れただけで
                     //   日付まで確定値として保存され、自動計算(欠席/振替への追従)が効かなくなる。
                     const updateOverride = (kind, m, d, h, mi) => {
-                      setLocalOverrides(prev => ({
-                        ...prev,
-                        [r.id]: {
-                          ...prev[r.id],
-                          ...(kind === 'date' ? { nextDateOverride: composeDate(m, d) } : { nextTimeOverride: composeTime(h, mi) }),
+                      setLocalOverrides(prev => {
+                        const cur = prev[r.id] || {};
+                        const patch = kind === 'date' ? { nextDateOverride: composeDate(m, d) } : { nextTimeOverride: composeTime(h, mi) };
+                        // ★ 日付を変えたら時間も新しい曜日の送迎時間へ自動追従(2026-08-17)。
+                        //   この画面で時間を手入力済み、または記録に手入力の時間が保存済みの場合は触らない。
+                        if (kind === 'date' && m && d && _rp) {
+                          const _baseT = (_ovBaseRef.current[r.id] || {}).nextTimeOverride;
+                          const _handEdited = String(cur.nextTimeOverride ?? '') !== String(_baseT ?? '');
+                          if (!_handEdited && !/\d/.test(String(r.nextTimeOverride ?? ''))) {
+                            const _y = new Date().getFullYear();
+                            const _cand = new Date(_y, +m-1, +d); const _td = new Date(); _td.setHours(0,0,0,0);
+                            const _tgt = _cand < _td ? new Date(_y+1, +m-1, +d) : _cand;
+                            const _t = getPickupTimeForDow(_rp, _tgt.getDay(), appData);
+                            if (_t) { patch.nextTimeOverride = _t; _ovBaseRef.current[r.id] = { ...(_ovBaseRef.current[r.id]||{}), nextTimeOverride: _t }; }
+                          }
                         }
-                      }));
+                        return { ...prev, [r.id]: { ...cur, ...patch } };
+                      });
                     };
                     return (
                       <div key={r.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl">
@@ -28772,7 +28813,16 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
       } else if (/\d/.test(String(record.nextTimeOverride ?? ''))) {
           nextTimeDisplay = record.nextTimeOverride;
       } else {
-          nextTimeDisplay = info2.time || "　時　分";
+          // ★ 時間は「表示している次回日付」の曜日に連動(2026-08-17): 日付だけ手修正されている場合、
+          //   従来は自動候補日(例: 休止スキップ後の水曜AM)の時間が出てしまい「月曜なのに8時台」になっていた。
+          const _dm = String(nextDateDisplay || '').match(/(\d+)月(\d+)日/);
+          if (_dm) {
+              const _y = record.year || new Date(selectedDate).getFullYear();
+              const _dow = new Date(_y, parseInt(_dm[1],10)-1, parseInt(_dm[2],10)).getDay();
+              nextTimeDisplay = getPickupTimeForDow(patient, _dow, appData) || info2.time || "　時　分";
+          } else {
+              nextTimeDisplay = info2.time || "　時　分";
+          }
       }
   }
 
