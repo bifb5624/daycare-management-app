@@ -10929,6 +10929,26 @@ function RosterView({ appData, onSave }) {
     </div>
   );
 }
+// ★ 観察モード(2026-08-17・挙動変更なし): 提供記録の_fieldTs刻印の妥当性検証。
+//   ユーザーが実際に編集した項目を端末メモリに記録し、保存時の「差分ベース刻印」と突き合わせて
+//   同期ログ(stamp-obs)に出すだけ。 目的: 「編集していない項目が新規編集として刻印される」
+//   (=古い下書きが他端末の変更を巻き戻す)実例の検出と、編集経路の棚卸し。 検証後に本適用(案A)を判断する。
+const _recEditObs = { map: new Map() };   // key: `${pid}|${M月D日}|${year}` -> { field: ts }
+const obsMarkRecEdit = (pid, dateIso, field) => {
+  try {
+    const d = new Date(dateIso); if (isNaN(d.getTime())) return;
+    const k = `${pid}|${d.getMonth()+1}月${d.getDate()}日|${d.getFullYear()}`;
+    const m = _recEditObs.map.get(k) || {};
+    m[field] = Date.now();
+    // 血圧・体温等のAM/PM項目は、保存時に旧形式互換のplain項目も一緒に更新されるため同時に記録
+    const _sfx = field.match(/^(.+)_(AM|PM)$/); if (_sfx) m[_sfx[1]] = Date.now();
+    _recEditObs.map.set(k, m);
+    if (_recEditObs.map.size > 400) { const fk = _recEditObs.map.keys().next().value; _recEditObs.map.delete(fk); }
+  } catch {}
+};
+// 観察の突き合わせで無視するメタ項目(担当者・表示用属性など。編集検出の対象ではない)
+const OBS_IGNORE_FIELDS = new Set(['name','kana','dayOfWeek','date','year','patientId','recorder','done']);
+
 // === ホーム / ダッシュボード ===
 // ★ Card/Tile は必ずモジュールレベルで定義する(2026-08-12)。 DashboardView 内で定義すると
 //   4秒ごとの同期のたびにコンポーネントの同一性が変わり、React がホームのDOM全体を
@@ -18165,6 +18185,7 @@ export default function App() {
       // ★ 提供記録/日誌は「フィールド単位マージ」対象。 変更した項目だけ _fieldTs=now を刻む(空にした=意図的削除も含む)。
       //   これで「意図的に空にした→反映」「触っていない空欄→他端末の入力を消さない(バイタル復活の事故防止)」を両立。
       const _FIELD_TS_KEYS = new Set(['ticketRecords','dailyLogs']);
+      const _obsStat = { rows:0, un:0, mis:0, unEx:'', misEx:'' };   // ★ 観察モード集計(ticketRecordsのみ・挙動不変)
       ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(_key => {
         if (!Array.isArray(newData[_key]) || !Array.isArray(prev[_key])) return;
         const _pm = new Map(prev[_key].map(r => [String(r && r.id), r]));
@@ -18178,6 +18199,7 @@ export default function App() {
           if (!_fieldLevel) return { ...r, _savedAt: _now2 }; // 新規/変更 → 最新時刻
           // 変更フィールドだけ _fieldTs を刻む(オブジェクト/配列も含め、実際に値が変わった項目のみ)
           const _fts = { ...(r._fieldTs || {}) };
+          const _stamped = [];   // ★ 観察モード: この保存で刻印された項目名(ticketRecordsのみ集計)
           const _fk = new Set([...Object.keys(r), ...(_old ? Object.keys(_old) : [])]);
           _fk.forEach(k => {
             if (k === '_savedAt' || k === '_fieldTs' || k === 'id') return;
@@ -18191,12 +18213,30 @@ export default function App() {
             let chg;
             if (_emptyN && _emptyO) chg = false;
             else { try { chg = JSON.stringify(_nv) !== JSON.stringify(_ov); } catch { chg = true; } }
-            if (chg) _fts[k] = _now2;
+            if (chg) { _fts[k] = _now2; if (_key === 'ticketRecords' && !OBS_IGNORE_FIELDS.has(k)) _stamped.push(k); }
           });
+          // ★ 観察モード(挙動不変): 差分ベースで刻印された項目を「ユーザー編集記録(obsMarkRecEdit)」と突き合わせ。
+          //   mis=編集記録が無いのに刻印(直近10分) → 古い下書きが他端末の変更を上書きした疑いの実例。
+          //   un=行ごと編集記録なし(状態モーダル・振替・自動補正など未マーキング経路の棚卸し用)。
+          if (_key === 'ticketRecords' && _stamped.length && _old) {
+            try {
+              const _obs = _recEditObs.map.get(`${r.patientId}|${r.date}|${r.year ?? ''}`);
+              const _recent = (f) => _obs && (Date.now() - (Number(_obs[f])||0)) < 10*60*1000;
+              if (!_obs) { _obsStat.un++; if (!_obsStat.unEx) _obsStat.unEx = `${r.name||r.patientId} ${r.date}:${_stamped.slice(0,4).join(',')}`; }
+              else {
+                const _mis = _stamped.filter(f => !_recent(f));
+                if (_mis.length) { _obsStat.mis += _mis.length; if (!_obsStat.misEx) _obsStat.misEx = `${r.name||r.patientId} ${r.date}:${_mis.slice(0,4).join(',')}`; }
+              }
+              _obsStat.rows++;
+            } catch {}
+          }
           return { ...r, _savedAt: _now2, _fieldTs: _fts };
         });
         if (_ch) newData = { ...newData, [_key]: _st };
       });
+      // ★ 観察モードの結果を同期ログへ(提供記録に変更行があった保存のみ)。 mis>0 が続くようなら
+      //   「差分ベース刻印が未編集項目を新編集として刻印している」実証 → 案A本適用の判断材料。
+      if (_obsStat.rows) syncLog('stamp-obs', { rows:_obsStat.rows, un:_obsStat.un, mis:_obsStat.mis, ...(_obsStat.misEx?{misEx:_obsStat.misEx}:{}), ...(!_obsStat.misEx&&_obsStat.unEx?{unEx:_obsStat.unEx}:{}) });
       // ★ 各種設定・日誌設定・連絡帳設定は「変更されたフィールドだけ」に更新時刻(_fieldTs[field])を刻む。
       //   これにより、古い端末が1項目だけ編集して保存しても、触っていない項目(送迎自動コピー/ケアマネ/各設定/
       //   連絡事項・掲載期間)は フィールド単位マージで巻き戻らない(「1項目直すと他が復活」の恒久対策)。
@@ -20111,13 +20151,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   }, [selectedDate, _patSig, appData.monthlyShifts, _trSig, appData.holidays]);
 
   const updateRecord = (id, field, value) => {
-    if (filterMode === 'single') setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    if (filterMode === 'single') { obsMarkRecEdit(id, selectedDate, field); setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p)); }
     else setLocalTicketRecords(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
     if (dirtyRef) dirtyRef.current = true;
   };
 
   const updateExercise = (id, field, value) => {
-    if (filterMode === 'single') setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, exercises: { ...(p.exercises || {}), [field]: value } } : p));
+    if (filterMode === 'single') { obsMarkRecEdit(id, selectedDate, 'exercises'); setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, exercises: { ...(p.exercises || {}), [field]: value } } : p)); }
     else setLocalTicketRecords(prev => prev.map(p => p.id === id ? { ...p, exercises: { ...(p.exercises || {}), [field]: value } } : p));
     if (dirtyRef) dirtyRef.current = true;
   };
@@ -20129,7 +20169,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       indEx[slot] = { ...cur, [field]: value };
       return { ...p, individualExercises: indEx };
     };
-    if (filterMode === 'single') setLocalPatients(prev => prev.map(p => p.id === id ? updater(p) : p));
+    if (filterMode === 'single') { obsMarkRecEdit(id, selectedDate, 'individualExercises'); setLocalPatients(prev => prev.map(p => p.id === id ? updater(p) : p)); }
     else setLocalTicketRecords(prev => prev.map(p => p.id === id ? updater(p) : p));
     if (dirtyRef) dirtyRef.current = true;
   };
