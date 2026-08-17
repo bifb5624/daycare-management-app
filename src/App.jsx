@@ -9677,6 +9677,9 @@ const getNextVisitInfo = (patient, currentDateStr, monthlyShifts, appData) => {
         const dayOfWeek = nextDate.getDay();
         if (closedDays.includes(dayOfWeek)) continue;
         if (_holiSet.has(`${nextDate.getFullYear()}-${String(nextDate.getMonth()+1).padStart(2,'0')}-${String(nextDate.getDate()).padStart(2,'0')}`)) continue;
+        // ★ 休止期間(pauseHistory)との連動(2026-08-17): 従来は「休止の記録行がある日」しか外れず、
+        //   記録行がまだ無い休止中の未来日が次回候補になっていた。 期間ベースで判定して確実に外す。
+        if (getPauseReasonOnDate(patient, nextDate)) continue;
         const monthKey = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
 
         const day = nextDate.getDate();
@@ -27903,6 +27906,48 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   //   全員ぶんの nextDateOverride/nextTimeOverride が確定値として焼き付き、
   //   1人の時間を直しただけで他全員が「変更済み(自動計算に戻らない)」になってしまう。
   const _ovBaseRef = React.useRef({});
+  // ★ 次回予定の焼き付き残骸チェック(2026-08-17): 全期間の記録から「保存済みの次回日付/時間が
+  //   自動計算(送迎時間マスタ・基本利用日・休止と連動)と食い違う」ものを一覧化し、選択して自動計算に戻す。
+  //   過去の「モーダルを開いて保存しただけで全員分が焼き付く」バグの残骸や誤入力(例: 8時)の一掃用。
+  const [ovCleanup, setOvCleanup] = useState(null);   // null | { items: [...] }
+  const _scanOvZansai = () => {
+    const items = [];
+    (appData.ticketRecords || []).forEach(r => {
+      const hasT = /\d/.test(String(r.nextTimeOverride ?? ''));
+      const hasD = /\d/.test(String(r.nextDateOverride ?? ''));
+      if (!hasT && !hasD) return;
+      const p = (appData.patients || []).find(pt => pt.id === r.patientId); if (!p) return;
+      const mm = String(r.date || '').match(/(\d+)月(\d+)日/); if (!mm) return;
+      const y = r.year || new Date().getFullYear();
+      const iso = `${y}-${String(mm[1]).padStart(2,'0')}-${String(mm[2]).padStart(2,'0')}`;
+      const auto = getNextVisitInfo(p, iso, appData.monthlyShifts, appData);
+      const diffT = hasT && String(r.nextTimeOverride).trim() !== String(auto.time).trim();
+      const diffD = hasD && String(r.nextDateOverride).trim() !== String(auto.date).trim();
+      if (!diffT && !diffD) return;
+      // 「8時」「13時」のような分なしの時刻は自動計算値の焼き付きの可能性が高い → 既定でチェックON
+      const suspicious = diffT && /^\s*\d{1,2}\s*時\s*$/.test(String(r.nextTimeOverride));
+      items.push({ id: r.id, name: p.name || r.name || '', date: `${y}年${mm[1]}月${mm[2]}日`, sort: iso,
+        storedT: diffT ? String(r.nextTimeOverride) : '', autoT: auto.time, storedD: diffD ? String(r.nextDateOverride) : '', autoD: auto.date, checked: suspicious });
+    });
+    items.sort((a,b) => b.sort.localeCompare(a.sort));
+    setOvCleanup({ items });
+  };
+  const _execOvCleanup = () => {
+    if (!ovCleanup) return;
+    const sel = ovCleanup.items.filter(x => x.checked);
+    if (!sel.length) { alert('対象が選択されていません。'); return; }
+    if (!window.confirm(`${sel.length}件の保存済みの次回予定を消去し、自動計算(送迎時間マスタと連動)に戻します。よろしいですか？`)) return;
+    const ids = new Map(sel.map(x => [String(x.id), x]));
+    const list = (appData.ticketRecords || []).map(r => {
+      const it = ids.get(String(r.id)); if (!it) return r;
+      const nr = { ...r, _savedAt: syncNow() };
+      if (it.storedT) nr.nextTimeOverride = '';
+      if (it.storedD) nr.nextDateOverride = '';
+      return nr;
+    });
+    onSave({ ...appData, ticketRecords: list }, { manual: true, message: `✓ ${sel.length}件を自動計算に戻しました` });
+    setOvCleanup(null);
+  };
   const [keypad, setKeypad] = useState({ isOpen: false, recordId: null, field: null, value: "", isFirstInput: false });
   const [isPrintPreview, setIsPrintPreview] = useState(false);
 
@@ -28389,11 +28434,54 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       </div>
       <div className="max-w-[800px] mx-auto space-y-8 pb-32 pt-6">
 
+        {/* ★ 次回予定の焼き付き残骸チェック一覧 */}
+        {ovCleanup && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{maxHeight:'88vh'}}>
+              <div className="px-6 py-4 border-b border-slate-200 bg-amber-50 flex justify-between items-center flex-shrink-0">
+                <h2 className="text-base font-bold text-slate-800">次回予定の残骸チェック（自動計算と食い違う保存値）</h2>
+                <button onClick={()=>setOvCleanup(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">✕</button>
+              </div>
+              <div className="px-6 py-2 text-[11px] text-slate-500 border-b border-slate-100">
+                チェックした行の保存値を消去して自動計算（送迎時間マスタ・基本利用日・休止期間と連動）に戻します。「8時」など分なしの時刻は焼き付きの可能性が高いため最初からチェック済みです。手入力で意図した変更はチェックを外してください。
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                {ovCleanup.items.length === 0 ? (
+                  <div className="text-center text-slate-400 py-10 font-bold">食い違いはありません（全て自動計算どおりです）</div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex gap-2 mb-2">
+                      <button onClick={()=>setOvCleanup(c=>({items:c.items.map(x=>({...x,checked:true}))}))} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-bold text-slate-600">全選択</button>
+                      <button onClick={()=>setOvCleanup(c=>({items:c.items.map(x=>({...x,checked:false}))}))} className="px-3 py-1 bg-slate-100 hover:bg-slate-200 rounded text-xs font-bold text-slate-600">全解除</button>
+                      <span className="text-xs text-slate-400 self-center">選択中 {ovCleanup.items.filter(x=>x.checked).length}／{ovCleanup.items.length}件</span>
+                    </div>
+                    {ovCleanup.items.map((it,i)=>(
+                      <label key={it.id} className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer ${it.checked?'border-amber-300 bg-amber-50':'border-slate-200 bg-white'}`}>
+                        <input type="checkbox" checked={it.checked} onChange={e=>setOvCleanup(c=>({items:c.items.map((x,xi)=>xi===i?{...x,checked:e.target.checked}:x)}))} className="w-4 h-4 mt-0.5"/>
+                        <div className="text-xs">
+                          <span className="font-bold text-slate-700">{it.date}　{it.name} 様</span>
+                          {it.storedT && <div className="text-slate-600 mt-0.5">時間: <b className="text-red-600">{it.storedT}</b> → 自動 <b className="text-emerald-700">{it.autoT}</b></div>}
+                          {it.storedD && <div className="text-slate-600 mt-0.5">日付: <b className="text-red-600">{it.storedD}</b> → 自動 <b className="text-emerald-700">{it.autoD}</b></div>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2 flex-shrink-0">
+                <button onClick={()=>setOvCleanup(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+                {ovCleanup.items.length > 0 && <button onClick={_execOvCleanup} className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-bold shadow">選択した{ovCleanup.items.filter(x=>x.checked).length}件を自動計算に戻す</button>}
+              </div>
+            </div>
+          </div>
+        )}
         {isScheduleModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" style={{maxHeight:'90vh'}}>
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-shrink-0">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center"><Clock size={20} className="mr-2 text-blue-600"/> 次回予定の変更</h2>
+                <h2 className="text-lg font-bold text-slate-800 flex items-center"><Clock size={20} className="mr-2 text-blue-600"/> 次回予定の変更
+                  <button onClick={_scanOvZansai} title="全期間の記録から、保存済みの次回日付/時間が自動計算と食い違うものを一覧表示し、選んで自動計算に戻せます" className="ml-3 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-xs font-bold">残骸チェック</button>
+                </h2>
                 <button onClick={() => setIsScheduleModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
