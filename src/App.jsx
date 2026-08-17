@@ -33846,11 +33846,22 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const _np = appData.systemSettings?.careManagers || [];
     setCmOffices(prev => JSON.stringify(prev) === JSON.stringify(_no) ? prev : _no);
     setCmPersons(prev => JSON.stringify(prev) === JSON.stringify(_np) ? prev : _np);
-    // ★ クラウド同期で値が入れ替わった分は「ユーザーの編集」ではないので、未保存判定の基準を取り直す
-    //   (これが無いと、同期が来ただけで「未保存のデータがあります」と出てしまう)。
-    _dirtyBaseRef.current = null;
+    // ★ 未保存判定の基準は「同期後の内容の署名」を即計算して置く(2026-08-17)。 従来の null(後で取り直す)は、
+    //   同期直後にユーザーが最初の編集をすると「基準の取り直し」と誤解されて編集フラグが立たず、
+    //   次の同期でクラウドの古い一覧に上書きされて「追加したのにすぐ消える」原因だった。
+    _dirtyBaseRef.current = _sigOf({ cmOffices: _no, cmPersons: _np });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appData.systemSettings?.cmOffices, appData.systemSettings?.careManagers]);
+  // ★ ケアマネ事業所/担当者の追加・削除は保存ボタンを待たず即クラウド保存する(2026-08-17)。
+  //   ローカルstateだけの変更は、4秒同期の追従処理との競合で「追加したのにすぐ消える」原因だった。
+  const persistCm = (nextOffices, nextPersons, msg) => {
+    if (nextOffices) setCmOffices(nextOffices);
+    if (nextPersons) setCmPersons(nextPersons);
+    onSave({ ...appData, systemSettings: { ...appData.systemSettings,
+      ...(nextOffices ? { cmOffices: nextOffices } : {}),
+      ...(nextPersons ? { careManagers: nextPersons } : {}) } }, { manual: true, message: msg });
+    _dirtyBaseRef.current = _sigOf({ ...(nextOffices ? { cmOffices: nextOffices } : {}), ...(nextPersons ? { cmPersons: nextPersons } : {}) });
+  };
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
@@ -33914,6 +33925,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     try { return JSON.stringify({ facilityInfo, massageInput, onyokuInput, massageStaffInput, exerciseItems, exerciseItemsHistory, individualExerciseItems, cmOffices, cmPersons, anthropicApiKey }); }
     catch { return null; }
   }, [facilityInfo, massageInput, onyokuInput, massageStaffInput, exerciseItems, exerciseItemsHistory, individualExerciseItems, cmOffices, cmPersons, anthropicApiKey]);
+  // ★ 未編集判定の基準署名を「上書き値つき」で即計算する(2026-08-17)。 同期追従や保存後に基準を
+  //   null(後で取り直す)にすると、その直後の最初の編集が「基準の取り直し」と誤解されて未保存扱いにならず、
+  //   次の同期でクラウド値に上書きされて消えるため、基準は常にその場で確定させる。 形は _draftSig と同一。
+  const _sigOf = (o = {}) => {
+    const pick = (k, cur) => (o[k] !== undefined ? o[k] : cur);
+    try { return JSON.stringify({ facilityInfo: pick('facilityInfo', facilityInfo), massageInput: pick('massageInput', massageInput), onyokuInput: pick('onyokuInput', onyokuInput), massageStaffInput: pick('massageStaffInput', massageStaffInput), exerciseItems: pick('exerciseItems', exerciseItems), exerciseItemsHistory: pick('exerciseItemsHistory', exerciseItemsHistory), individualExerciseItems: pick('individualExerciseItems', individualExerciseItems), cmOffices: pick('cmOffices', cmOffices), cmPersons: pick('cmPersons', cmPersons), anthropicApiKey: pick('anthropicApiKey', anthropicApiKey) }); }
+    catch { return null; }
+  };
   React.useEffect(() => {
     if (isInitialMount.current) { isInitialMount.current = false; _dirtyBaseRef.current = _draftSig; return; }
     if (_dirtyBaseRef.current === null) { _dirtyBaseRef.current = _draftSig; return; } // 同期/保存後の再基準化
@@ -33962,7 +33981,19 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     _exBaseRef.current = { ex: JSON.stringify(s.exerciseItems || []), ind: JSON.stringify(s.individualExerciseItems || []), hist: JSON.stringify(s.exerciseItemsHistory || []), qb: JSON.stringify(s.exerciseQuickButtons || []) };
     _setBaseRef.current = _captureSetBase(s);
     if (appData.diarySettings) diarySettingsRef.current = appData.diarySettings;
-    _dirtyBaseRef.current = null; // draftSig を新しい内容で再基準化(未保存扱いにしない)
+    // ★ 基準は同期後の内容で即確定(null にすると直後の最初の編集が未保存扱いにならない穴になる・2026-08-17)
+    _dirtyBaseRef.current = _sigOf({
+      facilityInfo: s.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" },
+      massageInput: (s.massageTypes || []).join('、'),
+      onyokuInput: (s.onyokuTypes || []).join('、'),
+      massageStaffInput: (s.massageStaff || appSettings.massageStaff).join('、'),
+      exerciseItems: effExerciseItems(s),
+      exerciseItemsHistory: s.exerciseItemsHistory || [],
+      individualExerciseItems: Array.isArray(s.individualExerciseItems) ? s.individualExerciseItems : undefined,
+      cmOffices: s.cmOffices || [],
+      cmPersons: s.careManagers || [],
+      anthropicApiKey: s.anthropicApiKey || '',
+    });
   }, [appData.systemSettings, appData.diarySettings, dirtyRef]);
 
   const [fitnessItems, setFitnessItems] = useState(
@@ -34104,9 +34135,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     //   1件でも項目があればフラグ解除。
     _nextSS.exerciseItemsCleared = !((_nextSS.exerciseItems || []).length);
     onSave({ ...appData, storeMembers: _syncedStoreMembers, diarySettings, systemSettings: _nextSS }, { manual: true, message: '✓ 各種設定を保存しました' });
-    // ★ 保存したので未保存フラグを解除し、基準(ベースライン)も保存内容へ取り直す(連続保存でも安全)
+    // ★ 保存したので未保存フラグを解除し、基準(ベースライン)も保存内容へ即確定(連続保存でも安全)
     if (dirtyRef) dirtyRef.current = false;
-    _dirtyBaseRef.current = null;
+    _dirtyBaseRef.current = _sigOf();   // ★ null にしない: 保存直後の最初の編集が未保存扱いにならない穴の対策
     _setBaseRef.current = _captureSetBase(_nextSS);
     _exBaseRef.current = { ex: JSON.stringify(_nextSS.exerciseItems || []), ind: JSON.stringify(_nextSS.individualExerciseItems || []), hist: JSON.stringify(_nextSS.exerciseItemsHistory || []), qb: JSON.stringify(_nextSS.exerciseQuickButtons || []) };
   };
@@ -34861,7 +34892,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       <input type="tel" value={newOffice.phone} onChange={e=>setNewOffice({...newOffice,phone:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                       <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,fax:formatJpPhone(o.fax)}))} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
-                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax)}]); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
+                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} persistCm([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax)}], null, '✓ ケアマネ事業所を追加しました'); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
                     {/* ★ CSVから一括取り込みは 利用者マスタ管理 側に集約したため、ここでは非表示 (ユーザー要望) */}
                     {false && (
                     <label className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center cursor-pointer">
@@ -34931,7 +34962,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                                 <div className="text-[11px] text-slate-500 truncate">{o.phone||'-'} / FAX {o.fax||'-'}</div>
                               </div>
                               <button type="button" onClick={(e)=>{e.stopPropagation(); setCmEditModal({kind:'office', orig:o, form:{name:o.name||'', phone:o.phone||'', fax:o.fax||''}});}} className="text-slate-300 hover:text-blue-500 p-1 ml-1 shrink-0" title="編集"><Edit3 size={14}/></button>
-                              <button type="button" onClick={(e)=>{e.stopPropagation(); setCmOffices(cmOffices.filter((_,j)=>j!==o.origIdx)); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
+                              <button type="button" onClick={(e)=>{e.stopPropagation(); if(!window.confirm('この事業所を削除しますか？')) return; persistCm(cmOffices.filter((_,j)=>j!==o.origIdx), null, '削除しました'); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                             </div>
                           );
                         })}</div>
@@ -34959,7 +34990,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       <input type="text" value={newPerson.kanaFirst||''} onChange={e=>setNewPerson({...newPerson,kanaFirst:e.target.value})} placeholder="ふりがな 名 例: いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); setCmPersons([...cmPersons,{...newPerson,kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); persistCm(null, [...cmPersons,{...newPerson,kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -35003,7 +35034,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                               }}/>
                             </label>
                             <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kanaLast:p.kanaLast||'', kanaFirst:p.kanaFirst||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
-                            <button type="button" onClick={()=>setCmPersons(cmPersons.filter((_,j)=>j!==origIdx))} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
+                            <button type="button" onClick={()=>{ if(!window.confirm('この担当者を削除しますか？')) return; persistCm(null, cmPersons.filter((_,j)=>j!==origIdx), '削除しました'); }} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                           </div>
                           {cards.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1.5 pl-1">
@@ -35051,13 +35082,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 </div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">住所</label><input type="text" value={newOffice.address||''} onChange={e => setNewOffice({...newOffice, address: e.target.value})} placeholder="例: 東京都江東区扇橋1-1-1" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 <div><label className="block text-sm font-bold text-slate-600 mb-1.5">建物名・部屋番号</label><input type="text" value={newOffice.addressBuilding||''} onChange={e => setNewOffice({...newOffice, addressBuilding: e.target.value})} placeholder="例: メイゾン白子101" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
-                <button type="button" onClick={() => { if(!newOffice.name){alert("事業所名を入力してください");return;} setCmOffices([...cmOffices,{...newOffice}]); setNewOffice({name:"",phone:"",fax:"",zipCode:"",address:"",addressBuilding:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
+                <button type="button" onClick={() => { if(!newOffice.name){alert("事業所名を入力してください");return;} persistCm([...cmOffices,{...newOffice}], null, '✓ ケアマネ事業所を追加しました'); setNewOffice({name:"",phone:"",fax:"",zipCode:"",address:"",addressBuilding:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
               </div>
               {cmOffices.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
                 <div className="space-y-2">{cmOffices.map((o, i) => (
                   <div key={i} className="flex items-center justify-between bg-white border border-slate-200 shadow-sm p-3 rounded-xl">
                     <div className="grid grid-cols-3 gap-4 flex-1 text-sm"><span className="font-bold text-slate-800">{o.name}</span><span className="text-slate-500">{o.phone||'ー'}</span><span className="text-slate-500">{o.fax||'ー'}</span></div>
-                    <button type="button" onClick={() => setCmOffices(cmOffices.filter((_,j)=>j!==i))} className="text-slate-300 hover:text-red-500 p-1.5 rounded ml-2"><Trash2 size={16}/></button>
+                    <button type="button" onClick={() => { if(!window.confirm('この事業所を削除しますか？')) return; persistCm(cmOffices.filter((_,j)=>j!==i), null, '削除しました'); }} className="text-slate-300 hover:text-red-500 p-1.5 rounded ml-2"><Trash2 size={16}/></button>
                   </div>
                 ))}</div>
               )}
@@ -35088,13 +35119,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   </div>
                   <div><label className="block text-sm font-bold text-slate-600 mb-1.5">電話番号（直通）</label><input type="tel" value={newPerson.phone} onChange={e => setNewPerson({...newPerson, phone: e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/></div>
                 </div>
-                <button type="button" onClick={() => { if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} setCmPersons([...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}]); setNewPerson({office:"",name:"",phone:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
+                <button type="button" onClick={() => { if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} persistCm(null, [...cmPersons,{...newPerson,phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:"",name:"",phone:""}); }} className="px-5 py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center"><Plus size={16} className="mr-1"/>追加</button>
               </div>
               {cmPersons.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
                 <div className="space-y-2">{cmPersons.map((p, i) => (
                   <div key={i} className="flex items-center justify-between bg-white border border-slate-200 shadow-sm p-3 rounded-xl">
                     <div className="grid grid-cols-3 gap-4 flex-1 text-sm"><span className="font-bold text-slate-700">{p.office}</span><span className="font-bold text-slate-800">{p.name}</span><span className="text-slate-500">{p.phone||'ー'}</span></div>
-                    <button type="button" onClick={() => setCmPersons(cmPersons.filter((_,j)=>j!==i))} className="text-slate-300 hover:text-red-500 p-1.5 rounded ml-2"><Trash2 size={16}/></button>
+                    <button type="button" onClick={() => { if(!window.confirm('この担当者を削除しますか？')) return; persistCm(null, cmPersons.filter((_,j)=>j!==i), '削除しました'); }} className="text-slate-300 hover:text-red-500 p-1.5 rounded ml-2"><Trash2 size={16}/></button>
                   </div>
                 ))}</div>
               )}
