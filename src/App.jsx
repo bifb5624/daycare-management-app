@@ -11048,7 +11048,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           const _seen=new Set();
           const all = [...fromHq, ...live, ...builtin].filter(x=>{ if(!x.id||_seen.has(x.id)) return false; _seen.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,50);
           if (!all.length) return null;
-          const _devShown = _pageSlice(all, devPage, 3);
+          const _devShown = _pageSlice(all, devPage, 4);   // ★ コンパクト化(2026-08-18): 1行表示×4件
           return (
             <Card style={{borderColor:'#c7d2fe'}}>
               <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span>
@@ -11060,21 +11060,21 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   </button>
                 )}
               </div>
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              {/* ★ コンパクト化(2026-08-18): 本文プレビューをやめ1行(バッジ+日付+タイトル)に。
+                  クリックで従来どおり全文モーダル。 画面の半分以上を占領していたのを1/4程度へ。 */}
+              <div style={{display:'flex',flexDirection:'column',gap:5}}>
                 {_devShown.map(a=>{ const _r=isRead(a.id); return (
                   <button key={a.id} onClick={()=>openDetail({id:a.id,badge:`${a.m.emoji} ${a.m.label}`,badgeColor:a.m.color,date:a.date,title:a.title,body:a.body})}
-                    style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'66'}`,background:_r?'white':a.m.bg,borderRadius:10,padding:'8px 12px',opacity:1}}>
-                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3}}>
-                      <span style={{fontSize:10,fontWeight:'bold',color:'white',background:_r?'#94a3b8':a.m.color,borderRadius:5,padding:'2px 7px'}}>{a.m.emoji} {a.m.label}</span>
-                      {a.date && <span style={{fontSize:10,color:'#94a3b8'}}>{a.date}</span>}
-                      {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
-                    </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:_r?'#1e293b':a.m.color}}>{a.title}</div>
-                    {a.body && <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.6,maxHeight:40,overflow:'hidden'}}>{a.body}</div>}
+                    title={a.title}
+                    style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'66'}`,background:_r?'white':a.m.bg,borderRadius:8,padding:'5px 10px',display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                    <span style={{fontSize:10,fontWeight:'bold',color:'white',background:_r?'#94a3b8':a.m.color,borderRadius:5,padding:'2px 7px',whiteSpace:'nowrap',flexShrink:0}}>{a.m.emoji} {a.m.label}</span>
+                    {a.date && <span style={{fontSize:10,color:'#94a3b8',whiteSpace:'nowrap',flexShrink:0}}>{a.date}</span>}
+                    <span style={{fontSize:12.5,fontWeight:'bold',color:_r?'#334155':a.m.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1,minWidth:0}}>{a.title}</span>
+                    <span style={{fontSize:9,color:'#94a3b8',flexShrink:0}}>{_r?'既読':'詳細 ›'}</span>
                   </button>
                 ); })}
               </div>
-              {renderPager(all.length, 3, devPage, setDevPage)}
+              {renderPager(all.length, 4, devPage, setDevPage)}
             </Card>
           );
         })()}
