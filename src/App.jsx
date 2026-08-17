@@ -21820,18 +21820,21 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         onSave({...appData, familyTokkiOverrides: {...fto, [pid]: next}});
                       };
                       return (
+                        // ★ 2026-08-17: 「載せる/非公開」を「家族非表示」トグルへ置換(ボタンは特記の前=左側)。
+                        //   既定=表示(通常運用)。 押すと利用者家族の閲覧画面にだけ非表示。
+                        //   ケアマネには設定に関わらず常に表示(閲覧側ゲートで cmViewerMode は素通し)。
                         <div style={{display:'flex',gap:2,alignItems:'stretch',height:'100%'}}>
+                          {hasTokki && !isReadOnly && (
+                            <button type="button" onClick={toggleVisible}
+                              title={isVisible ? "押すと利用者家族の閲覧画面にこの特記を表示しません（ケアマネには常に表示されます）" : "家族に非表示中。押すと表示に戻します（ケアマネには常に表示されています）"}
+                              style={{width:54,flexShrink:0,border:isVisible?'1px solid #cbd5e1':'1.5px solid #dc2626',borderRadius:6,fontSize:10,fontWeight:'bold',cursor:'pointer',background:isVisible?'#f8fafc':'#dc2626',color:isVisible?'#64748b':'#fff',padding:'2px 3px',whiteSpace:'normal',lineHeight:1.25}}>
+                              {isVisible ? '家族非表示' : '家族非表示中'}
+                            </button>
+                          )}
                           <textarea disabled={isReadOnly} value={p.tokki || ""} onChange={(e) => updateRecord(p.id, 'tokki', e.target.value)} rows={2}
                             className={`flex-1 px-2 border rounded-lg text-xs bg-transparent outline-none disabled:opacity-80 resize-none ${isReadOnly ? 'border-transparent' : 'border-slate-300 shadow-inner bg-white'}`}
                             style={{fontSize:14,lineHeight:1.4,padding:'2px 6px',height:'100%'}}
                             placeholder={isReadOnly ? "" : (isAbsent ? "欠席理由等..." : "特記事項...")} />
-                          {hasTokki && !isReadOnly && (
-                            <button type="button" onClick={toggleVisible}
-                              title={isVisible ? "家族の閲覧画面に表示中 (クリックで非表示)" : "家族の閲覧画面に非表示 (クリックで表示)"}
-                              style={{width:62,flexShrink:0,border:isVisible?'1px solid #6ee7b7':'1px solid #fca5a5',borderRadius:6,fontSize:10,fontWeight:'bold',cursor:'pointer',background:isVisible?'#ecfdf5':'#fef2f2',color:isVisible?'#047857':'#991b1b',padding:'2px 4px',whiteSpace:'nowrap',lineHeight:1.2}}>
-                              {isVisible ? ' 載せる' : '✕ 非公開'}
-                            </button>
-                          )}
                         </div>
                       );
                     })()}
@@ -23238,7 +23241,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           // 特記取得 (override 優先)
           const _ftoPid = (appData.familyTokkiOverrides||{})[selectedPatientId] || {};
           const _ov = _ftoPid[_latest.date] || _ftoPid[_latest.id] || {};
-          const _showTokki = _ov.visible !== false;
+          // ★ 「家族非表示」は利用者家族にだけ効かせる(2026-08-17)。 ケアマネ(cmViewerMode)には常に表示
+          const _showTokki = cmViewerMode || _ov.visible !== false;
           const _tokkiText = _ov.text || _latest.tokki || '';
           // 特記が無い場合は「大きな変化はなし」 と自動表示
           const _displayText = (_showTokki && _tokkiText && _tokkiText.trim()) ? _tokkiText : '大きな変化はありません';
@@ -23290,7 +23294,8 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           const MOODS = {'excellent':'🤩 とても良い','good':'😊 良い','normal':'😐 普通','bad':'😞 良くない','terrible':'😫 とても良くない'};
           const _ftoPid = (appData.familyTokkiOverrides||{})[selectedPatientId] || {};
           const tokkiOv = _ftoPid[latest.date] || _ftoPid[latest.id] || {};
-          const showTokki = tokkiOv.visible !== false;
+          // ★ 「家族非表示」はケアマネには効かせない(常に表示・2026-08-17)
+          const showTokki = cmViewerMode || tokkiOv.visible !== false;
           const tokkiText = tokkiOv.text || latest.tokki || '';
           // 利用者本人の休止情報 (現在休止中の場合)
           const _patient = (appData.patients||[]).find(p => p.id === selectedPatientId);
