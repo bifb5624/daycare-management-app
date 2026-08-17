@@ -21827,8 +21827,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                           {hasTokki && !isReadOnly && (
                             <button type="button" onClick={toggleVisible}
                               title={isVisible ? "押すと利用者家族の閲覧画面にこの特記を表示しません（ケアマネには常に表示されます）" : "家族に非表示中。押すと表示に戻します（ケアマネには常に表示されています）"}
-                              style={{width:54,flexShrink:0,border:isVisible?'1px solid #cbd5e1':'1.5px solid #dc2626',borderRadius:6,fontSize:10,fontWeight:'bold',cursor:'pointer',background:isVisible?'#f8fafc':'#dc2626',color:isVisible?'#64748b':'#fff',padding:'2px 3px',whiteSpace:'normal',lineHeight:1.25}}>
-                              {isVisible ? '家族非表示' : '家族非表示中'}
+                              style={{width:54,flexShrink:0,border:isVisible?'1px solid #cbd5e1':'1.5px solid #dc2626',borderRadius:6,fontWeight:'bold',cursor:'pointer',background:isVisible?'#f8fafc':'#dc2626',color:isVisible?'#64748b':'#fff',padding:'2px 3px',lineHeight:1.25,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                              {isVisible
+                                ? <span style={{fontSize:10,whiteSpace:'nowrap'}}>家族<br/>非表示</span>
+                                : <span style={{fontSize:8.5,whiteSpace:'nowrap'}}>非表示中</span>}
                             </button>
                           )}
                           <textarea disabled={isReadOnly} value={p.tokki || ""} onChange={(e) => updateRecord(p.id, 'tokki', e.target.value)} rows={2}
