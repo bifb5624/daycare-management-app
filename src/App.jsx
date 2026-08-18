@@ -11005,7 +11005,10 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
   const [noticeDetail, setNoticeDetail] = React.useState(null);
   const openDetail = (d) => { setNoticeDetail(d); if (d) markRead(d.id); };
   // ★ ホーム各カードのページ送り(＜ 1 2 3 ＞)。 下に長く伸びず、一定の高さで見やすくする。
-  const [devPage, setDevPage] = React.useState(0);   // つむぎ運営からのお知らせ(3件/頁)
+  const [devPage, setDevPage] = React.useState(0);   // つむぎ運営からのお知らせ(4件/頁)
+  // ★ 運営からのお知らせは既定で閉じたバー表示(2026-08-18): 業務ではスケジュール・家族/ケアマネ更新が主役のため。
+  //   新着があればバーに件数バッジを出し、タップで開閉する。
+  const [devOpen, setDevOpen] = React.useState(false);
   const [extPage, setExtPage] = React.useState(0);   // 家族・ケアマネからの更新(5件/頁)
   const [newsPage, setNewsPage] = React.useState(0); // お知らせ(5件/頁)
   const _pageSlice = (arr, page, size) => { const pages = Math.max(1, Math.ceil((arr.length||0)/size)); const p = Math.min(Math.max(0,page), pages-1); return arr.slice(p*size, p*size+size); };
@@ -11048,10 +11051,21 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           const _seen=new Set();
           const all = [...fromHq, ...live, ...builtin].filter(x=>{ if(!x.id||_seen.has(x.id)) return false; _seen.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,50);
           if (!all.length) return null;
-          const _devShown = _pageSlice(all, devPage, 4);   // ★ コンパクト化(2026-08-18): 1行表示×4件
+          const _devShown = _pageSlice(all, devPage, 4);   // 1行表示×4件
+          const _unread = all.filter(x => !isRead(x.id)).length;
           return (
-            <Card style={{borderColor:'#c7d2fe'}}>
-              <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>つむぎ運営からのお知らせ<span style={{fontSize:10,fontWeight:'normal',color:'#94a3b8'}}>（アップデート・メンテナンス情報）</span>
+            <Card style={{borderColor: _unread>0 ? '#c7d2fe' : '#e2e8f0', padding: devOpen ? 16 : 10}}>
+              {/* 閉じた状態=薄いバー。 新着があれば件数バッジで知らせる */}
+              <button onClick={()=>setDevOpen(o=>!o)} style={{width:'100%',background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',gap:10,padding:0,textAlign:'left'}}>
+                <span style={{fontSize:13,fontWeight:'bold',color:'#4338ca',whiteSpace:'nowrap'}}>つむぎ運営からのお知らせ</span>
+                {_unread>0
+                  ? <span style={{fontSize:11,fontWeight:'bold',color:'white',background:'#dc2626',borderRadius:999,padding:'2px 10px',whiteSpace:'nowrap'}}>新着 {_unread}件</span>
+                  : <span style={{fontSize:10,color:'#94a3b8',whiteSpace:'nowrap'}}>新着なし</span>}
+                <span style={{marginLeft:'auto',fontSize:11,color:'#94a3b8',fontWeight:'bold',whiteSpace:'nowrap'}}>{devOpen?'閉じる ▲':'開く ▼'}</span>
+              </button>
+              {devOpen && (<>
+              <div style={{display:'flex',alignItems:'center',gap:6,margin:'10px 0 8px'}}>
+                <span style={{fontSize:10,color:'#94a3b8'}}>アップデート・メンテナンス情報</span>
                 {/* ★ まとめて既読にする(未読が残っているときだけ表示) */}
                 {all.some(x => !isRead(x.id)) && (
                   <button onClick={()=>{ all.forEach(x => { if (!isRead(x.id)) markRead(x.id); }); }}
@@ -11075,6 +11089,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                 ); })}
               </div>
               {renderPager(all.length, 4, devPage, setDevPage)}
+              </>)}
             </Card>
           );
         })()}
@@ -16099,6 +16114,11 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
   useEffect(() => { loadStores(); }, []);
   // 店舗ログイン情報の表示/非表示制御
   const [showLoginFor, setShowLoginFor] = useState({}); // {storeId: true}
+  // ★ 管理局コンソールの見やすさ改善(2026-08-18): 店舗検索・セクションジャンプ・ガイダンス折りたたみ
+  const [storeQuery, setStoreQuery] = useState('');
+  const [loginInfoOpen, setLoginInfoOpen] = useState(false);
+  const _secNotices = React.useRef(null), _secStores = React.useRef(null), _secPolicy = React.useRef(null), _secMaster = React.useRef(null);
+  const _jump = (ref) => { try { ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {} };
 
   const handleCreateStore = async (e) => {
     e.preventDefault();
@@ -16197,12 +16217,22 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
           </div>
           <button onClick={onLogout} style={{padding:'8px 16px',background:'white',color:'#475569',border:'1px solid #cbd5e1',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>ログアウト</button>
         </div>
+        {/* ★ セクションジャンプ(2026-08-18): 店舗が増えても下の方のパネルへすぐ移動できる */}
+        <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16,position:'sticky',top:8,zIndex:20}}>
+          {[['お知らせ管理',_secNotices],['店舗一覧',_secStores],['同意ポリシー',_secPolicy],['傷病名マスタ',_secMaster]].map(([lb,ref])=>(
+            <button key={lb} onClick={()=>_jump(ref)} style={{padding:'6px 14px',background:'rgba(255,255,255,0.92)',color:'#3d5021',border:'1px solid #94c456',borderRadius:999,fontSize:12,fontWeight:'bold',cursor:'pointer',boxShadow:'0 1px 4px rgba(0,0,0,0.08)'}}>{lb}</button>
+          ))}
+        </div>
         {/* システムお知らせ管理 */}
+        <div ref={_secNotices} style={{scrollMarginTop:56}}>
         <SystemNoticesPanel stores={stores} staffSession={staffSession}/>
+        </div>
         {/* 店舗一覧 */}
-        <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+        <div ref={_secStores} style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)',scrollMarginTop:56}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:10,flexWrap:'wrap'}}>
             <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>登録店舗一覧 ({stores.length}店舗)</div>
+            {/* ★ 法人名・事業所名で検索(店舗が増えた時用) */}
+            <input value={storeQuery} onChange={e=>setStoreQuery(e.target.value)} placeholder="法人名・事業所名で検索" style={{flex:1,minWidth:180,maxWidth:320,padding:'8px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:12,fontWeight:'bold',outline:'none'}}/>
             <button onClick={()=>setShowAddStore(true)} style={{padding:'8px 14px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>+ 店舗を追加</button>
           </div>
           {loading ? (
@@ -16214,9 +16244,12 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
           ) : (
             <div style={{display:'grid',gap:16}}>
               {(() => {
-                // ★ 法人 (org_name) ごとにグループ分け
+                // ★ 検索フィルタ(法人名・事業所名・短縮名) → 法人 (org_name) ごとにグループ分け
+                const _q = storeQuery.trim().toLowerCase();
+                const _fs = _q ? stores.filter(s => [s.name, s.short_name, s.org_name].some(v => String(v||'').toLowerCase().includes(_q))) : stores;
+                if (_q && !_fs.length) return <div style={{textAlign:'center',padding:24,color:'#94a3b8',background:'#f8fafc',borderRadius:12}}>「{storeQuery}」に一致する店舗はありません</div>;
                 const m = new Map();
-                stores.forEach(s => { const k = (s.org_name||'').trim() || '（法人名なし）'; if(!m.has(k)) m.set(k, []); m.get(k).push(s); });
+                _fs.forEach(s => { const k = (s.org_name||'').trim() || '（法人名なし）'; if(!m.has(k)) m.set(k, []); m.get(k).push(s); });
                 const groups = [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ja'));
                 return groups.map(([org, list]) => (
                   <div key={org}>
@@ -16292,22 +16325,31 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
             </div>
           )}
         </div>
-        {/* 店舗ログイン情報の説明 (店舗作成時に同時発行されるため、ここはガイダンスのみ) */}
-        <div style={{background:'white',borderRadius:16,padding:24,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
-          <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>店舗ログイン情報について</div>
-          <div style={{fontSize:11,color:'#64748b',lineHeight:1.8}}>
-            ・店舗のログイン ID とパスワードは、<b>店舗を作成する時に同時に発行</b>されます。<br/>
-            ・店舗管理者の追加は不要です (店舗側でログイン後、最初のメンバーを「管理者」として追加する流れ)。<br/>
-            ・パスワードを忘れた場合は本部から再発行 (将来実装予定)。
-          </div>
-          {stores.length > 0 && (
-            <button onClick={()=>setShowAddStaff(true)} style={{marginTop:12,padding:'6px 12px',background:'transparent',color:'#94a3b8',border:'1px solid #cbd5e1',borderRadius:8,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>追加でログイン情報を発行 (上級者向け)</button>
-          )}
-        </div>
-        {/* ★ J: 全店共通ポリシー編集 (一番下・折りたたみ) */}
+        {/* ★ J: 全店共通ポリシー編集 (折りたたみ) */}
+        <div ref={_secPolicy} style={{scrollMarginTop:56}}>
         <GlobalPolicyPanel staffSession={staffSession}/>
+        </div>
         {/* LIFE傷病名マスタのCSV取込(全店共通・置き換え式) */}
+        <div ref={_secMaster} style={{scrollMarginTop:56}}>
         <DiseaseMasterPanel/>
+        </div>
+        {/* 店舗ログイン情報の説明 (既定は折りたたみ・2026-08-18: 常設ガイダンスで場所を取っていたため) */}
+        <div style={{background:'white',borderRadius:16,padding:'14px 24px',boxShadow:'0 4px 16px rgba(0,0,0,0.06)',marginBottom:16}}>
+          <button onClick={()=>setLoginInfoOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',background:'none',border:'none',cursor:'pointer',padding:0}}>
+            <span style={{fontSize:14,fontWeight:'bold',color:'#3d5021'}}>店舗ログイン情報について</span>
+            <span style={{fontSize:12,color:'#94a3b8'}}>{loginInfoOpen?'閉じる ▲':'開く ▼'}</span>
+          </button>
+          {loginInfoOpen && (<>
+            <div style={{fontSize:11,color:'#64748b',lineHeight:1.8,marginTop:10}}>
+              ・店舗のログイン ID とパスワードは、<b>店舗を作成する時に同時に発行</b>されます。<br/>
+              ・店舗管理者の追加は不要です (店舗側でログイン後、最初のメンバーを「管理者」として追加する流れ)。<br/>
+              ・パスワードを忘れた場合は店舗一覧の「管理者PWリセット」で再発行できます。
+            </div>
+            {stores.length > 0 && (
+              <button onClick={()=>setShowAddStaff(true)} style={{marginTop:12,padding:'6px 12px',background:'transparent',color:'#94a3b8',border:'1px solid #cbd5e1',borderRadius:8,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>追加でログイン情報を発行 (上級者向け)</button>
+            )}
+          </>)}
+        </div>
       </div>
       {/* 店舗追加モーダル */}
       {/* ★ 店舗情報の編集 (後から店舗名・短縮名・法人名・住所・電話・FAXを変更) */}
