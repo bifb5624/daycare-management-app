@@ -11033,12 +11033,10 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
     <div style={{height:'100%',overflow:'auto',background:'#f0f4f9'}}>
       <div style={{maxWidth:1040,margin:'0 auto',padding:16,display:'flex',flexDirection:'column',gap:16}}>
         {/* 挨拶 */}
-        <div style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',borderRadius:16,color:'white',padding:'18px 22px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
-          <div>
-            <div style={{fontSize:20,fontWeight:'bold'}}>{now.getFullYear()}年{now.getMonth()+1}月{now.getDate()}日（{dow}）</div>
-            <div style={{fontSize:13,opacity:0.9,marginTop:2}}>{activeRecorder?.name ? `${activeRecorder.name} さん、今日もよろしくお願いします。` : 'ようこそ'}</div>
-          </div>
-          <div style={{fontSize:34}}></div>
+        {/* ★ 1行表示(2026-08-18): 日付と挨拶を横並びにして高さを詰める */}
+        <div style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',borderRadius:16,color:'white',padding:'12px 22px',display:'flex',alignItems:'baseline',flexWrap:'wrap',gap:'6px 14px'}}>
+          <div style={{fontSize:19,fontWeight:'bold',whiteSpace:'nowrap'}}>{now.getFullYear()}年{now.getMonth()+1}月{now.getDate()}日（{dow}）</div>
+          <div style={{fontSize:13,opacity:0.9}}>{activeRecorder?.name ? `${activeRecorder.name} さん、今日もよろしくお願いします。` : 'ようこそ'}</div>
         </div>
         {/* つむぎ運営(管理局)からのお知らせ = 管理局で追加したものが全店に配信される + 組み込み告知 */}
         {(() => {
@@ -11070,7 +11068,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                 {all.some(x => !isRead(x.id)) && (
                   <button onClick={()=>{ all.forEach(x => { if (!isRead(x.id)) markRead(x.id); }); }}
                     style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:8,padding:'4px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>
-                    すべて既読にする
+                    全て既読
                   </button>
                 )}
               </div>
@@ -11101,7 +11099,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               <span style={{display:'flex',alignItems:'center',gap:6}}>
                 {todayEvents.some(e => !isRead(e.id)) && (
                   <button onClick={()=>{ todayEvents.forEach(e => { if (!isRead(e.id)) markRead(e.id); }); }}
-                    style={{fontSize:11,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:8,padding:'3px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>すべて既読にする</button>
+                    style={{fontSize:11,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:8,padding:'3px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>全て既読</button>
                 )}
                 <button onClick={()=>navigateTo('schedule')} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'#eef2ff',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>カレンダー →</button>
               </span>
@@ -11142,7 +11140,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   {_unread > 0 && (
                     <button onClick={()=>{ ext.forEach(u => { if (!isRead(u.id)) markRead(u.id); }); }}
                       style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:'#b45309',background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:'4px 10px',cursor:'pointer',whiteSpace:'nowrap'}}>
-                      すべて既読にする
+                      全て既読
                     </button>
                   )}
                 </div>
