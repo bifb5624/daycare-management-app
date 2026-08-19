@@ -17692,6 +17692,13 @@ export default function App() {
   //   これが無いと、古いスナップショットが数秒表示され「入力が消えた?」と誤解させてしまう。
   const [opsLoading, setOpsLoading] = useState(TABLE_ENABLED);   // 巨大JSON方式では読込中オーバーレイを出さない
   useEffect(() => { const t = setTimeout(() => setOpsLoading(false), 8000); return () => clearTimeout(t); }, []);
+  // ★ サイドバー用: 作成予定(期限内リード+超過)の件数をファミリー別に集計(2026-08-19)
+  const _dueCounts = React.useMemo(() => {
+    try {
+      const dues = computePlanDues(appData).filter(d => d.note !== '未作成' && d.note !== 'ADL評価が未実施');
+      return { tsusho: dues.filter(d => d.kind === 'tsusho').length, kinou: dues.filter(d => d.kind !== 'tsusho').length };
+    } catch { return { tsusho: 0, kinou: 0 }; }
+  }, [appData]);
   const [printPreviewContent, setPrintPreviewContent] = useState(null);
   useEffect(()=>{
     const handler = (e) => setPrintPreviewContent(e.detail);
@@ -19454,17 +19461,15 @@ export default function App() {
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<Users size={18} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="実績登録" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
+              {/* ★ 2ハブ構成(2026-08-19): 通所介護計画書(全利用者) / 個別機能訓練・LIFE(加算アドオン店舗のみ)。
+                  3-2/3-1/ADL/LIFE提出は機能訓練ハブ内のタブへ集約。 ラベルの数字=作成予定(期限内+超過)件数 */}
               {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
-                <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['keikaku_yotei','kinou_keikaku','tsusho_keikaku','life_hub'].includes(currentView)}>
-                  <SidebarItem icon={<ClipboardList size={16} />} label="作成予定" active={currentView === 'keikaku_yotei'} onClick={() => navigateTo('keikaku_yotei')} />
+                <SidebarGroup icon={<FileText size={18} />} label="計画書" activeChild={['keikaku_yotei','kinou_yotei','kinou_keikaku','tsusho_keikaku','seikatsu_kinou','kyomi_kanshin','life_hub'].includes(currentView)}>
                   {hasAddon(appData,'tsusho_keikaku') && (
-                    <SidebarItem icon={<FileText size={16} />} label="通所介護計画書" active={currentView === 'tsusho_keikaku'} onClick={() => navigateTo('tsusho_keikaku')} />
+                    <SidebarItem icon={<FileText size={16} />} label={_dueCounts.tsusho ? `通所介護計画書 (${_dueCounts.tsusho})` : '通所介護計画書'} active={['keikaku_yotei','tsusho_keikaku'].includes(currentView)} onClick={() => navigateTo('keikaku_yotei')} />
                   )}
-                  {hasAddon(appData,'kinou_keikaku') && (
-                    <SidebarItem icon={<FileText size={16} />} label="個別機能訓練計画書" active={currentView === 'kinou_keikaku'} onClick={() => navigateTo('kinou_keikaku')} />
-                  )}
-                  {hasAnyLifeAddon(appData) && (
-                    <SidebarItem icon={<Activity size={16} />} label="LIFE・加算" active={currentView === 'life_hub'} onClick={() => navigateTo('life_hub')} />
+                  {(hasAddon(appData,'kinou_keikaku') || hasAnyLifeAddon(appData)) && (
+                    <SidebarItem icon={<Activity size={16} />} label={_dueCounts.kinou ? `個別機能訓練・LIFE (${_dueCounts.kinou})` : '個別機能訓練・LIFE'} active={['kinou_yotei','kinou_keikaku','seikatsu_kinou','kyomi_kanshin','life_hub'].includes(currentView)} onClick={() => navigateTo('kinou_yotei')} />
                   )}
                 </SidebarGroup>
               )}
@@ -19507,7 +19512,8 @@ export default function App() {
                  currentView === 'schedule' ? 'スケジュール' :
                  currentView === 'roster' ? '勤務表' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
-                 currentView === 'keikaku_yotei' ? '計画書・加算の作成予定' :
+                 currentView === 'keikaku_yotei' ? '通所介護計画書の作成予定' :
+                 currentView === 'kinou_yotei' ? '個別機能訓練・LIFEの作成予定' :
                  currentView === 'tsusho_keikaku' ? '通所介護計画書' :
                  currentView === 'life_hub' ? 'LIFE・加算' :
                  currentView === 'seikatsu_kinou' ? '生活機能チェックシート' :
@@ -19610,7 +19616,8 @@ export default function App() {
              currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'roster' ? <RosterView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
-             currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} /> :
+             currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} family="tsusho" /> :
+             currentView === 'kinou_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} family="kinou" /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
              currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
@@ -37531,12 +37538,16 @@ function KKField({ label, value, onChange, rows, ph }) {
 }
 
 // 個別機能訓練 関連書類のタブ帯 (計画書3-3 / 生活機能チェック3-2 / 興味関心3-1 を相互リンク)
-const KEIKAKU_DOCS = [['keikaku_yotei','作成予定'],['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['tsusho_keikaku','通所介護計画書']];
-function KeikakuTabs({ current, navigateTo }) {
+// ★ 2ハブ構成(2026-08-19): 書類ファミリーごとにタブを分離。
+//   通所ファミリー=通所介護計画書(全利用者対象)。 機能訓練ファミリー=3-3+別紙(3-2/3-1)+LIFE(加算アドオン店舗のみ)。
+const KEIKAKU_DOCS_TSUSHO = [['keikaku_yotei','作成予定'],['tsusho_keikaku','通所介護計画書']];
+const KEIKAKU_DOCS_KINOU = [['kinou_yotei','作成予定'],['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['life_hub','LIFE・一括評価']];
+function KeikakuTabs({ current, navigateTo, family }) {
   if (!navigateTo) return null;
+  const docs = family === 'tsusho' ? KEIKAKU_DOCS_TSUSHO : KEIKAKU_DOCS_KINOU;
   return (
     <div className="flex gap-1 flex-wrap">
-      {KEIKAKU_DOCS.map(([v,l]) => (
+      {docs.map(([v,l]) => (
         <button key={v} onClick={()=>navigateTo(v)} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap ${current===v?'bg-blue-600 text-white':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{l}</button>
       ))}
     </div>
@@ -37546,9 +37557,11 @@ function KeikakuTabs({ current, navigateTo }) {
 // === 計画書・加算の作成予定 (サイドバー: 計画書 > 作成予定) ===
 //   期限の1ヶ月前から「誰の・何を・いつまでに」を月ごとにまとめて表示する。 行タップで該当画面へ。
 const PLAN_KIND_COLOR = { tsusho:'#0891b2', kinou:'#7c3aed', kagaku:'#059669', adl:'#d97706' };
-function KeikakuYoteiView({ appData, navigateTo }) {
+function KeikakuYoteiView({ appData, navigateTo, family = 'tsusho' }) {
   const [showDone, setShowDone] = React.useState(false); // 未作成(まだ1件も無い人)も含めるか
-  const all = React.useMemo(() => computePlanDues(appData), [appData]);
+  const _allDues = React.useMemo(() => computePlanDues(appData), [appData]);
+  // ★ ファミリーで絞る: tsusho=通所介護計画書 / kinou=個別機能訓練(3-3)+科学的介護+ADL加算
+  const all = React.useMemo(() => _allDues.filter(d => family === 'tsusho' ? d.kind === 'tsusho' : d.kind !== 'tsusho'), [_allDues, family]);
   // 「未作成」は初回導入時に全員ぶん出て件数が膨らむため、既定では期限があるものだけ表示する
   const dues = showDone ? all : all.filter(d => d.note !== '未作成' && d.note !== 'ADL評価が未実施');
   const newN = all.length - dues.length;
@@ -37559,7 +37572,7 @@ function KeikakuYoteiView({ appData, navigateTo }) {
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
-        <KeikakuTabs current="keikaku_yotei" navigateTo={navigateTo}/>
+        <KeikakuTabs current={family === 'tsusho' ? 'keikaku_yotei' : 'kinou_yotei'} navigateTo={navigateTo} family={family}/>
         <div className="flex-1"/>
         {overdueN > 0 && <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg">期限超過 {overdueN}件</span>}
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
@@ -37875,7 +37888,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <KeikakuTabs current="kinou_keikaku" navigateTo={navigateTo}/>
+        <KeikakuTabs current="kinou_keikaku" navigateTo={navigateTo} family="kinou"/>
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
@@ -38316,7 +38329,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
           <div className="kkfix" style={{fontSize:'8px',color:'#333',margin:'1px 0 0'}}>※実施結果等をふまえ、目標の見直しや訓練項目の変更等を行った場合は計画書の再作成又は更新等を行うこと。初回作成時にはⅢについては記載不要である。</div>
 
           <table className="kkfix" style={{width:'100%',borderCollapse:'collapse',marginTop:'4px'}}><tbody>
-            <tr><td style={cell}>（地域密着型）通所介護　{facility.name||'○○○'}　事業所No.{facility.jigyoshoNo||facility.officeNo||'000000000'}<br/>住所{facility.address||'○○○'}　電話番号{facility.phone||'○○○'}</td><td style={{...cell,width:'40%'}}>説明日：{pr.setsumeiDate||'令和　年　月　日'}<br/>説明者：{pr.setsumeisha||''}</td></tr>
+            <tr><td style={cell}>{/要支援|事業対象者/.test(String(patient?.careLevel||''))?'（総合事業）通所型サービス':'（地域密着型）通所介護'}　{facility.name||'○○○'}　事業所No.{facility.jigyoshoNo||facility.officeNo||'000000000'}<br/>住所{facility.address||'○○○'}　電話番号{facility.phone||'○○○'}</td><td style={{...cell,width:'40%'}}>説明日：{pr.setsumeiDate||'令和　年　月　日'}<br/>説明者：{pr.setsumeisha||''}</td></tr>
           </tbody></table>
         </div>
         );
@@ -38420,7 +38433,7 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <KeikakuTabs current="seikatsu_kinou" navigateTo={navigateTo}/>
+        <KeikakuTabs current="seikatsu_kinou" navigateTo={navigateTo} family="kinou"/>
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
@@ -38540,7 +38553,7 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <KeikakuTabs current="kyomi_kanshin" navigateTo={navigateTo}/>
+        <KeikakuTabs current="kyomi_kanshin" navigateTo={navigateTo} family="kinou"/>
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
@@ -38627,7 +38640,7 @@ const _monNorm = (v, autoText) => (v && typeof v === 'object') ? { sel: v.sel||'
 // ★ モニタリング表を「表形式HTML」で生成 (モニタリング画面・個人ファイル 共通で使用)
 const _escMon = (s) => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 // === 通所介護計画書 (アドオン: tsusho_keikaku) ===
-// ★ 厚労省「別紙様式３－４【（地域密着型）通所介護計画書】」準拠。印刷はA4 1枚を使い切る(下部余白なし)。
+// ★ 厚労省「別紙様式３－４${_yoshien?'【個別サービス計画書（介護予防・日常生活支援総合事業）】':'【（地域密着型）通所介護計画書】'}」準拠。印刷はA4 1枚を使い切る(下部余白なし)。
 const TSUSHO_PROG = ['入浴','食事','機能訓練','口腔・栄養','レクリエーション','健康チェック','送迎'];
 const TK_ADL_OPTS = ['自立','J1','J2','A1','A2','B1','B2','C1','C2'];
 const TK_DEM_OPTS = ['自立','Ⅰ','Ⅱa','Ⅱb','Ⅲa','Ⅲb','Ⅳ','M'];
@@ -38865,7 +38878,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
-        <KeikakuTabs current="tsusho_keikaku" navigateTo={navigateTo}/>
+        <KeikakuTabs current="tsusho_keikaku" navigateTo={navigateTo} family="tsusho"/>
         <div className="flex-1"/>
         {!editing && <button onClick={()=>setEditing(newRecord())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ 新規作成</button>}
         {editing && <>
@@ -39112,6 +39125,8 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         // ★ 2026-08-13: シートHTML生成を関数化し、通常印刷とケアマネ送付セットで共用する
         const buildSheetHtml = (rec0) => {
         const rec = _migrate(rec0);
+        // ★ 要支援・事業対象者は総合事業の個別サービス計画書として表題・種別を自動切替(2026-08-19)
+        const _yoshien = /要支援|事業対象者/.test(String(patient?.careLevel||''));
         const esc=(s)=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         const B='1px solid #000';
         // cs=利用者入力を出す枠(pre-wrapで改行保持) / csm=HTMLを組むだけの枠
@@ -39226,7 +39241,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         const _fmgr=facility.manager||[facility.managerLast,facility.managerFirst].filter(Boolean).join(' ')||'';
         const _faddr=[facility.address,facility.addressBuilding].filter(Boolean).join('');
         const footer=`<div style="flex:0 0 auto;border:${B};padding:2px 5px;font-size:8.5px;line-height:1.55;margin-top:1mm;">`
-          +`<div>（地域密着型）通所介護　${esc(facility.name)||'　　　　'}　　　${_fzip?'〒'+esc(_fzip):''}　住所：${esc(_faddr)}　　　管理者：${esc(_fmgr)}</div>`
+          +`<div>${_yoshien?'（総合事業）通所型サービス':'（地域密着型）通所介護'}　${esc(facility.name)||'　　　　'}　　　${_fzip?'〒'+esc(_fzip):''}　住所：${esc(_faddr)}　　　管理者：${esc(_fmgr)}</div>`
           +`<div>　事業所No.${esc(_fno)}　　　　　　　　　Tel.${esc(facility.phone)}/Fax.${esc(facility.fax)}</div>`
           +`</div>`;
         const html=`<div style="width:210mm;height:297mm;padding:6mm 5mm 4mm;box-sizing:border-box;display:flex;flex-direction:column;font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;color:#000;background:#fff;overflow:hidden;">`
@@ -39988,6 +40003,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
   return (
     <div className="flex flex-col h-full">
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <KeikakuTabs current="life_hub" navigateTo={navigateTo} family="kinou"/>
         <select value={pid??''} onChange={e=>{ setEditing(null); setPid(Number(e.target.value)); }} className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none">
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
