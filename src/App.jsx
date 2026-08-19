@@ -19619,7 +19619,7 @@ export default function App() {
              currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} family="tsusho" /> :
              currentView === 'kinou_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} family="kinou" /> :
              currentView === 'tsusho_keikaku' ? <TsushoKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} dirtyRef={tsushoKeikakuDirtyRef} saveFnRef={tsushoKeikakuSaveFnRef} /> :
-             currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
+             currentView === 'life_hub' ? <LifeHubView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} dirtyRef={lifeHubDirtyRef} saveFnRef={lifeHubSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'seikatsu_kinou' ? <SeikatsuKinouView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={seikatsuKinouDirtyRef} saveFnRef={seikatsuKinouSaveFnRef} /> :
              currentView === 'kyomi_kanshin' ? <KyomiKanshinView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={kyomiKanshinDirtyRef} saveFnRef={kyomiKanshinSaveFnRef} /> :
              currentView === 'dash_operation' ? <OperationDashboardView appData={appData} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} setAppData={setAppData} /> :
@@ -37541,7 +37541,7 @@ function KKField({ label, value, onChange, rows, ph }) {
 // ★ 2ハブ構成(2026-08-19): 書類ファミリーごとにタブを分離。
 //   通所ファミリー=通所介護計画書(全利用者対象)。 機能訓練ファミリー=3-3+別紙(3-2/3-1)+LIFE(加算アドオン店舗のみ)。
 const KEIKAKU_DOCS_TSUSHO = [['keikaku_yotei','作成予定'],['tsusho_keikaku','通所介護計画書']];
-const KEIKAKU_DOCS_KINOU = [['kinou_yotei','作成予定'],['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['life_hub','LIFE・一括評価']];
+const KEIKAKU_DOCS_KINOU = [['kinou_yotei','作成予定'],['kinou_keikaku','計画書 (様式3-3)'],['seikatsu_kinou','生活機能チェック (3-2)'],['kyomi_kanshin','興味・関心 (3-1)'],['life_hub','LIFE']];
 function KeikakuTabs({ current, navigateTo, family }) {
   if (!navigateTo) return null;
   const docs = family === 'tsusho' ? KEIKAKU_DOCS_TSUSHO : KEIKAKU_DOCS_KINOU;
@@ -37613,6 +37613,11 @@ function KeikakuYoteiView({ appData, navigateTo, family = 'tsusho' }) {
                             className={`w-full text-left px-4 py-3 flex items-center gap-3 flex-wrap hover:bg-blue-50 active:bg-blue-100 ${d.overdue?'bg-red-50':''}`}>
                             <span className="font-bold text-slate-800 text-sm" style={{minWidth:110}}>{d.patient.name}</span>
                             <span className="text-[11px] text-slate-400">{d.note}</span>
+                            {family === 'kinou' && (
+                              <span onClick={(e)=>{ e.stopPropagation(); navigateTo('life_hub', d.patient.id, 'batch'); }}
+                                title="ADL・生活機能・興味関心を1画面でまとめて評価します"
+                                className="px-2.5 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-[10px] font-bold shrink-0 cursor-pointer">一括評価</span>
+                            )}
                             <span className={`ml-auto text-xs font-bold whitespace-nowrap ${d.overdue?'text-red-600':d.daysLeft<=7?'text-amber-600':'text-slate-500'}`}>
                               {d.overdue ? `${Math.abs(d.daysLeft)}日超過` : d.daysLeft===0 ? '本日' : `あと${d.daysLeft}日`}
                             </span>
@@ -39734,7 +39739,7 @@ const DEM_SCALE_QUESTIONS = [
   { no:'⑤', label:'一人で着替えができるか', choices:['季節・気温に応じた服装を選び着脱衣できる','服装選びは不可だが順番・方法を理解し自分で着脱衣できる','促せば自分で着脱衣できる','着脱衣の一部を介護者が行う','着脱衣の全てを常に介護者が行う'] },
   { no:'⑥', label:'電化製品(テレビ・エアコン等)を操作できるか', choices:['自由に操作できる','普段している操作はできる','教えてもらえれば使える','認識しているが使い方が全く分からない','何をするものか分からない'] },
 ];
-function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, saveFnRef, onShowPrintPreview }) {
+function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, onFocusHandled, dirtyRef, saveFnRef, onShowPrintPreview }) {
   const markDirty = () => { if (dirtyRef) dirtyRef.current = true; };
   const patients = sortPatientsByKana((appData.patients||[]).filter(p => p.status==='利用中' || p.status==='休止'));
   const [pid, setPid] = React.useState((targetPatientId!=null && (appData.patients||[]).some(p=>p.id===targetPatientId)) ? targetPatientId : (patients[0]?.id ?? null));
@@ -39938,6 +39943,13 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
     else setBatch(b=>({ ...b, _aId:aId, _skId:skId, _kyId:kyId }));
   };
   React.useEffect(()=>{ if(!saveFnRef) return; if (batchMode && batch) saveFnRef.current = () => batchSave(true); });
+  // ★ 作成予定の「一括評価」ボタンからの遷移(navFocus='batch'): 対象者選択済みで一括評価を即開く(2026-08-20)
+  React.useEffect(() => {
+    if (navFocus !== 'batch') return;
+    _batchLoad(today);
+    if (onFocusHandled) onFocusHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navFocus]);
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
   // ★ 生活機能チェック(3-2)のADLから Barthel の点数を「提案」する。 同じ10項目を二度入力しないため。
