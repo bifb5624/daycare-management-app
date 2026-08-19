@@ -34020,7 +34020,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     if (Array.isArray(s.individualExerciseItems)) _setIndividualExerciseItemsSync(s.individualExerciseItems);
     _exBaseRef.current = { ex: JSON.stringify(s.exerciseItems || []), ind: JSON.stringify(s.individualExerciseItems || []), hist: JSON.stringify(s.exerciseItemsHistory || []), qb: JSON.stringify(s.exerciseQuickButtons || []) };
     _setBaseRef.current = _captureSetBase(s);
-    if (appData.diarySettings) diarySettingsRef.current = appData.diarySettings;
+    if (appData.diarySettings) { diarySettingsRef.current = appData.diarySettings; if (diarySettingsRef.edited) diarySettingsRef.edited.clear(); }
     // ★ 基準は同期後の内容で即確定(null にすると直後の最初の編集が未保存扱いにならない穴になる・2026-08-17)
     _dirtyBaseRef.current = _sigOf({
       facilityInfo: s.facilityInfo || { name: "", phone: "", fax: "", address: "", manager: "" },
@@ -34095,13 +34095,18 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const _ds0 = appData.diarySettings || {};
     let diarySettings = diarySettingsRef.current || _ds0;
     {
-      const _dsKeep = (a, b) => (Array.isArray(a) && a.length) ? a : (Array.isArray(b) ? b : (a || []));
+      // ★ この画面で実際に編集したキー(dsRef.edited)は「全削除=空配列」も意図として保存する(2026-08-19)。
+      //   未編集キーだけ従来の空ガード(未同期の空スナップショットで他端末の登録を消さない)を適用。
+      const _dsEd = diarySettingsRef.edited || new Set();
+      const _dsKeep = (a, b, k) => _dsEd.has(k)
+        ? (Array.isArray(a) ? a : [])
+        : ((Array.isArray(a) && a.length) ? a : (Array.isArray(b) ? b : (a || [])));
       diarySettings = {
         ..._ds0, ...diarySettings,
-        staff: _dsKeep(diarySettings.staff, _ds0.staff),
-        cars: _dsKeep(diarySettings.cars, _ds0.cars),
-        scheduleAM: _dsKeep(diarySettings.scheduleAM, _ds0.scheduleAM),
-        schedulePM: _dsKeep(diarySettings.schedulePM, _ds0.schedulePM),
+        staff: _dsKeep(diarySettings.staff, _ds0.staff, 'staff'),
+        cars: _dsKeep(diarySettings.cars, _ds0.cars, 'cars'),
+        scheduleAM: _dsKeep(diarySettings.scheduleAM, _ds0.scheduleAM, 'scheduleAM'),
+        schedulePM: _dsKeep(diarySettings.schedulePM, _ds0.schedulePM, 'schedulePM'),
       };
     }
     // ★★ 恒久対策・第3層(事業所情報): サブ項目単位で「この画面で実際に編集した項目だけ」を
@@ -34178,6 +34183,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     // ★ 保存したので未保存フラグを解除し、基準(ベースライン)も保存内容へ即確定(連続保存でも安全)
     if (dirtyRef) dirtyRef.current = false;
     _dirtyBaseRef.current = _sigOf();   // ★ null にしない: 保存直後の最初の編集が未保存扱いにならない穴の対策
+    if (diarySettingsRef.edited) diarySettingsRef.edited.clear();   // 日誌タブの編集済みフラグも保存で確定
     _setBaseRef.current = _captureSetBase(_nextSS);
     _exBaseRef.current = { ex: JSON.stringify(_nextSS.exerciseItems || []), ind: JSON.stringify(_nextSS.individualExerciseItems || []), hist: JSON.stringify(_nextSS.exerciseItemsHistory || []), qb: JSON.stringify(_nextSS.exerciseQuickButtons || []) };
   };
@@ -35925,16 +35931,24 @@ const _DSPSection = ({title, children}) => (
 );
 function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
   const initDs = appData.diarySettings || { staff:[], cars:[], scheduleAM:[], schedulePM:[] };
-  // 初回のみrefを初期化
-  React.useEffect(() => { dsRef.current = JSON.parse(JSON.stringify(initDs)); }, []);
+  // ★ タブ再訪でも未保存の編集を破棄しない(2026-08-19): 従来はマウントの度に無条件で
+  //   appData から初期化していたため、日誌タブ→他タブ→日誌タブと切り替えるだけで
+  //   編集中の職員・送迎車・1日の流れがクラウドの旧値に巻き戻り、保存しても旧値が保存されていた。
+  //   dsRef.edited(この画面で実際に編集したキーの集合)が残っている間は初期化しない。
+  React.useEffect(() => {
+    if (dsRef.edited && dsRef.edited.size) return;   // 未保存の編集あり → 保持
+    dsRef.current = JSON.parse(JSON.stringify(initDs));
+  }, []);
   const [renderKey, setRenderKey] = React.useState(0);
   const ds = dsRef.current || initDs;
+  // ★ 編集済みキーの記録: 保存時に「全削除(空配列)」を空ガードに握り潰させないための根拠にもなる
+  const _markEd = (k) => { if (!dsRef.edited) dsRef.edited = new Set(); dsRef.edited.add(k); };
   const _md = () => { if (markDirty) markDirty(); };
 
-  const mutate = (newDs) => { dsRef.current = newDs; setRenderKey(k=>k+1); _md(); };
-  const onBlurStaff = (i, field, val) => { const a=[...dsRef.current.staff]; a[i]={...a[i],[field]:val}; dsRef.current={...dsRef.current,staff:a}; _md(); };
-  const onBlurCar = (i, field, val) => { const a=[...dsRef.current.cars]; a[i]={...a[i],[field]:val}; dsRef.current={...dsRef.current,cars:a}; _md(); };
-  const onBlurSched = (ap, i, field, val) => { const k=`schedule${ap}`; const a=[...(dsRef.current[k]||[])]; a[i]={...a[i],[field]:val}; dsRef.current={...dsRef.current,[k]:a}; _md(); };
+  const mutate = (newDs) => { ['staff','cars','scheduleAM','schedulePM'].forEach(k => { if (newDs[k] !== (dsRef.current||{})[k]) _markEd(k); }); dsRef.current = newDs; setRenderKey(k=>k+1); _md(); };
+  const onBlurStaff = (i, field, val) => { _markEd('staff'); const a=[...dsRef.current.staff]; a[i]={...a[i],[field]:val}; dsRef.current={...dsRef.current,staff:a}; _md(); };
+  const onBlurCar = (i, field, val) => { _markEd('cars'); const a=[...dsRef.current.cars]; a[i]={...a[i],[field]:val}; dsRef.current={...dsRef.current,cars:a}; _md(); };
+  const onBlurSched = (ap, i, field, val) => { const k=`schedule${ap}`; _markEd(k); const a=[...(dsRef.current[k]||[])]; a[i]={...a[i],[field]:val}; dsRef.current={...dsRef.current,[k]:a}; _md(); };
 
   const SC = _DSPSection;
   return (
@@ -35967,7 +35981,7 @@ function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
                   const cur = dsRef.current.staff[i] || {};
                   const first = cur.firstName ?? ((cur.name||'').split(/[ 　]+/).slice(1).join(' ')||'');
                   const combined = [last, first].filter(Boolean).join(' ');
-                  const a=[...dsRef.current.staff]; a[i]={...a[i], lastName: last, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
+                  _markEd('staff'); const a=[...dsRef.current.staff]; a[i]={...a[i], lastName: last, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
                 }}
                 placeholder="姓"
                 className="w-[110px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
@@ -35977,7 +35991,7 @@ function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
                   const cur = dsRef.current.staff[i] || {};
                   const last = cur.lastName ?? ((cur.name||'').split(/[ 　]+/)[0]||'');
                   const combined = [last, first].filter(Boolean).join(' ');
-                  const a=[...dsRef.current.staff]; a[i]={...a[i], firstName: first, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
+                  _markEd('staff'); const a=[...dsRef.current.staff]; a[i]={...a[i], firstName: first, name: combined}; dsRef.current={...dsRef.current,staff:a}; _md();
                 }}
                 placeholder="名"
                 className="w-[110px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
