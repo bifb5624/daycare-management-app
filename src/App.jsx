@@ -39859,6 +39859,70 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
     onSave({ ...appData, adlRecords: [...(appData.adlRecords||[]), ...recs] }, { manual:true, message:`✓ LIFEデータ ${recs.length}件を取り込みました` });
     setLifeImport(null);
   };
+  // ★ LIFE一括評価(2026-08-19): 1画面でADL(Barthel)+科学的介護推進+生活機能チェック+興味関心を入力し、
+  //   保存で各様式のレコードへ同時反映する(まるっとLIFE式)。 個別画面とデータを共有(二重管理なし)。
+  //   生活機能ADLを入力するとBarthelの未入力項目へ自動反映(1回入力)。
+  const [batchMode, setBatchMode] = React.useState(false);
+  const [batch, setBatch] = React.useState(null);
+  const _batchRefs = React.useRef({});
+  const _bJump = (k) => { try { _batchRefs.current[k]?.scrollIntoView({ behavior:'smooth', block:'start' }); } catch {} };
+  const _toWareki = (iso) => { const d=new Date(iso); if(isNaN(d.getTime())) return iso||''; return `令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`; };
+  const _isoOfRec = (s2) => { const y=reiwaToYmd(s2); return y.length===8 ? `${y.slice(0,4)}-${y.slice(4,6)}-${y.slice(6,8)}` : ''; };
+  const _batchDates = React.useMemo(() => {
+    const set=new Set();
+    (appData.adlRecords||[]).filter(r=>r.patientId===pid&&r.evalDate).forEach(r=>set.add(String(r.evalDate)));
+    (appData.seikatsuKinouRecords||[]).filter(r=>r.patientId===pid).forEach(r=>{const i=_isoOfRec(r.recordDate); if(i)set.add(i);});
+    (appData.kyomiKanshinRecords||[]).filter(r=>r.patientId===pid).forEach(r=>{const i=_isoOfRec(r.recordDate); if(i)set.add(i);});
+    return [...set].sort().reverse();
+  }, [appData.adlRecords, appData.seikatsuKinouRecords, appData.kyomiKanshinRecords, pid]);
+  const _batchLoad = (dateIso) => {
+    const a = (appData.adlRecords||[]).find(r=>r.patientId===pid && String(r.evalDate)===dateIso) || null;
+    const skR = (appData.seikatsuKinouRecords||[]).find(r=>r.patientId===pid && _isoOfRec(r.recordDate)===dateIso) || null;
+    const kyR = (appData.kyomiKanshinRecords||[]).find(r=>r.patientId===pid && _isoOfRec(r.recordDate)===dateIso) || null;
+    setBatch({ evalDate: dateIso, evaluator: a?.evaluator||'',
+      items: {...(a?.items||{})}, science: JSON.parse(JSON.stringify(a?.science||{})),
+      sk: { adl:{...(skR?.adl||{})}, kikyo:{...(skR?.kikyo||{})}, iadl:{...(skR?.iadl||{})}, shinshin:{...(skR?.shinshin||{})} },
+      ky: { items: JSON.parse(JSON.stringify(kyR?.items||{})), custom: JSON.parse(JSON.stringify(kyR?.custom||[])), bikou: kyR?.bikou||'' },
+      _aId: a?.id||null, _skId: skR?.id||null, _kyId: kyR?.id||null });
+    setBatchMode(true); setEditing(null);
+  };
+  const bset = (patch) => { setBatch(b=>({...b, ...patch})); markDirty(); };
+  const bsetSci = (k,v) => { setBatch(b=>({...b, science:{...(b.science||{}),[k]:v}})); markDirty(); };
+  const bsetItem = (k,v) => { setBatch(b=>({...b, items:{...b.items,[k]: v===''?'':Number(v)}})); markDirty(); };
+  const bsetSk = (sec,k,v) => { setBatch(b=>{ const nb={...b, sk:{...b.sk,[sec]:{...b.sk[sec],[k]:v}}};
+      if (sec==='adl') { const sug=seikatsuAdlToBarthel(nb.sk.adl); const items={...nb.items}; Object.keys(sug).forEach(bk=>{ if(items[bk]==null||items[bk]==='') items[bk]=sug[bk]; }); nb.items=items; }
+      return nb; }); markDirty(); };
+  const bsetKy = (name, flag) => { setBatch(b=>{ const it={...(b.ky.items||{})}; const cur={...(it[name]||{})}; cur[flag]=!cur[flag]; it[name]=cur; return {...b, ky:{...b.ky, items:it}}; }); markDirty(); };
+  const _batchMissing = React.useMemo(() => {
+    if (!batch) return [];
+    const m=[];
+    if (!batch.evalDate) m.push('評価日');
+    BARTHEL_ITEMS.forEach(it=>{ if(batch.items[it.key]==null||batch.items[it.key]==='') m.push(`ADL:${it.label}`); });
+    const s2=batch.science||{};
+    if(s2.height==null||s2.height==='') m.push('身長'); if(s2.weight==null||s2.weight==='') m.push('体重');
+    ['denture','choke','stains_on_teeth','condition_of_gums'].forEach(k=>{ const v=s2[k]; if(!(v===1||v===0||v===true||v===false)) m.push('口腔:'+({denture:'義歯',choke:'むせ',stains_on_teeth:'歯の汚れ',condition_of_gums:'歯肉'}[k])); });
+    return m;
+  }, [batch]);
+  const batchSave = (asDraft=false) => {
+    if (!batch) return;
+    if (!asDraft && _batchMissing.length) { alert('必須項目が未入力です:\n・'+_batchMissing.slice(0,12).join('\n・')+(_batchMissing.length>12?'\n…他':'')+'\n\n途中の場合は「一時保存」を使ってください。'); return; }
+    const now = syncNow(); const wk=_toWareki(batch.evalDate);
+    const aId = batch._aId || `adl_${pid}_${Date.now()}`;
+    const skId = batch._skId || `sk_${pid}_${Date.now()}`;
+    const kyId = batch._kyId || `ky_${pid}_${Date.now()}`;
+    const up = (arr, id, patch) => { const list=[...(appData[arr]||[])]; const i=list.findIndex(r=>r.id===id);
+      if (i>=0) list[i]={...list[i], ...patch, id, _savedAt:now}; else list.push({ id, patientId:pid, createdAt:Date.now(), ...patch, _savedAt:now });
+      return list; };
+    onSave({ ...appData,
+      adlRecords: up('adlRecords', aId, { evalDate:batch.evalDate, evaluator:batch.evaluator||'', items:batch.items, science:batch.science }),
+      seikatsuKinouRecords: up('seikatsuKinouRecords', skId, { recordDate:wk, adl:batch.sk.adl, kikyo:batch.sk.kikyo, iadl:batch.sk.iadl, shinshin:batch.sk.shinshin }),
+      kyomiKanshinRecords: up('kyomiKanshinRecords', kyId, { recordDate:wk, items:batch.ky.items, custom:batch.ky.custom||[], bikou:batch.ky.bikou }),
+    }, { manual:true, message: asDraft ? '✓ 一時保存しました' : '✓ 一括評価を保存しました（ADL・生活機能チェック・興味関心へ反映）' });
+    if (dirtyRef) dirtyRef.current=false;
+    if (!asDraft) { setBatchMode(false); setBatch(null); }
+    else setBatch(b=>({ ...b, _aId:aId, _skId:skId, _kyId:kyId }));
+  };
+  React.useEffect(()=>{ if(!saveFnRef) return; if (batchMode && batch) saveFnRef.current = () => batchSave(true); });
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
   // ★ 生活機能チェック(3-2)のADLから Barthel の点数を「提案」する。 同じ10項目を二度入力しないため。
@@ -39928,6 +39992,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div className="flex-1"/>
+        {!editing && !batchMode && <button onClick={()=>_batchLoad((_batchDates[0] && _batchDates[0]===today) ? today : today)} title="ADL・科学的介護推進・生活機能チェック・興味関心を1画面でまとめて入力できます" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">一括評価</button>}
         {!editing && <label title="まるっとLIFE等の提出用CSV(TIFI2024/AINT2024)を読み込み、ADL評価と科学的介護推進の項目を移行します" className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow active:scale-95 cursor-pointer">CSV取込(移行)
           <input type="file" accept=".csv,.txt" multiple className="hidden" onChange={e=>{ const fs=[...(e.target.files||[])]; e.target.value=''; if(fs.length) startLifeImport(fs); }}/>
         </label>}
@@ -39943,6 +40008,132 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
           </button>
         </>}
       </div>
+      {/* ★ LIFE一括評価(1画面入力・まるっとLIFE式) */}
+      {batchMode && batch && (
+        <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col">
+          <div className="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-2 flex-wrap shadow-sm">
+            <span className="text-sm font-bold text-indigo-700">LIFE一括評価</span>
+            <span className="text-sm font-bold text-slate-700">{patient?.name} 様</span>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="text-[10px] font-bold text-slate-400">評価日</span>
+              <input type="date" value={batch.evalDate} onChange={e=>bset({evalDate:e.target.value})} className="px-2 py-1 border border-slate-300 rounded-lg text-sm outline-none"/>
+              <span className="text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5">必須</span>
+            </div>
+            <div className="flex-1"/>
+            {_batchMissing.length > 0 && <button onClick={()=>batchSave(true)} className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold shadow">一時保存</button>}
+            <button onClick={()=>batchSave(false)} title={_batchMissing.length?`必須が${_batchMissing.length}件未入力です`:''} className={`px-4 py-1.5 rounded-lg text-sm font-bold shadow text-white ${_batchMissing.length?'bg-slate-400':'bg-emerald-500 hover:bg-emerald-600'}`}>保存{_batchMissing.length?`（必須残${_batchMissing.length}）`:''}</button>
+            <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？（一時保存すれば残せます）')) return; if(dirtyRef) dirtyRef.current=false; setBatchMode(false); setBatch(null); }} className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+          </div>
+          {/* 評価履歴タイムライン + セクションジャンプ */}
+          <div className="bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-slate-400">履歴</span>
+            {_batchDates.length===0 && <span className="text-[11px] text-slate-400">まだ評価がありません（この画面が初回になります）</span>}
+            {_batchDates.slice(0,8).map(d=>(
+              <button key={d} onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄して切り替えますか？')) return; if(dirtyRef) dirtyRef.current=false; _batchLoad(d); }}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${d===batch.evalDate?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-300 hover:bg-indigo-50'}`}>{d.replace(/-/g,'/')}</button>
+            ))}
+            <div className="flex-1"/>
+            {[['adl','② ADL'],['sci','③ 科学的介護'],['sk','④ 生活機能'],['ky','⑤ 興味・関心']].map(([k,l])=>(
+              <button key={k} onClick={()=>_bJump(k)} className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600">{l}</button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-4xl mx-auto space-y-4 pb-24">
+              <div className="text-[11px] text-slate-500 bg-white border border-slate-200 rounded-xl px-4 py-2.5">
+                ここで入力した内容は保存時に <b>ADL評価(LIFE・加算)・生活機能チェック(様式3-2)・興味関心チェック(様式3-1)</b> の各レコードへ同時に反映されます。④生活機能のADLを選ぶと②のBarthel点数が未入力の項目に自動で入ります。生活・認知機能尺度やVitality等の詳細は保存後にLIFE・加算画面の編集で入力できます。
+              </div>
+              {/* ① 基本 */}
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <div className="text-sm font-bold text-indigo-700 mb-3">① 基本情報</div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">評価者</label><input value={batch.evaluator} onChange={e=>bset({evaluator:e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none"/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">利用状態</label>
+                    <select value={batch.science?.status||'利用中'} onChange={e=>bsetSci('status', e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none">
+                      {['利用開始時','利用中','利用終了時'].map(o=><option key={o}>{o}</option>)}
+                    </select></div>
+                </div>
+              </div>
+              {/* ② ADL */}
+              <div ref={el=>{_batchRefs.current.adl=el;}} className="bg-white rounded-xl border border-slate-200 p-4" style={{scrollMarginTop:8}}>
+                <div className="text-sm font-bold text-indigo-700 mb-1">② ADL評価（Barthel Index）<span className="ml-1 text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5">必須</span></div>
+                <div className="text-[10px] text-slate-400 mb-3">④の生活機能ADLを選ぶと未入力の項目へ自動で点数が入ります（直接選んでもOK）</div>
+                <div className="grid md:grid-cols-2 gap-2">
+                  {BARTHEL_ITEMS.map(it=>(
+                    <div key={it.key} className={`flex items-center gap-2 rounded-lg border p-2 ${batch.items[it.key]==null||batch.items[it.key]===''?'border-rose-200 bg-rose-50':'border-slate-200 bg-white'}`}>
+                      <span className="text-xs font-bold text-slate-600 flex-1">{it.label}</span>
+                      <select value={batch.items[it.key] ?? ''} onChange={e=>bsetItem(it.key, e.target.value)} className="px-2 py-1.5 border border-slate-300 rounded text-xs outline-none bg-white">
+                        <option value="">―</option>{it.opts.map(([pt,lb])=><option key={pt} value={pt}>{pt}点 {lb}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {/* ③ 科学的介護推進 */}
+              <div ref={el=>{_batchRefs.current.sci=el;}} className="bg-white rounded-xl border border-slate-200 p-4" style={{scrollMarginTop:8}}>
+                <div className="text-sm font-bold text-indigo-700 mb-3">③ 科学的介護推進（身長体重・口腔 <span className="text-[9px] font-bold text-white bg-rose-500 rounded px-1 py-0.5 align-middle">必須</span>・認知症）</div>
+                <div className="flex gap-3 flex-wrap mb-3">
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">身長(cm)</label><input type="number" value={batch.science?.height??''} onChange={e=>bsetSci('height', e.target.value)} className={`w-28 px-3 py-2 border rounded-lg text-sm outline-none ${batch.science?.height?'border-slate-300 bg-white':'border-rose-300 bg-rose-50'}`}/></div>
+                  <div><label className="block text-xs font-bold text-slate-500 mb-1">体重(kg)</label><input type="number" value={batch.science?.weight??''} onChange={e=>bsetSci('weight', e.target.value)} className={`w-28 px-3 py-2 border rounded-lg text-sm outline-none ${batch.science?.weight?'border-slate-300 bg-white':'border-rose-300 bg-rose-50'}`}/></div>
+                </div>
+                <div className="grid md:grid-cols-2 gap-2 mb-3">
+                  {[['denture','義歯の使用'],['choke','食事中のむせ'],['stains_on_teeth','歯の汚れ'],['condition_of_gums','歯肉の腫れ・出血']].map(([k,lb])=>{ const v=batch.science?.[k]; const has=(v===1||v===0||v===true||v===false); const on=(v===1||v===true); return (
+                    <div key={k} className={`flex items-center gap-2 rounded-lg border p-2 ${has?'border-slate-200 bg-white':'border-rose-200 bg-rose-50'}`}>
+                      <span className="text-xs font-bold text-slate-600 flex-1">{lb}</span>
+                      {[['あり',1],['なし',0]].map(([l2,val])=>(
+                        <button key={l2} type="button" onClick={()=>bsetSci(k, val)} className={`px-3 py-1 rounded text-xs font-bold border ${has&&((val===1)===on)?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-500 border-slate-300'}`}>{l2}</button>
+                      ))}
+                    </div>
+                  ); })}
+                </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-xs font-bold text-slate-600">認知症の診断:</span>
+                  {[['dem_alzheimer','アルツハイマー型'],['dem_vascular','血管性'],['dem_lewy','レビー小体型'],['dem_other','その他']].map(([k,lb])=>(
+                    <label key={k} className="flex items-center gap-1 text-xs text-slate-700 cursor-pointer"><input type="checkbox" checked={!!batch.science?.[k]} onChange={e=>bsetSci(k, e.target.checked)}/>{lb}</label>
+                  ))}
+                  {batch.science?.dem_other && <input value={batch.science?.dem_other_name||''} onChange={e=>bsetSci('dem_other_name', e.target.value)} placeholder="病名" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none"/>}
+                </div>
+              </div>
+              {/* ④ 生活機能チェック */}
+              <div ref={el=>{_batchRefs.current.sk=el;}} className="bg-white rounded-xl border border-slate-200 p-4" style={{scrollMarginTop:8}}>
+                <div className="text-sm font-bold text-indigo-700 mb-3">④ 生活機能チェック（様式3-2へ反映）</div>
+                {[['adl','ADL', SEIKATSU_ADL, ['自立','見守り','一部介助','全介助']],
+                  ['kikyo','起居動作', SEIKATSU_KIKYO, ['自立','見守り','一部介助','全介助']],
+                  ['iadl','IADL', SEIKATSU_IADL, ['自立','見守り','一部介助','全介助']],
+                  ['shinshin','心身機能', SEIKATSU_SHINSHIN, ['なし','あり']]].map(([sec,ttl,keys,opts])=>(
+                  <div key={sec} className="mb-3 last:mb-0">
+                    <div className="text-xs font-bold text-slate-500 mb-1.5">{ttl}</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5">
+                      {keys.map(k=>(
+                        <div key={k} className="flex items-center gap-1.5 bg-slate-50 rounded-lg px-2 py-1.5">
+                          <span className="text-[11px] font-bold text-slate-600 flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{k}</span>
+                          <select value={batch.sk[sec]?.[k]||''} onChange={e=>bsetSk(sec,k,e.target.value)} className="px-1.5 py-1 border border-slate-300 rounded text-[11px] outline-none bg-white">
+                            <option value="">―</option>{opts.map(o=><option key={o}>{o}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* ⑤ 興味・関心 */}
+              <div ref={el=>{_batchRefs.current.ky=el;}} className="bg-white rounded-xl border border-slate-200 p-4" style={{scrollMarginTop:8}}>
+                <div className="text-sm font-bold text-indigo-700 mb-3">⑤ 興味・関心チェック（様式3-1へ反映）</div>
+                <div className="grid md:grid-cols-2 gap-1">
+                  {KYOMI_DEFAULT.map(name=>{ const it=batch.ky.items?.[name]||{}; return (
+                    <div key={name} className="flex items-center gap-2 bg-slate-50 rounded-lg px-2 py-1">
+                      <span className="text-[11px] font-bold text-slate-600 flex-1">{name}</span>
+                      {[['shiteiru','している'],['shitemitai','してみたい'],['kyomi','興味がある']].map(([f,l2])=>(
+                        <label key={f} className="flex items-center gap-0.5 text-[10px] text-slate-500 whitespace-nowrap cursor-pointer"><input type="checkbox" checked={!!it[f]} onChange={()=>bsetKy(name,f)} className="accent-indigo-500"/>{l2}</label>
+                      ))}
+                    </div>
+                  ); })}
+                </div>
+                <div className="mt-2"><label className="block text-xs font-bold text-slate-500 mb-1">備考</label><textarea value={batch.ky.bikou} onChange={e=>{ setBatch(b=>({...b, ky:{...b.ky, bikou:e.target.value}})); markDirty(); }} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none"/></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ★ LIFE CSV取込(移行)の突合プレビュー */}
       {lifeImport && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
