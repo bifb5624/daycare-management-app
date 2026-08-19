@@ -39776,6 +39776,89 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
     if (!window.confirm(msg)) return;
     lifeDownloadCsv(`${dashForm.id}_${submitYm.replace('-','')}.csv`, lifeToCsvText(dashForm.cols, ok.map(d=>d.row)));
   };
+  // ★ LIFE CSV取込(移行・2026-08-19): まるっとLIFE等の他社ソフトが出力する提出用CSV(全国共通仕様v0310)を
+  //   読み込み、ADL評価(Barthel)+科学的介護推進の固有項目を評価レコードとして復元する。 TIFI2024/AINT2024対応。
+  //   突合は被保険者番号(10桁)。 同一利用者×同一評価日の既存レコードがあれば既定でチェックを外す(重複防止)。
+  const [lifeImport, setLifeImport] = React.useState(null);   // null | {items:[...], errs:[...]}
+  const LIFE_BI_FROM_CODE = React.useMemo(() => { const o={}; Object.keys(LIFE_BI_CODE).forEach(k=>{ o[k]={}; Object.entries(LIFE_BI_CODE[k]).forEach(([pt,c])=>{ o[k][c]=Number(pt); }); }); return o; }, []);
+  const _csvParse = (text) => {
+    const rows=[]; let row=[], cur='', q=false;
+    for (let i=0;i<text.length;i++){ const c=text[i];
+      if(q){ if(c==='"'){ if(text[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+      else if(c==='"') q=true;
+      else if(c===','){ row.push(cur); cur=''; }
+      else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(cur); rows.push(row); row=[]; cur=''; }
+      else cur+=c; }
+    if(cur!==''||row.length) { row.push(cur); rows.push(row); }
+    return rows.filter(r=>r.length>1 || (r[0]||'').trim()!=='');
+  };
+  const _lifeBiCols = ['barthel_index_meal','barthel_transfer','barthel_index_personal_hygiene_and_adjustment','barthel_index_toilet_activity','barthel_index_bathing','barthel_index_flat_ground_walking','barthel_index_stair_movement','barthel_index_changing_clothes','barthel_index_defecation_manage','barthel_index_urination_manage'];
+  const _lifeImportParseFile = async (f) => {
+    const buf = await f.arrayBuffer();
+    let text; try { text = new TextDecoder('utf-8',{fatal:true}).decode(buf); } catch { text = new TextDecoder('shift_jis').decode(buf); }
+    const rows = _csvParse(text);
+    if (!rows.length) return [];
+    let cols=null, dataRows=rows;
+    const h0 = rows[0].map(c=>String(c).trim());
+    if (h0.includes('care_facility_id')) { cols=h0; dataRows=rows.slice(1); }
+    const form = cols
+      ? (cols.includes('dbd13_01') ? 'TIFI2024' : (cols.includes('first_month') ? 'AINT2024' : null))
+      : (rows[0].length===LIFE_TIFI2024_COLUMNS.length ? 'TIFI2024' : (rows[0].length===LIFE_AINT2024_COLUMNS.length ? 'AINT2024' : null));
+    if (!form) return [{ _err:`${f.name}: 様式を判定できません(列数${rows[0].length}・対応はTIFI2024/AINT2024)` }];
+    const colNames = cols || (form==='TIFI2024' ? LIFE_TIFI2024_COLUMNS : LIFE_AINT2024_COLUMNS);
+    const out=[];
+    dataRows.forEach(r => {
+      const g = {}; colNames.forEach((k,i)=>{ g[k]=String(r[i] ?? '').trim(); });
+      if (!g.insured_no && !g.evaluate_date) return;
+      const ino = lifeZero10(g.insured_no);
+      const pat = (appData.patients||[]).find(p => lifeZero10(p.insuranceNo) === ino);
+      const ed = String(g.evaluate_date||'').replace(/\D/g,'');
+      const evalDate = ed.length===8 ? `${ed.slice(0,4)}-${ed.slice(4,6)}-${ed.slice(6,8)}` : '';
+      const items={};
+      LIFE_BI_ORDER.forEach((key,idx)=>{ const c=g[_lifeBiCols[idx]]; if(c!=='' && LIFE_BI_FROM_CODE[key][c]!=null) items[key]=LIFE_BI_FROM_CODE[key][c]; });
+      let science;
+      if (form==='TIFI2024') {
+        const b01=(v)=> v==='1'?1:(v==='0'?0:'');
+        science = {
+          status: ({'1':'利用開始時','2':'利用中','3':'利用終了時'})[g.status] || '利用中',
+          family: g.family||'', height: g.height||'', weight: g.weight||'',
+          bedsore: g.bedsore==='1'?1:(g.bedsore==='0'?0:''),
+          denture: b01(g.denture), choke: b01(g.choke), stains_on_teeth: b01(g.stains_on_teeth), condition_of_gums: b01(g.condition_of_gums),
+          dem_alzheimer: g.diagnosis_of_dementia_01==='1', dem_vascular: g.diagnosis_of_dementia_02==='1', dem_lewy: g.diagnosis_of_dementia_03==='1', dem_other: g.diagnosis_of_dementia_other==='1', dem_other_name: g.diagnosis_of_dementia_other_name||'',
+          demScale: ['diagnosis_of_dementia_evaluate_1_1','diagnosis_of_dementia_evaluate_1_2','diagnosis_of_dementia_evaluate_2','diagnosis_of_dementia_evaluate_3','diagnosis_of_dementia_evaluate_4','diagnosis_of_dementia_evaluate_5','diagnosis_of_dementia_evaluate_6'].map(k=>g[k]||''),
+          vitality: [1,2,3,4,5].map(i=>g['vitality_index_0'+i]||''),
+          dbd13: Array.from({length:13},(_,i)=>g['dbd13_'+String(i+1).padStart(2,'0')]||''),
+          icf: (()=>{ const o={}; LIFE_ICF_KEYS.forEach(k=>{ if(g[k]!=='') o[k]=g[k]; }); return o; })(),
+        };
+      }
+      out.push({ form, fileName:f.name, insuredNo: ino, name: pat?.name || '', patientId: pat?.id ?? null, evalDate, items, science,
+        adlMonth: form==='AINT2024' ? (g.sixth_month==='1' ? 'sixth' : 'first') : undefined,
+        dup: !!(pat && (appData.adlRecords||[]).some(x => x.patientId===pat.id && String(x.evalDate)===evalDate)),
+        checked: !!(pat && evalDate) });
+    });
+    return out;
+  };
+  const startLifeImport = async (files) => {
+    const all=[]; const errs=[];
+    for (const f of files) { try { const res = await _lifeImportParseFile(f); res.forEach(x=> x._err ? errs.push(x._err) : all.push(x)); } catch(e) { errs.push(`${f.name}: 読込失敗(${e?.message||e})`); } }
+    all.forEach(x=>{ if (x.dup) x.checked=false; });
+    if (!all.length) { alert(errs.length ? errs.join('\n') : '取り込めるデータがありませんでした。'); return; }
+    setLifeImport({ items: all, errs });
+  };
+  const execLifeImport = () => {
+    const sel = (lifeImport?.items||[]).filter(x=>x.checked && x.patientId!=null && x.evalDate);
+    if (!sel.length) { alert('取込対象が選択されていません。'); return; }
+    const map = new Map();   // 同一利用者×同一評価日はTIFI/AINTをマージして1件に
+    sel.forEach(x => { const k=`${x.patientId}|${x.evalDate}`; const ex=map.get(k);
+      if (!ex) map.set(k, {...x});
+      else { ex.items = { ...x.items, ...ex.items }; ex.science = ex.science || x.science; ex.adlMonth = ex.adlMonth || x.adlMonth; }
+    });
+    const now = syncNow();
+    const recs = [...map.values()].map((x,i) => ({ id:`adl_${x.patientId}_${Date.now()}_${i}`, patientId:x.patientId, evalDate:x.evalDate, evaluator:'LIFE移行取込', items:x.items, note:'',
+      ...(x.science ? { science: x.science } : {}), ...(x.adlMonth ? { adlMonth: x.adlMonth } : {}), _savedAt: now }));
+    onSave({ ...appData, adlRecords: [...(appData.adlRecords||[]), ...recs] }, { manual:true, message:`✓ LIFEデータ ${recs.length}件を取り込みました` });
+    setLifeImport(null);
+  };
   const blank = () => ({ id:`adl_${pid}_${Date.now()}`, patientId:pid, evalDate:today, evaluator:'', items:{}, note:'' });
   const setItem = (k,v)=>{ setEditing(e=>({...e, items:{...e.items,[k]:Number(v)}})); markDirty(); };
   // ★ 生活機能チェック(3-2)のADLから Barthel の点数を「提案」する。 同じ10項目を二度入力しないため。
@@ -39845,6 +39928,9 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
           {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div className="flex-1"/>
+        {!editing && <label title="まるっとLIFE等の提出用CSV(TIFI2024/AINT2024)を読み込み、ADL評価と科学的介護推進の項目を移行します" className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow active:scale-95 cursor-pointer">CSV取込(移行)
+          <input type="file" accept=".csv,.txt" multiple className="hidden" onChange={e=>{ const fs=[...(e.target.files||[])]; e.target.value=''; if(fs.length) startLifeImport(fs); }}/>
+        </label>}
         {!editing && <button onClick={()=>setEditing(blank())} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow active:scale-95">＋ ADL評価を新規作成</button>}
         {editing && <>
           <button onClick={()=>{ if(dirtyRef?.current && !window.confirm('編集中の内容を破棄しますか？')) return; if(dirtyRef) dirtyRef.current=false; setEditing(null); }} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
@@ -39857,6 +39943,41 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, dirtyRef, s
           </button>
         </>}
       </div>
+      {/* ★ LIFE CSV取込(移行)の突合プレビュー */}
+      {lifeImport && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{maxHeight:'88vh'}}>
+            <div className="px-6 py-4 border-b border-slate-200 bg-teal-50 flex justify-between items-center flex-shrink-0">
+              <h2 className="text-base font-bold text-slate-800">LIFEデータ取込(移行) — 突合結果の確認</h2>
+              <button onClick={()=>setLifeImport(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">✕</button>
+            </div>
+            <div className="px-6 py-2 text-[11px] text-slate-500 border-b border-slate-100">
+              被保険者番号(10桁)で利用者と突合しています。チェックした行を評価レコード(ADL・科学的介護推進)として取り込みます。同じ評価日の既存レコードがある行(重複)は既定でチェックを外しています。
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-1.5">
+              {(lifeImport.errs||[]).map((e,i)=>(<div key={'e'+i} className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{e}</div>))}
+              {lifeImport.items.map((it,i)=>(
+                <label key={i} className={`flex items-center gap-2.5 p-2.5 rounded-lg border ${it.patientId==null?'border-red-200 bg-red-50':it.dup?'border-amber-200 bg-amber-50':(it.checked?'border-teal-300 bg-teal-50':'border-slate-200 bg-white')} ${it.patientId==null?'':'cursor-pointer'}`}>
+                  <input type="checkbox" disabled={it.patientId==null||!it.evalDate} checked={it.checked} onChange={e=>setLifeImport(c=>({...c, items:c.items.map((x,xi)=>xi===i?{...x,checked:e.target.checked}:x)}))} className="w-4 h-4"/>
+                  <div className="text-xs flex-1 min-w-0">
+                    <span className="font-bold text-slate-700">{it.patientId!=null ? `${it.name} 様` : '利用者が見つかりません'}</span>
+                    <span className="text-slate-400 ml-2">被保険者番号 {it.insuredNo||'—'}</span>
+                    <div className="text-slate-500 mt-0.5">
+                      {it.form==='TIFI2024'?'科学的介護推進(ADL+固有項目)':'ADL維持等(Barthel)'}／評価日 {it.evalDate||'不明'}
+                      {it.dup && <b className="text-amber-700 ml-2">同じ評価日の既存あり(重複)</b>}
+                      {it.patientId==null && <b className="text-red-600 ml-2">→ 利用者マスタの被保険者番号をご確認ください</b>}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 flex justify-end gap-2 flex-shrink-0">
+              <button onClick={()=>setLifeImport(null)} className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-sm font-bold">閉じる</button>
+              <button onClick={execLifeImport} className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow">選択した{lifeImport.items.filter(x=>x.checked).length}件を取り込む</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
         {!pid ? <div className="text-center text-slate-400 py-20 font-bold">利用者を登録してください</div> : (
