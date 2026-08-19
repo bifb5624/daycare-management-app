@@ -37775,7 +37775,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const newRecord = () => ({
     id: `kk_${pid}_${Date.now()}`, patientId: pid, createdAt: Date.now(),
     createdDate: toReiwa(new Date().toISOString().slice(0,10)), prevDate: '', firstDate: '',
-    author: '', authorJob: '機能訓練指導員',
+    author: '', authorJob: '機能訓練指導員', coAuthors: '',   // ★ 共同作成者(多職種共同作成の記録・2026-08-19)
     // ★ 自立度・希望・社会参加・居宅環境・病名・留意事項はフェイスシートから自動取込
     ..._kkFsAuto(patient),
     kazokuKibou: '',
@@ -37962,7 +37962,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
                 <KKDateField label="初回作成日" value={editing.firstDate} onChange={v=>upd({firstDate:v})}/>
                 <KKField label="計画作成者" value={editing.author} onChange={v=>upd({author:v})}/>
                 <KKField label="職種" value={editing.authorJob} onChange={v=>upd({authorJob:v})}/>
-                <div/>
+                <KKField label="共同作成者（多職種）" value={editing.coAuthors} onChange={v=>upd({coAuthors:v})} ph="例: 看護師 山田／介護職員 佐藤"/>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 mb-1">障害高齢者の日常生活自立度</label>
                   <select value={editing.jiritsuBody} onChange={e=>upd({jiritsuBody:e.target.value})} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm outline-none">
@@ -38240,7 +38240,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
               <td style={{...cell,width:'10%'}}>性別<br/>{patient?.gender||''}</td>
               <td style={{...cell,width:'24%'}}>{bd?`${bd.getFullYear()}年${bd.getMonth()+1}月${bd.getDate()}日生（${_age(patient?.birthDate)}歳）`:'　年　月　日生（　歳）'}</td>
               <td style={{...cell,width:'12%'}}>要介護度<br/>{patient?.careLevel||''}</td>
-              <td style={cell}>計画作成者：{pr.author||''}<br/>職種：{pr.authorJob||''}</td>
+              <td style={cell}>計画作成者：{pr.author||''}<br/>職種：{pr.authorJob||''}<br/>共同作成者：{pr.coAuthors||''}</td>
             </tr>
           </tbody></table>
           <table style={{width:'100%',borderCollapse:'collapse',marginTop:'-1px'}}><tbody>
@@ -38326,7 +38326,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         let prevForSet = _pi>=0 ? (records[_pi+1]||null) : (records.find(r=>r.id!==printRec.id)||null);
         if (prevForSet && _prevRec && prevForSet.id===_prevRec.id && prevEvalPatch) prevForSet = { ...prevForSet, ...prevEvalPatch }; // 未保存の評価も反映
         const _progTxt = (r)=> (r.programs||[]).filter(p=>String(p.content||'').trim()).map((p,i)=>`${i+1}. ${p.content}${p.time?`（${p.time}）`:''}`).join('\n');
-        const KK_DIFF_FIELDS = [['短期目標（機能）','shortKinou'],['短期目標（活動）','shortKatsudo'],['短期目標（参加）','shortSanka'],['長期目標（機能）','longKinou'],['長期目標（活動）','longKatsudo'],['長期目標（参加）','longSanka'],['機能訓練実施上の留意事項','ryuiPoint'],['利用者本人の希望','honninKibou'],['家族の希望','kazokuKibou'],['時間外に実施すること','jikangaiJisshi'],['特記事項','tokki']];
+        const KK_DIFF_FIELDS = [['短期目標（機能）','shortKinou'],['短期目標（活動）','shortKatsudo'],['短期目標（参加）','shortSanka'],['長期目標（機能）','longKinou'],['長期目標（活動）','longKatsudo'],['長期目標（参加）','longSanka'],['機能訓練実施上の留意事項','ryuiPoint'],['共同作成者','coAuthors'],['利用者本人の希望','honninKibou'],['家族の希望','kazokuKibou'],['時間外に実施すること','jikangaiJisshi'],['特記事項','tokki']];
         const diffRows = prevForSet ? [
           ...KK_DIFF_FIELDS.map(([lb,k])=>({lb, a:String(prevForSet[k]||'').trim(), b:String(printRec[k]||'').trim()})),
           {lb:'訓練プログラム', a:_progTxt(prevForSet), b:_progTxt(printRec)},
