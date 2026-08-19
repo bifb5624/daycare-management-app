@@ -17703,15 +17703,38 @@ export default function App() {
   // ★ プレビュー内のサブモーダル状態も App 直下へ (IIFE内に hook を置くと条件付き呼び出しで React error #310 になる)
   const [showFaxHelp, setShowFaxHelp] = useState(false);
   const [showFaxRecord, setShowFaxRecord] = useState(false);
-  useEffect(()=>{ setPreviewIfH(900); setShowFaxHelp(false); setShowFaxRecord(false); }, [printPreviewContent?.title]);
+  // ★ 氏名マスキング(2026-08-19): FAX送付など個人情報を伏せたい時に、印刷プレビュー/印刷の
+  //   HTML内の利用者氏名・ふりがなを「●●」へ置換する(全印刷・FAX機能で共通)。 既定OFF・開くたびリセット。
+  const [printMaskNames, setPrintMaskNames] = useState(false);
+  useEffect(()=>{ setPreviewIfH(900); setShowFaxHelp(false); setShowFaxRecord(false); setPrintMaskNames(false); }, [printPreviewContent?.title]);
+  const _maskPrintHtml = React.useCallback((html) => {
+    try {
+      let out = html;
+      const mask = (s) => s.replace(/[^\s　]/g, '●');
+      const variants = new Set();
+      (appData?.patients || []).forEach(p => {
+        [p?.name, p?.kana].forEach(n => {
+          const t = String(n || '').trim(); if (t.length < 2) return;
+          variants.add(t);
+          const ns = t.replace(/[ 　]+/g, ''); if (ns.length >= 2) variants.add(ns);
+        });
+      });
+      [...variants].sort((a, b) => b.length - a.length).forEach(v => { out = out.split(v).join(mask(v)); });
+      return out;
+    } catch { return html; }
+  }, [appData?.patients]);
+  const printHtmlEff = useMemo(() => {
+    if (!printPreviewContent?.html) return '';
+    return printMaskNames ? _maskPrintHtml(printPreviewContent.html) : printPreviewContent.html;
+  }, [printPreviewContent?.html, printMaskNames, _maskPrintHtml]);
   const previewSrcDoc = useMemo(()=>{
-    if(!printPreviewContent?.html) return '';
+    if(!printHtmlEff) return '';
     let head=''; try{
       document.querySelectorAll('style').forEach(s=>{ head+='<style>'+(s.textContent||'')+'</style>'; });
       document.querySelectorAll('link[rel="stylesheet"]').forEach(l=>{ if(l.href) head+='<link rel="stylesheet" href="'+l.href+'">'; });
     }catch{}
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}</style></head><body>${printPreviewContent.html}</body></html>`;
-  }, [printPreviewContent?.html]);
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}</style></head><body>${printHtmlEff}</body></html>`;
+  }, [printHtmlEff]);
   // グローバルツールチップ（fixed）
   const [globalTip, setGlobalTip] = useState(null); // {text, x, y}
   const showTip = React.useCallback((text, e) => {
@@ -18960,7 +18983,7 @@ export default function App() {
           const isIOS = typeof navigator !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
           const buildDocHtml = () => {
             const styles = getStyles();
-            return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title></title>${styles}<style>*{box-sizing:border-box;}html,body{margin:0;padding:0;background:white;width:${pageW}mm;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:visible;}svg{overflow:visible!important;max-width:none!important;}@page{size:${pageW}mm ${pageH}mm;margin:0;}*{box-shadow:none!important;outline:none!important;--tw-ring-shadow:0 0 transparent!important;--tw-ring-color:transparent!important;--tw-ring-offset-shadow:0 0 transparent!important;}@media print{html,body{width:${pageW}mm;height:auto;overflow:hidden;margin:0!important;padding:0!important;}body>*{margin:0!important;padding:0!important;}body>*>*+*{margin-top:0!important;}.no-print,.thp,.page-sep{display:none!important;}.tp{page-break-inside:avoid;break-inside:avoid;}.tp:not(:last-child){page-break-after:always!important;break-after:page!important;}.tp:last-child{page-break-after:avoid!important;break-after:avoid!important;}.diary-page-wrap{margin:0!important;overflow:hidden!important;page-break-inside:avoid!important;break-inside:avoid!important;}.diary-page-wrap:not(:last-child){page-break-after:always!important;break-after:page!important;}.diary-page-wrap:last-child{page-break-after:avoid!important;break-after:avoid!important;}[data-page-break]{page-break-before:always;break-before:page;}}</style></head><body>${printPreviewContent.html}</body></html>`;
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title></title>${styles}<style>*{box-sizing:border-box;}html,body{margin:0;padding:0;background:white;width:${pageW}mm;height:auto;-webkit-print-color-adjust:exact;print-color-adjust:exact;overflow:visible;}svg{overflow:visible!important;max-width:none!important;}@page{size:${pageW}mm ${pageH}mm;margin:0;}*{box-shadow:none!important;outline:none!important;--tw-ring-shadow:0 0 transparent!important;--tw-ring-color:transparent!important;--tw-ring-offset-shadow:0 0 transparent!important;}@media print{html,body{width:${pageW}mm;height:auto;overflow:hidden;margin:0!important;padding:0!important;}body>*{margin:0!important;padding:0!important;}body>*>*+*{margin-top:0!important;}.no-print,.thp,.page-sep{display:none!important;}.tp{page-break-inside:avoid;break-inside:avoid;}.tp:not(:last-child){page-break-after:always!important;break-after:page!important;}.tp:last-child{page-break-after:avoid!important;break-after:avoid!important;}.diary-page-wrap{margin:0!important;overflow:hidden!important;page-break-inside:avoid!important;break-inside:avoid!important;}.diary-page-wrap:not(:last-child){page-break-after:always!important;break-after:page!important;}.diary-page-wrap:last-child{page-break-after:avoid!important;break-after:avoid!important;}[data-page-break]{page-break-before:always;break-before:page;}}</style></head><body>${printHtmlEff}</body></html>`;
           };
           const openPrintWindow = (autoClose=true) => {
             if(!printPreviewContent.html) return;
@@ -19016,6 +19039,10 @@ export default function App() {
               <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)',position:'relative',zIndex:10,pointerEvents:'auto'}}>
                 <div style={{flex:1}}>
                   <span style={{color:'#64748b',fontSize:11,fontWeight:'bold',letterSpacing:1}}>印刷プレビュー</span>
+                  <label title="利用者の氏名・ふりがなを●●に置き換えて印刷/FAXできます(全ての印刷画面で共通)" style={{display:'flex',alignItems:'center',gap:5,marginLeft:10,cursor:'pointer',background:printMaskNames?'#fef3c7':'#f1f5f9',border:printMaskNames?'1px solid #f59e0b':'1px solid #cbd5e1',borderRadius:8,padding:'3px 10px'}}>
+                    <input type="checkbox" checked={printMaskNames} onChange={e=>setPrintMaskNames(e.target.checked)} style={{width:14,height:14}}/>
+                    <span style={{fontSize:11,fontWeight:'bold',color:printMaskNames?'#b45309':'#475569',whiteSpace:'nowrap'}}>氏名マスキング</span>
+                  </label>
                   <div style={{color:'white',fontWeight:'bold',fontSize:15,marginTop:2}}>{printPreviewContent.title}</div>
                 </div>
                 <div style={{display:'flex',gap:10,alignItems:'center'}}>
@@ -38198,7 +38225,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         const KK_CSS = `.kk-sheet table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%}
             .kk-sheet td,.kk-sheet th{word-break:break-word;overflow-wrap:anywhere}
             .kk-sheet *{max-width:100%}
-            .kk-sheet{page-break-after:always;break-after:page}
+            .kk-sheet{page-break-after:always;break-after:page;zoom:0.96}
             .kk-sheet:last-child{page-break-after:auto;break-after:auto}`;
         const sheet = (pr) => (
         <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'6mm 7mm 4mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif',lineHeight:1.3}}>
