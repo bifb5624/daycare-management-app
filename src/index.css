@@ -43,3 +43,14 @@ html, body {
 .overflow-auto, .overflow-y-auto, .overflow-x-auto, .overflow-scroll {
   overscroll-behavior: contain;
 }
+
+/* ★ Windowsで文字が細く・薄く見える対策 (2026-08-19)
+   フォント未指定だとWindowsは游ゴシック(標準ウェイトが極端に細い)で描画されるため、
+   本文をメイリオ優先に統一する (Macは従来どおりヒラギノが先に当たるので見た目は変わらない)。 */
+html, body, #root {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+    "Segoe UI", Meiryo, "Yu Gothic Medium", "Yu Gothic", sans-serif;
+}
+
+/* ★ 薄いグレー(slate-400)の説明文・補足がWindowsで読めないため一段濃く (slate-500相当) */
+.text-slate-400 { color: #64748b !important; }

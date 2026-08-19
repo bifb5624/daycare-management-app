@@ -1117,7 +1117,7 @@ function SyncDebugPanel() {
       fontFamily:'ui-monospace,Menlo,monospace',boxShadow:'0 8px 30px rgba(0,0,0,0.5)'}}>
       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
         <b style={{fontSize:12}}>同期ログ</b>
-        <span style={{color:'#94a3b8'}}>#{log[0]?.n ?? 0} / 端末時刻 {new Date().toLocaleTimeString('ja-JP')}</span>
+        <span style={{color:'#64748b'}}>#{log[0]?.n ?? 0} / 端末時刻 {new Date().toLocaleTimeString('ja-JP')}</span>
         <button onClick={()=>{ clearSyncLog(); setLog([]); }}
           style={{marginLeft:'auto',background:'#334155',color:'#e2e8f0',border:'none',borderRadius:6,padding:'3px 8px',fontSize:11,cursor:'pointer'}}>消去</button>
       </div>
@@ -10245,7 +10245,7 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
         style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10,
           cursor:'grab', padding:'4px 4px', borderRadius:8, background:'#f8fafc',
           borderBottom:'1px solid #e2e8f0',gap:6}}>
-        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',letterSpacing:1,flexShrink:0}}>≡</span>
+        <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',letterSpacing:1,flexShrink:0}}>≡</span>
         <div style={{display:'flex',gap:2,flexShrink:0}}>
           <button onMouseDown={e=>e.stopPropagation()} onClick={()=>setScale(s=>Math.max(0.7,+(s-0.1).toFixed(2)))}
             title="縮小"
@@ -10454,7 +10454,7 @@ function SignupCompleteView({ context, appData, onSave }) {
   };
   if (form.done) {
     return (
-      <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#10b981,#059669)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif'}}>
+      <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#10b981,#059669)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif'}}>
         <div style={{background:'white',borderRadius:24,padding:'40px 32px',maxWidth:420,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.25)',textAlign:'center'}}>
           <div style={{fontSize:48,marginBottom:16}}>✓</div>
           <h1 style={{fontSize:20,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>登録が完了しました</h1>
@@ -10470,7 +10470,7 @@ function SignupCompleteView({ context, appData, onSave }) {
     );
   }
   return (
-    <div style={{minHeight:'100vh',background:isFamily?'linear-gradient(135deg,#6366f1,#8b5cf6)':'linear-gradient(135deg,#1e3a5f,#2d6a9f)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif'}}>
+    <div style={{minHeight:'100vh',background:isFamily?'linear-gradient(135deg,#6366f1,#8b5cf6)':'linear-gradient(135deg,#1e3a5f,#2d6a9f)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif'}}>
       <form onSubmit={handleSubmit} style={{background:'white',borderRadius:24,padding:32,maxWidth:440,width:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
         <div style={{textAlign:'center',marginBottom:22}}>
           <div style={{fontSize:11,color:'#64748b',fontWeight:'bold',letterSpacing:1}}>{facility.name||'デイケアサービス'}</div>
@@ -10492,7 +10492,7 @@ function SignupCompleteView({ context, appData, onSave }) {
                 <input type="date" value={form.birthDate} onChange={e=>setForm(f=>({...f,birthDate:e.target.value}))}
                   style={{width:'100%',padding:'8px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
-              <div style={{textAlign:'center',fontSize:10,color:'#94a3b8',margin:'4px 0'}}>— または —</div>
+              <div style={{textAlign:'center',fontSize:10,color:'#64748b',margin:'4px 0'}}>— または —</div>
               {/* 方法2: 招待コード (7桁: 6桁ID + チェックデジット1桁) */}
               <div style={{background:'white',padding:10,borderRadius:8}}>
                 <div style={{fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:6}}>方法2: 事業所から発行された招待コード (7桁)</div>
@@ -10501,9 +10501,9 @@ function SignupCompleteView({ context, appData, onSave }) {
                 {form.inviteCode.length === 7 && !verifyInviteCode(form.inviteCode) && (
                   <div style={{fontSize:10,color:'#dc2626',marginTop:4,fontWeight:'bold'}}>⚠ コードの形式が正しくありません (チェックデジット不一致)</div>
                 )}
-                <div style={{fontSize:10,color:'#94a3b8',marginTop:4}}>※ 7桁目は誤入力検出用のチェックデジットです</div>
+                <div style={{fontSize:10,color:'#64748b',marginTop:4}}>※ 7桁目は誤入力検出用のチェックデジットです</div>
               </div>
-              <div style={{fontSize:10,color:'#94a3b8',marginTop:8,lineHeight:1.5}}>
+              <div style={{fontSize:10,color:'#64748b',marginTop:8,lineHeight:1.5}}>
                 ※ 入力された情報が事業所のご利用者と一致した場合のみ登録できます<br/>
                 ※ 不明な場合は事業所までお問い合わせください
               </div>
@@ -10591,7 +10591,7 @@ function SignupCompleteView({ context, appData, onSave }) {
             登録する
           </button>
         </div>
-        <div style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:14,lineHeight:1.6,background:'#fef3c7',padding:10,borderRadius:8,border:'1px solid #fbbf24'}}>
+        <div style={{fontSize:10,color:'#64748b',textAlign:'center',marginTop:14,lineHeight:1.6,background:'#fef3c7',padding:10,borderRadius:8,border:'1px solid #fbbf24'}}>
           ※ 同意事項: ご登録いただいた情報は事業所内でのみ利用し、第三者への提供はいたしません。
         </div>
       </form>
@@ -10638,7 +10638,7 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
                     <Search size={14} color="#94a3b8"/>
                     <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
                       placeholder="氏名・フリガナで検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
-                    {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
+                    {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#64748b',lineHeight:1}}><X size={13}/></button>}
                   </div>
                 </div>
                 <div style={{overflowY:'auto',flex:1}}>
@@ -10649,12 +10649,12 @@ function FamilyPreviewTab({ patients, appData, onSave, previewPid, setPreviewPid
                       {p.id===previewPid && <span style={{width:6,height:6,borderRadius:'50%',background:'#7c3aed',flexShrink:0}}/>}
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:'bold'}}>{p.name}</div>
-                        {p.kana && <div style={{fontSize:10,color:'#94a3b8',lineHeight:1.2}}>{p.kana}</div>}
+                        {p.kana && <div style={{fontSize:10,color:'#64748b',lineHeight:1.2}}>{p.kana}</div>}
                       </div>
                     </button>
                   ))}
                   {filteredPatients.length === 0 && (
-                    <div style={{padding:'16px',textAlign:'center',fontSize:12,color:'#94a3b8'}}>該当する利用者が見つかりません</div>
+                    <div style={{padding:'16px',textAlign:'center',fontSize:12,color:'#64748b'}}>該当する利用者が見つかりません</div>
                   )}
                 </div>
               </div>
@@ -10892,7 +10892,7 @@ function RosterView({ appData, onSave }) {
           {ROSTER_SHIFTS.map(s=><span key={s.code} style={{fontSize:11,fontWeight:'bold',color:s.color,background:s.bg,border:`1px solid ${s.color}44`,borderRadius:6,padding:'2px 8px'}}>{s.code} {s.label}</span>)}
         </div>
         {staffRows.length===0 ? (
-          <div style={{background:'white',borderRadius:12,border:'1px solid #e2e8f0',padding:32,textAlign:'center',color:'#94a3b8',fontWeight:'bold'}}>職員が登録されていません。各種設定 → 日誌 の「担当職員」またはスタッフ切替から職員を登録してください。</div>
+          <div style={{background:'white',borderRadius:12,border:'1px solid #e2e8f0',padding:32,textAlign:'center',color:'#64748b',fontWeight:'bold'}}>職員が登録されていません。各種設定 → 日誌 の「担当職員」またはスタッフ切替から職員を登録してください。</div>
         ) : (
         <div style={{background:'white',borderRadius:12,border:'1px solid #e2e8f0',overflow:'auto',boxShadow:'0 1px 6px rgba(0,0,0,0.06)'}}>
           <table style={{borderCollapse:'separate',borderSpacing:0,minWidth:'max-content'}}>
@@ -10908,7 +10908,7 @@ function RosterView({ appData, onSave }) {
                 <tr key={s.key} style={{background: ri%2? '#fbfcfe':'white'}}>
                   <td style={{position:'sticky',left:0,zIndex:1,background:ri%2?'#fbfcfe':'white',borderRight:'2px solid #cbd5e1',borderBottom:'1px solid #eef2f6',padding:'4px 10px',minWidth:130}}>
                     <div style={{fontSize:12,fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap'}}>{s.name}</div>
-                    {s.role && <div style={{fontSize:9,color:'#94a3b8'}}>{s.role}</div>}
+                    {s.role && <div style={{fontSize:9,color:'#64748b'}}>{s.role}</div>}
                   </td>
                   {days.map(d=>{ const c=cellVal(s.key,d); const m=_rosterMeta(c); const w=dowOf(d); return (
                     <td key={d} onClick={()=>{ setPicker({staffKey:s.key, day:d}); setCustomText(''); }} style={{borderBottom:'1px solid #eef2f6',borderRight:'1px solid #f1f5f9',padding:0,textAlign:'center',cursor:'pointer',background: m? m.bg : (w===0?'#fff5f5':w===6?'#f5f9ff':'transparent')}}>
@@ -10985,7 +10985,7 @@ const DashTile = ({icon, label, sub, color, view, navigateTo}) => (
     onMouseLeave={e=>{e.currentTarget.style.boxShadow='none';e.currentTarget.style.transform='none';}}>
     <div style={{width:44,height:44,borderRadius:12,background:color,display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}>{icon}</div>
     <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{label}</div>
-    {sub && <div style={{fontSize:10,color:'#94a3b8'}}>{sub}</div>}
+    {sub && <div style={{fontSize:10,color:'#64748b'}}>{sub}</div>}
   </button>
 );
 function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes, isNoticeRead, markNoticeRead }) {
@@ -11058,12 +11058,12 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                 <span style={{fontSize:13,fontWeight:'bold',color:'#4338ca',whiteSpace:'nowrap'}}>つむぎ運営からのお知らせ</span>
                 {_unread>0
                   ? <span style={{fontSize:11,fontWeight:'bold',color:'white',background:'#dc2626',borderRadius:999,padding:'2px 10px',whiteSpace:'nowrap'}}>新着 {_unread}件</span>
-                  : <span style={{fontSize:10,color:'#94a3b8',whiteSpace:'nowrap'}}>新着なし</span>}
-                <span style={{marginLeft:'auto',fontSize:11,color:'#94a3b8',fontWeight:'bold',whiteSpace:'nowrap'}}>{devOpen?'閉じる ▲':'開く ▼'}</span>
+                  : <span style={{fontSize:10,color:'#64748b',whiteSpace:'nowrap'}}>新着なし</span>}
+                <span style={{marginLeft:'auto',fontSize:11,color:'#64748b',fontWeight:'bold',whiteSpace:'nowrap'}}>{devOpen?'閉じる ▲':'開く ▼'}</span>
               </button>
               {devOpen && (<>
               <div style={{display:'flex',alignItems:'center',gap:6,margin:'10px 0 8px'}}>
-                <span style={{fontSize:10,color:'#94a3b8'}}>アップデート・メンテナンス情報</span>
+                <span style={{fontSize:10,color:'#64748b'}}>アップデート・メンテナンス情報</span>
                 {/* ★ まとめて既読にする(未読が残っているときだけ表示) */}
                 {all.some(x => !isRead(x.id)) && (
                   <button onClick={()=>{ all.forEach(x => { if (!isRead(x.id)) markRead(x.id); }); }}
@@ -11080,9 +11080,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                     title={a.title}
                     style={{textAlign:'left',cursor:'pointer',width:'100%',border:`1px solid ${_r?'#e2e8f0':a.m.color+'66'}`,background:_r?'white':a.m.bg,borderRadius:8,padding:'5px 10px',display:'flex',alignItems:'center',gap:8,minWidth:0}}>
                     <span style={{fontSize:10,fontWeight:'bold',color:'white',background:_r?'#94a3b8':a.m.color,borderRadius:5,padding:'2px 7px',whiteSpace:'nowrap',flexShrink:0}}>{a.m.emoji} {a.m.label}</span>
-                    {a.date && <span style={{fontSize:10,color:'#94a3b8',whiteSpace:'nowrap',flexShrink:0}}>{a.date}</span>}
+                    {a.date && <span style={{fontSize:10,color:'#64748b',whiteSpace:'nowrap',flexShrink:0}}>{a.date}</span>}
                     <span style={{fontSize:12.5,fontWeight:'bold',color:_r?'#334155':a.m.color,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1,minWidth:0}}>{a.title}</span>
-                    <span style={{fontSize:9,color:'#94a3b8',flexShrink:0}}>{_r?'既読':'詳細 ›'}</span>
+                    <span style={{fontSize:9,color:'#64748b',flexShrink:0}}>{_r?'既読':'詳細 ›'}</span>
                   </button>
                 ); })}
               </div>
@@ -11104,7 +11104,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                 <button onClick={()=>navigateTo('schedule')} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'#eef2ff',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>カレンダー →</button>
               </span>
             </div>
-            {todayEvents.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>今日の予定はありません。</div> : (
+            {todayEvents.length===0 ? <div style={{fontSize:13,color:'#64748b'}}>今日の予定はありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {todayEvents.map(e=>{
                   const pt = e.patientId ? (appData.patients||[]).find(x=>x.id===e.patientId) : null;
@@ -11117,7 +11117,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                       <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                         <span>{e.title}</span>
                         {pt && <span style={{fontSize:10,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:4,padding:'0 5px'}}>{pt.name} 様</span>}
-                        {_r && <span style={{fontSize:9,color:'#94a3b8',marginLeft:'auto'}}>既読</span>}
+                        {_r && <span style={{fontSize:9,color:'#64748b',marginLeft:'auto'}}>既読</span>}
                       </div>
                       {e.note && <div style={{fontSize:11,color:'#64748b',whiteSpace:'pre-wrap',marginTop:2,lineHeight:1.5}}>{e.note}</div>}
                     </div>
@@ -11145,7 +11145,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   )}
                 </div>
                 {ext.length===0 ? (
-                  <div style={{fontSize:12,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
+                  <div style={{fontSize:12,color:'#64748b',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
                 ) : (<>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
                   {_extShown.map(u=>{ const _r=isRead(u.id); const _c=u.by==='caremanager'?'#0891b2':'#7c3aed'; return (
@@ -11154,7 +11154,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                         <span style={{fontSize:9,fontWeight:'bold',color:'white',background:_r?'#94a3b8':_c,borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>利用者：{u._pname} 様</span>
                         <span style={{fontSize:10,color:'#b45309',marginLeft:'auto'}}>{_fmt(u.at)}</span>
-                        {_r && <span style={{fontSize:9,color:'#94a3b8'}}>既読</span>}
+                        {_r && <span style={{fontSize:9,color:'#64748b'}}>既読</span>}
                       </div>
                       <div style={{fontSize:12,color:_r?'#94a3b8':'#78350f',fontWeight:'bold'}}>更新内容：{(u.items||[]).join('・')||'更新'}</div>
                       {u.byName?<div style={{fontSize:11,color:_r?'#b0bccb':'#a16207',marginTop:1}}>更新者：{u.byName}</div>:null}
@@ -11172,7 +11172,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               <span style={{display:'flex',alignItems:'center',gap:6}}>お知らせ</span>
               <button onClick={()=>navigateTo('family_admin')} style={{fontSize:11,fontWeight:'bold',color:'#0369a1',background:'#e0f2fe',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>投稿管理 →</button>
             </div>
-            {news.length===0 ? <div style={{fontSize:13,color:'#94a3b8'}}>お知らせはまだありません。</div> : (
+            {news.length===0 ? <div style={{fontSize:13,color:'#64748b'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
                 {_pageSlice(news, newsPage, 5).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
@@ -11181,7 +11181,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:(a.postedAt?String(a.postedAt).slice(0,10):(a.date||'')),title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
                       <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
-                      <span style={{fontSize:10,color:'#94a3b8'}}>{a.postedAt ? String(a.postedAt).slice(0,10) : (a.date||'')}</span>
+                      <span style={{fontSize:10,color:'#64748b'}}>{a.postedAt ? String(a.postedAt).slice(0,10) : (a.date||'')}</span>
                     </div>
                     <div style={{fontSize:13,fontWeight:'bold',color:_c}}>{a.title||'(写真)'}</div>
                     {a.body && <div style={{fontSize:11,color:'#475569',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
@@ -11189,7 +11189,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                     {Array.isArray(a.photos) && a.photos.length>0 && (
                       <div style={{display:'flex',gap:4,marginTop:4,alignItems:'center'}}>
                         {a.photos.slice(0,3).map((ph,i)=>(<StoredImage key={i} file={ph} style={{width:44,height:44,objectFit:'cover',borderRadius:6,border:'1px solid #e2e8f0'}}/>))}
-                        {a.photos.length>3 && <span style={{fontSize:10,color:'#94a3b8'}}>+{a.photos.length-3}枚</span>}
+                        {a.photos.length>3 && <span style={{fontSize:10,color:'#64748b'}}>+{a.photos.length-3}枚</span>}
                       </div>
                     )}
                   </button>
@@ -11240,7 +11240,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,padding:20,width:460,maxWidth:'96vw',maxHeight:'85vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
               {noticeDetail.badge && <span style={{fontSize:11,fontWeight:'bold',color:'white',background:noticeDetail.badgeColor||'#64748b',borderRadius:6,padding:'2px 9px'}}>{noticeDetail.badge}</span>}
-              {noticeDetail.date && <span style={{fontSize:11,color:'#94a3b8'}}>{noticeDetail.date}</span>}
+              {noticeDetail.date && <span style={{fontSize:11,color:'#64748b'}}>{noticeDetail.date}</span>}
             </div>
             <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10,lineHeight:1.4}}>{noticeDetail.title}</div>
             {noticeDetail.body && <div style={{fontSize:13,color:'#334155',whiteSpace:'pre-wrap',lineHeight:1.75}}>{noticeDetail.body}</div>}
@@ -11404,7 +11404,7 @@ function ScheduleView({ appData, onSave }) {
           <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><Clock size={16}/>今日の予定（{today.getMonth()+1}月{today.getDate()}日）</div>
             {todayEvents.length===0 ? (
-              <div style={{fontSize:13,color:'#94a3b8'}}>今日の予定はありません。</div>
+              <div style={{fontSize:13,color:'#64748b'}}>今日の予定はありません。</div>
             ) : (
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {todayEvents.map(e=>(
@@ -11464,7 +11464,7 @@ function ScheduleView({ appData, onSave }) {
                         <div style={{display:'flex',alignItems:'center',gap:1}}>
                           {bdays.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:dstr,birthdays:bdays,expiries:[]});}} title="お誕生日" style={{fontSize:12,cursor:'pointer',lineHeight:1}}>👑</span>}
                           {exps.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:dstr,birthdays:[],expiries:exps});}} title="要注意（認定満了など）" style={{fontSize:11,cursor:'pointer',lineHeight:1}}>⚠️</span>}
-                          {closed && <span style={{fontSize:8,fontWeight:'bold',color:'#94a3b8'}}>定休</span>}
+                          {closed && <span style={{fontSize:8,fontWeight:'bold',color:'#64748b'}}>定休</span>}
                         </div>
                       </div>
                       {holi && holidayName(dstr) && <span style={{fontSize:8,fontWeight:'bold',color:'#ef4444',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{holidayName(dstr)}</span>}
@@ -11497,12 +11497,12 @@ function ScheduleView({ appData, onSave }) {
                           <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:2,minHeight:14}}>
                             {bdays.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:ds,birthdays:bdays,expiries:[]});}} title="お誕生日" style={{fontSize:12,cursor:'pointer'}}>👑</span>}
                             {exps.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:ds,birthdays:[],expiries:exps});}} title="要注意" style={{fontSize:11,cursor:'pointer'}}>⚠️</span>}
-                            {closed && <span style={{fontSize:8,color:'#94a3b8',fontWeight:'bold'}}>定休</span>}
+                            {closed && <span style={{fontSize:8,color:'#64748b',fontWeight:'bold'}}>定休</span>}
                           </div>
                         </div>); })}
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:cols,borderBottom:'1px solid #e2e8f0'}}>
-                      <div style={{fontSize:8,color:'#94a3b8',textAlign:'right',padding:'3px 4px'}}>終日</div>
+                      <div style={{fontSize:8,color:'#64748b',textAlign:'right',padding:'3px 4px'}}>終日</div>
                       {wd.map(ds=>{ const alld=evOf(ds).filter(e=>!e.start); return (
                         <div key={ds} onClick={()=>openNew(ds)} {...dropCell(ds)} style={{minHeight:20,padding:2,borderLeft:'1px solid #f1f5f9',cursor:'pointer',display:'flex',flexDirection:'column',gap:2}}>
                           {alld.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();editEvent(e);}} title={e.title} style={{fontSize:9,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:3,padding:'1px 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>; })}
@@ -11510,7 +11510,7 @@ function ScheduleView({ appData, onSave }) {
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:cols}}>
                       <div style={{position:'relative',height:gridH}}>
-                        {Array.from({length:HEnd-HStart},(_,h)=>(<div key={h} style={{position:'absolute',top:h*hourH-6,right:3,fontSize:9,color:'#94a3b8',fontWeight:'bold'}}>{HStart+h}:00</div>))}
+                        {Array.from({length:HEnd-HStart},(_,h)=>(<div key={h} style={{position:'absolute',top:h*hourH-6,right:3,fontSize:9,color:'#64748b',fontWeight:'bold'}}>{HStart+h}:00</div>))}
                       </div>
                       {wd.map(ds=>{ const timed=evOf(ds).filter(e=>e.start); const closed=isClosedDate(ds); return (
                         <div key={ds} {...dropCell(ds)} onClick={(ev)=>{ const rect=ev.currentTarget.getBoundingClientRect(); const y=ev.clientY-rect.top; let mins=HStart*60+Math.round((y/hourH*60)/15)*15; mins=Math.max(HStart*60,Math.min(HEnd*60-15,mins)); const hh=String(Math.floor(mins/60)).padStart(2,'0'),mm=String(mins%60).padStart(2,'0'); setModal({date:ds,start:`${hh}:${mm}`,end:addMin(`${hh}:${mm}`,60),title:'',note:'',color:COLORS[0]}); }}
@@ -11524,7 +11524,7 @@ function ScheduleView({ appData, onSave }) {
                             </div>); })}
                         </div>); })}
                     </div>
-                    <div style={{fontSize:10,color:'#94a3b8',marginTop:6}}>※ 空いている時間帯をクリックするとその時刻で予定を追加できます。予定はドラッグで別の日へ移動できます（繰り返し予定を除く）。</div>
+                    <div style={{fontSize:10,color:'#64748b',marginTop:6}}>※ 空いている時間帯をクリックするとその時刻で予定を追加できます。予定はドラッグで別の日へ移動できます（繰り返し予定を除く）。</div>
                   </div>
                 );
               })()}
@@ -11536,7 +11536,7 @@ function ScheduleView({ appData, onSave }) {
                 <button onClick={()=>openNew(selDay)} style={{background:'#6366f1',color:'white',border:'none',borderRadius:8,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:4}}>追加</button>
               </div>
               {selEvents.length===0 ? (
-                <div style={{fontSize:13,color:'#94a3b8',padding:'12px 0'}}>この日の予定はありません。「追加」から登録できます。</div>
+                <div style={{fontSize:13,color:'#64748b',padding:'12px 0'}}>この日の予定はありません。「追加」から登録できます。</div>
               ) : (
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
                   {selEvents.map(e=>(
@@ -11576,7 +11576,7 @@ function ScheduleView({ appData, onSave }) {
             </div>
             {/* ★ 所要時間で終了を自動セット (開始時刻が必要) */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:12,marginTop:-4}}>
-              <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8'}}>終了を自動:</span>
+              <span style={{fontSize:11,fontWeight:'bold',color:'#64748b'}}>終了を自動:</span>
               {[['30分',30],['1時間',60],['1時間半',90],['2時間',120]].map(([lbl,mins])=>(
                 <button key={mins} type="button" disabled={!modal.start} onClick={()=>setModal(m=>({...m,end:addMin(m.start,mins)}))}
                   style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #c7d2fe',background:modal.start?'#eef2ff':'#f1f5f9',color:modal.start?'#4338ca':'#cbd5e1',cursor:modal.start?'pointer':'default'}}>{lbl}</button>
@@ -11632,7 +11632,7 @@ function ScheduleView({ appData, onSave }) {
                 </div>
               </div>
             )}
-            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#94a3b8',marginBottom:12}}>例:「2」＋「週ごと」で隔週。繰り返しの<b>終了・削除</b>は、画面右上の <b>🔁 繰り返し設定</b> から「指定日以降を削除」で行えます（編集はシリーズ全体に反映）。</div>}
+            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>例:「2」＋「週ごと」で隔週。繰り返しの<b>終了・削除</b>は、画面右上の <b>🔁 繰り返し設定</b> から「指定日以降を削除」で行えます（編集はシリーズ全体に反映）。</div>}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色・分類（押すとタイトルに入ります）</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
               {colorLabels.map((cl,i)=>{
@@ -11660,7 +11660,7 @@ function ScheduleView({ appData, onSave }) {
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:460,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
               <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>色ラベル（分類）の編集</div>
-              <button onClick={()=>setLabelEditorOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#94a3b8'}}><X size={18}/></button>
+              <button onClick={()=>setLabelEditorOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
             </div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>予定入力で色を押すと、その色と名前がタイトルに入ります。<b>色（丸を押す）</b>と<b>名前</b>を自由に設定でき、<b>最大15件</b>まで追加できます。</div>
             <div style={{display:'grid',gap:8}}>
@@ -11677,7 +11677,7 @@ function ScheduleView({ appData, onSave }) {
             </div>
             {colorLabels.length<15 ? (
               <button onClick={()=>saveColorLabels([...colorLabels,{color:COLORS[colorLabels.length%COLORS.length],label:''}])} style={{marginTop:10,background:'#eef2ff',border:'1px dashed #a5b4fc',color:'#4338ca',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',width:'100%'}}>＋ ラベルを追加（{colorLabels.length}/15）</button>
-            ) : <div style={{marginTop:10,fontSize:11,color:'#94a3b8',textAlign:'center'}}>上限の15件です。</div>}
+            ) : <div style={{marginTop:10,fontSize:11,color:'#64748b',textAlign:'center'}}>上限の15件です。</div>}
             <div style={{textAlign:'right',marginTop:14}}>
               <button onClick={()=>setLabelEditorOpen(false)} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>完了</button>
             </div>
@@ -11689,12 +11689,12 @@ function ScheduleView({ appData, onSave }) {
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
               <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>🔁 繰り返し設定の管理</div>
-              <button onClick={()=>setRepeatMgrOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#94a3b8'}}><X size={18}/></button>
+              <button onClick={()=>setRepeatMgrOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
             </div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>設定されている繰り返し予定の一覧です。<b>種類ごと</b>に分かれています。「すべて削除」または「<b>指定日</b>を選んで<b>その日以降を削除</b>」できます。</div>
             {(() => {
               const reps = events.filter(e => e.repeat && e.repeat !== 'none');
-              if (!reps.length) return <div style={{fontSize:13,color:'#94a3b8',padding:'16px 0',textAlign:'center'}}>繰り返し予定はありません。</div>;
+              if (!reps.length) return <div style={{fontSize:13,color:'#64748b',padding:'16px 0',textAlign:'center'}}>繰り返し予定はありません。</div>;
               const groups = [['daily','毎日'],['weekly','毎週'],['monthly','毎月（同じ日）'],['monthly_nth','毎月（第◯曜日）'],['yearly','毎年']];
               return groups.map(([key,label]) => {
                 const list = reps.filter(e => e.repeat === key).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
@@ -11710,7 +11710,7 @@ function ScheduleView({ appData, onSave }) {
                             <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}</span>
                             {patName(e) && <span style={{fontSize:12,color:'#6366f1',fontWeight:'bold'}}>／{patName(e)} 様</span>}
                           </div>
-                          <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>{repeatSummary(e)}{e.start?`　${timeLabel(e)}`:''}　<span style={{color:'#94a3b8'}}>開始 {e.date}{e.repeatUntil?`／${e.repeatUntil}まで`:''}</span></div>
+                          <div style={{fontSize:11,color:'#64748b',marginBottom:8}}>{repeatSummary(e)}{e.start?`　${timeLabel(e)}`:''}　<span style={{color:'#64748b'}}>開始 {e.date}{e.repeatUntil?`／${e.repeatUntil}まで`:''}</span></div>
                           <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                             <input type="date" value={mgrDates[e.id]||''} onChange={ev=>setMgrDates(d=>({...d,[e.id]:ev.target.value}))} style={{padding:'5px 8px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:12,outline:'none'}}/>
                             <button onClick={()=>{ const fd=mgrDates[e.id]; if(!fd){alert('削除を始める日付を選んでください');return;} stopSeriesFrom(e, fd); setMgrDates(d=>{const n={...d};delete n[e.id];return n;}); }} style={{fontSize:11,fontWeight:'bold',padding:'6px 10px',borderRadius:8,border:'none',background:'#fef3c7',color:'#b45309',cursor:'pointer'}}>この日以降を削除</button>
@@ -12455,7 +12455,7 @@ class ViewErrorBoundary extends React.Component {
   render(){
     if (this.state.err) {
       return (
-        <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f4f8ed',padding:24,fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif'}}>
+        <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f4f8ed',padding:24,fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif'}}>
           <div style={{background:'white',padding:'32px 28px',borderRadius:20,boxShadow:'0 10px 40px rgba(0,0,0,0.08)',textAlign:'center',maxWidth:440,width:'100%'}}>
             <div style={{fontSize:44,marginBottom:12}}>😢</div>
             <h1 style={{fontSize:17,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>表示中に問題が発生しました</h1>
@@ -12806,7 +12806,7 @@ function FamilyView() {
             <div style={{fontSize:11,color:'#5e8030',marginTop:4}}>下の<b>架空（見本）の利用者</b>で、見たい画面のボタンを押してください（実在の利用者情報は表示しません）</div>
           </div>
           {previewList.length === 0 ? (
-            <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'20px 0'}}>利用者が登録されていません</div>
+            <div style={{textAlign:'center',color:'#64748b',fontSize:13,padding:'20px 0'}}>利用者が登録されていません</div>
           ) : (
             <div style={{display:'grid',gap:8,maxHeight:'60vh',overflowY:'auto'}}>
               {previewList.map(p => (
@@ -12877,7 +12877,7 @@ function FamilyView() {
               </button>
             ))}
           </div>
-          <div style={{textAlign:'center',marginTop:18,fontSize:11,color:'#94a3b8'}}>
+          <div style={{textAlign:'center',marginTop:18,fontSize:11,color:'#64748b'}}>
             ログイン後も画面右上から切替できます
           </div>
         </div>
@@ -13000,7 +13000,7 @@ function FamilyView() {
       setAuthAccId(String(acc.id));
     };
     return (
-      <div style={{minHeight:'100vh',background:'#f4f8ed',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif'}}>
+      <div style={{minHeight:'100vh',background:'#f4f8ed',display:'flex',alignItems:'center',justifyContent:'center',padding:16,fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif'}}>
         <div style={{width:'100%',maxWidth:380}}>
           {/* 紡ぎ ロゴ v23: 四つ葉クローバー + 丸ゴ + 緑 */}
           <div style={{textAlign:'center',marginBottom:20}}>
@@ -13016,7 +13016,7 @@ function FamilyView() {
                 <div style={{fontSize:12,color:'#475569',lineHeight:1.8,marginBottom:18}}>
                   この招待リンクはすでに登録に使われています。<br/>
                   登録済みの<b>ID・パスワード</b>でログインしてください。<br/>
-                  <span style={{fontSize:11,color:'#94a3b8'}}>（ID・パスワードがご不明な場合は事業所までお問い合わせください）</span>
+                  <span style={{fontSize:11,color:'#64748b'}}>（ID・パスワードがご不明な場合は事業所までお問い合わせください）</span>
                 </div>
                 <button onClick={()=>{ _stripInviteUrl(); setSignupForm(f=>({...f, error:''})); setMode('login'); }}
                   style={{width:'100%',padding:'13px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:'pointer'}}>
@@ -13028,7 +13028,7 @@ function FamilyView() {
             <div style={{background:'white',borderRadius:24,padding:28,boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
               <div style={{textAlign:'center',marginBottom:18}}>
                 <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b'}}>{signupForm.ecRelation==='ケアマネージャー'?'新規ご関係者の登録':'新規ご家族の登録'}</div>
-                <div style={{fontSize:11,color:'#94a3b8',marginTop:4,lineHeight:1.7}}>
+                <div style={{fontSize:11,color:'#64748b',marginTop:4,lineHeight:1.7}}>
                   事業所から伝えられた招待コードを入力してください
                 </div>
               </div>
@@ -13360,7 +13360,7 @@ function FamilyView() {
                     <input type="email" value={signupForm.email} onChange={e=>setSignupForm(f=>({...f,email:toHalfWidth(e.target.value),error:''}))}
                       placeholder="例: yamada@example.com"
                       style={{width:'100%',padding:'12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
-                    <div style={{fontSize:10,color:'#94a3b8',marginTop:4}}>※ 緊急連絡先のメールアドレスとしても自動登録されます</div>
+                    <div style={{fontSize:10,color:'#64748b',marginTop:4}}>※ 緊急連絡先のメールアドレスとしても自動登録されます</div>
                   </div>
                   <div style={{marginBottom:12}}>
                     <label style={{display:'block',fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:6}}>ログインID</label>
@@ -13468,7 +13468,7 @@ function FamilyView() {
                     {signupForm.ecRelation==='ケアマネージャー' ? (
                       // ★ ケアマネは「直通・個人」の1欄のみ(携帯欄なし)。 直通が無い場合もあるので任意。
                       <div style={{marginBottom:8}}>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号（直通・個人） <span style={{color:'#94a3b8',fontWeight:'normal'}}>(任意・ハイフン不要)</span></label>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号（直通・個人） <span style={{color:'#64748b',fontWeight:'normal'}}>(任意・ハイフン不要)</span></label>
                         <input type="tel" inputMode="numeric" value={signupForm.ecPhone} onChange={e=>{const v=toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,11); setSignupForm(f=>({...f,ecPhone:v,error:''}));}}
                           placeholder="09012345678"
                           style={{width:'100%',maxWidth:240,padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',letterSpacing:1}}/>
@@ -13477,13 +13477,13 @@ function FamilyView() {
                     ) : (<>
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
                       <div>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>固定電話番号 <span style={{color:'#94a3b8',fontWeight:'normal'}}>(ハイフン不要)</span></label>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>固定電話番号 <span style={{color:'#64748b',fontWeight:'normal'}}>(ハイフン不要)</span></label>
                         <input type="tel" inputMode="numeric" value={signupForm.ecPhone} onChange={e=>{const v=toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,11); setSignupForm(f=>({...f,ecPhone:v,error:''}));}}
                           placeholder="0312345678"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',letterSpacing:1}}/>
                       </div>
                       <div>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>携帯電話番号 <span style={{color:'#94a3b8',fontWeight:'normal'}}>(ハイフン不要)</span></label>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>携帯電話番号 <span style={{color:'#64748b',fontWeight:'normal'}}>(ハイフン不要)</span></label>
                         <input type="tel" inputMode="numeric" value={signupForm.ecMobile} onChange={e=>{const v=toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,11); setSignupForm(f=>({...f,ecMobile:v,error:''}));}}
                           placeholder="09012345678"
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',letterSpacing:1}}/>
@@ -13543,7 +13543,7 @@ function FamilyView() {
                   {/* その他関係者 (訪問看護 等): 事業所名・電話・FAX を自由記述 */}
                   {signupForm.ecRelation === 'その他関係者' && (
                     <div style={{background:'#f1f5f9',border:'1px solid #cbd5e1',borderRadius:12,padding:14,marginBottom:12}}>
-                      <div style={{fontSize:12,fontWeight:'bold',color:'#334155',marginBottom:6}}>ご所属の事業所情報 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(任意・自由記述)</span></div>
+                      <div style={{fontSize:12,fontWeight:'bold',color:'#334155',marginBottom:6}}>ご所属の事業所情報 <span style={{fontSize:10,color:'#64748b',fontWeight:'normal'}}>(任意・自由記述)</span></div>
                       <input value={signupForm.cmNewOffice.name} onChange={e=>setSignupForm(f=>({...f, cmNewOffice:{...f.cmNewOffice, name:e.target.value}, error:''}))}
                         placeholder="事業所名 (例: ○○訪問看護ステーション)"
                         style={{width:'100%',padding:'9px 11px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:6,background:'white'}}/>
@@ -13600,7 +13600,7 @@ function FamilyView() {
                   placeholder="••••••••"
                   style={{width:'100%',padding:'12px 40px 12px 14px',border:'1px solid #e2e8f0',borderRadius:12,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
                 <button type="button" onClick={()=>setLoginForm(f=>({...f,showPw:!f.showPw}))}
-                  style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:12,fontWeight:'bold',color:'#94a3b8'}}>
+                  style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',fontSize:12,fontWeight:'bold',color:'#64748b'}}>
                   {loginForm.showPw?'隠す':'表示'}
                 </button>
               </div>
@@ -13615,7 +13615,7 @@ function FamilyView() {
               style={{width:'100%',padding:'13px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:15,fontWeight:'bold',cursor:'pointer',marginTop:12,boxShadow:'0 4px 12px rgba(125,170,61,0.3)'}}>
               ログイン
             </button>
-            <p style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginTop:16,lineHeight:1.6}}>
+            <p style={{fontSize:10,color:'#64748b',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
@@ -14050,7 +14050,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   if (!patient) {
     // データ同期中の可能性が高いので、読込中表示 + 案内
     return (
-      <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f4f8ed',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',padding:24}}>
+      <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#f4f8ed',fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif',padding:24}}>
         <div style={{background:'white',padding:'40px 32px',borderRadius:24,boxShadow:'0 10px 40px rgba(0,0,0,0.08)',textAlign:'center',maxWidth:420,width:'100%'}}>
           <div style={{fontSize:48,marginBottom:16}}>⏳</div>
           <h1 style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>データを取得中...</h1>
@@ -14058,7 +14058,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             事業所からデータを取得しています。<br/>
             <strong style={{color:'#5e8030'}}>10〜20 秒</strong>ほどお待ちください。
           </p>
-          <div style={{fontSize:11,color:'#94a3b8',lineHeight:1.7,marginBottom:16,padding:14,background:'#f8fafc',borderRadius:10,textAlign:'left'}}>
+          <div style={{fontSize:11,color:'#64748b',lineHeight:1.7,marginBottom:16,padding:14,background:'#f8fafc',borderRadius:10,textAlign:'left'}}>
             <div style={{fontWeight:'bold',color:'#475569',marginBottom:6}}>表示されない場合:</div>
             ・事業所側でまだ利用者情報が登録されていない可能性があります<br/>
             ・1分以上お待ちいただいても出ない場合は事業所までお問い合わせください
@@ -14316,7 +14316,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   <div key={a.id} style={{background:'white',borderRadius:16,padding:'14px 18px',marginBottom:12,boxShadow:'0 2px 8px rgba(0,0,0,0.04)',border: isNew ? '2px solid #94c456' : '1px solid transparent'}}>
                     <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
                       <span style={{fontSize:9,fontWeight:'bold',padding:'2px 6px',borderRadius:4,background:kindStyle.bg,color:kindStyle.fg}}>{a._kind}</span>
-                      <span style={{fontSize:11,color:'#94a3b8'}}>{a.date}</span>
+                      <span style={{fontSize:11,color:'#64748b'}}>{a.date}</span>
                       {isNew && <span style={{fontSize:9,fontWeight:'bold',padding:'2px 6px',borderRadius:4,background:'#ef4444',color:'white'}}>NEW</span>}
                     </div>
                     {a.title && <div style={{fontSize:15,fontWeight:'bold',color:'#1e293b',marginBottom:4}}>{a.title}</div>}
@@ -14348,7 +14348,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               return (
                 <>
                   {merged.length === 0 ? (
-                    <div style={{background:'white',borderRadius:16,padding:'24px 20px',textAlign:'center',color:'#94a3b8',fontSize:13,boxShadow:'0 2px 8px rgba(0,0,0,0.04)'}}>お知らせはまだ投稿されていません</div>
+                    <div style={{background:'white',borderRadius:16,padding:'24px 20px',textAlign:'center',color:'#64748b',fontSize:13,boxShadow:'0 2px 8px rgba(0,0,0,0.04)'}}>お知らせはまだ投稿されていません</div>
                   ) : (
                     <>
                       {recent.map(renderCard)}
@@ -14356,7 +14356,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         <details key={y} style={{background:'white',borderRadius:16,padding:'12px 18px',marginBottom:12,boxShadow:'0 2px 8px rgba(0,0,0,0.04)'}}>
                           <summary style={{cursor:'pointer',fontSize:13,fontWeight:'bold',color:'#475569',listStyle:'none',display:'flex',alignItems:'center',justifyContent:'space-between',userSelect:'none'}}>
                             <span>{y}年のお知らせ</span>
-                            <span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8'}}>{archivedByYear[y].length}件 ▼</span>
+                            <span style={{fontSize:11,fontWeight:'normal',color:'#64748b'}}>{archivedByYear[y].length}件 ▼</span>
                           </summary>
                           {/* ★ I2: 年内の各お知らせは「件名のみ」表示 → タップで展開して本文・写真を表示 */}
                           <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:8}}>
@@ -14364,7 +14364,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                               <details key={a.id} style={{background:'#f8fafc',borderRadius:10,border:'1px solid #e2e8f0',overflow:'hidden'}}>
                                 <summary style={{cursor:'pointer',listStyle:'none',display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,padding:'9px 12px',userSelect:'none'}}>
                                   <span style={{fontSize:13,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{a.title || '(無題のお知らせ)'}</span>
-                                  <span style={{fontSize:11,color:'#94a3b8',whiteSpace:'nowrap',flexShrink:0}}>{a.date} ▼</span>
+                                  <span style={{fontSize:11,color:'#64748b',whiteSpace:'nowrap',flexShrink:0}}>{a.date} ▼</span>
                                 </summary>
                                 <div style={{padding:'0 4px 4px'}}>{renderCard(a)}</div>
                               </details>
@@ -14415,7 +14415,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       {/* ★ 不具合レポート (家族・関係者) */}
       <div style={{maxWidth:720,margin:'0 auto',padding:'0 16px 6px',display:'flex',justifyContent:'center'}}>
         <button onClick={()=>setFamReport({desc:'',sending:false,sent:false,err:''})}
-          style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'transparent',color:'#94a3b8',border:'1px solid #e2e8f0',borderRadius:10,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>
+          style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',background:'transparent',color:'#64748b',border:'1px solid #e2e8f0',borderRadius:10,fontSize:11,fontWeight:'bold',cursor:'pointer'}}>
           不具合・ご意見を運営に報告
         </button>
       </div>
@@ -14435,7 +14435,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           </div>
         </div>
       ); })()}
-      <div style={{textAlign:'center',padding:'14px 16px 32px',fontSize:10,color:'#94a3b8'}}>
+      <div style={{textAlign:'center',padding:'14px 16px 32px',fontSize:10,color:'#64748b'}}>
         {facility.name||''} {facility.phone?`／${facility.phone}`:''}<br/>
         このページは {patient.name} 様のご家族専用です
       </div>
@@ -14596,7 +14596,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   return (<>
                     {readOnlyFields.map(f => (
                       <div key={f.key}>
-                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label} <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(事業所側で管理)</span></label>
+                        <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:3}}>{f.label} <span style={{fontSize:10,color:'#64748b',fontWeight:'normal'}}>(事業所側で管理)</span></label>
                         <div style={{
                           width:'100%', padding:'9px 12px',
                           background:'#f8fafc', border:'1px solid #e2e8f0',
@@ -14775,7 +14775,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               {/* ★ ケアマネ閲覧時 (isCmAccount) のみ 所属事業所名 (関係性欄は廃止: 続柄と重複のため) */}
               {isCmAccount && (
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>所属事業所名 <span style={{fontSize:10,color:'#94a3b8',fontWeight:'normal'}}>(ケアマネ事業所など)</span></label>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>所属事業所名 <span style={{fontSize:10,color:'#64748b',fontWeight:'normal'}}>(ケアマネ事業所など)</span></label>
                   <input value={myInfoForm.cmOffice||''} onChange={e=>setMyInfoForm(f=>({...f,cmOffice:e.target.value,savedMsg:''}))}
                     placeholder="例: ○○居宅介護支援事業所"
                     style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
@@ -14954,7 +14954,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   </div>
                   {/* メンバーカード */}
                   {myPeers.length === 0 ? (
-                    <div style={{textAlign:'center',color:'#94a3b8',fontSize:12,padding:'24px 0'}}>登録メンバーなし</div>
+                    <div style={{textAlign:'center',color:'#64748b',fontSize:12,padding:'24px 0'}}>登録メンバーなし</div>
                   ) : (
                     [...myPeers]
                       .sort((x,y) => {
@@ -15495,7 +15495,7 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
             style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
           <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="再設定用メールアドレス（必須）"
             style={{width:'100%',padding:'11px 13px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:6}}/>
-          <div style={{fontSize:10,color:'#94a3b8',marginBottom:10}}>※ パスワードを忘れた時の再設定に使います。<b style={{color:'#dc2626'}}>必須</b>です。</div>
+          <div style={{fontSize:10,color:'#64748b',marginBottom:10}}>※ パスワードを忘れた時の再設定に使います。<b style={{color:'#dc2626'}}>必須</b>です。</div>
         </>}
         {err && <div style={{color:'#dc2626',fontSize:12,fontWeight:'bold',marginBottom:10}}>{err}</div>}
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
@@ -15553,7 +15553,7 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdm
           {(members || []).length === 0 ? (
             <div style={{textAlign:'center',padding:32}}>
               <div style={{fontSize:14,color:'#475569',marginBottom:8,fontWeight:'bold'}}>まだメンバーが登録されていません</div>
-              <div style={{fontSize:11,color:'#94a3b8',marginBottom:18}}>下のボタンから店舗のスタッフ名を登録してください</div>
+              <div style={{fontSize:11,color:'#64748b',marginBottom:18}}>下のボタンから店舗のスタッフ名を登録してください</div>
               <div style={{display:'flex',flexDirection:'column',gap:10,alignItems:'center'}}>
                 {canManage && (
                   <button onClick={()=>setShowAdd(true)} style={{padding:'10px 20px',background:'#7daa3d',color:'white',border:'none',borderRadius:12,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>+ 最初のメンバーを追加</button>
@@ -15592,7 +15592,7 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdm
         {/* 下部リンク */}
         <div style={{textAlign:'center',marginTop:16,fontSize:11,color:'#5e8030'}}>
           {onBackToStores && <button onClick={onBackToStores} style={{background:'transparent',color:'#5e8030',border:'none',cursor:'pointer',fontSize:11,fontWeight:'bold',marginRight:12}}>← 店舗選択に戻る</button>}
-          <button onClick={onLogout} style={{background:'transparent',color:'#94a3b8',border:'none',cursor:'pointer',fontSize:11,fontWeight:'bold'}}>ログアウト</button>
+          <button onClick={onLogout} style={{background:'transparent',color:'#64748b',border:'none',cursor:'pointer',fontSize:11,fontWeight:'bold'}}>ログアウト</button>
         </div>
       </div>
       {/* メンバー追加モーダル */}
@@ -15712,7 +15712,7 @@ function DiseaseMasterPanel() {
     <div style={{background:'white',borderRadius:16,padding:24,marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
       <button onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',background:'none',border:'none',cursor:'pointer',padding:0}}>
         <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>LIFE傷病名マスタ管理</div>
-        <span style={{fontSize:12,color:'#94a3b8'}}>{open?'閉じる ▲':'開く ▼'}</span>
+        <span style={{fontSize:12,color:'#64748b'}}>{open?'閉じる ▲':'開く ▼'}</span>
       </button>
       {open && (
         <div style={{marginTop:14}}>
@@ -15724,11 +15724,11 @@ function DiseaseMasterPanel() {
           </div>
           <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
             <input type="file" accept=".csv,.txt" disabled={busy} onChange={e=>{ parseCsv(e.target.files?.[0]); e.target.value=''; }} style={{fontSize:12}}/>
-            {busy && <span style={{fontSize:12,color:'#94a3b8'}}>処理中…</span>}
+            {busy && <span style={{fontSize:12,color:'#64748b'}}>処理中…</span>}
           </div>
           {preview && (
             <div style={{marginTop:12,border:'1px solid #cbd5e1',borderRadius:10,padding:'10px 12px',background:'#fefce8'}}>
-              <div style={{fontSize:13,fontWeight:'bold',color:'#334155'}}>読み取り結果: {preview.count.toLocaleString()}件（{preview.source}）{preview.skipped>0 && <span style={{fontWeight:'normal',color:'#94a3b8'}}>／読み飛ばし{preview.skipped.toLocaleString()}行</span>}</div>
+              <div style={{fontSize:13,fontWeight:'bold',color:'#334155'}}>読み取り結果: {preview.count.toLocaleString()}件（{preview.source}）{preview.skipped>0 && <span style={{fontWeight:'normal',color:'#64748b'}}>／読み飛ばし{preview.skipped.toLocaleString()}行</span>}</div>
               <div style={{fontSize:11,color:'#64748b',margin:'6px 0'}}>先頭5件: {preview.items.slice(0,5).map(([c,n])=>`${n}(${c})`).join('、 ')}</div>
               <div style={{display:'flex',gap:8}}>
                 <button onClick={save} disabled={busy} style={{padding:'8px 16px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>この内容で置き換え保存</button>
@@ -15824,7 +15824,7 @@ function GlobalPolicyPanel({ staffSession }) {
         <label style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>
           <input type="checkbox" checked={st.notify?.login!==false} onChange={e=>setSt(s=>({...s,notify:{...(s.notify||{}),login:e.target.checked}}))} style={{accentColor:'#7daa3d'}}/>版を上げたら<b>ログイン時に再同意</b>を求める
         </label>
-        <span style={{fontSize:10,color:'#94a3b8'}}>※ お知らせへの掲載は下の「お知らせに掲載」ボタンで別途行います</span>
+        <span style={{fontSize:10,color:'#64748b'}}>※ お知らせへの掲載は下の「お知らせに掲載」ボタンで別途行います</span>
       </div>
       <label style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>本文（{'{facility}'}=事業所名 / {'{tel}'}=電話番号 に自動置換）</label>
       <textarea value={st.text} onChange={e=>setSt(s=>({...s,text:e.target.value}))} rows={8} style={{...inp,fontWeight:'normal',lineHeight:1.7,resize:'vertical',fontFamily:'inherit'}}/>
@@ -15841,7 +15841,7 @@ function GlobalPolicyPanel({ staffSession }) {
               <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
                 <span style={{fontSize:12,fontWeight:'bold',color:'#3d5021'}}>版 {h.version}</span>
                 {h.date && <span style={{fontSize:11,color:'#64748b'}}>改定日 {String(h.date).replace(/-/g,'/')}</span>}
-                <span style={{fontSize:10,color:'#94a3b8'}}>保存 {h.savedAt?String(h.savedAt).slice(0,10):''}{h.savedBy?` / ${h.savedBy}`:''}</span>
+                <span style={{fontSize:10,color:'#64748b'}}>保存 {h.savedAt?String(h.savedAt).slice(0,10):''}{h.savedBy?` / ${h.savedBy}`:''}</span>
                 <button type="button" onClick={()=>setHistText(t=>({...t,[hk]:!t[hk]}))} style={{marginLeft:'auto',fontSize:10,fontWeight:'bold',color:'#4338ca',background:'none',border:'none',cursor:'pointer'}}>{histText[hk]?'本文を隠す':'本文を表示'}</button>
                 <button type="button" onClick={()=>{ if(window.confirm(`版 ${h.version} の内容を編集欄に復元します（このあと保存すると反映）。よろしいですか?`)) setSt(s=>({...s,version:h.version,date:h.date||'',text:h.text||''})); }} style={{fontSize:10,fontWeight:'bold',color:'#7daa3d',background:'none',border:'none',cursor:'pointer'}}>復元</button>
               </div>
@@ -15856,10 +15856,10 @@ function GlobalPolicyPanel({ staffSession }) {
     <div style={{background:'white',borderRadius:16,padding:'16px 24px',marginBottom:16,boxShadow:'0 4px 16px rgba(0,0,0,0.06)'}}>
       <button type="button" onClick={()=>setOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',background:'none',border:'none',cursor:'pointer',padding:'4px 0'}}>
         <span style={{fontSize:16,fontWeight:'bold',color:'#3d5021'}}>📜 同意ポリシー編集（全店共通）</span>
-        <span style={{fontSize:13,color:'#94a3b8',fontWeight:'bold'}}>{open?'閉じる ▲':'開く ▼'}</span>
+        <span style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>{open?'閉じる ▲':'開く ▼'}</span>
       </button>
       {open && (loading ? (
-        <div style={{textAlign:'center',padding:24,color:'#94a3b8'}}>読込中...</div>
+        <div style={{textAlign:'center',padding:24,color:'#64748b'}}>読込中...</div>
       ) : (
         <div style={{marginTop:12}}>
           <div style={{fontSize:11,color:'#64748b',lineHeight:1.6,marginBottom:12,background:'#f0f7e0',border:'1px solid #d4e7a5',borderRadius:8,padding:'8px 10px'}}>
@@ -15918,9 +15918,9 @@ function SystemNoticesPanel({ stores, staffSession }) {
         <button onClick={()=>setShowForm(true)} style={{padding:'8px 14px',background:'#3b82f6',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>+ お知らせを追加</button>
       </div>
       {loading ? (
-        <div style={{textAlign:'center',padding:24,color:'#94a3b8'}}>読込中...</div>
+        <div style={{textAlign:'center',padding:24,color:'#64748b'}}>読込中...</div>
       ) : notices.length === 0 ? (
-        <div style={{textAlign:'center',padding:24,color:'#94a3b8',background:'#f8fafc',borderRadius:12,fontSize:12}}>
+        <div style={{textAlign:'center',padding:24,color:'#64748b',background:'#f8fafc',borderRadius:12,fontSize:12}}>
           お知らせはまだありません。「+ お知らせを追加」からメンテナンス通知などを作成できます。
         </div>
       ) : (
@@ -15936,7 +15936,7 @@ function SystemNoticesPanel({ stores, staffSession }) {
             return (
               <div key={n.id} style={{padding:'10px 12px',background:isExpired?'#f1f5f9':'#f8fafc',borderLeft:`4px solid ${sevColor}`,borderRadius:8,display:'flex',gap:10,alignItems:'flex-start'}}>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{n.title} {isExpired && <span style={{fontSize:9,color:'#94a3b8',marginLeft:6}}>(期限切れ)</span>}</div>
+                  <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{n.title} {isExpired && <span style={{fontSize:9,color:'#64748b',marginLeft:6}}>(期限切れ)</span>}</div>
                   {n.body && <div style={{fontSize:11,color:'#475569',marginTop:2,whiteSpace:'pre-wrap'}}>{n.body}</div>}
                   <div style={{fontSize:9,color:'#64748b',marginTop:4}}>
                     対象: <b>{targetName}</b> / 重要度: <b style={{color:sevColor}}>{n.severity}</b>
@@ -15990,7 +15990,7 @@ function SystemNoticesPanel({ stores, staffSession }) {
                     </label>
                   ))}
                 </div>
-                <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>
+                <div style={{fontSize:10,color:'#64748b',marginTop:2}}>
                   {form.targetStoreIds.length === 0 ? '→ 全店舗に表示' : `→ ${form.targetStoreIds.length} 店舗に表示`}
                 </div>
               </div>
@@ -16005,7 +16005,7 @@ function SystemNoticesPanel({ stores, staffSession }) {
               <div>
                 <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>表示終了日時 (任意)</label>
                 <input type="datetime-local" value={form.endsAt} onChange={e=>setForm({...form,endsAt:e.target.value})} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>未指定なら永続的に表示</div>
+                <div style={{fontSize:10,color:'#64748b',marginTop:2}}>未指定なら永続的に表示</div>
               </div>
               <div style={{display:'flex',gap:8,marginTop:8}}>
                 <button type="button" onClick={()=>setShowForm(false)} style={{flex:1,padding:'12px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
@@ -16234,9 +16234,9 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
             <button onClick={()=>setShowAddStore(true)} style={{padding:'8px 14px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:12,fontWeight:'bold',cursor:'pointer'}}>+ 店舗を追加</button>
           </div>
           {loading ? (
-            <div style={{textAlign:'center',padding:32,color:'#94a3b8'}}>読込中...</div>
+            <div style={{textAlign:'center',padding:32,color:'#64748b'}}>読込中...</div>
           ) : stores.length === 0 ? (
-            <div style={{textAlign:'center',padding:32,color:'#94a3b8',background:'#f8fafc',borderRadius:12}}>
+            <div style={{textAlign:'center',padding:32,color:'#64748b',background:'#f8fafc',borderRadius:12}}>
               まだ店舗が登録されていません。「+ 店舗を追加」から作成してください。
             </div>
           ) : (
@@ -16245,7 +16245,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                 // ★ 検索フィルタ(法人名・事業所名・短縮名) → 法人 (org_name) ごとにグループ分け
                 const _q = storeQuery.trim().toLowerCase();
                 const _fs = _q ? stores.filter(s => [s.name, s.short_name, s.org_name].some(v => String(v||'').toLowerCase().includes(_q))) : stores;
-                if (_q && !_fs.length) return <div style={{textAlign:'center',padding:24,color:'#94a3b8',background:'#f8fafc',borderRadius:12}}>「{storeQuery}」に一致する店舗はありません</div>;
+                if (_q && !_fs.length) return <div style={{textAlign:'center',padding:24,color:'#64748b',background:'#f8fafc',borderRadius:12}}>「{storeQuery}」に一致する店舗はありません</div>;
                 const m = new Map();
                 _fs.forEach(s => { const k = (s.org_name||'').trim() || '（法人名なし）'; if(!m.has(k)) m.set(k, []); m.get(k).push(s); });
                 const groups = [...m.entries()].sort((a,b)=>a[0].localeCompare(b[0],'ja'));
@@ -16335,7 +16335,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         <div style={{background:'white',borderRadius:16,padding:'14px 24px',boxShadow:'0 4px 16px rgba(0,0,0,0.06)',marginBottom:16}}>
           <button onClick={()=>setLoginInfoOpen(o=>!o)} style={{display:'flex',justifyContent:'space-between',alignItems:'center',width:'100%',background:'none',border:'none',cursor:'pointer',padding:0}}>
             <span style={{fontSize:14,fontWeight:'bold',color:'#3d5021'}}>店舗ログイン情報について</span>
-            <span style={{fontSize:12,color:'#94a3b8'}}>{loginInfoOpen?'閉じる ▲':'開く ▼'}</span>
+            <span style={{fontSize:12,color:'#64748b'}}>{loginInfoOpen?'閉じる ▲':'開く ▼'}</span>
           </button>
           {loginInfoOpen && (<>
             <div style={{fontSize:11,color:'#64748b',lineHeight:1.8,marginTop:10}}>
@@ -16344,7 +16344,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
               ・パスワードを忘れた場合は店舗一覧の「管理者PWリセット」で再発行できます。
             </div>
             {stores.length > 0 && (
-              <button onClick={()=>setShowAddStaff(true)} style={{marginTop:12,padding:'6px 12px',background:'transparent',color:'#94a3b8',border:'1px solid #cbd5e1',borderRadius:8,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>追加でログイン情報を発行 (上級者向け)</button>
+              <button onClick={()=>setShowAddStaff(true)} style={{marginTop:12,padding:'6px 12px',background:'transparent',color:'#64748b',border:'1px solid #cbd5e1',borderRadius:8,fontSize:10,fontWeight:'bold',cursor:'pointer'}}>追加でログイン情報を発行 (上級者向け)</button>
             )}
           </>)}
         </div>
@@ -16367,7 +16367,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                       <div style={{fontSize:11,color:'#64748b',marginTop:2}}>{a.desc}</div>
                     </div>
                     {a.soon ? (
-                      <span style={{flexShrink:0,fontSize:11,fontWeight:'bold',color:'#94a3b8',background:'#f1f5f9',borderRadius:999,padding:'6px 12px'}}>近日公開</span>
+                      <span style={{flexShrink:0,fontSize:11,fontWeight:'bold',color:'#64748b',background:'#f1f5f9',borderRadius:999,padding:'6px 12px'}}>近日公開</span>
                     ) : (
                       <button onClick={()=>toggleStoreAddon(addonModal.storeId, a.key)} disabled={addonBusy===addonModal.storeId}
                         style={{flexShrink:0,padding:'8px 16px',borderRadius:8,fontSize:13,fontWeight:'bold',cursor:addonBusy?'wait':'pointer',border:'none',color:'white',background:on?'#10b981':'#cbd5e1'}}>
@@ -16378,7 +16378,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                 );
               })}
             </div>
-            <div style={{fontSize:10,color:'#94a3b8',marginTop:12}}>※ 変更は即時に店舗へ反映されます。</div>
+            <div style={{fontSize:10,color:'#64748b',marginTop:12}}>※ 変更は即時に店舗へ反映されます。</div>
             <button onClick={()=>!addonBusy&&setAddonModal(null)} style={{width:'100%',marginTop:14,padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
           </div>
         </div>
@@ -16387,7 +16387,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}} onClick={()=>!editStore.loading&&setEditStore(null)}>
           <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:4}}>店舗情報を編集</div>
-            <div style={{fontSize:11,color:'#94a3b8',marginBottom:16}}>店舗ID（{editStore.id}）は変更できません。</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:16}}>店舗ID（{editStore.id}）は変更できません。</div>
             {editStore.error && <div style={{background:'#fef2f2',color:'#dc2626',padding:'8px 12px',borderRadius:8,fontSize:12,fontWeight:'bold',marginBottom:12}}>{editStore.error}</div>}
             {[
               {k:'name',label:'店舗名 (正式) *',ph:'ひかりデイサービス本所店'},
@@ -16421,7 +16421,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:16}}>新規店舗を追加</div>
             <form onSubmit={handleCreateStore}>
               <div style={{marginBottom:12}}>
-                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>店舗ID <span style={{color:'#dc2626'}}>*</span> <span style={{fontWeight:'normal',color:'#94a3b8'}}>(半角英数字、例: store_honjo)</span></label>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>店舗ID <span style={{color:'#dc2626'}}>*</span> <span style={{fontWeight:'normal',color:'#64748b'}}>(半角英数字、例: store_honjo)</span></label>
                 <input value={storeForm.id} onChange={e=>setStoreForm(f=>({...f,id:toHalfWidth(e.target.value).replace(/[^a-zA-Z0-9_-]/g,''),error:''}))} placeholder="store_honjo" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'monospace'}}/>
               </div>
               <div style={{marginBottom:12}}>
@@ -16453,16 +16453,16 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                 <input value={storeForm.address} onChange={e=>setStoreForm(f=>({...f,address:e.target.value}))} placeholder="東京都江東区扇橋..." style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
               <div style={{marginBottom:12}}>
-                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>建物名・部屋番号 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>建物名・部屋番号 <span style={{fontWeight:'normal',color:'#64748b'}}>(任意)</span></label>
                 <input value={storeForm.addressBuilding || ''} onChange={e=>setStoreForm(f=>({...f,addressBuilding:e.target.value}))} placeholder="例: メイゾン白子 101" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:16}}>
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(ハイフン不要)</span></label>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>電話番号 <span style={{fontWeight:'normal',color:'#64748b'}}>(ハイフン不要)</span></label>
                   <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.phone)} onChange={e=>setStoreForm(f=>({...f,phone:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
                 <div>
-                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>FAX <span style={{fontWeight:'normal',color:'#94a3b8'}}>(ハイフン不要)</span></label>
+                  <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>FAX <span style={{fontWeight:'normal',color:'#64748b'}}>(ハイフン不要)</span></label>
                   <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.fax)} onChange={e=>setStoreForm(f=>({...f,fax:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345679" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 </div>
               </div>
@@ -16479,18 +16479,18 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                     <input value={storeForm.login_id} onChange={e=>setStoreForm(f=>({...f,login_id:toHalfWidth(e.target.value).replace(/[^a-zA-Z0-9_-]/g,''),error:''}))} placeholder="例: ougibashi_login" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'monospace'}}/>
                   </div>
                   <div>
-                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>パスワード <span style={{color:'#dc2626'}}>*</span> <span style={{fontWeight:'normal',color:'#94a3b8'}}>(8文字以上)</span></label>
+                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>パスワード <span style={{color:'#dc2626'}}>*</span> <span style={{fontWeight:'normal',color:'#64748b'}}>(8文字以上)</span></label>
                     <input type="text" value={storeForm.login_pw} onChange={e=>setStoreForm(f=>({...f,login_pw:toHalfWidth(e.target.value),error:''}))} placeholder="8文字以上" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'monospace'}}/>
                   </div>
                 </div>
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:12}}>
                   <div>
-                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先メール <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
+                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先メール <span style={{fontWeight:'normal',color:'#64748b'}}>(任意)</span></label>
                     <input type="email" value={storeForm.login_email} onChange={e=>setStoreForm(f=>({...f,login_email:e.target.value}))} placeholder="store@example.com" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                     <div style={{fontSize:10,color:'#0e7490',marginTop:3,lineHeight:1.5}}>入力すると、作成時にこのアドレスへ<b>ログインURL・ID・パスワード</b>の登録完了メールを自動送信します。</div>
                   </div>
                   <div>
-                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先電話 <span style={{fontWeight:'normal',color:'#94a3b8'}}>(任意)</span></label>
+                    <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>連絡先電話 <span style={{fontWeight:'normal',color:'#64748b'}}>(任意)</span></label>
                     <input type="tel" inputMode="numeric" value={formatJpPhone(storeForm.login_phone)} onChange={e=>setStoreForm(f=>({...f,login_phone:toHankaku(e.target.value).replace(/[^0-9]/g,'').slice(0,11)}))} placeholder="0312345678" style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                   </div>
                 </div>
@@ -16537,7 +16537,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
                 <input value={staffForm.username} onChange={e=>setStaffForm(f=>({...f,username:toHalfWidth(e.target.value).replace(/[^a-zA-Z0-9_-]/g,''),error:''}))} placeholder="staff_yamada" lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'monospace'}}/>
               </div>
               <div style={{marginBottom:12}}>
-                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>初期パスワード <span style={{color:'#dc2626'}}>*</span> <span style={{fontWeight:'normal',color:'#94a3b8'}}>(8文字以上)</span></label>
+                <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>初期パスワード <span style={{color:'#dc2626'}}>*</span> <span style={{fontWeight:'normal',color:'#64748b'}}>(8文字以上)</span></label>
                 <input type="text" value={staffForm.password} onChange={e=>setStaffForm(f=>({...f,password:toHalfWidth(e.target.value),error:''}))} lang="en" autoCapitalize="off" autoCorrect="off" spellCheck={false} style={{width:'100%',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'monospace'}}/>
               </div>
               <div style={{marginBottom:16}}>
@@ -16627,7 +16627,7 @@ function StaffLoginGate({ onLogin }) {
             {form.loading ? 'ログイン中...' : 'ログイン'}
           </button>
         </form>
-        <div style={{marginTop:18,fontSize:10,color:'#94a3b8',textAlign:'center',lineHeight:1.7}}>
+        <div style={{marginTop:18,fontSize:10,color:'#64748b',textAlign:'center',lineHeight:1.7}}>
           ご家族の方は <a href="?family" style={{color:'#5e8030',fontWeight:'bold'}}>こちら</a> からログイン<br/>
           お困りの場合はサポートまでお問い合わせください<br/>
           <a href="mailto:support@ones-style.co.jp" style={{color:'#5e8030',fontWeight:'bold',textDecoration:'underline'}}>support@ones-style.co.jp</a>
@@ -19015,7 +19015,7 @@ export default function App() {
               {/* ヘッダー — ★ プレビュー内容(注入HTML)より必ず手前＆操作可能にする */}
               <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)',position:'relative',zIndex:10,pointerEvents:'auto'}}>
                 <div style={{flex:1}}>
-                  <span style={{color:'#94a3b8',fontSize:11,fontWeight:'bold',letterSpacing:1}}>印刷プレビュー</span>
+                  <span style={{color:'#64748b',fontSize:11,fontWeight:'bold',letterSpacing:1}}>印刷プレビュー</span>
                   <div style={{color:'white',fontWeight:'bold',fontSize:15,marginTop:2}}>{printPreviewContent.title}</div>
                 </div>
                 <div style={{display:'flex',gap:10,alignItems:'center'}}>
@@ -19052,7 +19052,7 @@ export default function App() {
                 ) : (
                   <div style={{background:'white',minWidth:595,padding:60,boxShadow:'0 4px 24px rgba(0,0,0,0.4)',textAlign:'center'}}>
                     <div style={{fontSize:18,fontWeight:'bold',color:'#475569',marginBottom:8}}>{printPreviewContent.title}</div>
-                    <div style={{fontSize:13,color:'#94a3b8'}}>印刷ボタンをクリックしてください</div>
+                    <div style={{fontSize:13,color:'#64748b'}}>印刷ボタンをクリックしてください</div>
                   </div>
                 )}
               </div>
@@ -19093,7 +19093,7 @@ export default function App() {
             <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:20,width:'100%',maxWidth:640,maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
               <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',gap:8}}>
                 <div style={{fontWeight:'bold',color:'#1e293b'}}>変更ログ</div>
-                <div style={{fontSize:11,color:'#94a3b8'}}>いつ・どの端末で・何を変更したか（最新300件）</div>
+                <div style={{fontSize:11,color:'#64748b'}}>いつ・どの端末で・何を変更したか（最新300件）</div>
                 <button onClick={()=>setAuditLogOpen(false)} style={{marginLeft:'auto',border:'none',background:'#f1f5f9',borderRadius:8,padding:'4px 10px',fontWeight:'bold',cursor:'pointer',color:'#475569'}}>閉じる</button>
               </div>
               <div style={{padding:'8px 14px',borderBottom:'1px solid #f1f5f9',display:'flex',gap:6,flexWrap:'wrap'}}>
@@ -19102,15 +19102,15 @@ export default function App() {
                 ))}
               </div>
               <div style={{overflowY:'auto',padding:'6px 6px 12px'}}>
-                {_list.length===0 ? <div style={{textAlign:'center',color:'#94a3b8',padding:'32px 0',fontSize:13,fontWeight:'bold'}}>記録はまだありません</div> :
+                {_list.length===0 ? <div style={{textAlign:'center',color:'#64748b',padding:'32px 0',fontSize:13,fontWeight:'bold'}}>記録はまだありません</div> :
                   _list.map(e=>(
                     <div key={e.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderBottom:'1px solid #f8fafc'}}>
                       <span style={{fontSize:10,fontWeight:'bold',color:'#4338ca',background:'#eef2ff',border:'1px solid #c7d2fe',borderRadius:6,padding:'2px 7px',whiteSpace:'nowrap'}}>{e.cat}</span>
                       <div style={{minWidth:0,flex:1}}>
                         <div style={{fontSize:12,color:'#1e293b',fontWeight:'bold',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.detail || '（更新）'}</div>
-                        <div style={{fontSize:10,color:'#94a3b8'}}>{e.device||'端末不明'}</div>
+                        <div style={{fontSize:10,color:'#64748b'}}>{e.device||'端末不明'}</div>
                       </div>
-                      <span style={{fontSize:11,color:'#94a3b8',whiteSpace:'nowrap'}}>{_fmt(e.at)}</span>
+                      <span style={{fontSize:11,color:'#64748b',whiteSpace:'nowrap'}}>{_fmt(e.at)}</span>
                     </div>
                   ))}
               </div>
@@ -19188,7 +19188,7 @@ export default function App() {
                 <div key={n.id} style={{border:`1px solid ${mm.color}44`,background:mm.bg,borderRadius:12,padding:'12px 14px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
                     <span style={{fontSize:11,fontWeight:'bold',color:'white',background:mm.color,borderRadius:6,padding:'2px 8px'}}>{mm.emoji} {mm.label}</span>
-                    {n.date && <span style={{fontSize:11,color:'#94a3b8'}}>{n.date}</span>}
+                    {n.date && <span style={{fontSize:11,color:'#64748b'}}>{n.date}</span>}
                   </div>
                   <div style={{fontSize:14,fontWeight:'bold',color:mm.color,marginBottom:4}}>{n.title}</div>
                   {n.body && <div style={{fontSize:13,color:'#475569',whiteSpace:'pre-wrap',lineHeight:1.7}}>{n.body}</div>}
@@ -21994,7 +21994,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             {recs.length===0 ? <div style={{padding:'4px 12px',fontSize:12}}>履歴なし</div> :
               recs.map((r,ri)=>(
                 <div key={ri} style={{padding:'4px 14px',fontSize:12}}>
-                  <span style={{color:'#94a3b8'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
+                  <span style={{color:'#64748b'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
                   <b style={{color:'white',marginLeft:8}}>{r.massage||''}</b>
                 </div>
               ))}
@@ -23243,7 +23243,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               : [
                   {label:'利用者名', value:(<>
                     <span>{selectedPatient.name} <span style={{fontSize:12,color:'#475569'}}>様</span>
-                      {selectedPatient.kana && <span style={{fontSize:11,color:'#94a3b8',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
+                      {selectedPatient.kana && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal',marginLeft:8}}>（{selectedPatient.kana}）</span>}
                     </span>
                   </>)},
                   {label:'年齢', value: birthWithAge},
@@ -23256,7 +23256,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 <div style={{display:'grid',gridTemplateColumns: compactMode ? '1fr' : 'repeat(auto-fit,minmax(140px,1fr))',gap:8,marginBottom:12}}>
                   {items.map(({label,value})=>(
                     <div key={label} style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #94a3b8'}}>
-                      <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>{label}</div>
+                      <div style={{fontSize:11,fontWeight:'bold',color:'#64748b',marginBottom:3}}>{label}</div>
                       <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{value}</div>
                     </div>
                   ))}
@@ -23264,11 +23264,11 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 {/* 既往歴・留意点 (compactMode は 1 列、 事業所は 2 列) */}
                 <div style={{display:'grid',gridTemplateColumns: compactMode ? '1fr' : '1fr 1fr',gap:10}}>
                   <div style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #94a3b8'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>既往歴</div>
+                    <div style={{fontSize:11,fontWeight:'bold',color:'#64748b',marginBottom:3}}>既往歴</div>
                     <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{selectedPatient.kiou||'—'}</div>
                   </div>
                   <div style={{background:'#f8fafc',borderRadius:10,padding:'8px 12px',border:'1px solid #94a3b8'}}>
-                    <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:3}}>留意点</div>
+                    <div style={{fontSize:11,fontWeight:'bold',color:'#64748b',marginBottom:3}}>留意点</div>
                     <div style={{fontSize:13,color:'#1e293b',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{selectedPatient.ryui||'—'}</div>
                   </div>
                 </div>
@@ -23397,7 +23397,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 {/* 休止中: 休止情報を最優先で表示 */}
                 {isOnPause && lastPause ? (
                   <div>
-                    <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>休止</span>
+                    <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>休止</span>
                     <div style={{fontWeight:'bold',color:'#9a3412',fontSize:15,marginTop:4}}>
                       {lastPause.reason || '休止中'}
                       {lastPause.fromDate && <span style={{marginLeft:10,fontSize:12,color:'#7c2d12'}}>{lastPause.fromDate} 〜 現在</span>}
@@ -23407,7 +23407,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 ) : isAbsent ? (
                   /* 欠席: 理由 + 特記 */
                   <div>
-                    <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>欠席理由</span>
+                    <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>欠席理由</span>
                     <div style={{fontWeight:'bold',color:'#b91c1c',fontSize:15,marginTop:4}}>
                       {tokkiText || '理由未入力'}
                     </div>
@@ -23418,7 +23418,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px 16px',fontSize:13}}>
                       {/* 気分 (左上) */}
                       <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>気分</span>
+                        <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>気分</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,marginTop:4,lineHeight:1.5}}>
                           {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}{latest.kibunArrivalReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunArrivalReason}）</span>}</div>}
                           {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}{latest.kibunDepartureReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunDepartureReason}）</span>}</div>}
@@ -23427,31 +23427,31 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       </div>
                       {/* 体温 (右上) */}
                       <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>体温</span>
+                        <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>体温</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2}}>
-                          {latest.temp ? <>{latest.temp}<span style={{fontSize:11,color:'#94a3b8',marginLeft:2}}>℃</span></> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                          {latest.temp ? <>{latest.temp}<span style={{fontSize:11,color:'#64748b',marginLeft:2}}>℃</span></> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
                         </div>
                       </div>
                       {/* 血圧+脈 開始 (左下) */}
                       <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (開始)</span>
+                        <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 (開始)</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
-                          {latest.bpUpSt ? <span>{latest.bpUpSt}/{latest.bpDnSt}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
-                          {latest.plSt && <span>{latest.plSt}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
+                          {latest.bpUpSt ? <span>{latest.bpUpSt}/{latest.bpDnSt}<span style={{fontSize:10,color:'#64748b',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                          {latest.plSt && <span>{latest.plSt}<span style={{fontSize:10,color:'#64748b',marginLeft:2}}>回</span></span>}
                         </div>
                       </div>
                       {/* 血圧+脈 終了 (右下) */}
                       <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 ({secondBpLabel(appData)})</span>
+                        <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>血圧 / 脈 ({secondBpLabel(appData)})</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:18,lineHeight:1.2,marginTop:2,display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap'}}>
-                          {latest.bpUpEn ? <span>{latest.bpUpEn}/{latest.bpDnEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
-                          {latest.plEn && <span>{latest.plEn}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>回</span></span>}
+                          {latest.bpUpEn ? <span>{latest.bpUpEn}/{latest.bpDnEn}<span style={{fontSize:10,color:'#64748b',marginLeft:2}}>mmHg</span></span> : <span style={{color:'#cbd5e1',fontSize:14}}>—</span>}
+                          {latest.plEn && <span>{latest.plEn}<span style={{fontSize:10,color:'#64748b',marginLeft:2}}>回</span></span>}
                         </div>
                       </div>
                       {/* 旧 気分位置 (削除済) */}
                       {false && (
                       <div>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>気分</span>
+                        <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>気分</span>
                         <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,marginTop:4,lineHeight:1.5}}>
                           {latest.kibunArrival && <div>来所: {MOODS[latest.kibunArrival]||latest.kibunArrival}{latest.kibunArrivalReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunArrivalReason}）</span>}</div>}
                           {latest.kibunDeparture && <div>帰宅: {MOODS[latest.kibunDeparture]||latest.kibunDeparture}{latest.kibunDepartureReason && <span style={{fontSize:11,color:'#64748b',fontWeight:'normal'}}>（{latest.kibunDepartureReason}）</span>}</div>}
@@ -23494,7 +23494,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                       const prevDate = prevRec?.r?.date || '';
                       return (
                         <div style={{marginTop:10,paddingTop:10,borderTop:`1px dashed ${headerBorder}`}}>
-                          <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>今回の運動メニュー</span>
+                          <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>今回の運動メニュー</span>
                           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'6px 14px',marginTop:6}}>
                             {doneEx.map(it => {
                               const v = resolveEx(latest, it);
@@ -23510,7 +23510,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                               const diff = (cur != null && prev != null) ? (cur - prev) : null;
                               return (
                                 <div key={it.id}>
-                                  <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>{label}</span>
+                                  <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>{label}</span>
                                   <div style={{fontWeight:'bold',color:'#1e293b',fontSize:13,lineHeight:1.3,marginTop:2,display:'flex',alignItems:'baseline',gap:6,flexWrap:'wrap'}}>
                                     <span>{disp}</span>
                                     {diff != null && diff !== 0 && (
@@ -23519,30 +23519,30 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                                       </span>
                                     )}
                                     {diff === 0 && (
-                                      <span style={{fontSize:10,color:'#94a3b8',fontWeight:'bold'}}>→ 前回比 同</span>
+                                      <span style={{fontSize:10,color:'#64748b',fontWeight:'bold'}}>→ 前回比 同</span>
                                     )}
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
-                          {prevDate && <div style={{fontSize:9,color:'#94a3b8',marginTop:4}}>※ 前回比較: {prevDate}</div>}
+                          {prevDate && <div style={{fontSize:9,color:'#64748b',marginTop:4}}>※ 前回比較: {prevDate}</div>}
                         </div>
                       );
                     })()}
                     {/* 体力測定 (測定したら表示 — 最新測定記録) */}
                     {fitnessOnDay && (
                       <div style={{marginTop:10,paddingTop:10,borderTop:`1px dashed ${headerBorder}`}}>
-                        <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>体力測定 ({fitnessOnDay.date})</span>
+                        <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>体力測定 ({fitnessOnDay.date})</span>
                         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))',gap:'6px 14px',marginTop:6,fontSize:13}}>
                           {fitnessItems.map(it => {
                             const v = fitnessOnDay.values?.[it.id];
                             if (v === undefined || v === '') return null;
                             return (
                               <div key={it.id}>
-                                <span style={{color:'#94a3b8',fontSize:10,fontWeight:'bold'}}>{it.name}</span>
+                                <span style={{color:'#64748b',fontSize:10,fontWeight:'bold'}}>{it.name}</span>
                                 <div style={{fontWeight:'bold',color:'#1e293b',fontSize:14,lineHeight:1.2}}>
-                                  {v}<span style={{fontSize:10,color:'#94a3b8',marginLeft:2}}>{it.unit}</span>
+                                  {v}<span style={{fontSize:10,color:'#64748b',marginLeft:2}}>{it.unit}</span>
                                 </div>
                               </div>
                             );
@@ -23580,7 +23580,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               const slices=[
                 {label:'出席',count:tusho,color:'#60a5fa'},
                 {label:'欠席',count:kesseki,color:'#f87171'},
-                ...(kyugyo>0?[{label:'休業',count:kyugyo,color:'#94a3b8'}]:[]),
+                ...(kyugyo>0?[{label:'休業',count:kyugyo,color:'#64748b'}]:[]),
                 ...(furikaeCount>0?[{label:'振替',count:furikaeCount,color:'#4ade80'}]:[]),
                 ...(kyushi>0?[{label:'休止',count:kyushi,color:'#fde047'}]:[]),
               ].filter(s=>s.count>0);
@@ -23608,7 +23608,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                     </svg>
                     <div style={{fontWeight:'bold',color:attendance<70?'#dc2626':'#1e293b',lineHeight:1,whiteSpace:'nowrap',display:'inline-flex',alignItems:'baseline',flexShrink:0}}>
                       <span style={{fontSize:28}}>{attendance}</span>
-                      <span style={{fontSize:13,marginLeft:1,color:'#94a3b8'}}>%</span>
+                      <span style={{fontSize:13,marginLeft:1,color:'#64748b'}}>%</span>
                     </div>
                     <div style={{display:'flex',flexWrap:'wrap',gap:'4px 10px',flex:1,minWidth:0}}>
                       {slices.map((s,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:12,whiteSpace:'nowrap'}}><span style={{width:8,height:8,borderRadius:'50%',background:s.color,display:'inline-block',flexShrink:0}}/><span style={{fontWeight:'bold',color:'#475569'}}>{s.label}</span><span style={{color:'#1e293b',fontWeight:'bold'}}>{s.count}</span></div>))}
@@ -23633,7 +23633,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               if (arrList.length === 0 && depList.length === 0) return (
                 <div style={{background:'white',borderRadius:12,padding:'14px 16px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #94a3b8',display:'flex',flexDirection:'column',gap:8}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>気分</div>
-                  <div style={{fontSize:13,color:'#94a3b8',textAlign:'center',padding:'20px 0'}}>記録なし</div>
+                  <div style={{fontSize:13,color:'#64748b',textAlign:'center',padding:'20px 0'}}>記録なし</div>
                 </div>
               );
               // 1 タイミング (arrival/departure) ぶんの円グラフを描画するヘルパー
@@ -23666,7 +23666,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 if (!pie) return (
                   <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6,padding:'8px 4px',background:'#f8fafc',borderRadius:10,border:'1px solid #94a3b8'}}>
                     <div style={{fontSize:12,fontWeight:'bold',color:'#475569'}}>{title}</div>
-                    <div style={{fontSize:12,color:'#94a3b8'}}>記録なし</div>
+                    <div style={{fontSize:12,color:'#64748b'}}>記録なし</div>
                   </div>
                 );
                 const {slices, paths, modeDef, total} = pie;
@@ -23679,13 +23679,13 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         : paths.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth={1.2}/>)}
                     </svg>
                     <div style={{background:modeDef.color+'22',borderRadius:8,padding:'3px 8px',border:`1.5px solid ${modeDef.color}55`,textAlign:'center'}}>
-                      <div style={{fontSize:9,color:'#94a3b8',fontWeight:'bold'}}>多かった気分</div>
+                      <div style={{fontSize:9,color:'#64748b',fontWeight:'bold'}}>多かった気分</div>
                       <div style={{display:'flex',alignItems:'center',gap:3,justifyContent:'center'}}>
                         <span style={{fontSize:18,lineHeight:1}}>{modeDef.emoji}</span>
                         <span style={{fontSize:11,fontWeight:'bold',color:'#1e293b'}}>{modeDef.label}</span>
                       </div>
                     </div>
-                    <div style={{fontSize:9,color:'#94a3b8',fontWeight:'bold'}}>{total}件</div>
+                    <div style={{fontSize:9,color:'#64748b',fontWeight:'bold'}}>{total}件</div>
                   </div>
                 );
               };
@@ -23722,7 +23722,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                 <div style={{background:'white',borderRadius:14,padding:'18px 20px',boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #94a3b8'}}>
                   <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>月別通所状況
                     {(monthlyData._preTrimmed > 0) && (
-                      <span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8',marginLeft:8}}>
+                      <span style={{fontSize:11,fontWeight:'normal',color:'#64748b',marginLeft:8}}>
                         ※ 利用開始{selectedPatient?.startDate ? `（${String(selectedPatient.startDate).slice(0,10).replace(/-/g,'/')}）` : ''}前の月は表示していません
                       </span>
                     )}
@@ -23758,7 +23758,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                         <table style={{borderCollapse:'collapse',fontSize:13,tableLayout:'auto'}}>
                           <tbody>
                             <tr>
-                              <td style={{padding:'2px 10px 2px 0',fontWeight:'bold',color:'#94a3b8',fontSize:14,whiteSpace:'nowrap',verticalAlign:'middle'}}></td>
+                              <td style={{padding:'2px 10px 2px 0',fontWeight:'bold',color:'#64748b',fontSize:14,whiteSpace:'nowrap',verticalAlign:'middle'}}></td>
                               {monthlyData.map(m=>(
                                 <td key={m.month} style={{textAlign:'center',padding:'4px 14px',verticalAlign:'middle',width:80,minWidth:80}}>
                                   <div style={{display:'flex',justifyContent:'center'}}>{mkPie(m.tusho,m.kesseki,m.furikae,m.kyushi||0)}</div>
@@ -23869,7 +23869,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   arrR:r.kibunArrivalReason||'',
                   depR:r.kibunDepartureReason||'',
                 }));
-              if(!kibunData.length) return <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'20px 0'}}>記録なし</div>;
+              if(!kibunData.length) return <div style={{textAlign:'center',color:'#64748b',fontSize:13,padding:'20px 0'}}>記録なし</div>;
               // 半年以上は月別平均、1ヶ月・3ヶ月は日別 (ただし displayMode='daily' なら強制的に日別)
               const useMonthly = displayMode==='daily' ? false : (parseInt(period,10)>=6 || period==='all');
               const kibunMonthly = useMonthly ? (()=>{
@@ -24719,7 +24719,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         </div>}
 
         <div id="sec-fitness" style={{scrollMarginTop:170,marginBottom:16}}>
-<div onClick={()=>toggleSec('sec-fitness')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>体力測定</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-fitness')?'▶':'▼'}</span></div>
+<div onClick={()=>toggleSec('sec-fitness')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>体力測定</span><span style={{fontSize:14,color:'#64748b'}}>{isCol('sec-fitness')?'▶':'▼'}</span></div>
           {!isCol('sec-fitness') && (()=>{
             const fitnessItems = appData.systemSettings?.fitnessItems || appSettings.fitnessItems;
             const fitnessRecs = (appData.fitnessRecords||[]).filter(r=>r.patientId===selectedPatientId).sort((a,b)=>a.date.localeCompare(b.date));
@@ -24755,7 +24755,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                   ))}
                 </div>
                 {dailyFit.length === 0 ? (
-                  <div style={{background:'white',borderRadius:14,padding:'40px',textAlign:'center',color:'#94a3b8',fontSize:14,fontWeight:'bold',border:'1px solid #94a3b8'}}>
+                  <div style={{background:'white',borderRadius:14,padding:'40px',textAlign:'center',color:'#64748b',fontSize:14,fontWeight:'bold',border:'1px solid #94a3b8'}}>
                     {selFitItem?.name}の記録がありません
                   </div>
                 ) : (
@@ -24830,7 +24830,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
                               <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#475569'}}>{r.date}</td>
                               {fitnessItems.map(it=>(
                                 <td key={it.id} style={{padding:'4px 8px',textAlign:'center',fontWeight:'bold',color:'#1e293b'}}>
-                                  {r.values?.[it.id]!==undefined&&r.values[it.id]!==''?<>{r.values[it.id]}<span style={{fontSize:8,color:'#94a3b8',marginLeft:1}}>{it.unit}</span></>:<span style={{color:'#cbd5e1'}}>—</span>}
+                                  {r.values?.[it.id]!==undefined&&r.values[it.id]!==''?<>{r.values[it.id]}<span style={{fontSize:8,color:'#64748b',marginLeft:1}}>{it.unit}</span></>:<span style={{color:'#cbd5e1'}}>—</span>}
                                 </td>
                               ))}
                             </tr>
@@ -24844,7 +24844,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
             );
           })()}
         </div>
-        {!familyMode && <><div id="sec-absence" style={{scrollMarginTop:170,marginBottom:0}}><div onClick={()=>toggleSec('sec-absence')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>欠席・休業一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-absence')?'▶':'▼'}</span></div></div></>}{/* === 欠席一覧 === */}
+        {!familyMode && <><div id="sec-absence" style={{scrollMarginTop:170,marginBottom:0}}><div onClick={()=>toggleSec('sec-absence')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>欠席・休業一覧</span><span style={{fontSize:14,color:'#64748b'}}>{isCol('sec-absence')?'▶':'▼'}</span></div></div></>}{/* === 欠席一覧 === */}
         {!familyMode && !isCol('sec-absence') && (() => {
           const absList = records.filter(r=>r.status==='欠席'||r.status==='休業');
           return (
@@ -24877,7 +24877,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           );
         })()}
 
-        {!familyMode && <><div id="sec-kyushi" style={{scrollMarginTop:170,marginBottom:0}}><div onClick={()=>toggleSec('sec-kyushi')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>休止一覧</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-kyushi')?'▶':'▼'}</span></div></div></>}{/* === 休止一覧 === */}
+        {!familyMode && <><div id="sec-kyushi" style={{scrollMarginTop:170,marginBottom:0}}><div onClick={()=>toggleSec('sec-kyushi')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer'}}><span>休止一覧</span><span style={{fontSize:14,color:'#64748b'}}>{isCol('sec-kyushi')?'▶':'▼'}</span></div></div></>}{/* === 休止一覧 === */}
         {!familyMode && !isCol('sec-kyushi') && <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.06)',border:'1px solid #fed7aa',overflow:'hidden',marginBottom:16}}>
           <div style={{padding:'12px 20px',borderBottom:'1px solid #fff7ed',background:'#fff7ed',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{fontSize:14,fontWeight:'bold',color:'#c2410c',display:'flex',alignItems:'center',gap:6}}>
@@ -24953,7 +24953,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
           )}
         </div>
         </>)}{/* /モニタリング (ケアマネ・関係者のみ) */}
-        {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:170}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#94a3b8'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
+        {!familyMode && <><div id="sec-detail" style={{scrollMarginTop:170}}><div onClick={()=>toggleSec('sec-detail')} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:14,fontWeight:'bold',color:'#475569',marginBottom:8,paddingBottom:6,borderBottom:'2px solid #e2e8f0',cursor:'pointer',userSelect:'none'}}><span>詳細記録</span><span style={{fontSize:14,color:'#64748b'}}>{isCol('sec-detail')?'▶':'▼'}</span></div></div></>}{/* === 詳細記録テーブル === */}
         {!familyMode && !isCol('sec-detail') && (()=>{
           // ★ 詳細記録は上の「期間」選択 (records) を表示。 ただし
           //   ①未来日は除外(その日を過ぎてから表示) ②非利用日に残った「空の出席」記録は除外
@@ -25182,7 +25182,7 @@ function SalesCalendarModal({ initialMonth, appData, setAppData, onClose }) {
 
         {/* ヘッダー */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20}}>
-          <div><div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>売上入力</div><div style={{fontSize:10,color:'#94a3b8',fontWeight:'bold'}}>年度（{_fyRange}）</div></div>
+          <div><div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>売上入力</div><div style={{fontSize:10,color:'#64748b',fontWeight:'bold'}}>年度（{_fyRange}）</div></div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <button style={navBtn} onClick={()=>{setYear(y=>y-1);setSelectedMonth(null);}}>‹</button>
             <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',minWidth:120,textAlign:'center'}}>{year}年度{warekiFy?<span style={{fontSize:11,color:'#64748b',display:'block'}}>（{warekiFy}年度）</span>:null}</span>
@@ -25417,7 +25417,7 @@ function AttrSection({appData, tY, tM, baseMonth, attrMonth, setAttrMonth, perio
                 <span style={{fontSize:12,fontWeight:'bold',color}}>{label}</span>
                 <span style={{fontSize:20,fontWeight:'bold',color:'#1e293b'}}>{avg(arr)}<span style={{fontSize:10,color:'#64748b',marginLeft:2}}>歳</span></span>
               </div>
-              <div style={{fontSize:10,color:'#94a3b8',display:'flex',gap:6,flexWrap:'wrap'}}>
+              <div style={{fontSize:10,color:'#64748b',display:'flex',gap:6,flexWrap:'wrap'}}>
                 <span style={{color:'#3b82f6'}}>最低 {arr.length?Math.min(...arr):'-'}歳</span>
                 <span style={{color:'#ef4444'}}>最高 {arr.length?Math.max(...arr):'-'}歳</span>
                 <span>{arr.length}名</span>
@@ -25569,8 +25569,8 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
         <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)'}}>
           <button onClick={()=>setCodeOpen(o=>!o)} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'12px 16px',background:'transparent',border:'none',cursor:'pointer',textAlign:'left'}}>
             <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>サービスコードの登録</span>
-            <span style={{fontSize:11,color:'#94a3b8'}}>（登録済み {serviceCodes.length} 件）</span>
-            <span style={{marginLeft:'auto',color:'#94a3b8'}}>{codeOpen?'▲':'▼'}</span>
+            <span style={{fontSize:11,color:'#64748b'}}>（登録済み {serviceCodes.length} 件）</span>
+            <span style={{marginLeft:'auto',color:'#64748b'}}>{codeOpen?'▲':'▼'}</span>
           </button>
           {codeOpen && (
             <div style={{padding:'0 16px 14px',display:'flex',flexDirection:'column',gap:8}}>
@@ -25585,13 +25585,13 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
                 <div style={{display:'flex',flexWrap:'wrap',gap:6,maxHeight:180,overflowY:'auto'}}>
                   {serviceCodes.map(sc=>(
                     <span key={sc.code} style={{display:'inline-flex',alignItems:'center',gap:6,background:'#f1f5f9',border:'1px solid #e2e8f0',borderRadius:8,padding:'4px 10px',fontSize:12}}>
-                      <b style={{color:'#1e293b'}}>{sc.code}</b><span style={{color:'#64748b'}}>{sc.name}</span>{sc.units && <span style={{color:'#94a3b8',fontSize:10}}>{sc.units}単位</span>}
+                      <b style={{color:'#1e293b'}}>{sc.code}</b><span style={{color:'#64748b'}}>{sc.name}</span>{sc.units && <span style={{color:'#64748b',fontSize:10}}>{sc.units}単位</span>}
                       <button onClick={()=>delCode(sc.code)} style={{border:'none',background:'transparent',color:'#dc2626',cursor:'pointer',fontWeight:'bold'}}>✕</button>
                     </span>
                   ))}
                 </div>
               )}
-              <div style={{fontSize:10,color:'#94a3b8'}}>国・自治体のサービスコード表CSV(UTF-8/Shift_JIS)を取り込めます。登録したコードは利用者ごとに複数割り当てられ、CSVにも出力されます。</div>
+              <div style={{fontSize:10,color:'#64748b'}}>国・自治体のサービスコード表CSV(UTF-8/Shift_JIS)を取り込めます。登録したコードは利用者ごとに複数割り当てられ、CSVにも出力されます。</div>
             </div>
           )}
         </div>
@@ -25599,7 +25599,7 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
         {tab==='month' && (
         <div style={{background:'white',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
           <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap',marginBottom:10}}>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>月次実績表<span style={{fontSize:11,fontWeight:'normal',color:'#94a3b8',marginLeft:6}}>（カイポケ等への実績転記用）</span></div>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>月次実績表<span style={{fontSize:11,fontWeight:'normal',color:'#64748b',marginLeft:6}}>（カイポケ等への実績転記用）</span></div>
             <div style={{display:'flex',alignItems:'center',gap:6,marginLeft:'auto'}}>
               <button onClick={dlCsv} style={{padding:'4px 12px',background:'#0f766e',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>CSV出力</button>
               {onShowPrintPreview && <button onClick={()=>onShowPrintPreview(`実績表_${jy}年${jm}月`,'A4 landscape','jisseki-print-area')} style={{padding:'4px 12px',background:'#334155',color:'white',border:'none',borderRadius:8,fontWeight:'bold',cursor:'pointer',fontSize:12}}>印刷/PDF</button>}
@@ -25655,12 +25655,12 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
             {selRow && <span style={{fontSize:12,color:'#64748b'}}>実績 <b style={{color:'#4338ca',fontSize:15}}>{selRow.jisseki}</b> 回（{jy}年{jm}月）</span>}
           </div>
           {!selRow ? (
-            <div style={{fontSize:13,color:'#94a3b8',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'20px',textAlign:'center'}}>利用者を選択すると、その方の当月実績とサービスコード割当を表示します。</div>
+            <div style={{fontSize:13,color:'#64748b',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'20px',textAlign:'center'}}>利用者を選択すると、その方の当月実績とサービスコード割当を表示します。</div>
           ) : (()=>{ const p=selRow.p; const _codes=patCodes(p); return (
             <div style={{display:'flex',flexDirection:'column',gap:14}}>
               {/* サービスコード割当(複数) */}
               <div style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:12,padding:'12px 14px'}}>
-                <div style={{fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:8}}>サービスコード割当<span style={{fontWeight:'normal',color:'#94a3b8',marginLeft:6}}>（複数可・請求時に使用するコード）</span></div>
+                <div style={{fontSize:12,fontWeight:'bold',color:'#475569',marginBottom:8}}>サービスコード割当<span style={{fontWeight:'normal',color:'#64748b',marginLeft:6}}>（複数可・請求時に使用するコード）</span></div>
                 <div style={{display:'flex',flexWrap:'wrap',gap:6,alignItems:'center'}}>
                   {_codes.map(c=>(
                     <span key={c} style={{display:'inline-flex',alignItems:'center',gap:6,background:'#ecfdf5',border:'1px solid #a7f3d0',borderRadius:8,padding:'5px 10px',fontSize:12}}>
@@ -25672,7 +25672,7 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
                     <option value="">＋ コードを追加…</option>
                     {serviceCodes.filter(sc=>!_codes.includes(sc.code)).map(sc=>(<option key={sc.code} value={sc.code}>{sc.code}{sc.name?`（${sc.name}）`:''}</option>))}
                   </select>
-                  {serviceCodes.length===0 && <span style={{fontSize:11,color:'#94a3b8'}}>※先に上の「サービスコードの登録」でコードを登録してください</span>}
+                  {serviceCodes.length===0 && <span style={{fontSize:11,color:'#64748b'}}>※先に上の「サービスコードの登録」でコードを登録してください</span>}
                 </div>
               </div>
               {/* 日別実績(実績のある日+欠席等) */}
@@ -25697,7 +25697,7 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
                   </tbody>
                 </table>
               </div>
-              <div style={{fontSize:10,color:'#94a3b8'}}>※実績（状態・時間帯）は提供記録から自動集計です。修正は提供記録入力から行ってください。</div>
+              <div style={{fontSize:10,color:'#64748b'}}>※実績（状態・時間帯）は提供記録から自動集計です。修正は提供記録入力から行ってください。</div>
             </div>
           ); })()}
         </div>
@@ -25707,7 +25707,7 @@ function JissekiView({ appData, onSave, onShowPrintPreview }) {
           <div onClick={()=>setCsvPreview(null)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
             <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:640,maxWidth:'96vw',maxHeight:'86vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
               <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                <div><div style={{fontSize:15,fontWeight:'bold',color:'#1e293b'}}>サービスコードCSV取込</div><div style={{fontSize:11,color:'#94a3b8',marginTop:2}}>{csvPreview.fileName}／{csvPreview.rows.length}件を検出（チェックした行を取り込みます）</div></div>
+                <div><div style={{fontSize:15,fontWeight:'bold',color:'#1e293b'}}>サービスコードCSV取込</div><div style={{fontSize:11,color:'#64748b',marginTop:2}}>{csvPreview.fileName}／{csvPreview.rows.length}件を検出（チェックした行を取り込みます）</div></div>
                 <button onClick={()=>setCsvPreview(null)} style={{background:'#f1f5f9',border:'none',borderRadius:16,width:32,height:32,fontSize:15,fontWeight:'bold',color:'#475569',cursor:'pointer'}}>✕</button>
               </div>
               <div style={{flex:1,overflow:'auto',padding:'10px 18px'}}>
@@ -26384,7 +26384,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
             <tr key={patient.id}>
               <td style={{padding:'2px 4px 2px 0',fontWeight:'bold',color:'#1e293b',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{patient.name}</td>
               <td style={{padding:'2px 2px',fontWeight:'bold',color:RC(rate),whiteSpace:'nowrap'}}>{rate}%</td>
-              <td style={{padding:'2px 0 2px 2px',color:'#94a3b8',whiteSpace:'nowrap'}}>{att}/{planned}</td>
+              <td style={{padding:'2px 0 2px 2px',color:'#64748b',whiteSpace:'nowrap'}}>{att}/{planned}</td>
             </tr>
           ))}
         </tbody>
@@ -26399,7 +26399,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
       <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
         {k.map(({patient,days},idx) => (
           <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #94a3b8',minWidth:0}}>
-            <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
+            <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
             <span style={{fontSize:12,fontWeight:'bold',color:'#000',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
             <span style={{fontSize:12,fontWeight:'bold',color:'#000',whiteSpace:'nowrap',flexShrink:0,marginLeft:4}}>{days}日</span>
           </div>
@@ -26715,7 +26715,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 </div>
                 {/* 売上一覧テーブル: グラフと近接表示 */}
                 <div data-print-id="rate-detail-table" style={{marginTop:4,overflowX:'auto'}}>
-                  <div style={{fontSize:12,fontWeight:'bold',color:'#94a3b8',marginBottom:4}}>■ 数値詳細</div>
+                  <div style={{fontSize:12,fontWeight:'bold',color:'#64748b',marginBottom:4}}>■ 数値詳細</div>
                   <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
                     <thead>
                       <tr style={{background:'#f8fafc'}}>
@@ -26782,9 +26782,9 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         ))}
                       </tr>
                       <tr style={{background:'#fafafa'}}>
-                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#94a3b8'}}>前年度稼働率</td>
+                        <td style={{padding:'4px 8px',fontWeight:'bold',whiteSpace:'nowrap',color:'#64748b'}}>前年度稼働率</td>
                         {chartDataWithDiff.map(d=>(
-                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',color:'#94a3b8'}}>{d.prevRate !== null ? `${d.prevRate}%` : '—'}</td>
+                          <td key={d.month} style={{padding:'4px 6px',textAlign:'right',color:'#64748b'}}>{d.prevRate !== null ? `${d.prevRate}%` : '—'}</td>
                         ))}
                       </tr>
                       <tr>
@@ -26864,7 +26864,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                         {s.planned>0 ? (
                           <React.Fragment>
                             <div data-print-id="dow-rate-pct" style={{fontSize:16,fontWeight:'bold',color:RC(s.rate),lineHeight:1.15,marginTop:2}}>{s.rate}%</div>
-                            <div style={{fontSize:11,color:'#94a3b8'}}>{s.attended}/{s.planned}件</div>
+                            <div style={{fontSize:11,color:'#64748b'}}>{s.attended}/{s.planned}件</div>
                           </React.Fragment>
                         ) : <div style={{fontSize:13,color:'#cbd5e1',padding:'12px 0'}}>ー</div>}
                       </div>
@@ -26920,7 +26920,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                           {s.planned>0 ? (
                             <React.Fragment>
                               <div data-print-id="dow-rate-pct" style={{fontSize:16,fontWeight:'bold',color:RC(s.rate),lineHeight:1.15,marginTop:2}}>{s.rate}%</div>
-                              <div style={{fontSize:11,color:'#94a3b8'}}>{s.attended}/{s.planned}件</div>
+                              <div style={{fontSize:11,color:'#64748b'}}>{s.attended}/{s.planned}件</div>
                             </React.Fragment>
                           ) : <div style={{fontSize:13,color:'#cbd5e1',padding:'12px 0'}}>ー</div>}
                         </div>
@@ -26943,7 +26943,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div id="ops-mood" data-sec="ops-mood" style={{scrollMarginTop:170}}/>
         <Card title={`気分割合　${periodLabel}（合計 ${moodStats.total}回）`} accent='#06b6d4'>
           {moodStats.total === 0 ? (
-            <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>データなし</div>
+            <div style={{textAlign:'center',color:'#64748b',fontSize:13,padding:'12px 0'}}>データなし</div>
           ) : (
             <div style={{display:'flex',flexDirection:'column',gap:12}}>
               {[
@@ -26983,7 +26983,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div id="ops-kaikin" data-sec="ops-kaikin" style={{scrollMarginTop:170}}/>
         <Card title={`皆勤賞　${periodLabel}（${kaikin.length}名）`} accent='#f59e0b'>
           {kaikin.length === 0 ? (
-            <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>該当者なし</div>
+            <div style={{textAlign:'center',color:'#64748b',fontSize:13,padding:'12px 0'}}>該当者なし</div>
           ) : renderKaikin(kaikin, getScheduleDays)}
         </Card>
 
@@ -26991,7 +26991,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         {/* 4. 出席率ランキング */}
         <div id="ops-rank-att" data-sec="ops-rank-att" style={{scrollMarginTop:170}}/>
         <Card title={`出席率ランキング　${periodLabel}（${attRank.length}名）`} accent='#3b82f6'>
-            {attRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
+            {attRank.length===0 ? <div style={{color:'#64748b',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
               // ★ 横列数は画面幅で可変(スマホは2列＝氏名がつぶれない)。 左→右順、はみ出たら次の行へ
               const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
               const list = showAllAtt ? attRank : attRank.slice(0,120);
@@ -27000,7 +27000,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                   <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:12}}>
                     {list.map(({patient,rate}, idx) => (
                       <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{`${idx+1}.`}</span>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{`${idx+1}.`}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#3b82f6',flexShrink:0,marginLeft:4}}>{rate}%</span>
                       </div>
@@ -27019,7 +27019,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         {/* 5. 欠席率ランキング */}
         <div id="ops-rank-abs" data-sec="ops-rank-abs" style={{scrollMarginTop:170,marginTop:12}}/>
         <Card title={`欠席率ランキング　${periodLabel}（${absRank.length}名）`} accent='#ef4444'>
-            {absRank.length===0 ? <div style={{color:'#94a3b8',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
+            {absRank.length===0 ? <div style={{color:'#64748b',fontSize:13,textAlign:'center',padding:'12px 0'}}>データなし</div> : (() => {
               const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
               const list = showAllAbs ? absRank : absRank.slice(0,120);
               return (
@@ -27027,7 +27027,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                   <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:12}}>
                     {list.map(({patient,rate}, idx) => (
                       <div key={patient.id} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                        <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{`${idx+1}.`}</span>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:22,textAlign:'right',flexShrink:0,marginRight:4}}>{`${idx+1}.`}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{patient.name}</span>
                         <span style={{fontSize:12,fontWeight:'bold',color:'#ef4444',flexShrink:0,marginLeft:4}}>{rate}%</span>
                       </div>
@@ -27047,7 +27047,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         <div id="ops-reason" data-sec="ops-reason" style={{scrollMarginTop:170}}/>
         <Card title={`欠席理由ランキング　${periodLabel}（${reasonRank.length}種）`} accent='#64748b'>
           {reasonRank.length===0 ? (
-            <div style={{textAlign:'center',color:'#94a3b8',fontSize:13,padding:'12px 0'}}>欠席理由の記録なし</div>
+            <div style={{textAlign:'center',color:'#64748b',fontSize:13,padding:'12px 0'}}>欠席理由の記録なし</div>
           ) : (() => {
             // ★ 横6列まで。 左→右に1〜6位、はみ出たら次の行へ
             const N_COLS = (typeof window!=='undefined' && window.innerWidth < 640) ? 2 : (typeof window!=='undefined' && window.innerWidth < 1024) ? 3 : 6;
@@ -27057,7 +27057,7 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
                   {list.map(({reason,count}, idx) => (
                     <div key={reason} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                      <span style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
+                      <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
                       <span style={{fontSize:12,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{reason}</span>
                       <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',flexShrink:0,marginLeft:4}}>{count}件</span>
                     </div>
@@ -27287,7 +27287,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                     <Search size={14} color="#94a3b8"/>
                     <input autoFocus type="text" value={patSearch} onChange={e=>setPatSearch(e.target.value)}
                       placeholder="氏名で検索..." style={{border:'none',background:'transparent',outline:'none',fontSize:13,fontWeight:'bold',flex:1,width:0}}/>
-                    {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#94a3b8',lineHeight:1}}><X size={13}/></button>}
+                    {patSearch && <button onClick={()=>setPatSearch('')} style={{color:'#64748b',lineHeight:1}}><X size={13}/></button>}
                   </div>
                 </div>
                 <div style={{overflowY:'auto',flex:1}}>
@@ -27298,13 +27298,13 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
                       {p.id===selId && <span style={{width:6,height:6,borderRadius:'50%',background:'#3b82f6',flexShrink:0}}/>}
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:'bold',truncate:true}}>{p.name}</div>
-                        {p.kana && <div style={{fontSize:10,color:'#94a3b8',lineHeight:1.2}}>{p.kana}</div>}
+                        {p.kana && <div style={{fontSize:10,color:'#64748b',lineHeight:1.2}}>{p.kana}</div>}
                       </div>
                       {p.careLevel && <span style={{fontSize:10,fontWeight:'bold',color:'#3b82f6',background:'#eff6ff',padding:'1px 5px',borderRadius:4,flexShrink:0}}>{p.careLevel}</span>}
                     </button>
                   ))}
                   {[...appData.patients].filter(p=>getPatientDisplayStatus(p)==='利用中'&&(!patSearch||p.name.includes(patSearch)||(p.kana&&p.kana.includes(patSearch)))).length===0 && (
-                    <div style={{padding:'16px',textAlign:'center',fontSize:12,color:'#94a3b8'}}>見つかりません</div>
+                    <div style={{padding:'16px',textAlign:'center',fontSize:12,color:'#64748b'}}>見つかりません</div>
                   )}
                 </div>
               </div>
@@ -27639,7 +27639,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}} onClick={()=>setBikouEdit(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',padding:24,boxShadow:'0 10px 40px rgba(0,0,0,0.3)'}}>
             <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:6}}>備考の編集　<span style={{fontSize:12,color:'#64748b'}}>{tY}年{tM}月 ／ {sp.name} 様</span></div>
-            <div style={{fontSize:11,color:'#94a3b8',marginBottom:12}}>この月の備考欄に表示される内容です。空にして保存すると空欄になります（自動記載に戻したい場合は本文を空にせず「自動に戻す」を押してください）。</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12}}>この月の備考欄に表示される内容です。空にして保存すると空欄になります（自動記載に戻したい場合は本文を空にせず「自動に戻す」を押してください）。</div>
             <textarea value={bikouEdit.text} onChange={e=>setBikouEdit({text:e.target.value})} rows={5}
                       placeholder="例: 6/15 重さ3→4に変更"
                       style={{width:'100%',boxSizing:'border-box',padding:'10px 12px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',resize:'vertical',lineHeight:1.7,marginBottom:14}}/>
@@ -29911,7 +29911,7 @@ function DateRangePicker({ fromValue, toValue, onFromChange, onToChange, disable
       <div onClick={()=>!disabled&&setOpen(o=>!o)}
         style={{display:'flex',alignItems:'center',gap:2,background:'#f8fafc',border:'1px solid #cbd5e1',borderRadius:12,padding:'8px 12px',cursor:disabled?'default':'pointer',opacity:disabled?0.6:1}}>
         <span style={{fontSize:13,fontWeight:'bold',color:inFrom?'#1e293b':'#94a3b8'}}>{inFrom?fmt(inFrom):'開始日'}</span>
-        <span style={{color:'#94a3b8',fontWeight:'bold',fontSize:13,margin:'0 2px'}}>〜</span>
+        <span style={{color:'#64748b',fontWeight:'bold',fontSize:13,margin:'0 2px'}}>〜</span>
         <span style={{fontSize:13,fontWeight:'bold',color:inTo?'#1e293b':'#94a3b8'}}>{inTo?fmt(inTo):'終了日'}</span>
         {inFrom && inTo && (()=>{
           const d1=new Date(inFrom), d2=new Date(inTo);
@@ -37251,7 +37251,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                       );
                     })}
                   </div>
-                  <div style={{marginTop:4,paddingTop:4,borderTop:'1px solid #f1f5f9',display:'flex',gap:8,fontSize:8,fontWeight:'bold',color:'#94a3b8'}}>
+                  <div style={{marginTop:4,paddingTop:4,borderTop:'1px solid #f1f5f9',display:'flex',gap:8,fontSize:8,fontWeight:'bold',color:'#64748b'}}>
                     <span><span style={{color:'#16a34a'}}>●</span> AM+PM</span>
                     <span><span style={{color:'#d97706'}}>AM</span> AMのみ</span>
                     <span><span style={{color:'#2563eb'}}>PM</span> PMのみ</span>
@@ -38187,7 +38187,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
             .kk-sheet{page-break-after:always;break-after:page}
             .kk-sheet:last-child{page-break-after:auto;break-after:auto}`;
         const sheet = (pr) => (
-        <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'6mm 7mm 4mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+        <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'6mm 7mm 4mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif',lineHeight:1.3}}>
           <div className="kkfix" style={{fontSize:'10px'}}>別紙様式３－３</div>
           <div className="kkfix" style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【個別機能訓練計画書】</div>
           <table style={{width:'100%',borderCollapse:'collapse'}}><tbody>
@@ -38293,7 +38293,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         const _tD=new Date(); const _wk=`令和${_tD.getFullYear()-2018}年${_tD.getMonth()+1}月${_tD.getDate()}日`;
         const dcell={border:'1px solid #94a3b8',padding:'4px 6px',verticalAlign:'top',whiteSpace:'pre-wrap',fontSize:'10px',wordBreak:'break-word'};
         const cover = (
-          <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'14mm 16mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.6,fontSize:'12px'}}>
+          <div className="kk-sheet" style={{background:'white',color:'#000',width:'210mm',minHeight:'296mm',padding:'14mm 16mm',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif',lineHeight:1.6,fontSize:'12px'}}>
             <div style={{textAlign:'right',fontSize:'11px'}}>{_wk}</div>
             <div style={{fontSize:'13px',marginTop:'8mm',fontWeight:'bold'}}>{patient?.cmOffice||'居宅介護支援事業所'}<br/>{patient?.cmName?`${patient.cmName} 様`:'ご担当者 様'}</div>
             {patient?.cmFax && <div style={{fontSize:'11px',color:'#333'}}>FAX: {patient.cmFax}</div>}
@@ -38429,7 +38429,7 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         )}
       </div>
       {printRec && (
-        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.3}}>
+        <div id="sk-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif',lineHeight:1.3}}>
           <style>{`#sk-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #sk-print-area td,#sk-print-area th{word-break:break-word;overflow-wrap:anywhere} #sk-print-area *{max-width:100%}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－２</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【生活機能チェックシート】</div>
@@ -38552,7 +38552,7 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
         )}
       </div>
       {printRec && (
-        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Yu Gothic",sans-serif',lineHeight:1.25}}>
+        <div id="ki-print-area" style={{display:'none',background:'white',color:'#000',width:'794px',padding:'34px 36px',boxSizing:'border-box',fontFamily:'"Hiragino Sans","Meiryo","Yu Gothic Medium","Yu Gothic",sans-serif',lineHeight:1.25}}>
           <style>{`#ki-print-area table{table-layout:fixed;width:100%;border-collapse:collapse;max-width:100%} #ki-print-area td,#ki-print-area th{word-break:break-word;overflow-wrap:anywhere} #ki-print-area *{max-width:100%}`}</style>
           <div style={{fontSize:'10px'}}>別紙様式３－１</div>
           <div style={{textAlign:'center',fontSize:'15px',fontWeight:'bold',margin:'2px 0 6px'}}>【興味・関心チェックシート】</div>
@@ -39188,7 +39188,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
           +`<div>（地域密着型）通所介護　${esc(facility.name)||'　　　　'}　　　${_fzip?'〒'+esc(_fzip):''}　住所：${esc(_faddr)}　　　管理者：${esc(_fmgr)}</div>`
           +`<div>　事業所No.${esc(_fno)}　　　　　　　　　Tel.${esc(facility.phone)}/Fax.${esc(facility.fax)}</div>`
           +`</div>`;
-        const html=`<div style="width:210mm;height:297mm;padding:6mm 5mm 4mm;box-sizing:border-box;display:flex;flex-direction:column;font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;background:#fff;overflow:hidden;">`
+        const html=`<div style="width:210mm;height:297mm;padding:6mm 5mm 4mm;box-sizing:border-box;display:flex;flex-direction:column;font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;color:#000;background:#fff;overflow:hidden;">`
           +`<div style="flex:0 0 auto;font-size:9px;font-weight:bold;">別紙様式３－４</div>`
           +`<div style="flex:0 0 auto;text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:0.8mm 0 1.5mm;">【（地域密着型）通所介護計画書】</div>`
           +`<div style="flex:0 0 auto;">${hdr1}${hdr2}${hdr3}</div>`
@@ -40163,7 +40163,7 @@ function buildMonitoringTableHtml(patient, sheet, facility, monthLabel) {
     <td style="${bd}background:#d9d9d9;padding:6px 8px;font-weight:bold;font-size:11px;width:170px;vertical-align:top;line-height:1.4;">${it.no}${it.title}<div style="font-weight:normal;font-size:9px;color:#444;margin-top:2px;">${_escMon(it.explain)}</div></td>
     <td style="${bd}padding:6px;font-size:11px;font-weight:bold;text-align:center;width:96px;vertical-align:top;">${_escMon(c.sel)||'　'}</td>
     <td style="${bd}padding:6px 9px;font-size:11px;vertical-align:top;line-height:1.6;">${_escMon(c.text)||'&nbsp;'}</td></tr>`; }).join('');
-  return `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;background:white;">
+  return `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;color:#000;background:white;">
     <div style="text-align:center;font-size:17px;font-weight:bold;margin-bottom:10px;">通所介護モニタリング表</div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
       <tr><td style="${bd}background:#f2f2f2;padding:5px 8px;font-weight:bold;font-size:11px;white-space:nowrap;">利用者名</td><td style="${bd}padding:5px 8px;font-size:11px;">${_escMon(patient.name)} 様</td>
@@ -40714,7 +40714,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     }
     if (!window.confirm(`${targets.length}名のモニタリング表を、それぞれの担当ケアマネ宛て（宛先自動）で出力します。\n送付履歴にも記録します。よろしいですか？`)) return;
     const pages = targets.map(p => buildSheetHtml(p, getSheetRecord(p.id).sheet, true, true)).join('');
-    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${pages}</div>`;
+    const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${pages}</div>`;
     const title = `モニタリング表_ケアマネ送付_${monthLabelStr}_${targets.length}名`;
     const entries = targets.map((p,i) => _monFaxEntry(p, i));
     onSave({...appData, faxHistory:[...entries, ...(appData.faxHistory||[])]}, {manual:true, message:`✓ ${targets.length}名分を担当ケアマネ宛てで出力し、送付履歴に記録しました`});
@@ -40739,7 +40739,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     setAutoFax({ running:true, total:withFax.length, done:0, results:[] });
     const results = [];
     for (const p of withFax) {
-      const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${buildSheetHtml(p, getSheetRecord(p.id).sheet, true, false)}</div>`;
+      const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${buildSheetHtml(p, getSheetRecord(p.id).sheet, true, false)}</div>`;
       let r0 = { name:p.name, office:p.cmOffice||'', to:p.cmFax, ok:false, err:'' };
       try {
         const resp = await fetch('/api/send-fax', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ to:p.cmFax, html, subject:`${monthLabelStr} 通所介護モニタリング表` }) });
@@ -40764,7 +40764,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const rec = getSheetRecord(patient.id);
     const sheet = (rec&&rec.sheet) ? rec.sheet : getOrInitSheetFor(patient);
     if (!((patient.cmOffice||'').trim())) { if(!window.confirm('この利用者は担当ケアマネ事業所が未設定です。宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）')) return; }
-    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${buildSheetHtml(patient, sheet, true, false)}</div>`;
+    const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${buildSheetHtml(patient, sheet, true, false)}</div>`;
     const title = `モニタリング表_${patient.name}_${monthLabelStr}`;
     onSave({...appData, faxHistory:[_monFaxEntry(patient), ...(appData.faxHistory||[])]}, {manual:true, message:`✓ ${patient.name}様のモニタリング表を担当ケアマネ宛てで出力しました`});
     if (onShowPrintPreview) {
@@ -40778,7 +40778,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const targets = checked.length ? checked : [...attendedPats, ...absentPats];
     if (!targets.length) { alert('対象の利用者がいません'); return; }
     const pages = targets.map(p => { const rec=getSheetRecord(p.id); const sheet = (rec&&rec.sheet) ? rec.sheet : getOrInitSheetFor(p); return buildSheetHtml(p, sheet, true, true); }).join('');
-    const html = `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;">${pages}</div>`;
+    const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${pages}</div>`;
     const title = `通所介護モニタリング表_${monthLabelStr}_${targets.length}名`;
     if (onShowPrintPreview) {
       onShowPrintPreview(title,'A4 landscape',null);
@@ -41019,7 +41019,7 @@ ${optionsDesc}
         <td style="${bd}padding:7px 9px;font-size:11px;vertical-align:top;line-height:1.7;">${escSheet(c.text)||'&nbsp;'}</td>
       </tr>`;
     }).join('');
-    return `<div style="font-family:'Hiragino Sans','Yu Gothic','MS PGothic',sans-serif;color:#000;width:297mm;min-height:210mm;box-sizing:border-box;padding:10mm 12mm;background:white;${pageBreak?'page-break-after:always;page-break-inside:avoid;':''}">
+    return `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;color:#000;width:297mm;min-height:210mm;box-sizing:border-box;padding:10mm 12mm;background:white;${pageBreak?'page-break-after:always;page-break-inside:avoid;':''}">
       <div style="text-align:center;font-size:19px;font-weight:bold;margin-bottom:12px;">通所介護モニタリング表</div>
       ${faxLine}
       <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
@@ -41232,7 +41232,7 @@ ${optionsDesc}
                     {patient.name}
                     {isBdayMonth(patient) && <span title="今月が誕生月" style={{fontSize:14}}>👑</span>}
                   </div>
-                  <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>{patient.careLevel||''}</div>
+                  <div style={{fontSize:10,color:'#64748b',marginTop:2}}>{patient.careLevel||''}</div>
                 </td>
                 {/* 内容列 — ★ ①〜⑤を既定表示。 プルダウン変更・本文入力でその場保存。 確定済みは編集不可 */}
                 <td style={{padding:'10px 14px',verticalAlign:'middle'}}>
@@ -41243,7 +41243,7 @@ ${optionsDesc}
                     const sh = persisted ? sheetRec.sheet : getOrInitSheetFor(patient);
                     return (
                       <div style={{fontSize:12,lineHeight:1.5,color:'#1e293b'}}>
-                        {!persisted && <div style={{fontSize:10,color:'#94a3b8',marginBottom:4}}>（既定の下書き。プルダウンや本文を変更すると保存されます）</div>}
+                        {!persisted && <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>（既定の下書き。プルダウンや本文を変更すると保存されます）</div>}
                         {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; const copyId=`${patient.id}:${it.key}`; return (
                           <div key={it.key} style={{marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'}}>
                             <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:2}}>
@@ -41267,7 +41267,7 @@ ${optionsDesc}
                             )}
                           </div>
                         );})}
-                        <div style={{fontSize:10,color:'#94a3b8'}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}</div>
+                        <div style={{fontSize:10,color:'#64748b'}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}</div>
                       </div>
                     );
                   })()}
@@ -41317,7 +41317,7 @@ ${optionsDesc}
                   </thead>
                   <tbody>
                     {attendedPats.length === 0
-                      ? <tr><td colSpan={4} style={{padding:'24px',textAlign:'center',color:'#94a3b8',fontSize:12}}>対象者なし</td></tr>
+                      ? <tr><td colSpan={4} style={{padding:'24px',textAlign:'center',color:'#64748b',fontSize:12}}>対象者なし</td></tr>
                       : attendedPats.map((p,i) => renderRow(p,i,false))
                     }
                   </tbody>
@@ -41327,7 +41327,7 @@ ${optionsDesc}
               {/* 未通所 */}
               {absentPats.length > 0 && (
                 <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 4px rgba(0,0,0,0.05)',overflow:'hidden',border:'1px solid #f1f5f9'}}>
-                  <div style={{background:'#f8fafc',padding:'8px 16px',fontSize:12,fontWeight:'bold',color:'#94a3b8',borderBottom:'1px solid #f1f5f9'}}>
+                  <div style={{background:'#f8fafc',padding:'8px 16px',fontSize:12,fontWeight:'bold',color:'#64748b',borderBottom:'1px solid #f1f5f9'}}>
                     今月の通所なし（{absentPats.length}名）— 必要な場合のみ手入力・生成
                   </div>
                   <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
@@ -41348,7 +41348,7 @@ ${optionsDesc}
               )}
 
               {attendedPats.length === 0 && absentPats.length === 0 && (
-                <div style={{textAlign:'center',padding:'40px',color:'#94a3b8',fontSize:13}}>
+                <div style={{textAlign:'center',padding:'40px',color:'#64748b',fontSize:13}}>
                   {searchQuery ? `「${searchQuery}」に一致する利用者がいません` : '利用中の利用者がいません'}
                 </div>
               )}
@@ -41688,7 +41688,7 @@ function FaxHistoryListModal({ history, typeLabel, onDelete, onClose }) {
         </div>
         <div style={{flex:1,overflow:'auto',padding:'8px 0'}}>
           {filtered.length === 0 ? (
-            <div style={{padding:'40px 20px',textAlign:'center',color:'#94a3b8',fontSize:13}}>
+            <div style={{padding:'40px 20px',textAlign:'center',color:'#64748b',fontSize:13}}>
               {history && history.length > 0 ? '該当する履歴がありません' : '送付履歴はまだありません'}
             </div>
           ) : (
@@ -41706,7 +41706,7 @@ function FaxHistoryListModal({ history, typeLabel, onDelete, onClose }) {
                     {(h.recipientName || h.recipientFax) ? (
                       <>宛先: <b>{h.recipientName||'(名前なし)'}</b>{h.recipientFax && <span style={{fontFamily:'Menlo,monospace',marginLeft:6,color:'#7c3aed'}}>{h.recipientFax}</span>}</>
                     ) : (
-                      <span style={{color:'#94a3b8',fontStyle:'italic'}}>宛先情報なし</span>
+                      <span style={{color:'#64748b',fontStyle:'italic'}}>宛先情報なし</span>
                     )}
                   </div>
                   {h.memo && <div style={{fontSize:12,color:'#334155',marginTop:3,whiteSpace:'pre-wrap'}}>{String(h.memo).slice(0,120)}{String(h.memo).length>120?'…':''}</div>}
@@ -42072,7 +42072,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           <button type="button" onClick={closeFax} style={{background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,255,255,0.2)',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
             ← カレンダーに戻る
           </button>
-          <span style={{fontSize:13,fontWeight:'bold',color:'#94a3b8'}}>{absDate}　{maskedName} 様</span>
+          <span style={{fontSize:13,fontWeight:'bold',color:'#64748b'}}>{absDate}　{maskedName} 様</span>
           <div style={{marginLeft:'auto',display:'flex',gap:8,flexWrap:'wrap'}}>
             <button type="button" onClick={()=>{
               // プレビューモーダルへ + 送付履歴を自動記録
@@ -42376,7 +42376,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                     <div style={{fontSize:13,fontWeight:'bold',color:isClosed?'#cbd5e1':di===0?'#dc2626':di===6?'#2563eb':'#334155',marginBottom:4,display:'flex',alignItems:'center',gap:4}}>
                       {day}
                       {isToday&&!isClosed&&<span style={{fontSize:9,background:'#f59e0b',color:'white',borderRadius:4,padding:'1px 4px',fontWeight:'bold'}}>今日</span>}
-                      {isClosed&&<span style={{fontSize:9,color:'#94a3b8'}}>定休</span>}
+                      {isClosed&&<span style={{fontSize:9,color:'#64748b'}}>定休</span>}
                     </div>
                     {absences.map(({patient:pat, tokki},ai)=>{
                       const k = getKey(dateStr, pat.id);
@@ -42858,7 +42858,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             {!tplEdit && (
               <>
                 {faxTemplates.length === 0 && (
-                  <div style={{fontSize:13,color:'#94a3b8',padding:'16px 0',textAlign:'center'}}>定型文がありません。「＋ 新規追加」から登録してください。</div>
+                  <div style={{fontSize:13,color:'#64748b',padding:'16px 0',textAlign:'center'}}>定型文がありません。「＋ 新規追加」から登録してください。</div>
                 )}
                 {faxTemplates.map(t => (
                   <div key={t.id} style={{border:'1px solid #e2e8f0',borderRadius:10,padding:12,marginBottom:10}}>
