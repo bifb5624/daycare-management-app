@@ -39899,10 +39899,23 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
     const a = (appData.adlRecords||[]).find(r=>r.patientId===pid && String(r.evalDate)===dateIso) || null;
     const skR = (appData.seikatsuKinouRecords||[]).find(r=>r.patientId===pid && _isoOfRec(r.recordDate)===dateIso) || null;
     const kyR = (appData.kyomiKanshinRecords||[]).find(r=>r.patientId===pid && _isoOfRec(r.recordDate)===dateIso) || null;
+    // ★ 計画書(3-3)の見直しセクション用: 同じ評価日の計画書があればそれを編集、無ければ直近を「前回」として新規作成
+    const wk0 = _toWareki(dateIso);
+    const kks = (appData.kinouKeikakuRecords||[]).filter(r=>r.patientId===pid)
+      .sort((x,y)=>(String(y.createdDate||'')).localeCompare(String(x.createdDate||'')));
+    const sameDayKk = kks.find(r=>String(r.createdDate)===wk0) || null;
+    const prevKk = kks.find(r=>String(r.createdDate)!==wk0) || null;
+    const seedKk = sameDayKk || prevKk;
     setBatch({ evalDate: dateIso, evaluator: a?.evaluator||'',
       items: {...(a?.items||{})}, science: JSON.parse(JSON.stringify(a?.science||{})),
       sk: { adl:{...(skR?.adl||{})}, kikyo:{...(skR?.kikyo||{})}, iadl:{...(skR?.iadl||{})}, shinshin:{...(skR?.shinshin||{})} },
       ky: { items: JSON.parse(JSON.stringify(kyR?.items||{})), custom: JSON.parse(JSON.stringify(kyR?.custom||[])), bikou: kyR?.bikou||'' },
+      plan: { on: !!sameDayKk, longOn: false, available: !!seedKk,
+        sameDayId: sameDayKk?.id||null, prevId: prevKk?.id||null, prevDate: prevKk?.createdDate||'',
+        prevShortAchieve: prevKk?.shortAchieve||'', prevLongAchieve: prevKk?.longAchieve||'',
+        shortKinou: seedKk?.shortKinou||'', shortKatsudo: seedKk?.shortKatsudo||'', shortSanka: seedKk?.shortSanka||'',
+        longKinou: seedKk?.longKinou||'', longKatsudo: seedKk?.longKatsudo||'', longSanka: seedKk?.longSanka||'',
+        ryuiPoint: seedKk?.ryuiPoint||'', henka: sameDayKk?.henka||'', kadai: sameDayKk?.kadai||'' },
       _aId: a?.id||null, _skId: skR?.id||null, _kyId: kyR?.id||null });
     setBatchMode(true); setEditing(null);
   };
@@ -39912,6 +39925,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
   const bsetSk = (sec,k,v) => { setBatch(b=>{ const nb={...b, sk:{...b.sk,[sec]:{...b.sk[sec],[k]:v}}};
       if (sec==='adl') { const sug=seikatsuAdlToBarthel(nb.sk.adl); const items={...nb.items}; Object.keys(sug).forEach(bk=>{ if(items[bk]==null||items[bk]==='') items[bk]=sug[bk]; }); nb.items=items; }
       return nb; }); markDirty(); };
+  const bsetPlan = (patch) => { setBatch(b=>({...b, plan:{...(b.plan||{}), ...patch}})); markDirty(); };
   const bsetKy = (name, flag) => { setBatch(b=>{ const it={...(b.ky.items||{})}; const cur={...(it[name]||{})}; cur[flag]=!cur[flag]; it[name]=cur; return {...b, ky:{...b.ky, items:it}}; }); markDirty(); };
   const _batchMissing = React.useMemo(() => {
     if (!batch) return [];
@@ -39933,11 +39947,39 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
     const up = (arr, id, patch) => { const list=[...(appData[arr]||[])]; const i=list.findIndex(r=>r.id===id);
       if (i>=0) list[i]={...list[i], ...patch, id, _savedAt:now}; else list.push({ id, patientId:pid, createdAt:Date.now(), ...patch, _savedAt:now });
       return list; };
+    // ★ 計画書(3-3)の見直し(2026-08-20): ONの場合、評価日の計画書を「複製して更新」相当で作成/更新し、
+    //   前回計画書には達成度(短期/長期)を書き込む。 プログラム・希望・病名等は前回から引き継ぎ(計画書画面で編集可)。
+    let _kkList = null; let _planMsg = '';
+    const P = batch.plan || {};
+    if (P.on && P.available) {
+      _kkList = [...(appData.kinouKeikakuRecords||[])];
+      const prev = P.prevId ? _kkList.find(r=>r.id===P.prevId) : null;
+      if (prev && (P.prevShortAchieve !== (prev.shortAchieve||'') || P.prevLongAchieve !== (prev.longAchieve||''))) {
+        const pi2 = _kkList.findIndex(r=>r.id===P.prevId);
+        _kkList[pi2] = { ..._kkList[pi2], shortAchieve: P.prevShortAchieve, longAchieve: P.prevLongAchieve, _savedAt: now };
+      }
+      const base = P.sameDayId ? _kkList.find(r=>r.id===P.sameDayId) : (prev || {});
+      const nkId = P.sameDayId || `kk_${pid}_${Date.now()}`;
+      const nk = { ...base, id: nkId, patientId: pid, createdAt: base?.createdAt || Date.now(),
+        createdDate: wk, prevDate: P.sameDayId ? (base?.prevDate || P.prevDate || '') : (P.prevDate || ''),
+        firstDate: base?.firstDate || prev?.firstDate || wk,
+        shortKinou: P.shortKinou, shortKatsudo: P.shortKatsudo, shortSanka: P.shortSanka,
+        longKinou: P.longOn ? P.longKinou : (base?.longKinou ?? P.longKinou),
+        longKatsudo: P.longOn ? P.longKatsudo : (base?.longKatsudo ?? P.longKatsudo),
+        longSanka: P.longOn ? P.longSanka : (base?.longSanka ?? P.longSanka),
+        ryuiPoint: P.ryuiPoint, henka: P.henka, kadai: P.kadai,
+        shortAchieve: P.sameDayId ? (base?.shortAchieve||'') : '', longAchieve: P.sameDayId ? (base?.longAchieve||'') : '',
+        _savedAt: now };
+      const ni = _kkList.findIndex(r=>r.id===nkId);
+      if (ni>=0) _kkList[ni]=nk; else _kkList.push(nk);
+      _planMsg = '・計画書(3-3)';
+    }
     onSave({ ...appData,
       adlRecords: up('adlRecords', aId, { evalDate:batch.evalDate, evaluator:batch.evaluator||'', items:batch.items, science:batch.science }),
       seikatsuKinouRecords: up('seikatsuKinouRecords', skId, { recordDate:wk, adl:batch.sk.adl, kikyo:batch.sk.kikyo, iadl:batch.sk.iadl, shinshin:batch.sk.shinshin }),
       kyomiKanshinRecords: up('kyomiKanshinRecords', kyId, { recordDate:wk, items:batch.ky.items, custom:batch.ky.custom||[], bikou:batch.ky.bikou }),
-    }, { manual:true, message: asDraft ? '✓ 一時保存しました' : '✓ 一括評価を保存しました（ADL・生活機能チェック・興味関心へ反映）' });
+      ...(_kkList ? { kinouKeikakuRecords: _kkList } : {}),
+    }, { manual:true, message: asDraft ? '✓ 一時保存しました' : `✓ 一括評価を保存しました（ADL・生活機能・興味関心${_planMsg}へ反映）` });
     if (dirtyRef) dirtyRef.current=false;
     if (!asDraft) { setBatchMode(false); setBatch(null); }
     else setBatch(b=>({ ...b, _aId:aId, _skId:skId, _kyId:kyId }));
@@ -40061,7 +40103,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
                 className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${d===batch.evalDate?'bg-indigo-600 text-white border-indigo-600':'bg-white text-slate-600 border-slate-300 hover:bg-indigo-50'}`}>{d.replace(/-/g,'/')}</button>
             ))}
             <div className="flex-1"/>
-            {[['adl','② ADL'],['sci','③ 科学的介護'],['sk','④ 生活機能'],['ky','⑤ 興味・関心']].map(([k,l])=>(
+            {[['adl','② ADL'],['sci','③ 科学的介護'],['sk','④ 生活機能'],['ky','⑤ 興味・関心'],...(batch.plan?.available?[['plan','⑥ 計画書']]:[])].map(([k,l])=>(
               <button key={k} onClick={()=>_bJump(k)} className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600">{l}</button>
             ))}
           </div>
@@ -40157,6 +40199,64 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
                   ); })}
                 </div>
                 <div className="mt-2"><label className="block text-xs font-bold text-slate-500 mb-1">備考</label><textarea value={batch.ky.bikou} onChange={e=>{ setBatch(b=>({...b, ky:{...b.ky, bikou:e.target.value}})); markDirty(); }} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none resize-none"/></div>
+              </div>
+              {/* ⑥ 計画書の見直し(まるっとLIFE式: 更新が必要な項目だけ・2026-08-20) */}
+              <div ref={el=>{_batchRefs.current.plan=el;}} className="bg-white rounded-xl border border-slate-200 p-4" style={{scrollMarginTop:8}}>
+                <div className="flex items-center gap-3 flex-wrap mb-1">
+                  <div className="text-sm font-bold text-indigo-700">⑥ 計画書(3-3)の見直し</div>
+                  {batch.plan?.available ? (
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
+                      <input type="checkbox" checked={!!batch.plan?.on} onChange={e=>bsetPlan({on:e.target.checked})} className="w-4 h-4"/>
+                      この評価日で計画書も更新する
+                    </label>
+                  ) : (
+                    <span className="text-xs text-slate-400">初回の計画書は「計画書(様式3-3)」画面から作成してください（2回目以降はここで見直しできます）</span>
+                  )}
+                </div>
+                {batch.plan?.available && batch.plan?.on && (<>
+                  <div className="text-[10px] text-slate-400 mb-3">保存すると前回計画の「複製して更新」が自動で行われます。プログラム・希望・病名などは前回から引き継がれ、計画書(3-3)画面でいつでも編集できます。</div>
+                  {batch.plan.prevId && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                      <div className="text-xs font-bold text-amber-700 mb-2">前回計画（作成日: {batch.plan.prevDate||'—'}）の達成度</div>
+                      <div className="flex gap-4 flex-wrap">
+                        {[['prevShortAchieve','短期目標'],['prevLongAchieve','長期目標']].map(([k,lb])=>(
+                          <label key={k} className="flex items-center gap-2 text-xs font-bold text-slate-600">{lb}
+                            <select value={batch.plan[k]||''} onChange={e=>bsetPlan({[k]:e.target.value})} className="px-2 py-1.5 border border-slate-300 rounded-lg text-sm outline-none bg-white">
+                              <option value="">未評価</option><option>達成</option><option>一部</option><option>未達</option>
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="text-xs font-bold text-slate-600 mb-1.5">新しい短期目標（今後3ヶ月）</div>
+                  <div className="grid md:grid-cols-3 gap-2 mb-3">
+                    {[['shortKinou','（機能）'],['shortKatsudo','（活動）'],['shortSanka','（参加）']].map(([k,lb])=>(
+                      <div key={k}><label className="block text-[10px] font-bold text-slate-400 mb-0.5">{lb}</label>
+                        <textarea value={batch.plan[k]||''} onChange={e=>bsetPlan({[k]:e.target.value})} rows={2} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none resize-none"/></div>
+                    ))}
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer mb-1.5">
+                    <input type="checkbox" checked={!!batch.plan?.longOn} onChange={e=>bsetPlan({longOn:e.target.checked})} className="w-4 h-4"/>
+                    長期目標も変更する（通常は前回から引き継ぎ）
+                  </label>
+                  {batch.plan?.longOn && (
+                    <div className="grid md:grid-cols-3 gap-2 mb-3">
+                      {[['longKinou','（機能）'],['longKatsudo','（活動）'],['longSanka','（参加）']].map(([k,lb])=>(
+                        <div key={k}><label className="block text-[10px] font-bold text-slate-400 mb-0.5">{lb}</label>
+                          <textarea value={batch.plan[k]||''} onChange={e=>bsetPlan({[k]:e.target.value})} rows={2} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none resize-none"/></div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid md:grid-cols-3 gap-2">
+                    <div><label className="block text-[10px] font-bold text-slate-400 mb-0.5">機能訓練実施上の留意事項</label>
+                      <textarea value={batch.plan.ryuiPoint||''} onChange={e=>bsetPlan({ryuiPoint:e.target.value})} rows={2} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none resize-none"/></div>
+                    <div><label className="block text-[10px] font-bold text-slate-400 mb-0.5">実施による変化（Ⅲ）</label>
+                      <textarea value={batch.plan.henka||''} onChange={e=>bsetPlan({henka:e.target.value})} rows={2} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none resize-none"/></div>
+                    <div><label className="block text-[10px] font-bold text-slate-400 mb-0.5">課題とその要因（Ⅲ）</label>
+                      <textarea value={batch.plan.kadai||''} onChange={e=>bsetPlan({kadai:e.target.value})} rows={2} className="w-full px-2 py-1.5 border border-slate-300 rounded-lg text-xs outline-none resize-none"/></div>
+                  </div>
+                </>)}
               </div>
             </div>
           </div>
