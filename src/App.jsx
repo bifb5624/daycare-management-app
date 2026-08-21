@@ -42435,19 +42435,40 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const firstDow = new Date(cY, cM-1, 1).getDay();
   const dayNames = ['日','月','火','水','木','金','土'];
 
-  // 当月の欠席者を日付別に集計
+  // 当月+末週にはみ出す翌月分の欠席者を日付別に集計。
+  // ★ 2026-08-21: 提供記録(ticketRecords)だけでなく「利用者マスタの月間スケジュールで付けた欠席」も反映する。
+  //   従来は提供記録の欠席しか見ておらず、月間スケジュール側で調整した欠席がカレンダーに出なかった。
   const absencesByDate = {};
-  tickets.forEach(r => {
-    if (r.status !== '欠席') return;
-    const m = r.date?.match(/(\d+)月(\d+)日/);
-    if (!m) return;
-    const rm = parseInt(m[1]), rd = parseInt(m[2]);
-    if (rm !== cM) return;
-    const dateStr = `${cY}-${String(cM).padStart(2,'0')}-${String(rd).padStart(2,'0')}`;
-    if (!absencesByDate[dateStr]) absencesByDate[dateStr] = [];
-    const pat = patients.find(p => p.id === r.patientId);
-    if (pat) absencesByDate[dateStr].push({ patient: pat, tokki: r.tokki || '' });
-  });
+  const _collectAbs = (y2, m2) => {
+    tickets.forEach(r => {
+      if (r.status !== '欠席') return;
+      const m = r.date?.match(/(\d+)月(\d+)日/);
+      if (!m) return;
+      const rm = parseInt(m[1]), rd = parseInt(m[2]);
+      if (rm !== m2) return;
+      if (r.year && Number(r.year) !== y2) return;   // 年またぎの誤混入防止
+      const dateStr = `${y2}-${String(m2).padStart(2,'0')}-${String(rd).padStart(2,'0')}`;
+      if (!absencesByDate[dateStr]) absencesByDate[dateStr] = [];
+      const pat = patients.find(p => p.id === r.patientId);
+      if (pat && !absencesByDate[dateStr].some(a => a.patient.id === pat.id)) absencesByDate[dateStr].push({ patient: pat, tokki: r.tokki || '' });
+    });
+    const mk = `${y2}-${String(m2).padStart(2,'0')}`;
+    const ms = appData.monthlyShifts?.[mk] || {};
+    Object.keys(ms).forEach(pidStr => {
+      const cellsObj = ms[pidStr] || {};
+      Object.keys(cellsObj).forEach(ck => {
+        if (cellsObj[ck] !== '欠席') return;
+        const dm = ck.match(/^(\d+)_/); if (!dm) return;
+        const dateStr = `${y2}-${String(m2).padStart(2,'0')}-${String(parseInt(dm[1],10)).padStart(2,'0')}`;
+        const pat = patients.find(p => String(p.id) === String(pidStr)); if (!pat) return;
+        if (!absencesByDate[dateStr]) absencesByDate[dateStr] = [];
+        if (!absencesByDate[dateStr].some(a => a.patient.id === pat.id)) absencesByDate[dateStr].push({ patient: pat, tokki: '' });
+      });
+    });
+  };
+  const _nY = cM === 12 ? cY + 1 : cY, _nM = cM === 12 ? 1 : cM + 1;
+  _collectAbs(cY, cM);
+  _collectAbs(_nY, _nM);
 
   const getKey = (date, patId) => `${date}_${patId}`;
   const getFax = (date, patId) => faxData[getKey(date, patId)] || { checkboxes: { kyuukyuu: false, kakunin: false, orikaesu: false }, reporter: '', status: 'none' };
@@ -42781,13 +42802,14 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   }
 
   // カレンダー画面
+  // ★ 末週は翌月の日付で埋めて1週間分見えるようにする(2026-08-21)。 例: 8/31(月)の週に 9/1〜9/5 を薄く表示
   const weeks = [];
   let cells = Array(firstDow).fill(null);
   for (let d=1; d<=daysInMonth; d++) {
-    cells.push(d);
+    cells.push({ y: cY, m: cM, d });
     if (cells.length===7) { weeks.push(cells); cells=[]; }
   }
-  if (cells.length>0) { while(cells.length<7) cells.push(null); weeks.push(cells); }
+  if (cells.length>0) { let nd=1; while(cells.length<7) cells.push({ y:_nY, m:_nM, d:nd++, other:true }); weeks.push(cells); }
 
   const statusColors = { none:'', edited:'#dbeafe', printed:'#dbeafe', pdf:'#dbeafe', both:'#dbeafe' };
   const statusLabels = { edited:'編集済', printed:'編集済', pdf:'編集済', both:'編集済' };
@@ -42847,15 +42869,16 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             <div key={wi} style={{display:'grid',gridTemplateColumns:'repeat(7,minmax(0,1fr))',borderTop:'1px solid #f1f5f9'}}>
               {week.map((day,di)=>{
                 if (!day) return <div key={di} style={{minHeight:90,minWidth:0,background:'#f8fafc',borderRight:'1px solid #f1f5f9'}}/>;
-                const dateStr = `${cY}-${String(cM).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const dateStr = `${day.y}-${String(day.m).padStart(2,'0')}-${String(day.d).padStart(2,'0')}`;
                 const absences = absencesByDate[dateStr] || [];
                 const today = new Date(); today.setHours(0,0,0,0);
                 const isToday = new Date(dateStr).getTime()===today.getTime();
                 const isClosed = (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(di);
                 return (
-                  <div key={di} style={{minHeight:90,minWidth:0,borderRight:'1px solid #f1f5f9',padding:'6px 4px 4px',background:isClosed?'#f1f5f9':isToday?'#fffbeb':'white',position:'relative'}}>
+                  <div key={di} style={{minHeight:90,minWidth:0,borderRight:'1px solid #f1f5f9',padding:'6px 4px 4px',opacity:day.other?0.75:1,background:isClosed?'#f1f5f9':isToday?'#fffbeb':'white',position:'relative'}}>
                     <div style={{fontSize:13,fontWeight:'bold',color:isClosed?'#cbd5e1':di===0?'#dc2626':di===6?'#2563eb':'#334155',marginBottom:4,display:'flex',alignItems:'center',gap:4}}>
-                      {day}
+                      {day.other ? `${day.m}/${day.d}` : day.d}
+                      {day.other&&<span style={{fontSize:9,color:'#94a3b8'}}>翌月</span>}
                       {isToday&&!isClosed&&<span style={{fontSize:9,background:'#f59e0b',color:'white',borderRadius:4,padding:'1px 4px',fontWeight:'bold'}}>今日</span>}
                       {isClosed&&<span style={{fontSize:9,color:'#64748b'}}>定休</span>}
                     </div>
