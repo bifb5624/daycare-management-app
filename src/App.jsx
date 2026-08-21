@@ -19462,8 +19462,10 @@ export default function App() {
               </SidebarGroup>
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
-              <SidebarItem icon={<Users size={18} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
-              <SidebarItem icon={<ClipboardList size={18} />} label="実績登録" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
+              <SidebarGroup icon={<ClipboardList size={18} />} label="実績" activeChild={['roster','jisseki'].includes(currentView)}>
+                <SidebarItem icon={<Users size={16} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
+                <SidebarItem icon={<ClipboardList size={16} />} label="利用者実績" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
+              </SidebarGroup>
               {/* ★ 2ハブ構成(2026-08-19): 通所介護計画書(全利用者) / 個別機能訓練・LIFE(加算アドオン店舗のみ)。
                   3-2/3-1/ADL/LIFE提出は機能訓練ハブ内のタブへ集約。 ラベルの数字=作成予定(期限内+超過)件数 */}
               {(hasAddon(appData,'kinou_keikaku') || hasAddon(appData,'tsusho_keikaku') || hasAnyLifeAddon(appData)) && (
