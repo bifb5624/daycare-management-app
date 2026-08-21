@@ -19455,8 +19455,11 @@ export default function App() {
               })()}
               {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
               <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} />
-              <SidebarItem icon={<FileText size={18} />} label="休み連絡" active={currentView === 'absence_fax'} onClick={() => navigateTo('absence_fax')} />
-              <SidebarItem icon={<FileText size={18} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
+              {/* ★ サイドバー整理(2026-08-21): 使用頻度が近いペアは計画書と同じ開閉グループに集約 */}
+              <SidebarGroup icon={<FileText size={18} />} label="連絡（FAX）" activeChild={['absence_fax','general_fax'].includes(currentView)}>
+                <SidebarItem icon={<FileText size={16} />} label="休み連絡" active={currentView === 'absence_fax'} onClick={() => navigateTo('absence_fax')} />
+                <SidebarItem icon={<FileText size={16} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
+              </SidebarGroup>
               <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<Users size={18} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
@@ -19475,8 +19478,10 @@ export default function App() {
               )}
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
-                <SidebarItem icon={<BarChart3 size={18} />} label="分析（個人）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
-                <SidebarItem icon={<TrendingUp size={18} />} label="分析（稼働）" active={currentView === 'dash_operation'} onClick={() => navigateTo('dash_operation')} />
+                <SidebarGroup icon={<BarChart3 size={18} />} label="分析" activeChild={['dash_personal','dash_operation'].includes(currentView)}>
+                  <SidebarItem icon={<BarChart3 size={16} />} label="個人（バイタル・記録）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
+                  <SidebarItem icon={<TrendingUp size={16} />} label="稼働（実績・月次）" active={currentView === 'dash_operation'} onClick={() => navigateTo('dash_operation')} />
+                </SidebarGroup>
                 <SidebarItem icon={<QrCode size={18} />} label="家族関係者閲覧 管理" active={currentView === 'family_admin'} onClick={() => navigateTo('family_admin')} />
                 <SidebarItem icon={<Settings size={18} />} label="各種設定" active={currentView === 'settings'} onClick={() => navigateTo('settings')} />
                 {/* ★ 不具合レポート (管理者のみ) */}
