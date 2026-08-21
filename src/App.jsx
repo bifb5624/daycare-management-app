@@ -11570,12 +11570,13 @@ function ScheduleView({ appData, onSave }) {
             <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:6}}>{modal.id?'予定を編集':'予定を追加'}</div>
             <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="タイトルを追加"
               style={{width:'100%',boxSizing:'border-box',padding:'6px 2px 8px',border:'none',borderBottom:'2px solid #c7d2fe',fontSize:20,fontWeight:'bold',color:'#1e293b',outline:'none',marginBottom:14,background:'transparent'}}/>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+            {/* ★ 日時は必ず横一列(2026-08-21): 幅を明示し折り返し禁止。 狭い画面では各入力が縮む */}
+            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,flexWrap:'nowrap',minWidth:0}}>
               <Clock size={16} style={{color:'#64748b',flexShrink:0}}/>
-              <input type="date" value={modal.date} onChange={e=>setModal(m=>({...m,date:e.target.value}))} style={{padding:'7px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc'}}/>
-              <input type="time" value={modal.start||''} onChange={e=>setModal(m=>({...m,start:e.target.value}))} style={{padding:'7px 8px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc',width:96}}/>
-              <span style={{color:'#94a3b8',fontWeight:'bold'}}>〜</span>
-              <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{padding:'7px 8px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc',width:96}}/>
+              <input type="date" value={modal.date} onChange={e=>setModal(m=>({...m,date:e.target.value}))} style={{flex:'1 1 120px',minWidth:0,maxWidth:150,boxSizing:'border-box',padding:'7px 6px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc'}}/>
+              <input type="time" value={modal.start||''} onChange={e=>setModal(m=>({...m,start:e.target.value}))} style={{flex:'0 1 84px',minWidth:0,boxSizing:'border-box',padding:'7px 4px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc'}}/>
+              <span style={{color:'#94a3b8',fontWeight:'bold',flexShrink:0}}>〜</span>
+              <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{flex:'0 1 84px',minWidth:0,boxSizing:'border-box',padding:'7px 4px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc'}}/>
             </div>
             {/* ★ 所要時間で終了を自動セット (開始時刻が必要) */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:12,marginTop:-4}}>
