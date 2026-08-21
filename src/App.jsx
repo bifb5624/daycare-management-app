@@ -19423,7 +19423,7 @@ export default function App() {
               <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_homeUnreadCount||null} />
               <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
-              <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
+              <SidebarItem icon={<Printer size={18} />} label="連絡帳" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
               <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} />
               {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
@@ -28493,8 +28493,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </div>
         <div className="flex-1" />
         {/* ★ 提供記録入力への相互ジャンプ(2026-08-21): 提供記録側の「連絡帳」ボタンと対 */}
-        {navigateTo && <button onClick={()=>navigateTo('record')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shadow"><ClipboardList size={15} className="mr-1"/>提供記録</button>}
-        <button onClick={() => setRenrakuModal({ patientId: null })} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-blue-600 border-blue-600 hover:bg-blue-700 text-white">
+        {navigateTo && <button onClick={()=>navigateTo('record')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shadow"><ClipboardList size={15} className="mr-1"/>提供記録</button>}
+        <button onClick={() => setRenrakuModal({ patientId: null })} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-white border-slate-300 hover:bg-slate-50 text-slate-700">
           連絡事項
         </button>
         <button onClick={() => setIsScheduleModalOpen(true)} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-white border-slate-300 hover:bg-slate-50 text-slate-700">
@@ -36543,8 +36543,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const _patients = (appData.ticketRecords||[])
       .filter(r=>r.date===dateStr)
       .filter(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId); if(!p) return false; return _match(r, p); })
-      .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,name:p.name||r.name||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; })
-      .sort((a, b) => _rankS(a.status) - _rankS(b.status));
+      .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; })
+      // ★ 提供記録入力と同じ並び(2026-08-21): 状態ランク→同状態内はかな順
+      .sort((a, b) => (_rankS(a.status) - _rankS(b.status)) || String(a.kana||'').localeCompare(String(b.kana||''), 'ja'));
     const _serviceTime = ap==='AM' ? (fi.serviceTimeAM||'9:00〜12:05') : (fi.serviceTimePM||'13:25〜16:30');
     const _schedule = ap==='AM' ? (ds.scheduleAM||[]) : (ds.schedulePM||[]);
     const _label = ap==='AM' ? '午前' : '午後';
@@ -37256,8 +37257,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             const ds = `${y}-${pad(m+1)}-${pad(d2)}`;
             const amLog = (appData.diaryLogs||{})[`${ds}_AM`];
             const pmLog = (appData.diaryLogs||{})[`${ds}_PM`];
-            const amHasData = amLog && Object.keys(amLog).length > 0;
-            const pmHasData = pmLog && Object.keys(pmLog).length > 0;
+            // ★ 自動コピーの未確認が残っている間は「入力済み」に数えない(2026-08-21)
+            const _ok = (l) => l && Object.keys(l).length > 0 && !(l._sougeiPending && Object.keys(l._sougeiPending).length);
+            const amHasData = _ok(amLog);
+            const pmHasData = _ok(pmLog);
             if (amHasData && pmHasData) return 'both';
             if (amHasData) return 'am';
             if (pmHasData) return 'pm';
@@ -37348,6 +37351,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const items = [];
           if (sp['迎え']) items.push({ label:'迎え', hint:'コピー未確認' });
           if (sp['送り']) items.push({ label:'送り', hint:'コピー未確認' });
+          // ★ 送迎そのものが未記入の場合も要確認に出す(2026-08-21): 従来はコピー未確認しか見ておらず、
+          //   何も記入していない日誌が「管理者確認のみ」の表示になっていた。
+          const _hasAny = (o) => !!o && Object.values(o).some(v => Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : String(v ?? '').trim() !== ''));
+          if (!sp['迎え'] && !_hasAny(log.pick) && !_hasAny(log.pick_walk)) items.push({ label:'迎え', hint:'未入力' });
+          if (!sp['送り'] && !_hasAny(log.drop) && !_hasAny(log.drop_walk)) items.push({ label:'送り', hint:'未入力' });
           const _timeEmpty = !Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart));
           if (_timeEmpty) items.push({ label:'送迎時間', hint:'未入力' });
           const _recEmpty = !Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k]);
