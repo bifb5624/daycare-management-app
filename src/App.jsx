@@ -11093,9 +11093,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
         })()}
         {/* 本日のスケジュール + お知らせ */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:16}}>
-          <Card>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-              <span style={{display:'flex',alignItems:'center',gap:6}}><Clock size={16}/>本日のスケジュール</span>
+          <Card style={{borderColor:'#818cf8',borderWidth:2}}>
+            <div style={{fontSize:15,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{display:'flex',alignItems:'center',gap:6}}><Clock size={17}/>本日のスケジュール</span>
               <span style={{display:'flex',alignItems:'center',gap:6}}>
                 {todayEvents.some(e => !isRead(e.id)) && (
                   <button onClick={()=>{ todayEvents.forEach(e => { if (!isRead(e.id)) markRead(e.id); }); }}
@@ -11110,9 +11110,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   const pt = e.patientId ? (appData.patients||[]).find(x=>x.id===e.patientId) : null;
                   const _r = isRead(e.id); // ★ #4: タップで既読(グレー)
                   return (
-                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日',title:e.title,body:e.note,patientId:e.patientId,isMeeting:/担当者会議|担会/.test(String(e.title||''))})}
+                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日',title:e.title,body:`時間：${e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}${pt?`\n利用者：${pt.name} 様`:''}${e.note?`\n\n${e.note}`:''}`,patientId:e.patientId,isMeeting:/担当者会議|担会/.test(String(e.title||''))})}
                     style={{textAlign:'left',cursor:'pointer',width:'100%',display:'flex',alignItems:'flex-start',gap:10,background:_r?'#f8fafc':'#eef2ff',border:`1px solid ${_r?'#e2e8f0':'#c7d2fe'}`,borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px',opacity:_r?0.72:1}}>
-                    <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',minWidth:88,fontVariantNumeric:'tabular-nums',paddingTop:1}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
+                    <span style={{fontSize:14,fontWeight:'bold',color:'#4338ca',minWidth:96,fontVariantNumeric:'tabular-nums',paddingTop:1}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:'bold',color:_r?'#64748b':'#1e293b',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
                         <span>{e.title}</span>
@@ -11148,16 +11148,15 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   <div style={{fontSize:12,color:'#64748b',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'12px 10px',textAlign:'center'}}>現在、家族・ケアマネからの新しい更新はありません。</div>
                 ) : (<>
                 <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  {/* ★ 1行表示(2026-08-21): 利用者名・更新内容・日時のみ。 タップで詳細(更新者含む) */}
                   {_extShown.map(u=>{ const _r=isRead(u.id); const _c=u.by==='caremanager'?'#0891b2':'#7c3aed'; return (
-                    <button key={u.id} onClick={()=>openDetail({id:u.id,badge:u.by==='caremanager'?'ケアマネ':'ご家族',badgeColor:_c,date:_fmt(u.at),title:`利用者：${u._pname} 様`,body:`更新内容：${(u.items||[]).join('・')||'更新'}${u.byName?`\n更新者：${u.byName}`:''}`,patientId:u._pid})} style={{textAlign:'left',background:_r?'#f8fafc':'#fffbeb',border:`1px solid ${_r?'#e2e8f0':'#fde68a'}`,borderRadius:10,padding:'8px 10px',cursor:'pointer',opacity:_r?0.72:1}}>
-                      <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:3,flexWrap:'wrap'}}>
-                        <span style={{fontSize:9,fontWeight:'bold',color:'white',background:_r?'#94a3b8':_c,borderRadius:4,padding:'1px 6px'}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
-                        <span style={{fontSize:12,fontWeight:'bold',color:_r?'#64748b':'#1e293b'}}>利用者：{u._pname} 様</span>
-                        <span style={{fontSize:10,color:'#b45309',marginLeft:'auto'}}>{_fmt(u.at)}</span>
-                        {_r && <span style={{fontSize:9,color:'#64748b'}}>既読</span>}
-                      </div>
-                      <div style={{fontSize:12,color:_r?'#94a3b8':'#78350f',fontWeight:'bold'}}>更新内容：{(u.items||[]).join('・')||'更新'}</div>
-                      {u.byName?<div style={{fontSize:11,color:_r?'#b0bccb':'#a16207',marginTop:1}}>更新者：{u.byName}</div>:null}
+                    <button key={u.id} onClick={()=>openDetail({id:u.id,badge:u.by==='caremanager'?'ケアマネ':'ご家族',badgeColor:_c,date:_fmt(u.at),title:`利用者：${u._pname} 様`,body:`更新内容：${(u.items||[]).join('・')||'更新'}${u.byName?`\n更新者：${u.byName}`:''}`,patientId:u._pid})}
+                      style={{textAlign:'left',background:_r?'#f8fafc':'#fffbeb',border:`1px solid ${_r?'#e2e8f0':'#fde68a'}`,borderRadius:8,padding:'6px 10px',cursor:'pointer',opacity:_r?0.72:1,display:'flex',alignItems:'center',gap:8,minWidth:0,width:'100%'}}>
+                      <span style={{fontSize:9,fontWeight:'bold',color:'white',background:_r?'#94a3b8':_c,borderRadius:4,padding:'2px 6px',whiteSpace:'nowrap',flexShrink:0}}>{u.by==='caremanager'?'ケアマネ':'ご家族'}</span>
+                      <span style={{fontSize:12.5,fontWeight:'bold',color:_r?'#64748b':'#1e293b',whiteSpace:'nowrap',flexShrink:0}}>{u._pname} 様</span>
+                      <span style={{fontSize:11.5,color:_r?'#94a3b8':'#78350f',fontWeight:'bold',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1,minWidth:0}}>{(u.items||[]).join('・')||'更新'}</span>
+                      <span style={{fontSize:10,color:'#b45309',whiteSpace:'nowrap',flexShrink:0}}>{_fmt(u.at)}</span>
+                      <span style={{fontSize:9,color:'#94a3b8',flexShrink:0}}>{_r?'既読':'詳細 ›'}</span>
                     </button>
                   ); })}
                 </div>
@@ -11175,23 +11174,15 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
             {news.length===0 ? <div style={{fontSize:13,color:'#64748b'}}>お知らせはまだありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {/* ★ #4: 事業所からのお知らせは既読管理しない(投稿したら表示のみ)。 タップで詳細は見られるが既読は付けない。 */}
-                {_pageSlice(news, newsPage, 5).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; return (
-                  // ★ 見出しの日付は「投稿日(postedAt)」を優先(2026-08-11): 予定から配信したお知らせは
-                  //   date=会議等の開催日のため、見出しが未来日に見えていた。開催日は本文に記載済み。
-                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:(a.postedAt?String(a.postedAt).slice(0,10):(a.date||'')),title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})} style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:10,padding:'7px 10px',opacity:1}}>
-                    <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:2}}>
-                      <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'1px 5px'}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
-                      <span style={{fontSize:10,color:'#64748b'}}>{a.postedAt ? String(a.postedAt).slice(0,10) : (a.date||'')}</span>
-                    </div>
-                    <div style={{fontSize:13,fontWeight:'bold',color:_c}}>{a.title||'(写真)'}</div>
-                    {a.body && <div style={{fontSize:11,color:'#475569',whiteSpace:'pre-wrap',maxHeight:34,overflow:'hidden'}}>{a.body}</div>}
-                    {/* ★ 投稿写真のサムネイル(店舗要望: 件名・本文だけでなく写真もここで見える) */}
-                    {Array.isArray(a.photos) && a.photos.length>0 && (
-                      <div style={{display:'flex',gap:4,marginTop:4,alignItems:'center'}}>
-                        {a.photos.slice(0,3).map((ph,i)=>(<StoredImage key={i} file={ph} style={{width:44,height:44,objectFit:'cover',borderRadius:6,border:'1px solid #e2e8f0'}}/>))}
-                        {a.photos.length>3 && <span style={{fontSize:10,color:'#64748b'}}>+{a.photos.length-3}枚</span>}
-                      </div>
-                    )}
+                {/* ★ 1行表示(2026-08-21): バッジ+日付+題名(+写真枚数)。 タップで詳細モーダル(本文・写真) */}
+                {_pageSlice(news, newsPage, 5).map(a=>{ const _c=a._kind==='個別'?'#b45309':'#1d4ed8'; const _ph=(Array.isArray(a.photos)?a.photos.length:0); return (
+                  <button key={a.id} onClick={()=>setNoticeDetail({id:a.id,badge:`${a._kind}${a.patientId?`・${patName(a.patientId)}`:''}`,badgeColor:_c,date:(a.postedAt?String(a.postedAt).slice(0,10):(a.date||'')),title:a.title||'(写真)',body:a.body,patientId:a.patientId,photos:a.photos})}
+                    style={{textAlign:'left',width:'100%',cursor:'pointer',background:(a._kind==='個別'?'#fffbeb':'#eff6ff'),border:`1px solid ${_c+'55'}`,borderRadius:8,padding:'6px 10px',display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                    <span style={{fontSize:9,fontWeight:'bold',color:_c,background:(a._kind==='個別'?'#fef3c7':'#dbeafe'),borderRadius:4,padding:'2px 6px',whiteSpace:'nowrap',flexShrink:0}}>{a._kind}{a.patientId?`・${patName(a.patientId)}`:''}</span>
+                    <span style={{fontSize:10,color:'#64748b',whiteSpace:'nowrap',flexShrink:0}}>{a.postedAt ? String(a.postedAt).slice(0,10) : (a.date||'')}</span>
+                    <span style={{fontSize:12.5,fontWeight:'bold',color:_c,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',flex:1,minWidth:0}}>{a.title||'(写真)'}</span>
+                    {_ph>0 && <span style={{fontSize:9,fontWeight:'bold',color:'#475569',background:'#e2e8f0',borderRadius:999,padding:'2px 7px',whiteSpace:'nowrap',flexShrink:0}}>写真{_ph}枚</span>}
+                    <span style={{fontSize:9,color:'#94a3b8',flexShrink:0}}>詳細 ›</span>
                   </button>
                 ); })}
                 {renderPager(news.length, 5, newsPage, setNewsPage)}
@@ -11377,8 +11368,15 @@ function ScheduleView({ appData, onSave }) {
   const [cy, cm] = curMonth.split('-').map(Number);
   const firstDow = new Date(cy, cm-1, 1).getDay();
   const daysIn = new Date(cy, cm, 0).getDate();
-  const cells = [...Array(firstDow).fill(null), ...Array.from({length:daysIn},(_,i)=>i+1)];
-  while (cells.length % 7 !== 0) cells.push(null);
+  // ★ 前月末・翌月頭の日付でグリッドを埋めて連続して見えるように(2026-08-21)
+  const _mkC=(y2,m2,d2,other)=>({ds:`${y2}-${String(m2).padStart(2,'0')}-${String(d2).padStart(2,'0')}`, d:d2, other});
+  const _pY=cm===1?cy-1:cy, _pM=cm===1?12:cm-1, _pDays=new Date(_pY,_pM,0).getDate();
+  const _nY2=cm===12?cy+1:cy, _nM2=cm===12?1:cm+1;
+  const cells = [
+    ...Array.from({length:firstDow},(_,i)=>_mkC(_pY,_pM,_pDays-firstDow+1+i,true)),
+    ...Array.from({length:daysIn},(_,i)=>_mkC(cy,cm,i+1,false)),
+  ];
+  { let _nd=1; while (cells.length % 7 !== 0) cells.push(_mkC(_nY2,_nM2,_nd++,true)); }
   const dstrOf = (d) => `${cy}-${String(cm).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
   const shiftMonth = (delta) => { const d = new Date(cy, cm-1+delta, 1); setCurMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`); };
   const todayEvents = evOf(todayStr);
@@ -11429,8 +11427,7 @@ function ScheduleView({ appData, onSave }) {
               <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:4}}>
                 {dow.map((w,i)=>(<div key={w} style={{textAlign:'center',fontSize:11,fontWeight:'bold',padding:'2px 0',color:i===0?'#ef4444':i===6?'#3b82f6':'#64748b'}}>{w}</div>))}
                 {cells.map((d,i)=>{
-                  if (d===null) return <div key={`e${i}`}/>;
-                  const dstr = dstrOf(d);
+                  const dstr = d.ds;
                   const evs = evOf(dstr);
                   const isToday = dstr===todayStr;
                   const isSel = dstr===selDay;
@@ -11443,9 +11440,9 @@ function ScheduleView({ appData, onSave }) {
                     <div key={dstr} onClick={()=>setSelDay(dstr)}
                       onDragOver={dragEvId?ev=>ev.preventDefault():undefined}
                       onDrop={dragEvId?()=>{ const be=events.find(x=>x.id===dragEvId); if(be) moveEvent(be,dstr); setDragEvId(null); }:undefined}
-                      style={{minHeight:78,textAlign:'left',background:bg,border:`1px solid ${isSel?'#818cf8':(dragEvId?'#c7d2fe':'#e2e8f0')}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
+                      style={{minHeight:78,opacity:d.other?0.62:1,textAlign:'left',background:bg,border:`1px solid ${isSel?'#818cf8':(dragEvId?'#c7d2fe':'#e2e8f0')}`,borderRadius:8,padding:'3px 4px',cursor:'pointer',display:'flex',flexDirection:'column',gap:2,overflow:'hidden'}}>
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                        <span style={{fontSize:12,fontWeight:'bold',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(holi?'#ef4444':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155'))}}>{d}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',width:20,height:20,lineHeight:'20px',textAlign:'center',borderRadius:'50%',background:isToday?'#6366f1':'transparent',color:isToday?'white':(holi?'#ef4444':(i%7===0?'#ef4444':i%7===6?'#3b82f6':'#334155'))}}>{d.other?`${parseInt(dstr.slice(5,7))}/${d.d}`:d.d}</span>
                         <div style={{display:'flex',alignItems:'center',gap:1}}>
                           {bdays.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:dstr,birthdays:bdays,expiries:[]});}} title="お誕生日" style={{fontSize:12,cursor:'pointer',lineHeight:1}}>👑</span>}
                           {exps.length>0 && <span onClick={ev=>{ev.stopPropagation();setIconPopup({date:dstr,birthdays:[],expiries:exps});}} title="要注意（認定満了など）" style={{fontSize:11,cursor:'pointer',lineHeight:1}}>⚠️</span>}
@@ -16852,7 +16849,8 @@ export default function App() {
   const _homeUnreadCount = React.useMemo(() => {
     const d = new Date(); const _ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const schedUnread = (appData.scheduleEvents||[]).filter(e=>e.date===_ymd && !isNoticeRead(e.id)).length;
-    const famUnread = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[])).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice && !isNoticeRead(u.id)).length;
+    // ★ 2026-08-21: ホームの「全て既読」はnoticeRead側に記録されるため、バッジも同じ基準で数える(readOfficeだけ見ると1が残り続けた)
+    const famUnread = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[])).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice && !isNoticeRead(u.id) && !isNoticeRead(u.id)).length;
     const nowT = Date.now();
     const hqIds = (visibleNotices||[]).filter(n=>!(n.ends_at && new Date(n.ends_at).getTime()<nowT)).map(n=>n.id);
     const devIds = (typeof DEV_ANNOUNCEMENTS!=='undefined'?DEV_ANNOUNCEMENTS:[]).map(a=>a.id);
