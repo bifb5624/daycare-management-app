@@ -10979,13 +10979,14 @@ const OBS_IGNORE_FIELDS = new Set(['name','kana','dayOfWeek','date','year','pati
 //   4秒ごとの同期のたびにコンポーネントの同一性が変わり、React がホームのDOM全体を
 //   作り直す → タップ中のボタンが破棄されてクリック不発・添付サムネイルが読込やり直しでチカチカしていた。
 const DashCard = ({children, style}) => <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16,...style}}>{children}</div>;
+// ★ DashTileはコンパクト化(2026-08-21): ホーム全体が1画面に収まりやすいサイズへ縮小
 const DashTile = ({icon, label, sub, color, view, navigateTo}) => (
-  <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:14,padding:'14px 12px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:6,textAlign:'center',transition:'all .12s'}}
+  <button onClick={()=>navigateTo(view)} style={{background:'white',border:'1px solid #e2e8f0',borderRadius:12,padding:'8px 6px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:4,textAlign:'center',transition:'all .12s'}}
     onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,0.1)';e.currentTarget.style.transform='translateY(-2px)';}}
     onMouseLeave={e=>{e.currentTarget.style.boxShadow='none';e.currentTarget.style.transform='none';}}>
-    <div style={{width:44,height:44,borderRadius:12,background:color,display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}>{icon}</div>
-    <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b'}}>{label}</div>
-    {sub && <div style={{fontSize:10,color:'#64748b'}}>{sub}</div>}
+    <div style={{width:34,height:34,borderRadius:10,background:color,display:'flex',alignItems:'center',justifyContent:'center',color:'white'}}>{icon}</div>
+    <div style={{fontSize:11.5,fontWeight:'bold',color:'#1e293b',lineHeight:1.3}}>{label}</div>
+    {sub && <div style={{fontSize:9,color:'#64748b'}}>{sub}</div>}
   </button>
 );
 function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes, isNoticeRead, markNoticeRead }) {
@@ -11110,7 +11111,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                   const pt = e.patientId ? (appData.patients||[]).find(x=>x.id===e.patientId) : null;
                   const _r = isRead(e.id); // ★ #4: タップで既読(グレー)
                   return (
-                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日',title:e.title,body:`時間：${e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}${pt?`\n利用者：${pt.name} 様`:''}${e.note?`\n\n${e.note}`:''}`,patientId:e.patientId,isMeeting:/担当者会議|担会/.test(String(e.title||''))})}
+                  <button key={e.id} onClick={()=>openDetail({id:e.id,badge:'予定',badgeColor:e.color||'#6366f1',date:'',title:e.title,body:`時間：${e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}${pt?`\n利用者：${pt.name} 様`:''}${e.note?`\n\n${e.note}`:''}`,patientId:e.patientId,isMeeting:/担当者会議|担会/.test(String(e.title||''))})}
                     style={{textAlign:'left',cursor:'pointer',width:'100%',display:'flex',alignItems:'flex-start',gap:10,background:_r?'#f8fafc':'#eef2ff',border:`1px solid ${_r?'#e2e8f0':'#c7d2fe'}`,borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'7px 10px',opacity:_r?0.72:1}}>
                     <span style={{fontSize:14,fontWeight:'bold',color:'#4338ca',minWidth:96,fontVariantNumeric:'tabular-nums',paddingTop:1}}>{e.start?`${e.start}${e.end?`〜${e.end}`:''}`:'終日'}</span>
                     <div style={{flex:1,minWidth:0}}>
@@ -11193,7 +11194,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
         {/* 記録類 */}
         <Card>
           <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b',marginBottom:12}}>記録・入力</div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(92px,1fr))',gap:8}}>
             <DashTile navigateTo={navigateTo} icon={<ClipboardList size={22}/>} label="提供記録入力" color="#3b82f6" view="record"/>
             <DashTile navigateTo={navigateTo} icon={<Printer size={22}/>} label="連絡帳" color="#0ea5e9" view="print"/>
             <DashTile navigateTo={navigateTo} icon={<PenTool size={22}/>} label="日誌" color="#8b5cf6" view="diary"/>
@@ -11216,14 +11217,17 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
             </div>
           </Card>
         )}
-        {/* 分析・家族・設定 */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(110px,1fr))',gap:10}}>
-          <DashTile navigateTo={navigateTo} icon={<BarChart3 size={22}/>} label="分析（個人）" color="#2563eb" view="dash_personal"/>
-          <DashTile navigateTo={navigateTo} icon={<TrendingUp size={22}/>} label="分析（稼働）" color="#16a34a" view="dash_operation"/>
-          <DashTile navigateTo={navigateTo} icon={<QrCode size={22}/>} label="家族関係者 投稿" color="#db2777" view="family_admin"/>
-          <DashTile navigateTo={navigateTo} icon={<CalendarRange size={22}/>} label="スケジュール" color="#7c3aed" view="schedule"/>
-          <DashTile navigateTo={navigateTo} icon={<Settings size={22}/>} label="各種設定" color="#475569" view="settings"/>
-        </div>
+        {/* 分析・家族・設定 (★白カードで統一・2026-08-21) */}
+        <Card>
+          <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',marginBottom:8}}>管理・分析</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(92px,1fr))',gap:8}}>
+            <DashTile navigateTo={navigateTo} icon={<BarChart3 size={18}/>} label="分析（個人）" color="#2563eb" view="dash_personal"/>
+            <DashTile navigateTo={navigateTo} icon={<TrendingUp size={18}/>} label="分析（稼働）" color="#16a34a" view="dash_operation"/>
+            <DashTile navigateTo={navigateTo} icon={<QrCode size={18}/>} label="家族関係者 投稿" color="#db2777" view="family_admin"/>
+            <DashTile navigateTo={navigateTo} icon={<CalendarRange size={18}/>} label="スケジュール" color="#7c3aed" view="schedule"/>
+            <DashTile navigateTo={navigateTo} icon={<Settings size={18}/>} label="各種設定" color="#475569" view="settings"/>
+          </div>
+        </Card>
       </div>
       {/* ★ お知らせ詳細モーダル */}
       {noticeDetail && (
