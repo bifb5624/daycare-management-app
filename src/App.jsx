@@ -21928,7 +21928,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                         //   既定=表示(通常運用)。 押すと利用者家族の閲覧画面にだけ非表示。
                         //   ケアマネには設定に関わらず常に表示(閲覧側ゲートで cmViewerMode は素通し)。
                         <div style={{display:'flex',gap:2,alignItems:'stretch',height:'100%'}}>
-                          {hasTokki && !isReadOnly && (
+                          {/* ★ 欠席・休止の特記=休みの理由は家族へ必ず表示する(2026-08-21): 非表示ボタン自体を出さない */}
+                          {hasTokki && !isReadOnly && p.status !== '欠席' && p.status !== '休止' && (
                             <button type="button" onClick={toggleVisible}
                               title={isVisible ? "押すと利用者家族の閲覧画面にこの特記を表示しません（ケアマネには常に表示されます）" : "家族に非表示中。押すと表示に戻します（ケアマネには常に表示されています）"}
                               style={{width:54,flexShrink:0,border:isVisible?'1px solid #cbd5e1':'1.5px solid #dc2626',borderRadius:6,fontWeight:'bold',cursor:'pointer',background:isVisible?'#f8fafc':'#dc2626',color:isVisible?'#64748b':'#fff',padding:'2px 3px',lineHeight:1.25,display:'flex',alignItems:'center',justifyContent:'center'}}>
