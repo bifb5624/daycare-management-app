@@ -11273,6 +11273,7 @@ function ScheduleView({ appData, onSave }) {
   const [iconPopup, setIconPopup] = useState(null); // {date, birthdays:[], expiries:[]}
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'week'
   const [dragEvId, setDragEvId] = useState(null); // ドラッグ移動中の予定ID
+  const [evDetail, setEvDetail] = useState(null); // ★ 予定クリック時の確認ポップアップ(Googleカレンダー方式・2026-08-21)
   const events = appData.scheduleEvents || [];
   const save = (list, msg) => onSave({ ...appData, scheduleEvents: list }, msg ? { manual:true, message: msg } : undefined);
   // ★ 色ラベル(カテゴリ): 色を押すとタイトルが自動で入る。 各種設定不要でここで編集・保存。
@@ -11400,23 +11401,7 @@ function ScheduleView({ appData, onSave }) {
       </div>
       <div style={{flex:1,overflow:'auto',padding:16}}>
         <div style={{maxWidth:1000,margin:'0 auto',display:'flex',flexDirection:'column',gap:16}}>
-          {/* 今日の予定 */}
-          <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
-            <div style={{fontSize:14,fontWeight:'bold',color:'#4338ca',marginBottom:10,display:'flex',alignItems:'center',gap:6}}><Clock size={16}/>今日の予定（{today.getMonth()+1}月{today.getDate()}日）</div>
-            {todayEvents.length===0 ? (
-              <div style={{fontSize:13,color:'#64748b'}}>今日の予定はありません。</div>
-            ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                {todayEvents.map(e=>(
-                  <button key={e.id} onClick={()=>editEvent(e)} style={{textAlign:'left',display:'flex',alignItems:'center',gap:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderLeft:`5px solid ${e.color||'#6366f1'}`,borderRadius:10,padding:'8px 12px',cursor:'pointer'}}>
-                    <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
-                    <span style={{fontSize:14,fontWeight:'bold',color:'#1e293b',flex:1}}>{e.title}{patName(e)?<span style={{fontSize:12,color:'#6366f1',marginLeft:6}}>／{patName(e)} 様</span>:null}</span>
-                    {e.note && <span style={{fontSize:11,color:'#64748b',maxWidth:260,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.note}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* ★ 「今日の予定」はホームと重複のため削除(2026-08-21)。 選択日(既定=今日)の予定で確認できる */}
           {/* カレンダー + 選択日 */}
           <div style={{display:'grid',gridTemplateColumns:'minmax(0,1fr)',gap:16}}>
             <div style={{background:'white',borderRadius:16,border:'1px solid #e2e8f0',boxShadow:'0 1px 6px rgba(0,0,0,0.06)',padding:16}}>
@@ -11469,7 +11454,7 @@ function ScheduleView({ appData, onSave }) {
                       </div>
                       {holi && holidayName(dstr) && <span style={{fontSize:8,fontWeight:'bold',color:'#ef4444',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{holidayName(dstr)}</span>}
                       {evs.slice(0,3).map(e=>{ const drg = !e._occ && (!e.repeat||e.repeat==='none'); return (
-                        <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?ev=>{setDragEvId(e.id);}:undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation(); editEvent(e);}}
+                        <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?ev=>{setDragEvId(e.id);}:undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation(); setEvDetail(e);}}
                           title={`${e.title}${patName(e)?'／'+patName(e):''}`}
                           style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.start?`${e.start} `:''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>
                       );})}
@@ -11505,7 +11490,7 @@ function ScheduleView({ appData, onSave }) {
                       <div style={{fontSize:8,color:'#64748b',textAlign:'right',padding:'3px 4px'}}>終日</div>
                       {wd.map(ds=>{ const alld=evOf(ds).filter(e=>!e.start); return (
                         <div key={ds} onClick={()=>openNew(ds)} {...dropCell(ds)} style={{minHeight:20,padding:2,borderLeft:'1px solid #f1f5f9',cursor:'pointer',display:'flex',flexDirection:'column',gap:2}}>
-                          {alld.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();editEvent(e);}} title={e.title} style={{fontSize:9,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:3,padding:'1px 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>; })}
+                          {alld.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();setEvDetail(e);}} title={e.title} style={{fontSize:9,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:3,padding:'1px 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>; })}
                         </div>); })}
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:cols}}>
@@ -11517,7 +11502,7 @@ function ScheduleView({ appData, onSave }) {
                           style={{position:'relative',height:gridH,borderLeft:'1px solid #f1f5f9',cursor:'pointer',background:closed?'#f8fafc':(isHolidayDate(ds)?'#fef2f2':'white')}}>
                           {Array.from({length:HEnd-HStart},(_,h)=>(<div key={h} style={{position:'absolute',top:h*hourH,left:0,right:0,borderTop:'1px solid #f1f5f9'}}/>))}
                           {timed.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return (
-                            <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();editEvent(e);}} title={`${timeLabel(e)} ${e.title}`}
+                            <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();setEvDetail(e);}} title={`${timeLabel(e)} ${e.title}`}
                               style={{position:'absolute',top:toTop(e.start),left:2,right:2,height:durH(e),background:e.color||'#6366f1',color:'white',borderRadius:4,padding:'1px 4px',fontSize:9,fontWeight:'bold',overflow:'hidden',cursor:drg?'grab':'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.25)'}}>
                               <div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.start} {e.title}</div>
                               {patName(e)&&<div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',opacity:0.9}}>／{patName(e)}</div>}
@@ -11558,21 +11543,39 @@ function ScheduleView({ appData, onSave }) {
         </div>
       </div>
       {/* 予定 追加/編集モーダル */}
+      {/* ★ 予定の確認ポップアップ: クリック→内容確認→編集/削除(2026-08-21) */}
+      {evDetail && (()=>{ const e=evDetail; const REP={daily:'毎日',weekly:'毎週',monthly:'毎月(同じ日)',monthly_nth:'毎月(第◯曜日)',yearly:'毎年'}; return (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.45)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setEvDetail(null)}>
+          <div onClick={ev=>ev.stopPropagation()} style={{background:'white',borderRadius:16,width:400,maxWidth:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',overflow:'hidden'}}>
+            <div style={{height:8,background:e.color||'#6366f1'}}/>
+            <div style={{padding:'16px 20px 6px'}}>
+              <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b',lineHeight:1.4}}>{e.title||'（無題の予定）'}</div>
+              <div style={{fontSize:13,color:'#475569',marginTop:6,display:'flex',alignItems:'center',gap:6}}><Clock size={14}/>{fmtJp(e.date)}　{timeLabel(e)}</div>
+              {e.repeat && e.repeat!=='none' && <div style={{fontSize:12,color:'#64748b',marginTop:4}}>繰り返し: {REP[e.repeat]||e.repeat}{e.repeatEvery>1?`（${e.repeatEvery}ごと）`:''}</div>}
+              {patName(e) && <div style={{fontSize:13,color:'#4338ca',marginTop:4,display:'flex',alignItems:'center',gap:6}}><Users size={14}/>{patName(e)} 様{(()=>{const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p?.cmName?`（担当CM: ${p.cmName}）`:'';})()}</div>}
+              {e.note && <div style={{fontSize:13,color:'#334155',marginTop:8,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'8px 10px',whiteSpace:'pre-wrap'}}>{e.note}</div>}
+            </div>
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,padding:'12px 16px'}}>
+              <button onClick={()=>{ if(window.confirm('この予定を削除しますか？')){ delEvent(e); setEvDetail(null); } }} style={{background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
+              <button onClick={()=>{ setEvDetail(null); editEvent(e); }} style={{background:'#4f46e5',border:'none',color:'white',borderRadius:8,padding:'7px 18px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>編集</button>
+              <button onClick={()=>setEvDetail(null)} style={{background:'#f1f5f9',border:'none',color:'#475569',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      ); })()}
       {modal && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setModal(null)}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:440,maxWidth:'100%',maxHeight:'90vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
-            <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:14}}>{modal.id?'予定を編集':'予定を追加'}</div>
-            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>日付</label>
-            <input type="date" value={modal.date} onChange={e=>setModal(m=>({...m,date:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
-            <div style={{display:'flex',gap:10,marginBottom:12}}>
-              <div style={{flex:1,minWidth:0}}>
-                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>開始</label>
-                <input type="time" value={modal.start||''} onChange={e=>setModal(m=>({...m,start:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>終了</label>
-                <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none'}}/>
-              </div>
+            {/* ★ Googleカレンダー風(2026-08-21): タイトルを最上部の大きな下線入力に、日付と時刻を1行に */}
+            <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:6}}>{modal.id?'予定を編集':'予定を追加'}</div>
+            <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="タイトルを追加"
+              style={{width:'100%',boxSizing:'border-box',padding:'6px 2px 8px',border:'none',borderBottom:'2px solid #c7d2fe',fontSize:20,fontWeight:'bold',color:'#1e293b',outline:'none',marginBottom:14,background:'transparent'}}/>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
+              <Clock size={16} style={{color:'#64748b',flexShrink:0}}/>
+              <input type="date" value={modal.date} onChange={e=>setModal(m=>({...m,date:e.target.value}))} style={{padding:'7px 10px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc'}}/>
+              <input type="time" value={modal.start||''} onChange={e=>setModal(m=>({...m,start:e.target.value}))} style={{padding:'7px 8px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc',width:96}}/>
+              <span style={{color:'#94a3b8',fontWeight:'bold'}}>〜</span>
+              <input type="time" value={modal.end||''} onChange={e=>setModal(m=>({...m,end:e.target.value}))} style={{padding:'7px 8px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#f8fafc',width:96}}/>
             </div>
             {/* ★ 所要時間で終了を自動セット (開始時刻が必要) */}
             <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center',marginBottom:12,marginTop:-4}}>
@@ -11582,8 +11585,6 @@ function ScheduleView({ appData, onSave }) {
                   style={{fontSize:11,fontWeight:'bold',padding:'4px 10px',borderRadius:14,border:'1px solid #c7d2fe',background:modal.start?'#eef2ff':'#f1f5f9',color:modal.start?'#4338ca':'#cbd5e1',cursor:modal.start?'pointer':'default'}}>{lbl}</button>
               ))}
             </div>
-            <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>タイトル</label>
-            <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="例: 担当者会議 / 避難訓練 / 面談" style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:12}}/>
             {/* ★ 担当者会議など: 対象の利用者を任意で紐付け → 担当ケアマネ事業所・担当者を表示 */}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:4}}>対象の利用者（任意・担当者会議など）</label>
             <select value={modal.patientId||''} onChange={e=>setModal(m=>({...m,patientId:e.target.value?Number(e.target.value):undefined}))} style={{width:'100%',boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',marginBottom:8,background:'white'}}>
