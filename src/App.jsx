@@ -19417,6 +19417,7 @@ export default function App() {
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
               <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_homeUnreadCount||null} />
+              <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
@@ -19472,19 +19473,18 @@ export default function App() {
                   )}
                 </SidebarGroup>
               )}
-              <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
-              <SidebarGroup icon={<ClipboardList size={18} />} label="実績" activeChild={['roster','jisseki'].includes(currentView)}>
+              <SidebarGroup icon={<ClipboardList size={18} />} label="実績・モニタリング" activeChild={['roster','jisseki','monitoring'].includes(currentView)}>
                 <SidebarItem icon={<Users size={16} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
                 <SidebarItem icon={<ClipboardList size={16} />} label="利用者実績" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
+                <SidebarItem icon={<ClipboardList size={16} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               </SidebarGroup>
-              <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
                 <SidebarGroup icon={<BarChart3 size={18} />} label="分析" activeChild={['dash_personal','dash_operation'].includes(currentView)}>
                   <SidebarItem icon={<BarChart3 size={16} />} label="個人（バイタル・記録）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
                   <SidebarItem icon={<TrendingUp size={16} />} label="稼働（実績・月次）" active={currentView === 'dash_operation'} onClick={() => navigateTo('dash_operation')} />
                 </SidebarGroup>
-                <SidebarItem icon={<QrCode size={18} />} label="家族関係者閲覧 管理" active={currentView === 'family_admin'} onClick={() => navigateTo('family_admin')} />
+                <SidebarItem icon={<QrCode size={18} />} label="お知らせ・閲覧管理" active={currentView === 'family_admin'} onClick={() => navigateTo('family_admin')} />
                 <SidebarItem icon={<Settings size={18} />} label="各種設定" active={currentView === 'settings'} onClick={() => navigateTo('settings')} />
                 {/* ★ 不具合レポート (管理者のみ) */}
                 {activeRecorder && isMemberAdmin(activeRecorder, appData.systemSettings) && (
