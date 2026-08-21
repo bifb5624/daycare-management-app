@@ -28679,9 +28679,10 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                               onChange={e=>updateOverride('date', curMonth, e.target.value.replace(/\D/g,''), curHour, curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
                             <span className="text-xs font-bold text-slate-500">日</span>
-                            {localData.nextDateOverride && (
-                              <span className="text-[10px] text-slate-500 ml-1">{(localData.nextDateOverride.match(/（(.)）/)||[])[1] && `(${(localData.nextDateOverride.match(/（(.)）/)||[])[1]})`}</span>
-                            )}
+                            {/* ★ 曜日は判断材料になるため大きく濃く表示(2026-08-21)。 日曜=赤/土曜=青 */}
+                            {localData.nextDateOverride && (()=>{ const _w=(localData.nextDateOverride.match(/（(.)）/)||[])[1]; if(!_w) return null;
+                              const _wc=_w==='日'?'#dc2626':_w==='土'?'#2563eb':'#1e293b';
+                              return <span className="ml-1 font-bold" style={{fontSize:15,color:_wc}}>({_w})</span>; })()}
                           </div>
                         </div>
                         <div className="flex-1">
