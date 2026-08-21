@@ -19419,6 +19419,8 @@ export default function App() {
               <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_homeUnreadCount||null} />
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳 作成・印刷" active={currentView === 'print'} onClick={() => navigateTo('print')} />
+              {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
+              <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} />
               {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
                 // 体力測定バッジ: 当日出席 かつ 当月測定対象の利用者数
                 const _now = new Date(); _now.setHours(0,0,0,0);
@@ -19453,18 +19455,10 @@ export default function App() {
                 }).length;
                 return <SidebarItem icon={<Activity size={18} />} label="体力測定" active={currentView === 'fitness'} onClick={() => navigateTo('fitness')} badge={_fitnessBadge||null} />;
               })()}
-              {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
-              <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} />
               {/* ★ サイドバー整理(2026-08-21): 使用頻度が近いペアは計画書と同じ開閉グループに集約 */}
               <SidebarGroup icon={<FileText size={18} />} label="連絡（FAX）" activeChild={['absence_fax','general_fax'].includes(currentView)}>
                 <SidebarItem icon={<FileText size={16} />} label="休み連絡" active={currentView === 'absence_fax'} onClick={() => navigateTo('absence_fax')} />
                 <SidebarItem icon={<FileText size={16} />} label="各種連絡" active={currentView === 'general_fax'} onClick={() => navigateTo('general_fax')} />
-              </SidebarGroup>
-              <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
-              <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
-              <SidebarGroup icon={<ClipboardList size={18} />} label="実績" activeChild={['roster','jisseki'].includes(currentView)}>
-                <SidebarItem icon={<Users size={16} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
-                <SidebarItem icon={<ClipboardList size={16} />} label="利用者実績" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
               </SidebarGroup>
               {/* ★ 2ハブ構成(2026-08-19): 通所介護計画書(全利用者) / 個別機能訓練・LIFE(加算アドオン店舗のみ)。
                   3-2/3-1/ADL/LIFE提出は機能訓練ハブ内のタブへ集約。 ラベルの数字=作成予定(期限内+超過)件数 */}
@@ -19478,6 +19472,12 @@ export default function App() {
                   )}
                 </SidebarGroup>
               )}
+              <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
+              <SidebarGroup icon={<ClipboardList size={18} />} label="実績" activeChild={['roster','jisseki'].includes(currentView)}>
+                <SidebarItem icon={<Users size={16} />} label="勤務表" active={currentView === 'roster'} onClick={() => navigateTo('roster')} />
+                <SidebarItem icon={<ClipboardList size={16} />} label="利用者実績" active={currentView === 'jisseki'} onClick={() => navigateTo('jisseki')} />
+              </SidebarGroup>
+              <SidebarItem icon={<ClipboardList size={18} />} label="モニタリング" active={currentView === 'monitoring'} onClick={() => navigateTo('monitoring')} />
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
                 <SidebarGroup icon={<BarChart3 size={18} />} label="分析" activeChild={['dash_personal','dash_operation'].includes(currentView)}>
