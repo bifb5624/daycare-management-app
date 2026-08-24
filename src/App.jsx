@@ -40816,6 +40816,9 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [checkedIds, setCheckedIds] = React.useState(new Set());
   const [activeSelection, setActiveSelection] = React.useState(null);
   const [monitorSort, setMonitorSort] = React.useState('kana'); // 'kana'|'careLevel'|'cmOffice'|'schedule'
+  const [monitorSortDir, setMonitorSortDir] = React.useState('asc'); // 'asc'|'desc'
+  const [monitorDowFilter, setMonitorDowFilter] = React.useState([]); // 絞り込む曜日index(0=日..6=土)の配列。空=全曜日
+  const [monitorStatusFilter, setMonitorStatusFilter] = React.useState('all'); // 'all'|'unentered'|'unconfirmed'
   const [sheetModal, setSheetModal] = React.useState(null); // {patientId} 正式モニタリング表の編集
   const [autoFax, setAutoFax] = React.useState(null); // 自動FAX送信の進捗/結果 {running,total,done,results:[]}
   const [editTextCell, setEditTextCell] = React.useState(null); // `${pid}:${key}` 一覧で本文を直接編集中のセル
@@ -40855,10 +40858,10 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const _mNow = new Date();
   const _isCurrentMonth = tY === _mNow.getFullYear() && tM === (_mNow.getMonth()+1);
   const _monthLocked = _isCurrentMonth && _mNow.getDate() < 15;
-  // ★ AI利用回数の上限: 1事業所あたり「利用中の利用者数 ＋ 月3回」まで(実際のカレンダー月で集計)。
+  // ★ AI利用回数の上限: 1事業所あたり「利用中の利用者数 × 2回」まで(実際のカレンダー月で集計)。
   const _aiMonthKey = `${_mNow.getFullYear()}-${String(_mNow.getMonth()+1).padStart(2,'0')}`;
   const _aiActiveCount = (appData.patients||[]).filter(p => p.status === '利用中').length;
-  const _aiLimit = _aiActiveCount + 3;
+  const _aiLimit = _aiActiveCount * 2;
   const _aiUsed = (appData.systemSettings?.aiUsage?.[_aiMonthKey]) || 0;
   const _aiRemaining = Math.max(0, _aiLimit - _aiUsed);
   // systemSettings に AI使用回数を n 加算した新しい systemSettings を返す
@@ -40875,18 +40878,28 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
   const careLevelOrd = ['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'];
   const dowStr = ['日','月','火','水','木','金','土'];
-  const getSchedule = (p) => (p.scheduleAmPm||[]).map((v,i)=>v?dowStr[i]:'').filter(Boolean).join('');
+  // ★ 利用曜日は月曜起点で統一(表示・並び替えとも月→日の順)
+  const _dowMonOrder = [1,2,3,4,5,6,0];
+  const getSchedule = (p) => _dowMonOrder.map(i=>(p.scheduleAmPm||[])[i]?dowStr[i]:'').filter(Boolean).join('');
+  const _schedKey = (p) => { const s = _dowMonOrder.map((di,ord)=>(p.scheduleAmPm||[])[di]?String(ord):'').join(''); return s || '9'; };
   const isBdayMonth = (p) => { if(!p.birthDate) return false; return new Date(p.birthDate).getMonth()+1 === new Date().getMonth()+1; };
   const sortPats = (arr) => [...arr].sort((a,b)=>{
-    if(monitorSort==='kana') return (a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja');
-    if(monitorSort==='careLevel') return careLevelOrd.indexOf(a.careLevel)-careLevelOrd.indexOf(b.careLevel);
-    if(monitorSort==='cmOffice') return (a.cmOffice||'').localeCompare(b.cmOffice||'','ja');
-    if(monitorSort==='schedule') return getSchedule(a).localeCompare(getSchedule(b),'ja');
-    return 0;
+    let c = 0;
+    if(monitorSort==='kana') c = (a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja');
+    else if(monitorSort==='careLevel') c = careLevelOrd.indexOf(a.careLevel)-careLevelOrd.indexOf(b.careLevel);
+    else if(monitorSort==='cmOffice') c = (a.cmOffice||'').localeCompare(b.cmOffice||'','ja');
+    else if(monitorSort==='schedule') c = _schedKey(a) < _schedKey(b) ? -1 : _schedKey(a) > _schedKey(b) ? 1 : 0;
+    if (c === 0 && monitorSort !== 'kana') c = (a.kana||a.name||'').localeCompare(b.kana||b.name||'','ja');
+    return monitorSortDir==='desc' ? -c : c;
   });
   const filterBySearch = (p) => !searchQuery || p.name.includes(searchQuery) || (p.kana||'').includes(searchQuery);
-  const attendedPats = sortPats(allActive.filter(p => hasAttendance(p) && filterBySearch(p)));
-  const absentPats   = sortPats(allActive.filter(p => !hasAttendance(p) && filterBySearch(p)));
+  const filterByDow = (p) => monitorDowFilter.length===0 || monitorDowFilter.some(i => (p.scheduleAmPm||[])[i]);
+  const filterByStatus = (p) => monitorStatusFilter==='all' ? true
+    : monitorStatusFilter==='unentered' ? !results[p.id]?.text
+    : !results[p.id]?.confirmed;
+  const _monFilter = (p) => filterBySearch(p) && filterByDow(p) && filterByStatus(p);
+  const attendedPats = sortPats(allActive.filter(p => hasAttendance(p) && _monFilter(p)));
+  const absentPats   = sortPats(allActive.filter(p => !hasAttendance(p) && _monFilter(p)));
 
   // チェックボックス操作
   const toggleCheck = (id) => setCheckedIds(prev => {
@@ -41186,7 +41199,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const aiDraftRow = async (patient) => {
     if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
     if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('各種設定→モニタリングでAPIキーを設定してください'); return; }
-    if (_aiRemaining <= 0) { alert(`今月のAI下書きの上限（利用者${_aiActiveCount}名＋3回＝${_aiLimit}回）に達しました。\n翌月まで手入力または「一括作成（既定）」でご対応ください。`); return; }
+    if (_aiRemaining <= 0) { alert(`今月のAI下書きの上限（利用者${_aiActiveCount}名×2回＝${_aiLimit}回）に達しました。\n翌月まで手入力または「一括作成（既定）」でご対応ください。`); return; }
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
       const out = await aiDraftSheet(patient);
@@ -41600,22 +41613,6 @@ ${optionsDesc}
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <input type="month" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)}
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
-          <div style={{display:'flex',alignItems:'center',background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',borderRadius:10,padding:'4px 10px',gap:6}}>
-            <Search size={14} style={{color:'#1e293b',flexShrink:0}}/>
-            <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="氏名で絞り込み"
-              className="mon-search"
-              style={{background:'transparent',border:'none',outline:'none',color:'#1e293b',fontSize:12,fontWeight:'bold',width:100}}/>
-            {searchQuery && <button type="button" onClick={()=>setSearchQuery('')} style={{background:'none',border:'none',color:'#1e293b',cursor:'pointer',padding:0,lineHeight:1}}><X size={12}/></button>}
-          </div>
-          {/* ソートボタン */}
-          <div style={{display:'flex',gap:4}}>
-            {[['kana','名前'],['careLevel','介護度'],['cmOffice','事業所'],['schedule','曜日']].map(([k,l])=>(
-              <button key={k} type="button" onClick={()=>setMonitorSort(k)}
-                style={{background:monitorSort===k?'white':'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:8,padding:'4px 8px',fontWeight:'bold',fontSize:11,cursor:'pointer'}}>
-                {l}
-              </button>
-            ))}
-          </div>
           <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
             style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
             プレビュー
@@ -41625,6 +41622,61 @@ ${optionsDesc}
             保存
           </button>
         </div>
+      </div>
+      {/* ★ 絞り込み・並び替えバー(固定): 散在していた氏名検索/未作成/曜日/並び順を1本に集約 */}
+      <div className="no-print" style={{flexShrink:0,background:'#f0f9ff',padding:'7px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:25}}>
+        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1'}}>絞り込み：</span>
+        <div style={{display:'flex',alignItems:'center',background:'white',border:'1px solid #bae6fd',borderRadius:16,padding:'3px 10px',gap:5}}>
+          <Search size={12} style={{color:'#0369a1',flexShrink:0}}/>
+          <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="氏名"
+            className="mon-search"
+            style={{background:'transparent',border:'none',outline:'none',color:'#1e293b',fontSize:11,fontWeight:'bold',width:80}}/>
+          {searchQuery && <button type="button" onClick={()=>setSearchQuery('')} style={{background:'none',border:'none',color:'#64748b',cursor:'pointer',padding:0,lineHeight:1}}><X size={11}/></button>}
+        </div>
+        {[['all','すべて'],['unentered','未作成'],['unconfirmed','未確認']].map(([k,l])=>{
+          const on = monitorStatusFilter===k;
+          return (
+            <button key={k} type="button" onClick={()=>setMonitorStatusFilter(k)}
+              title={k==='all'?'全員を表示':k==='unentered'?'今月のモニタリング表が未作成の方だけ表示':'確定されていない方だけ表示'}
+              style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#bae6fd'}`,background:on?'#0284c7':'white',color:on?'white':'#0369a1',cursor:'pointer'}}>
+              {l}
+            </button>
+          );
+        })}
+        <span style={{borderLeft:'1px solid #bae6fd',height:18,margin:'0 4px'}}/>
+        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1'}}>曜日：</span>
+        {_dowMonOrder.map(i=>{
+          const on = monitorDowFilter.includes(i);
+          return (
+            <button key={i} type="button" title={`${dowStr[i]}曜日に利用予定の方だけ表示(複数選択可)`}
+              onClick={()=>setMonitorDowFilter(prev=>prev.includes(i)?prev.filter(x=>x!==i):[...prev,i])}
+              style={{width:26,height:26,borderRadius:'50%',fontSize:11,fontWeight:'bold',padding:0,border:`1px solid ${on?'#0284c7':'#bae6fd'}`,background:on?'#0284c7':'white',color:on?'white':(i===0?'#dc2626':i===6?'#2563eb':'#0369a1'),cursor:'pointer'}}>
+              {dowStr[i]}
+            </button>
+          );
+        })}
+        {monitorDowFilter.length>0 && (
+          <button type="button" onClick={()=>setMonitorDowFilter([])}
+            style={{padding:'4px 8px',borderRadius:16,fontSize:10,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
+            解除
+          </button>
+        )}
+        <span style={{borderLeft:'1px solid #bae6fd',height:18,margin:'0 4px'}}/>
+        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1'}}>並び替え：</span>
+        {[['kana','名前'],['careLevel','介護度'],['cmOffice','事業所'],['schedule','曜日']].map(([k,l])=>{
+          const on = monitorSort===k;
+          return (
+            <button key={k} type="button" onClick={()=>setMonitorSort(k)}
+              style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#bae6fd'}`,background:on?'#0284c7':'white',color:on?'white':'#0369a1',cursor:'pointer'}}>
+              {l}
+            </button>
+          );
+        })}
+        <button type="button" onClick={()=>setMonitorSortDir(d=>d==='asc'?'desc':'asc')} title="昇順と降順を切り替え"
+          style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #0284c7',background:'white',color:'#0284c7',cursor:'pointer'}}>
+          {monitorSortDir==='asc'?'▲ 昇順':'▼ 降順'}
+        </button>
+        <span style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:'#0369a1'}}>{attendedPats.length+absentPats.length}名表示</span>
       </div>
       {/* 選択バー（固定） */}
       <div className="no-print" style={{flexShrink:0,background:'#e0f2fe',padding:'8px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:20}}>
@@ -41728,7 +41780,7 @@ ${optionsDesc}
         );
       })()}
       <div className="no-print" style={{flexShrink:0,background:_aiRemaining>0?'#eff6ff':'#fef2f2',borderBottom:`1px solid ${_aiRemaining>0?'#bfdbfe':'#fecaca'}`,color:_aiRemaining>0?'#1e40af':'#b91c1c',padding:'6px 16px',fontSize:12,display:'flex',alignItems:'center',gap:8}}>
-        今月のAI下書き：<strong>残り{_aiRemaining}回</strong>（上限{_aiLimit}回＝利用者{_aiActiveCount}名＋3回／{_aiUsed}回使用済み）
+        今月のAI下書き：<strong>残り{_aiRemaining}回</strong>（上限{_aiLimit}回＝利用者{_aiActiveCount}名×2回／{_aiUsed}回使用済み）
         {_aiRemaining<=0 && <span style={{fontWeight:'bold'}}>— 上限に達しました。手入力または「一括作成（既定）」でご対応ください。</span>}
       </div>
       {/* テーブル（スクロール可） */}
