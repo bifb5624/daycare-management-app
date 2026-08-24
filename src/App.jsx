@@ -41681,9 +41681,9 @@ ${optionsDesc}
       {/* 選択バー（固定） */}
       <div className="no-print" style={{flexShrink:0,background:'#e0f2fe',padding:'8px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:20}}>
         <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1',marginRight:2}}>選択：</span>
+        {/* ★「未作成のみ」は絞り込みバーの「未作成」と重複のため撤去(絞り込み後に「全員」で同じ結果) */}
         {[
           ['全員','all',checkAll],
-          ['未作成のみ','unentered',checkUnentered],
           ['通所なし','absent',checkAbsent],
           ['選択解除','none',uncheckAll],
         ].map(([label,key,fn]) => {
