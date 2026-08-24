@@ -11397,7 +11397,7 @@ function ScheduleView({ appData, onSave }) {
         </div>
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
           <button onClick={()=>setLabelEditorOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>ラベル編集</button>
-          <button onClick={()=>setRepeatMgrOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>🔁 繰り返し設定</button>
+          <button onClick={()=>setRepeatMgrOpen(true)} style={{background:'rgba(255,255,255,0.18)',color:'white',border:'1px solid rgba(255,255,255,0.5)',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>繰り返し設定</button>
           <button onClick={()=>openNew(selDay)} style={{background:'white',color:'#6d28d9',border:'none',borderRadius:10,padding:'8px 16px',fontWeight:'bold',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>予定を追加</button>
         </div>
       </div>
@@ -11457,7 +11457,7 @@ function ScheduleView({ appData, onSave }) {
                       {evs.slice(0,3).map(e=>{ const drg = !e._occ && (!e.repeat||e.repeat==='none'); return (
                         <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?ev=>{setDragEvId(e.id);}:undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation(); setEvDetail(e);}}
                           title={`${e.title}${patName(e)?'／'+patName(e):''}`}
-                          style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.start?`${e.start} `:''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>
+                          style={{fontSize:9.5,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:4,padding:'1px 4px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:'100%',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'[繰]':''}{e.start?`${e.start} `:''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>
                       );})}
                       {evs.length>3 && <span style={{fontSize:9,color:'#64748b',fontWeight:'bold'}}>他{evs.length-3}件</span>}
                     </div>
@@ -11491,7 +11491,7 @@ function ScheduleView({ appData, onSave }) {
                       <div style={{fontSize:8,color:'#64748b',textAlign:'right',padding:'3px 4px'}}>終日</div>
                       {wd.map(ds=>{ const alld=evOf(ds).filter(e=>!e.start); return (
                         <div key={ds} onClick={()=>openNew(ds)} {...dropCell(ds)} style={{minHeight:20,padding:2,borderLeft:'1px solid #f1f5f9',cursor:'pointer',display:'flex',flexDirection:'column',gap:2}}>
-                          {alld.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();setEvDetail(e);}} title={e.title} style={{fontSize:9,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:3,padding:'1px 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>; })}
+                          {alld.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();setEvDetail(e);}} title={e.title} style={{fontSize:9,fontWeight:'bold',color:'white',background:e.color||'#6366f1',borderRadius:3,padding:'1px 3px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',cursor:drg?'grab':'pointer'}}>{e.repeat&&e.repeat!=='none'?'[繰]':''}{e.title}{patName(e)?`／${patName(e)}`:''}</div>; })}
                         </div>); })}
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:cols}}>
@@ -11505,7 +11505,7 @@ function ScheduleView({ appData, onSave }) {
                           {timed.map(e=>{ const drg=!e._occ&&(!e.repeat||e.repeat==='none'); return (
                             <div key={e.id+(e._occ?'_o':'')} draggable={drg} onDragStart={drg?()=>setDragEvId(e.id):undefined} onDragEnd={()=>setDragEvId(null)} onClick={ev=>{ev.stopPropagation();setEvDetail(e);}} title={`${timeLabel(e)} ${e.title}`}
                               style={{position:'absolute',top:toTop(e.start),left:2,right:2,height:durH(e),background:e.color||'#6366f1',color:'white',borderRadius:4,padding:'1px 4px',fontSize:9,fontWeight:'bold',overflow:'hidden',cursor:drg?'grab':'pointer',boxShadow:'0 1px 2px rgba(0,0,0,0.25)'}}>
-                              <div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.repeat&&e.repeat!=='none'?'🔁':''}{e.start} {e.title}</div>
+                              <div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.repeat&&e.repeat!=='none'?'[繰]':''}{e.start} {e.title}</div>
                               {patName(e)&&<div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',opacity:0.9}}>／{patName(e)}</div>}
                             </div>); })}
                         </div>); })}
@@ -11635,7 +11635,7 @@ function ScheduleView({ appData, onSave }) {
                 </div>
               </div>
             )}
-            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>例:「2」＋「週ごと」で隔週。繰り返しの<b>終了・削除</b>は、画面右上の <b>🔁 繰り返し設定</b> から「指定日以降を削除」で行えます（編集はシリーズ全体に反映）。</div>}
+            {modal.repeat && modal.repeat!=='none' && <div style={{fontSize:10,color:'#64748b',marginBottom:12}}>例:「2」＋「週ごと」で隔週。繰り返しの<b>終了・削除</b>は、画面右上の <b>繰り返し設定</b> から「指定日以降を削除」で行えます（編集はシリーズ全体に反映）。</div>}
             <label style={{fontSize:12,fontWeight:'bold',color:'#475569',display:'block',marginBottom:6}}>色・分類（押すとタイトルに入ります）</label>
             <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
               {colorLabels.map((cl,i)=>{
@@ -11691,7 +11691,7 @@ function ScheduleView({ appData, onSave }) {
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setRepeatMgrOpen(false)}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
-              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>🔁 繰り返し設定の管理</div>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>繰り返し設定の管理</div>
               <button onClick={()=>setRepeatMgrOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
             </div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>設定されている繰り返し予定の一覧です。<b>種類ごと</b>に分かれています。「すべて削除」または「<b>指定日</b>を選んで<b>その日以降を削除</b>」できます。</div>
@@ -33794,7 +33794,7 @@ function AdminSettingsSection({ appData, onSave }) {
         <button type="button" onClick={saveDelegate} className="mt-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-sm active:scale-95">委任する</button>
       </div>
       <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-        <div className="text-sm font-bold text-red-800 mb-1">🔁 管理者の完全譲渡（交代）</div>
+        <div className="text-sm font-bold text-red-800 mb-1">管理者の完全譲渡（交代）</div>
         <div className="text-[11px] text-red-700 mb-2">管理者を別の従業員に交代します。譲渡後は新しい管理者がパスワードを再設定します。現管理者は下で選んだ職種になります。</div>
         <div className="flex gap-2 flex-wrap">
           <select value={tgt} onChange={e=>setTgt(e.target.value)} className={inp} style={{maxWidth:200}}>
