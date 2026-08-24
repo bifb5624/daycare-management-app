@@ -10973,6 +10973,19 @@ const obsMarkRecEdit = (pid, dateIso, field) => {
 };
 // 観察の突き合わせで無視するメタ項目(担当者・表示用属性など。編集検出の対象ではない)
 const OBS_IGNORE_FIELDS = new Set(['name','kana','dayOfWeek','date','year','patientId','recorder','done']);
+// ★ 案A本適用(2026-08-24): 提供記録レコードを直接指定して実編集を記録(月表示・振替取消等のレコードid経路用)
+const obsMarkRecEditRec = (rec, field) => {
+  try {
+    if (!rec || rec.patientId == null || !rec.date) return;
+    const k = `${rec.patientId}|${rec.date}|${rec.year ?? ''}`;
+    const m = _recEditObs.map.get(k) || {};
+    m[field] = Date.now();
+    const _sfx = String(field).match(/^(.+)_(AM|PM)$/); if (_sfx) m[_sfx[1]] = Date.now();
+    _recEditObs.map.set(k, m);
+  } catch {}
+};
+// ★ 実編集ゲートの対象フィールド(提供記録入力が管理する項目のみ。 連絡帳の次回予定等は従来どおり差分刻印)
+const _REC_GATED = (k) => k==='status'||k==='tokki'||k==='massage'||k==='onyoku'||k==='actualTime'||k==='furikaeAmpm'||k==='exercises'||k==='individualExercises'||/^temp/.test(k)||/^bp/.test(k)||/^pl/.test(k)||/^kibun/.test(k);
 
 // === ホーム / ダッシュボード ===
 // ★ Card/Tile は必ずモジュールレベルで定義する(2026-08-12)。 DashboardView 内で定義すると
@@ -11224,7 +11237,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
             <DashTile navigateTo={navigateTo} icon={<BarChart3 size={18}/>} label="分析（個人）" color="#2563eb" view="dash_personal"/>
             <DashTile navigateTo={navigateTo} icon={<TrendingUp size={18}/>} label="分析（稼働）" color="#16a34a" view="dash_operation"/>
             <DashTile navigateTo={navigateTo} icon={<QrCode size={18}/>} label="家族関係者 投稿" color="#db2777" view="family_admin"/>
-            <DashTile navigateTo={navigateTo} icon={<CalendarRange size={18}/>} label="スケジュール" color="#7c3aed" view="schedule"/>
+            <DashTile navigateTo={navigateTo} icon={<CalendarRange size={18}/>} label="カレンダー" color="#7c3aed" view="schedule"/>
             <DashTile navigateTo={navigateTo} icon={<Settings size={18}/>} label="各種設定" color="#475569" view="settings"/>
           </div>
         </Card>
@@ -18298,7 +18311,9 @@ export default function App() {
           if (!_fieldLevel) return { ...r, _savedAt: _now2 }; // 新規/変更 → 最新時刻
           // 変更フィールドだけ _fieldTs を刻む(オブジェクト/配列も含め、実際に値が変わった項目のみ)
           const _fts = { ...(r._fieldTs || {}) };
-          const _stamped = [];   // ★ 観察モード: この保存で刻印された項目名(ticketRecordsのみ集計)
+          const _stamped = [];   // 診断用: この保存で変更が検出された項目名(ticketRecordsのみ)
+          const _blk = [];       // ★ 案A: 実編集記録が無く刻印をブロックした項目(=巻き戻り防止が働いた)
+          const _obsGate = (_key === 'ticketRecords' && _old) ? _recEditObs.map.get(`${r.patientId}|${r.date}|${r.year ?? ''}`) : null;
           const _fk = new Set([...Object.keys(r), ...(_old ? Object.keys(_old) : [])]);
           _fk.forEach(k => {
             if (k === '_savedAt' || k === '_fieldTs' || k === 'id') return;
@@ -18312,30 +18327,28 @@ export default function App() {
             let chg;
             if (_emptyN && _emptyO) chg = false;
             else { try { chg = JSON.stringify(_nv) !== JSON.stringify(_ov); } catch { chg = true; } }
-            if (chg) { _fts[k] = _now2; if (_key === 'ticketRecords' && !OBS_IGNORE_FIELDS.has(k)) _stamped.push(k); }
+            if (chg) {
+              // ★ 案A本適用(2026-08-24): 提供記録の既存行で、実編集記録(観察モードの記録)が存在する行は、
+              //   提供記録入力が管理する項目(_REC_GATED)について「実際に編集した項目」だけに新時刻を刻む。
+              //   これにより、他端末の変更が同期中の下書きに紛れても「新編集」と誤認されず巻き戻らない。
+              //   実編集記録の無い行(連絡帳・他画面・別セッション由来)は従来の差分刻印のまま。
+              const _gatedField = _obsGate && _REC_GATED(k) && !OBS_IGNORE_FIELDS.has(k);
+              if (!_gatedField || (_obsGate[k] != null)) { _fts[k] = _now2; }
+              else { _blk.push(k); }
+              if (_key === 'ticketRecords' && !OBS_IGNORE_FIELDS.has(k)) _stamped.push(k);
+            }
           });
-          // ★ 観察モード(挙動不変): 差分ベースで刻印された項目を「ユーザー編集記録(obsMarkRecEdit)」と突き合わせ。
-          //   mis=編集記録が無いのに刻印(直近10分) → 古い下書きが他端末の変更を上書きした疑いの実例。
-          //   un=行ごと編集記録なし(状態モーダル・振替・自動補正など未マーキング経路の棚卸し用)。
-          if (_key === 'ticketRecords' && _stamped.length && _old) {
-            try {
-              const _obs = _recEditObs.map.get(`${r.patientId}|${r.date}|${r.year ?? ''}`);
-              const _recent = (f) => _obs && (Date.now() - (Number(_obs[f])||0)) < 10*60*1000;
-              if (!_obs) { _obsStat.un++; if (!_obsStat.unEx) _obsStat.unEx = `${r.name||r.patientId} ${r.date}:${_stamped.slice(0,4).join(',')}`; }
-              else {
-                const _mis = _stamped.filter(f => !_recent(f));
-                if (_mis.length) { _obsStat.mis += _mis.length; if (!_obsStat.misEx) _obsStat.misEx = `${r.name||r.patientId} ${r.date}:${_mis.slice(0,4).join(',')}`; }
-              }
-              _obsStat.rows++;
-            } catch {}
+          // ★ 案A本適用の診断: ブロックが発生した行を記録(=巻き戻りを防いだ実例)
+          if (_key === 'ticketRecords' && _blk.length) {
+            _obsStat.rows++; _obsStat.mis += _blk.length;
+            if (!_obsStat.misEx) _obsStat.misEx = `${r.name||r.patientId} ${r.date}:${_blk.slice(0,4).join(',')}`;
           }
           return { ...r, _savedAt: _now2, _fieldTs: _fts };
         });
         if (_ch) newData = { ...newData, [_key]: _st };
       });
-      // ★ 観察モードの結果を同期ログへ(提供記録に変更行があった保存のみ)。 mis>0 が続くようなら
-      //   「差分ベース刻印が未編集項目を新編集として刻印している」実証 → 案A本適用の判断材料。
-      if (_obsStat.rows) syncLog('stamp-obs', { rows:_obsStat.rows, un:_obsStat.un, mis:_obsStat.mis, ...(_obsStat.misEx?{misEx:_obsStat.misEx}:{}), ...(!_obsStat.misEx&&_obsStat.unEx?{unEx:_obsStat.unEx}:{}) });
+      // ★ 案A本適用(2026-08-24): 巻き戻り防止が働いた時だけログ(blk=ブロックした項目数・ex=最初の実例)
+      if (_obsStat.mis) syncLog('stamp-gate', { rows:_obsStat.rows, blk:_obsStat.mis, ex:_obsStat.misEx });
       // ★ 各種設定・日誌設定・連絡帳設定は「変更されたフィールドだけ」に更新時刻(_fieldTs[field])を刻む。
       //   これにより、古い端末が1項目だけ編集して保存しても、触っていない項目(送迎自動コピー/ケアマネ/各設定/
       //   連絡事項・掲載期間)は フィールド単位マージで巻き戻らない(「1項目直すと他が復活」の恒久対策)。
@@ -19421,7 +19434,7 @@ export default function App() {
             )}
             <div className="flex-1 py-6 px-4 space-y-1 overflow-y-auto">
               <SidebarItem icon={<CalendarCheck size={18} />} label="ホーム" active={currentView === 'dashboard'} onClick={() => navigateTo('dashboard')} badge={_homeUnreadCount||null} />
-              <SidebarItem icon={<CalendarRange size={18} />} label="スケジュール" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
+              <SidebarItem icon={<CalendarRange size={18} />} label="カレンダー" active={currentView === 'schedule'} onClick={() => navigateTo('schedule')} />
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
@@ -19520,7 +19533,7 @@ export default function App() {
                  currentView === 'absence_fax' ? '休み連絡' :
                  currentView === 'general_fax' ? '各種連絡' :
                  currentView === 'monitoring' ? 'モニタリング' :
-                 currentView === 'schedule' ? 'スケジュール' :
+                 currentView === 'schedule' ? 'カレンダー' :
                  currentView === 'roster' ? '勤務表' :
                  currentView === 'kinou_keikaku' ? '個別機能訓練計画書' :
                  currentView === 'keikaku_yotei' ? '通所介護計画書の作成予定' :
@@ -20191,17 +20204,19 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                Object.keys(dd).forEach(k => { if (dd[k] === _furiTag0) { const dn = parseInt((k.split('_')[0])||'0'); if (dn) _furiDestLabel = `${_md0.getMonth()+1}月${dn}日`; } });
              });
              if (_furiFrom || _furiDestLabel) {
+               obsMarkRecEdit(p.id, selectedDate, 'status'); obsMarkRecEdit(p.id, selectedDate, 'tokki');
                pData.status = '欠席';
                pData.tokki = _furiFrom ? `${_furiFrom.date||''}へ振替` : (_furiDestLabel ? `${_furiDestLabel}へ振替` : '振替');
              } else {
                // この日のシフトに欠席/休業が入っていれば反映 (記録が無くてもステータスを合わせる)
                const _ds = appData.monthlyShifts?.[monthKey]?.[p.id] || {};
                const _absKey = Object.keys(_ds).find(k => k.startsWith(`${dayNum}_`) && (_ds[k]==='欠席' || _ds[k]==='休業'));
-               if (_absKey) pData.status = _ds[_absKey];
+               if (_absKey) { obsMarkRecEdit(p.id, selectedDate, 'status'); pData.status = _ds[_absKey]; }
              }
          }
          const pauseInfo = getPauseReasonOnDate(p, selectedDate);
          if (pauseInfo) {
+             obsMarkRecEdit(p.id, selectedDate, 'status');
              pData.status = "休止"; // 一時停止中は休止表記。カウント上は欠席扱い
              // ★ 休止の理由・期間ラベルは「表示のみ」。 保存はしない(_pauseAuto)。 これで休止が終わって
              //   出席に戻った時に、過去の休止ラベルが特記に焼き付いて残らない。
@@ -20210,19 +20225,22 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
          } else {
              // ★ 休止期間外なのに記録に「休止」が残っている(休止中に自動保存された残骸) → 出席に戻す(2026-08-11)。
              //   これが無いと、休止の終了日を過ぎても提供記録入力が休止のままになる。
-             if (pData.status === '休止') pData.status = '出席';
+             if (pData.status === '休止') { obsMarkRecEdit(p.id, selectedDate, 'status'); pData.status = '出席'; }
              if (pData.tokki && /（\d{4}\/\d{1,2}\/\d{1,2}〜）\s*$/.test(pData.tokki)) {
                  // ★ 休止期間が終わった(出席等に戻った)のに、過去に焼き付いた休止ラベルが残っている → 消す。
+                 obsMarkRecEdit(p.id, selectedDate, 'tokki');
                  pData.tokki = '';
              }
          }
          // ★ 施設の休業日は状態を自動で「休業」にする(2026-08-11)。 休止中の人は休止のまま。
          //   バイタル等の実データが入力済みの記録は触らない(休業日設定の誤りで入力を隠さない保護)。
          if (_isHolidaySel && pData.status !== '休止' && pData.status !== '休業' && !ticketHasClinicalData(pData)) {
+             obsMarkRecEdit(p.id, selectedDate, 'status');
              pData.status = '休業';
          }
          // ★ 休業の特記に休業日の名称(例: 夏季休業)を自動記載(2026-08-11)。 既に特記がある場合は触らない。
          if (_isHolidaySel && pData.status === '休業' && _holidayNameSel && !(pData.tokki && String(pData.tokki).trim())) {
+             obsMarkRecEdit(p.id, selectedDate, 'tokki');
              pData.tokki = _holidayNameSel;
          }
          return pData;
@@ -20262,13 +20280,13 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 
   const updateRecord = (id, field, value) => {
     if (filterMode === 'single') { obsMarkRecEdit(id, selectedDate, field); setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p)); }
-    else setLocalTicketRecords(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    else { obsMarkRecEditRec((localTicketRecords||[]).find(x=>x.id===id), field); setLocalTicketRecords(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p)); }
     if (dirtyRef) dirtyRef.current = true;
   };
 
   const updateExercise = (id, field, value) => {
     if (filterMode === 'single') { obsMarkRecEdit(id, selectedDate, 'exercises'); setLocalPatients(prev => prev.map(p => p.id === id ? { ...p, exercises: { ...(p.exercises || {}), [field]: value } } : p)); }
-    else setLocalTicketRecords(prev => prev.map(p => p.id === id ? { ...p, exercises: { ...(p.exercises || {}), [field]: value } } : p));
+    else { obsMarkRecEditRec((localTicketRecords||[]).find(x=>x.id===id), 'exercises'); setLocalTicketRecords(prev => prev.map(p => p.id === id ? { ...p, exercises: { ...(p.exercises || {}), [field]: value } } : p)); }
     if (dirtyRef) dirtyRef.current = true;
   };
   // 個別運動セルの更新: slot (1〜3), field='itemId'|'value'
@@ -20280,7 +20298,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       return { ...p, individualExercises: indEx };
     };
     if (filterMode === 'single') { obsMarkRecEdit(id, selectedDate, 'individualExercises'); setLocalPatients(prev => prev.map(p => p.id === id ? updater(p) : p)); }
-    else setLocalTicketRecords(prev => prev.map(p => p.id === id ? updater(p) : p));
+    else { obsMarkRecEditRec((localTicketRecords||[]).find(x=>x.id===id), 'individualExercises'); setLocalTicketRecords(prev => prev.map(p => p.id === id ? updater(p) : p)); }
     if (dirtyRef) dirtyRef.current = true;
   };
 
@@ -20503,6 +20521,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   };
 
   const applyStatusChange = (id, newStatus, reason, furikaeDate, substituteReason, furikaeAmpm='AM', pauseFromDate='', pauseToDate='') => {
+    { const _mkPid = (localPatients.find(p=>p.id===id)?.patientId) || id; ['status','tokki','furikaeAmpm'].forEach(f=>obsMarkRecEdit(_mkPid, selectedDate, f)); }   // ★ 案A: 状態モーダル経由の変更も実編集として記録
     // 休止: 利用者マスタの pauseHistory に新エントリ追加 + status='休止'
     if (newStatus === '休止') {
       const targetPatientId = (localPatients.find(p=>p.id===id)?.patientId) || id;
@@ -20859,7 +20878,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           //   空枠だけ削除(削除idは上の removedIds に入っている=墓石になる)。
           updatedTicketRecords = updatedTicketRecords.map(r => {
             if (!(r.patientId === patientId && r.date === destDateStr && (destAny || r.status === '振替'))) return r;
-            if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: syncNow() };
+            if (ticketHasClinicalData(r)) { ['status','furikaeAmpm','tokki'].forEach(f=>obsMarkRecEditRec(r, f)); return { ...r, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: syncNow() }; }
             return null;
           }).filter(Boolean);
           // 振替先の 振 シフトを削除
