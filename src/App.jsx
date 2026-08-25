@@ -427,7 +427,7 @@ ${body}</body></html>`;
                 const mt = isF && r.status==='出席';
                 const v = (x) => (isA||mt) ? '' : (x||'');
                 const sl = isF ? (r.status==='出席'?'予定':r.status) : r.status;
-                const slColor = sl==='出席'?'#1d4ed8':sl==='予定'?'#94a3b8':sl==='欠席'?'#dc2626':sl==='振替'?'#7c3aed':sl==='臨時'?'#0e7490':'#64748b';
+                const slColor = sl==='出席'?'#1d4ed8':sl==='予定'?'#94a3b8':sl==='欠席'?'#dc2626':sl==='振替'?'#059669':sl==='臨時'?'#0e7490':'#64748b';
                 const slWeight = (sl==='出席'||sl==='欠席'||sl==='振替'||sl==='臨時')?'bold':'normal';
                 const rowBg = isA ? '#f8fafc' : 'white';
                 const exCells = exerciseItems.map(it => {
@@ -10021,7 +10021,10 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
         plEn: existing?.plEn || "",
         massage: existing?.massage || "",
         exercises: existing?.exercises || {},
-        tokki: existing?.tokki || "",
+        // ★ 休業日は特記が空なら休業の理由(祝日・年末年始等の休業名/定休日)を表示(2026-08-25 店舗要望)
+        tokki: existing?.tokki || (((existing?.status || status) === '休業')
+          ? (isHoliday ? ((((holidays||[]).find(x=>(x&&(x.date||x))===dateStr))||{}).name || '休業日') : (isClosedDay ? '定休日' : ''))
+          : ""),
         actualTime: existing?.actualTime || "",
         kibunArrival: existing?.kibunArrival || "",
         kibunArrivalReason: existing?.kibunArrivalReason || "",
@@ -27190,7 +27193,7 @@ function buildAllPeriodTicketHtml(appData, patient) {
         const mt = isF && r.status==='出席';
         const v = (x) => (isA||mt) ? '' : (x||'');
         const sl = isF ? (r.status==='出席'?'予定':r.status) : r.status;
-        const slColor = sl==='出席'?'#1d4ed8':sl==='予定'?'#94a3b8':sl==='欠席'?'#dc2626':sl==='振替'?'#7c3aed':sl==='臨時'?'#0e7490':'#64748b';
+        const slColor = sl==='出席'?'#1d4ed8':sl==='予定'?'#94a3b8':sl==='欠席'?'#dc2626':sl==='振替'?'#059669':sl==='臨時'?'#0e7490':'#64748b';
         const slWeight = (sl==='出席'||sl==='欠席'||sl==='振替'||sl==='臨時')?'bold':'normal';
         const rowBg = isA ? '#f8fafc' : 'white';
         const exCells = exerciseItems.map(it => {
@@ -44264,7 +44267,13 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           </div>
         )}
         {/* タブ (グループごとに区切り線を入れて見やすく) */}
-        <div className="flex overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50 px-3 gap-1 items-stretch">
+        {/* ★ スクロールバーを常時表示(2026-08-25 店舗要望): タブが隠れていることに気付けるように */}
+        <style>{`.pf-tabs-scroll{scrollbar-width:thin;scrollbar-color:#94a3b8 #e2e8f0;}
+          .pf-tabs-scroll::-webkit-scrollbar{height:8px;display:block;}
+          .pf-tabs-scroll::-webkit-scrollbar-track{background:#e2e8f0;}
+          .pf-tabs-scroll::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:4px;}
+          .pf-tabs-scroll::-webkit-scrollbar-thumb:hover{background:#64748b;}`}</style>
+        <div className="pf-tabs-scroll flex overflow-x-auto border-b border-slate-200 shrink-0 bg-slate-50 px-3 gap-1 items-stretch">
           {allCategories.map((c, i) => {
             const prev = allCategories[i-1];
             const showDivider = i > 0 && (c.group || '') !== (prev?.group || '');
@@ -44528,6 +44537,15 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             const _match = (h) => { if(!_q) return true; const hay = [h.subject,h.recipientOffice,h.recipientName,h.memo,h.body,h.content,h.note,h.dateIso,_ts(h.timestamp)].map(x=>String(x||'').toLowerCase()).join(' '); return hay.includes(_q); };
             const absHist = faxOf('absence').filter(_match); const genHist = faxOf('general').filter(_match);
             const monHist = faxOf('monitoring').filter(_match);
+            // ★ 休み連絡の「下書き(編集済・未送付)」も表示(2026-08-25)。 カレンダーで「編集済」なのに
+            //   ここに出ない(=送付履歴は印刷/PDF/送信時のみ記録)という食い違いを解消する。
+            const _histDates = new Set(faxOf('absence').map(h=>h.dateIso||''));
+            const _fdEdited = (fd) => !!fd && ((typeof fd.reason==='string'&&fd.reason.trim()!=='')||(typeof fd.reporter==='string'&&fd.reporter.trim()!=='')||(typeof fd.memo==='string'&&fd.memo.trim()!=='')||((fd.checkboxes||{}).kyuukyuu||(fd.checkboxes||{}).kakunin||(fd.checkboxes||{}).orikaesu)||(fd.status&&fd.status!=='none'));
+            const absDrafts = Object.entries(appData.faxDataStore||{})
+              .map(([k,v])=>{ const m=k.match(/^(\d{4}-\d{2}-\d{2})_(.+)$/); return m?{date:m[1],pid:m[2],fd:v}:null; })
+              .filter(Boolean)
+              .filter(x=>String(x.pid)===String(patient.id) && _fdEdited(x.fd) && !_histDates.has(x.date))
+              .sort((a,b)=>b.date.localeCompare(a.date));
             const faxList = (title, list, view) => (
               <div className="bg-white rounded-xl border border-slate-200 p-3">
                 <div className="flex items-center justify-between mb-2">
@@ -44581,6 +44599,18 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 </div>
                 {_q && <div className="text-[11px] text-slate-500">「{renrakuSearch}」で絞り込み中（休み{absHist.length}件・各種{genHist.length}件・モニタリング{monHist.length}件）</div>}
                 {faxList('休み連絡', absHist, 'absence_fax')}
+                {absDrafts.length>0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-amber-800 mb-1">休み連絡の下書き（編集済・未送付 {absDrafts.length}件）</div>
+                    {absDrafts.map((d,i)=>(
+                      <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-amber-100 last:border-b-0">
+                        <span className="text-amber-900 font-bold">{d.date}{d.fd?.reason?`（${d.fd.reason}）`:''}</span>
+                        <span className="text-amber-700 shrink-0">編集済・未送付</span>
+                      </div>
+                    ))}
+                    <div className="text-[10px] text-amber-700 mt-1.5">印刷・PDF・FAX送信をすると上の「休み連絡」の送付履歴に記録されます。休み連絡カレンダーの該当日から開いて出力してください。</div>
+                  </div>
+                )}
                 {faxList('各種連絡', genHist, 'general_fax')}
                 {faxList('モニタリング（ケアマネ送付）', monHist, 'monitoring')}
               </div>
@@ -44590,13 +44620,39 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           {isRecordsTab && (() => {
             const fitItems = appData.systemSettings?.fitnessItems || [];
             const fitRecs = (appData.fitnessRecords||[]).filter(r => r.patientId === patient.id).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+            // ★ 体力測定の一覧を印刷/PDF(A4横・全項目・全測定日) (2026-08-25 店舗要望)
+            const _printFitness = () => {
+              const _fac = appData.systemSettings?.facilityInfo || {};
+              const esc = (s)=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              const th = 'border:1px solid #94a3b8;background:#e2e8f0;padding:4px 6px;font-size:10px;white-space:nowrap;text-align:center;';
+              const td = 'border:1px solid #94a3b8;padding:4px 6px;font-size:11px;text-align:center;';
+              const head = `<tr><th style="${th}">日付</th><th style="${th}">担当</th>${fitItems.map(it=>`<th style="${th}">${esc(it.name)}<br/><span style="font-weight:normal;color:#475569;">（${esc(it.unit)}）</span></th>`).join('')}</tr>`;
+              const rows = fitRecs.map(r=>`<tr><td style="${td}font-weight:bold;white-space:nowrap;">${esc(r.date)}</td><td style="${td}white-space:nowrap;">${esc(r.recorder||'')}</td>${fitItems.map(it=>{const v=r.values?.[it.id];return `<td style="${td}">${(v!==''&&v!=null)?`<b>${esc(v)}</b>`:''}</td>`;}).join('')}</tr>`).join('');
+              const html = `<div style="font-family:sans-serif;">
+                <div style="text-align:center;font-size:16px;font-weight:bold;letter-spacing:6px;margin-bottom:8px;">体力測定の記録</div>
+                <table style="width:100%;border-collapse:collapse;margin-bottom:8px;"><tr>
+                  <td style="border:1px solid #555;background:#e2e8f0;padding:4px 8px;font-size:10px;font-weight:bold;width:70px;">利用者氏名</td><td style="border:1px solid #555;padding:4px 8px;font-size:12px;font-weight:bold;">${esc(patient.name)}　様</td>
+                  <td style="border:1px solid #555;background:#e2e8f0;padding:4px 8px;font-size:10px;font-weight:bold;width:60px;">事業所</td><td style="border:1px solid #555;padding:4px 8px;font-size:11px;">${esc(_fac.name||'')}</td>
+                  <td style="border:1px solid #555;background:#e2e8f0;padding:4px 8px;font-size:10px;font-weight:bold;width:60px;">出力日</td><td style="border:1px solid #555;padding:4px 8px;font-size:11px;width:90px;">${new Date().toLocaleDateString('ja-JP')}</td>
+                </tr></table>
+                <table style="width:100%;border-collapse:collapse;">${head}${rows}</table>
+              </div>`;
+              const w = window.open('', '_blank');
+              if (!w) { alert('ポップアップがブロックされました。ブラウザの設定で許可してください。'); return; }
+              w.document.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>体力測定の記録_${patient.name}</title><style>@page{size:A4 landscape;margin:10mm}body{margin:0;padding:8mm;box-sizing:border-box}</style></head><body>${html}</body></html>`);
+              w.document.close();
+              setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} }, 350);
+            };
             return (
               <div className="space-y-4">
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-800">この利用者の<b>体力測定の記録</b>を測定日ごとに一覧できます。項目が多い場合は<b>表を左右にスクロール</b>してください（日付・担当は左に固定されます）。</div>
                 <div className="bg-white rounded-xl border border-slate-200 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div className="font-bold text-sm text-slate-700">体力測定（{fitRecs.length}件）</div>
-                    {navigateTo && <button onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo('fitness'); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">測定・入力へ →</button>}
+                    <div className="flex items-center gap-1.5">
+                      {fitRecs.length>0 && <button onClick={_printFitness} className="text-[11px] font-bold text-slate-700 bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-50 flex items-center gap-1"><Printer size={12}/>印刷 / PDF保存</button>}
+                      {navigateTo && <button onClick={()=>{ onPatientChange&&onPatientChange(patient.id); onClose&&onClose(); navigateTo('fitness'); }} className="text-[11px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-1 rounded hover:bg-blue-100">測定・入力へ →</button>}
+                    </div>
                   </div>
                   {fitRecs.length===0 ? <div className="text-xs text-slate-400 py-2">記録なし</div> : (
                     <>
