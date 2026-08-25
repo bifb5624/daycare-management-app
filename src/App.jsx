@@ -36390,7 +36390,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const _rpMap = new Map();
   _recordedRaw.forEach(r => { const ex=_rpMap.get(r.patientId); const sc=(x)=>Object.keys(x).filter(k=>k[0]!=='_'&&x[k]!==''&&x[k]!=null).length; if(!ex || sc(r)>sc(ex)) _rpMap.set(r.patientId, r); });
   const recordedPatients = [..._rpMap.values()]
-    .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; });
+    .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; });
   const recordedPids = new Set(recordedPatients.map(r=>r.patientId));
   // ★ ticketRecords にまだ記録が無くても、当日の曜日スケジュールに該当する利用者を表示
   //   (体温などを入力しなくても日誌に名前が出るように)
@@ -36402,9 +36402,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       if (ampm === '1日') return ['AM','PM','1日'].includes(slot);
       return slot === ampm || slot === '1日';
     })
-    .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', careLevel:p.careLevel||'', tokki:'', status:'出席' }));
+    .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:'出席' }));
+  // ★ 状態ランク→同状態内はかな順(提供記録入力・プレビューと同じ並び)
   const patients = [...recordedPatients, ...scheduledExtras]
-    .sort((a, b) => _statusRank(a.status) - _statusRank(b.status));
+    .sort((a, b) => (_statusRank(a.status) - _statusRank(b.status)) || String(a.kana||a.name||'').localeCompare(String(b.kana||b.name||''), 'ja'));
 
   // 各種設定の定員数 (capacity) を基準にしつつ、欠席を含む全員が必ず表示されるよう
   // totalRows は patients.length と capacity の max を採用
@@ -36559,19 +36560,34 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       return [ap,'1日'].includes(p.scheduleAmPm?.[dow]);
     };
     const _rankS = (st) => st === '出席' ? 0 : st === '振替' ? 1 : st === '欠席' ? 2 : st === '休止' ? 3 : st === '休業' ? 4 : 5;
-    const _patients = (appData.ticketRecords||[])
+    // ★ 入力画面と同一の行構築(2026-08-25): 重複記録の絞り込み・記録なしの予定者・patientId/kana を持たせ、
+    //   並びも同じにする。 patientId が無いと迎え/送りの号車(IDキー保存)がプレビューで引けず空白になっていた。
+    const _rawRecs = (appData.ticketRecords||[])
       .filter(r=>r.date===dateStr)
-      .filter(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId); if(!p) return false; return _match(r, p); })
-      .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; })
-      // ★ 提供記録入力と同じ並び(2026-08-21): 状態ランク→同状態内はかな順
-      .sort((a, b) => (_rankS(a.status) - _rankS(b.status)) || String(a.kana||'').localeCompare(String(b.kana||''), 'ja'));
+      .filter(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId); if(!p) return false; return _match(r, p); });
+    const _dmap = new Map();
+    _rawRecs.forEach(r => { const ex=_dmap.get(r.patientId); const sc=(x)=>Object.keys(x).filter(k=>k[0]!=='_'&&x[k]!==''&&x[k]!=null).length; if(!ex || sc(r)>sc(ex)) _dmap.set(r.patientId, r); });
+    const _recd = [..._dmap.values()]
+      .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; });
+    const _recdIds = new Set(_recd.map(r=>r.patientId));
+    const _extras = (appData.patients||[])
+      .filter(p => {
+        if (_recdIds.has(p.id)) return false;
+        if (getPatientDisplayStatus && getPatientDisplayStatus(p) !== '利用中') return false;
+        const slot = p.scheduleAmPm?.[dow] || '';
+        return slot === ap || slot === '1日';
+      })
+      .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:'出席' }));
+    const _patients = [..._recd, ..._extras]
+      .sort((a, b) => (_rankS(a.status) - _rankS(b.status)) || String(a.kana||a.name||'').localeCompare(String(b.kana||b.name||''), 'ja'));
     const _serviceTime = ap==='AM' ? (fi.serviceTimeAM||'9:00〜12:05') : (fi.serviceTimePM||'13:25〜16:30');
     const _schedule = ap==='AM' ? (ds.scheduleAM||[]) : (ds.schedulePM||[]);
     const _label = ap==='AM' ? '午前' : '午後';
     const _jigyoCount = _patients.filter(r=>r.careLevel&&(r.careLevel.startsWith('事業')||r.careLevel.startsWith('要支援'))).length;
     const _kaigoCount = _patients.filter(r=>r.careLevel&&r.careLevel.startsWith('要介護')).length;
     const _logKey = `${selectedDate}_${ap}`;
-    const _log = (appData.diaryLogs||{})[_logKey] || {};
+    // ★ 表示中のAM/PMは編集中(未保存)の内容をそのままプレビューへ(送迎時間・号車が「保存前は空白」になるのを防ぐ)
+    const _log = (ap === ampm) ? localLog : ((appData.diaryLogs||{})[_logKey] || {});
     return {patients:_patients, serviceTime:_serviceTime, schedule:_schedule, label:_label, ampm:ap, jigyoCount:_jigyoCount, kaigoCount:_kaigoCount, log:_log, logKey:_logKey};
   };
 
@@ -36626,11 +36642,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       {/* 担当職員 — 横一列ボックス */}
       {/* 提供日・提供時間・利用者数 — 全列固定幅で日付/AM/PMによって列幅が動かないように */}
       <div style={{display:'flex',gap:4,marginBottom:4,width:'100%'}}>
-        {/* 提供日（固定幅・長い日付でも切れないよう AutoFitLine で自動縮小） */}
-        <div style={{border:'1px solid #555',borderRadius:2,overflow:'hidden',width:180,flexShrink:0,display:'flex',flexDirection:'column'}}>
+        {/* 提供日（固定幅200。 日付は必ず収まるため自動縮小はやめ、プレビュー/印刷でも文字サイズが変わらない固定12pxに） */}
+        <div style={{border:'1px solid #555',borderRadius:2,overflow:'hidden',width:200,flexShrink:0,display:'flex',flexDirection:'column'}}>
           <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px',textAlign:'center'}}>提供日</div>
-          <div style={{padding:'6px 6px',textAlign:'center',flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <AutoFitLine style={{fontSize:12,fontWeight:'bold',width:'100%',textAlign:'center'}}>{yw}</AutoFitLine>
+          <div style={{padding:'6px 4px',textAlign:'center',flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <div style={{fontSize:12,fontWeight:'bold',whiteSpace:'nowrap'}}>{yw}</div>
           </div>
         </div>
         {/* 提供時間（24時間表記なので AM/PM prefix は省略・幅を狭く） */}
