@@ -18313,7 +18313,12 @@ export default function App() {
           const _fts = { ...(r._fieldTs || {}) };
           const _stamped = [];   // 診断用: この保存で変更が検出された項目名(ticketRecordsのみ)
           const _blk = [];       // ★ 案A: 実編集記録が無く刻印をブロックした項目(=巻き戻り防止が働いた)
-          const _obsGate = (_key === 'ticketRecords' && _old) ? _recEditObs.map.get(`${r.patientId}|${r.date}|${r.year ?? ''}`) : null;
+          // ★ 案A拡張(2026-08-25): 実編集記録が「全く無い」既存行もゲート対象({}扱い)。
+          //   端末Bが利用者Aを一切触っていなくても、Bの自動保存は下書き全行を保存するため、
+          //   同期で届いたAの新しい値と下書きの古い値の差分が「新編集」と誤刻印され消える穴が残っていた
+          //   (2026-08-25 2端末で別利用者の血圧を同時入力→片方が消える実害)。 提供記録入力が管理する
+          //   項目(_REC_GATED)を書き換える経路は全て obsMarkRecEdit 済みのため、記録が無い=触っていない。
+          const _obsGate = (_key === 'ticketRecords' && _old) ? (_recEditObs.map.get(`${r.patientId}|${r.date}|${r.year ?? ''}`) || {}) : null;
           const _fk = new Set([...Object.keys(r), ...(_old ? Object.keys(_old) : [])]);
           _fk.forEach(k => {
             if (k === '_savedAt' || k === '_fieldTs' || k === 'id') return;
@@ -18333,7 +18338,10 @@ export default function App() {
               //   これにより、他端末の変更が同期中の下書きに紛れても「新編集」と誤認されず巻き戻らない。
               //   実編集記録の無い行(連絡帳・他画面・別セッション由来)は従来の差分刻印のまま。
               const _gatedField = _obsGate && _REC_GATED(k) && !OBS_IGNORE_FIELDS.has(k);
-              if (!_gatedField || (_obsGate[k] != null)) { _fts[k] = _now2; }
+              // ★ 実編集の有効期限30分(2026-08-25): 編集はautosave(1.2秒)や保存ボタンで速やかに刻印されるため、
+              //   30分より古い編集記録は「過去の編集の残骸」。 期限を切らないと、数日前に振替を設定した端末の
+              //   古い下書きが、他端末で行った振替取消を「新編集」として何度でも巻き戻せてしまう。
+              if (!_gatedField || (_obsGate[k] != null && (Date.now() - _obsGate[k]) < 30*60*1000)) { _fts[k] = _now2; }
               else { _blk.push(k); }
               if (_key === 'ticketRecords' && !OBS_IGNORE_FIELDS.has(k)) _stamped.push(k);
             }
@@ -20539,7 +20547,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       const _ridx = _recs.findIndex(r => r.patientId === targetPatientId && recMatchesDateYear(r, _dateLabel, _yr));
       // ★ 休止の理由は pauseHistory(利用者)に持ち、特記(tokki)には焼き込まない(表示で計算する)。
       //   焼き込むと休止が終わって出席に戻っても特記に残り続けるため。 既存の特記メモはそのまま保持。
-      if (_ridx >= 0) _recs[_ridx] = { ..._recs[_ridx], status: '休止', _savedAt: syncNow() };
+      if (_ridx >= 0) { obsMarkRecEditRec(_recs[_ridx], 'status'); _recs[_ridx] = { ..._recs[_ridx], status: '休止', _savedAt: syncNow() }; }
       else _recs.push({ id: `tr_${targetPatientId}_${_yr}_${_sd.getMonth()+1}_${_sd.getDate()}`, patientId: targetPatientId, date: _dateLabel, year: _yr, status: '休止', _savedAt: syncNow() });
       onSave({ ...appData, patients: updatedPatients, ticketRecords: _recs }, { manual: true, message: '✓ 休止に設定しました' });
       // 画面上の localPatients も即時反映
@@ -30988,7 +30996,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ 振替先の記録: バイタル等のデータがあれば消さずに残す(出席として保持・振替の目印tokkiは消す)。空枠だけ削除。
     let updated = (effTickets||[]).map(r => {
       if (!(r && r.patientId === localPatient.id && r.date === destDateStr && r.status === '振替')) return r;
-      if (ticketHasClinicalData(r)) return { ...r, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: _now };
+      if (ticketHasClinicalData(r)) { ['status','furikaeAmpm','tokki'].forEach(f=>obsMarkRecEditRec(r,f)); return { ...r, status: '出席', furikaeAmpm: '', tokki: '', _savedAt: _now }; }
       if (r.id != null) _removedIds.push(String(r.id));
       return null;
     }).filter(Boolean);
@@ -31010,7 +31018,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         // 1. ticketRecord の '欠席' 記録を出席へ戻す(振替の目印tokkiは消す)。 データがあれば保持、無ければ削除。
         updated = (updated||[]).map(r => {
           if (!(r && r.patientId === localPatient.id && r.date === srcDateStr && r.status === '欠席')) return r;
-          if (ticketHasClinicalData(r)) return { ...r, status: '出席', tokki: '', _savedAt: _now };
+          if (ticketHasClinicalData(r)) { ['status','tokki'].forEach(f=>obsMarkRecEditRec(r,f)); return { ...r, status: '出席', tokki: '', _savedAt: _now }; }
           if (r.id != null) _removedIds.push(String(r.id));
           return null;
         }).filter(Boolean);
@@ -31031,6 +31039,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             const t = r.tokki || '';
             const subM = t.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:(.+))?$/);
             const cleaned = subM ? (subM[1] || '') : t;
+            obsMarkRecEditRec(r, 'tokki');
             return { ...r, tokki: cleaned, _savedAt: _now };
           }
           return r;
@@ -31088,16 +31097,32 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         }
       } else {
         // 状態を空にする (基本利用日なら '〇' に戻す = isBase ? '〇' : 空欄)
-        const ns2 = saveSh(localPatient.id, day, ap, isBase ? '〇' : '空欄', isBase, null);
+        let ns2 = saveSh(localPatient.id, day, ap, isBase ? '〇' : '空欄', isBase, null);
         // ticketRecords 側の該当日記録 (欠席/休業/振替の残骸など) を整理。 ★ バイタル等のデータがある記録は
         //   消さずに残す(出席として保持・振替/欠席の目印tokkiは消す)。 データの無い空枠だけ削除する。
         const dateStr = `${currentMonth.getMonth()+1}月${day}日`;
         const removed = [];
+        // ★ 取り消すセルが「振替元の欠席」なら、対になる振替先(特記の「◯月◯日へ振替」)の記録とシフトも
+        //   一緒に取り消す(2026-08-25)。 これまで欠席側だけ消え、振替先の「振替」記録・特記・シフト表示が
+        //   残骸として残り、提供記録入力と月間スケジュールの表示が食い違っていた。
+        const _srcRec = (effTickets||[]).find(t => t.patientId === localPatient.id && t.date === dateStr);
+        const _pairM = String(_srcRec?.tokki||'').match(/(\d+)月(\d+)日(?:AM|PM|1日)?へ振替/);
+        const _pairLabel = _pairM ? `${parseInt(_pairM[1])}月${parseInt(_pairM[2])}日` : null;
         const filteredTickets = (effTickets||[]).map(t => {
-          if (!(t.patientId === localPatient.id && t.date === dateStr)) return t;
-          if (ticketHasClinicalData(t)) return { ...t, status: '出席', furikaeAmpm: undefined, tokki: '', _savedAt: syncNow() };
+          if (t.patientId !== localPatient.id) return t;
+          const _isSelf = t.date === dateStr;
+          const _isPair = _pairLabel && t.date === _pairLabel && t.status === '振替';
+          if (!_isSelf && !_isPair) return t;
+          if (ticketHasClinicalData(t)) { ['status','furikaeAmpm','tokki'].forEach(f=>obsMarkRecEditRec(t,f)); return { ...t, status: '出席', furikaeAmpm: '', tokki: '', _savedAt: syncNow() }; }
           removed.push(t); return null;
         }).filter(Boolean);
+        // ★ 振替先セルのシフト表示「振(x/x)」も削除(同年内の月として扱う)
+        if (_pairM) {
+          const _pKey = `${currentMonth.getFullYear()}-${String(parseInt(_pairM[1])).padStart(2,'0')}`;
+          if (ns2[_pKey]?.[localPatient.id]) {
+            ['AM','PM'].forEach(a => { const k = `${parseInt(_pairM[2])}_${a}`; if (String(ns2[_pKey][localPatient.id][k]||'').startsWith('振')) delete ns2[_pKey][localPatient.id][k]; });
+          }
+        }
         // ★ 削除した(空の)記録を墓石(deletedIds)へ → クラウドマージで復活させない。 その場で即保存し確実に反映。
         const _tomb = { ...(appData.deletedIds || {}) };
         _tomb.ticketRecords = { ...(_tomb.ticketRecords || {}) };
@@ -31144,6 +31169,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const existing = effTickets.find(t => t.patientId === localPatient.id && t.date === dateStr);
     let nextTickets;
     if (existing) {
+      ['status','tokki'].forEach(f=>obsMarkRecEditRec(existing,f));
       nextTickets = effTickets.map(t => t === existing ? { ...t, status, tokki: reason || t.tokki || '' } : t);
     } else {
       const maxId = Math.max(0, ...effTickets.map(t => t.id || 0));
@@ -31227,12 +31253,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     // ★ _savedAt を必ず更新 = クラウドマージで「古い出席記録が新しい欠席/振替を上書き」して戻る不具合を防ぐ
     const _furiNow = syncNow();
     const srcIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, srcLabel, srcYear));
-    if (srcIdx >= 0) ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear, _savedAt: _furiNow };
+    if (srcIdx >= 0) { ['status','tokki'].forEach(f=>obsMarkRecEditRec(ur[srcIdx],f)); ur[srcIdx] = { ...ur[srcIdx], status: '欠席', tokki: srcTokki, year: srcYear, _savedAt: _furiNow }; }
     else ur.push({ id: `tr_${localPatient.id}_${srcYear}_${srcDateObj.getMonth()+1}_${srcDateObj.getDate()}`, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: srcLabel, year: srcYear, dayOfWeek: srcDow, status: '欠席', temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, tokki: srcTokki, _savedAt: _furiNow });
     // 振替先 ticketRecord（振替）の新規作成 / 更新
     const destTokki = `${srcLabel}${ampmSuffix}分振替`;
     const destIdx = ur.findIndex(r => r.patientId === localPatient.id && recMatchesDateYear(r, destLabel, destYear));
-    if (destIdx >= 0) ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear, _savedAt: _furiNow };
+    if (destIdx >= 0) { ['status','furikaeAmpm','tokki'].forEach(f=>obsMarkRecEditRec(ur[destIdx],f)); ur[destIdx] = { ...ur[destIdx], status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, year: destYear, _savedAt: _furiNow }; }
     else ur.push({ id: `tr_${localPatient.id}_${destYear}_${destDateObj.getMonth()+1}_${destDateObj.getDate()}`, patientId: localPatient.id, name: localPatient.name, kana: localPatient.kana, date: destLabel, year: destYear, dayOfWeek: destDow, status: '振替', furikaeAmpm: destAmpm, tokki: destTokki, temp: '', bpUpSt: '', bpDnSt: '', plSt: '', bpUpEn: '', bpDnEn: '', plEn: '', massage: '', exercises: {}, _savedAt: _furiNow });
     // ★ 振替は下書きに留めず即クラウド保存(欠席記録/振替記録をすぐ反映 → 提供記録入力にも欠席者が出る)
     setPendingShifts(null); setPendingTickets(null);
@@ -36254,17 +36280,17 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           };
           SOUGEI_FIELDS.forEach(f => {
             if (!prevLog[f]) return;
-            if (f==='pick'||f==='drop'||f==='pick_walk'||f==='drop_walk') loaded[f] = remapRow(prevLog[f]);
-            else loaded[f] = JSON.parse(JSON.stringify(prevLog[f]));
+            // ★ 送迎時間(carTimes)と運転者(driver)は毎回違うためコピーしない(2026-08-25 店舗要望)。
+            //   コピーするのは利用者と車両の紐付け(pick/drop/徒歩)のみ。
+            if (f==='driver'||f==='carTimes') return;
+            loaded[f] = remapRow(prevLog[f]);
           });
           _didAutoCopy = true;
-          // ★ 1週間前からの自動コピー(未確認)。 迎え/送り/運転者/時間 を項目別に保持し、
+          // ★ 1週間前からの自動コピー(未確認)。 迎え/送り を項目別に保持し、
           //   その項目を編集したらバッジが1つずつ消える(確認済み扱い)。
           const _pend = {};
           if (prevLog.pick || prevLog.pick_walk) _pend['迎え'] = true;
           if (prevLog.drop || prevLog.drop_walk) _pend['送り'] = true;
-          if (prevLog.driver) _pend['運転者'] = true;
-          if (prevLog.carTimes) _pend['時間'] = true;
           loaded._sougeiPending = _pend;
         }
       }
@@ -42736,6 +42762,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   // 元 tokki が「○月○日AMへ振替（理由）」の形なら、振替ノートを保持して理由だけ差し替える
                   const m = (r.tokki || '').match(/^(.+?へ振替)/);
                   const newTokki = m ? `${m[1]}（${fx.reason}）` : fx.reason;
+                  obsMarkRecEditRec(r, 'tokki');
                   return { ...r, tokki: newTokki };
                 });
               });
