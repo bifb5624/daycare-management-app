@@ -31052,7 +31052,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     _removedIds.forEach(id => { _delTomb.ticketRecords[id] = _now; });
     setPendingShifts(null); setPendingTickets(null);
     if (dirtyRef) dirtyRef.current = false;
-    onSave({ ...appData, monthlyShifts: newShifts, ticketRecords: updated, deletedIds: _delTomb }, { manual: true, message: '✓ 振替を取り消しました' });
+    // ★ deleteRecordIds でテーブル(ticket_records)にも削除を伝える(2026-08-25)。 墓石だけでは
+    //   テーブルの行が生き残り、保存→再読み込みで振替が復活していた(2026-08-10のRecordView側修正と同型)。
+    onSave({ ...appData, monthlyShifts: newShifts, ticketRecords: updated, deletedIds: _delTomb },
+      { manual: true, message: '✓ 振替を取り消しました', ...(_removedIds.length ? { deleteRecordIds: _removedIds } : {}) });
   };
 
   // セルクリック: 状態選択ポップアップを開く（振替セルは取り消し確認）
@@ -31129,7 +31132,10 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
         removed.forEach(t => { if (t && t.id != null) _tomb.ticketRecords[String(t.id)] = Date.now(); });
         setPendingShifts(ns2);
         setPendingTickets(filteredTickets);
-        onSave({ ...appData, monthlyShifts: ns2, ticketRecords: filteredTickets, ...(removed.length ? { deletedIds: _tomb } : {}) }, { manual: true, message: '✓ 取り消しました' });
+        // ★ deleteRecordIds でテーブルにも削除を伝える(2026-08-25)。 墓石だけでは再読み込みで復活する。
+        const _remIds = removed.filter(t => t && t.id != null).map(t => String(t.id));
+        onSave({ ...appData, monthlyShifts: ns2, ticketRecords: filteredTickets, ...(removed.length ? { deletedIds: _tomb } : {}) },
+          { manual: true, message: '✓ 取り消しました', ...(_remIds.length ? { deleteRecordIds: _remIds } : {}) });
         if (dirtyRef) dirtyRef.current = false;
       }
       return;
@@ -35728,7 +35734,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                             ids.forEach(id=>{ if(id!=null) m[String(id)] = now; });
                             tomb.ticketRecords = m;
                             const nextRecs = (appData.ticketRecords||[]).filter(r => !(r && r.id!=null && idSet.has(String(r.id))));
-                            onSave({ ...appData, ticketRecords: nextRecs, deletedIds: tomb }, { manual:true, message:`✓ ${ids.length}件の残骸記録を削除しました（他端末はリロードしてください）`, allowEmpty:true });
+                            onSave({ ...appData, ticketRecords: nextRecs, deletedIds: tomb }, { manual:true, message:`✓ ${ids.length}件の残骸記録を削除しました（他端末はリロードしてください）`, allowEmpty:true, deleteRecordIds: ids.filter(x=>x!=null).map(String) });
                             setStrayScan([]);
                           }} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm active:scale-95">この{strayScan.length}件を削除</button>
                         )}
