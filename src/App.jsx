@@ -28548,7 +28548,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                 <div>
                   <div className="text-[11px] font-bold text-slate-500 mb-1">面数（1枚に何人分）</div>
                   <div className="flex gap-2">
-                    <button onClick={()=>setSS({renrakuMode:'1'})} className={tabBtn(mode==='1')}>1面（1人ずつ）</button>
+                    {/* ★ 1面を選んだら用紙はB6(手差し)を既定に(2026-08-25 店舗要望。B5中央配置へは手動で変更可) */}
+                    <button onClick={()=>setSS({renrakuMode:'1', renrakuPaper:'b6port'})} className={tabBtn(mode==='1')}>1面（1人ずつ）</button>
                     <button onClick={()=>setSS({renrakuMode:'2'})} className={tabBtn(mode==='2')}>2面（B5横に2人）</button>
                   </div>
                 </div>
@@ -28556,10 +28557,21 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                   <div>
                     <div className="text-[11px] font-bold text-slate-500 mb-1">用紙</div>
                     <div className="flex gap-2">
-                      <button onClick={()=>setSS({renrakuPaper:'b5land'})} className={tabBtn(paper==='b5land')}>横（B5）</button>
-                      <button onClick={()=>setSS({renrakuPaper:'b6port'})} className={tabBtn(paper==='b6port')}>縦（B6）</button>
+                      <button onClick={()=>setSS({renrakuPaper:'b6port'})} className={tabBtn(paper==='b6port')}>B6（手差しトレイ）</button>
+                      <button onClick={()=>setSS({renrakuPaper:'b5land'})} className={tabBtn(paper==='b5land')}>B5（中央にB6配置）</button>
                     </div>
-                    <div className="text-[10px] text-slate-400 mt-1">B6対応機は「縦（B6）」。非対応機は「横（B5）」でB5中央にB6配置。</div>
+                    <div className="text-[10px] text-slate-400 mt-1">おすすめはB6用紙への直接印刷。うまくいかない機種は「B5（中央にB6配置）」で普通のB5用紙に印刷できます。</div>
+                    {paper==='b6port' && (
+                      <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        <div className="text-[11px] font-bold text-amber-800 mb-1">手差しトレイでのB6印刷のしかた</div>
+                        <ol className="text-[10px] text-amber-800 leading-relaxed list-decimal ml-4 space-y-0.5">
+                          <li>複合機の手差しトレイ（側面の折りたたみトレイ）にB6用紙をセットし、ガイドを用紙の幅に合わせる</li>
+                          <li>複合機の画面に用紙サイズの確認が出たら「B6」を選ぶ（一覧に無い機種は「カスタム 128×182mm」で登録）</li>
+                          <li>このアプリの印刷画面で、用紙サイズ「B6」・給紙トレイ「手差し」を選んで印刷</li>
+                        </ol>
+                        <div className="text-[10px] text-amber-700 mt-1">※ ほとんどの複合機は手差しトレイでB6サイズに対応していますが、機種により手順が異なります。最初は1枚だけテスト印刷してから本番の印刷をおすすめします。</div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div>
