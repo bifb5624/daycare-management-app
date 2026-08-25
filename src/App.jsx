@@ -42969,8 +42969,9 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   }
   if (cells.length>0) { let nd=1; while(cells.length<7) cells.push({ y:_nY, m:_nM, d:nd++, other:true }); weeks.push(cells); }
 
-  const statusColors = { none:'', edited:'#dbeafe', printed:'#dbeafe', pdf:'#dbeafe', both:'#dbeafe' };
-  const statusLabels = { edited:'編集済', printed:'編集済', pdf:'編集済', both:'編集済' };
+  // ★ 状態を区別して表示(2026-08-25 店舗要望): 編集しただけ=青、印刷/PDF/送信済み=緑
+  const statusColors = { none:'', edited:'#dbeafe', printed:'#dcfce7', pdf:'#dcfce7', both:'#dcfce7' };
+  const statusLabels = { edited:'編集済', printed:'印刷済', pdf:'PDF済', both:'印刷・PDF済' };
   // fax データが何らかの編集（理由・連絡者・備考・チェック）を含むかどうか
   const isFaxEdited = (fd) => {
     if (!fd) return false;
@@ -43000,6 +43001,10 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
           <span style={{display:'flex',alignItems:'center',gap:4}}>
             <span style={{width:12,height:12,borderRadius:3,background:'#dbeafe',border:'1px solid #64748b',display:'inline-block'}}/>
             <span style={{color:'#cbd5e1'}}>編集済</span>
+          </span>
+          <span style={{display:'flex',alignItems:'center',gap:4}}>
+            <span style={{width:12,height:12,borderRadius:3,background:'#dcfce7',border:'1px solid #64748b',display:'inline-block'}}/>
+            <span style={{color:'#cbd5e1'}}>印刷・PDF済</span>
           </span>
           <button type="button" onClick={()=>setShowFaxHist(true)}
             style={{background:'#7c3aed',border:'none',color:'white',borderRadius:8,padding:'6px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:5,marginLeft:8}}>
