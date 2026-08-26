@@ -10042,7 +10042,7 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
 // === 共通コンポーネント ===
 
-function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons, zoom = 1, unitSep = '', unit2 = '' }) {
+function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons, prefixButtons, zoom = 1, unitSep = '', unit2 = '' }) {
   const keypadRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
 
@@ -10060,7 +10060,7 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
   const fontSize = Math.round(baseFontSize * scale);
   const padW = btnSize * 4 + 12 * 3 + 24; // 4列 + gap3 + padding
   // ★ 運動モードは ○/×/ー 行 + クイック(+分/+回/+kg/+ー)行が増えるので高さに加算。 quickButtons があればさらに加算
-  const _extraRows = (mode === 'exercise' ? 2 : 0) + ((quickButtons && quickButtons.length) ? 1 : 0);
+  const _extraRows = (mode === 'exercise' ? 2 : 0) + ((quickButtons && quickButtons.length) ? 1 : 0) + ((prefixButtons && prefixButtons.length) ? 1 : 0);
   const padH = btnSize * 4 + 140 + _extraRows * (Math.round(btnSize * 0.66) + 12); // 4行 + ヘッダー/フッター + 追加行
 
   // ★ 初期位置: visualViewport の表示可能領域内に必ず収まる中央寄せ (右下角は見切れ防止)
@@ -10294,6 +10294,17 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
             <button key={s} onClick={()=>{ if(onInput) onInput(s,false); if(onEnter) onEnter(s); onClose(); }}
               style={{flex:1,height:btnSize*0.8,background:bg,color:fg,border:`1.5px solid ${bd}`,borderRadius:10,fontSize:fontSize*0.95,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
               {s}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* ★ 体温などの先頭値クイックボタン(2026-08-26): 押すと値がその値で始まり、続けて下1桁を打つだけ(例: 36.→5) */}
+      {prefixButtons && prefixButtons.length > 0 && (
+        <div style={{display:'flex',gap:6,marginTop:8}}>
+          {prefixButtons.map((btn,i)=>(
+            <button key={i} onClick={()=>{ if (onInput) onInput(btn, false); }}
+              style={{flex:1,height:btnSize*0.7,background:'#ecfdf5',color:'#047857',border:'1.5px solid #a7f3d0',borderRadius:10,fontSize:fontSize*0.85,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
+              {btn}
             </button>
           ))}
         </div>
@@ -22083,7 +22094,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           <span>⚠ {vitalWarn}</span>
           <button onClick={()=>setVitalWarn(null)} style={{background:'rgba(255,255,255,0.2)',border:'none',color:'white',borderRadius:8,padding:'4px 10px',fontWeight:'bold',cursor:'pointer',fontSize:12}}>閉じる</button>
         </div>, document.body)}
-      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { _checkVitalRange(keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons}
+      <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { _checkVitalRange(keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons} prefixButtons={String(keypad.field||'').startsWith('temp') ? ['35.','36.','37.'] : null}
         unitSep={(()=>{ const _ei=(appData.systemSettings?.exerciseItems||appSettings.exerciseItems).find(i=>i.id===keypad.field); if(_ei && _ei.type!=='individual') return _ei.unitSep||''; const _rec=(filterMode==='single'?localPatients:localTicketRecords).find(x=>x.id===keypad.recordId); const _cur=_rec&&_rec.exercises&&_rec.exercises[keypad.field]; const _iid=(_cur&&typeof _cur==='object')?_cur.itemId:null; if(_iid){ const _ii=(appData.systemSettings?.individualExerciseItems||appSettings.individualExerciseItems||[]).find(x=>x.id===_iid); return (_ii&&_ii.unitSep)||''; } return ''; })()}/>
 
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
