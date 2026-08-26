@@ -1861,6 +1861,8 @@ function stripPatientData(appData, idSet) {
 //   entries: { value, from, to, note }
 //   ★ prevFrom を渡すと「値は同じでも認定有効期間の開始日が変わった=認定更新」も1件として残す。
 //     (要介護2のまま R7.4.1〜R8.3.31 → R8.4.1〜R9.3.31 に更新した、という事実を履歴に残すため)
+// ★ スタッフ切替で選択中のスタッフ名(履歴の「誰が更新したか」記録用)
+const _activeStaffName = () => { try { return (JSON.parse(sessionStorage.getItem('tsumugiActiveRecorder')||'null')||{}).name || ''; } catch { return ''; } };
 function appendValueHistory(existingHist, oldValue, newValue, from, to, prevFrom) {
   const hist = Array.isArray(existingHist) ? [...existingHist] : [];
   const today = new Date().toISOString().split('T')[0];
@@ -1880,7 +1882,8 @@ function appendValueHistory(existingHist, oldValue, newValue, from, to, prevFrom
     if (last && !last.to) hist[hist.length - 1] = { ...last, to: f };
     else if (!hist.length) hist.push({ value: oldValue, from: prevFrom || null, to: f, note: '' });
   }
-  hist.push({ value: nv, from: f, to: to || null, note: valChanged ? '' : '認定更新' });
+  // ★ 誰が更新したかを記録(2026-08-26): スタッフ切替の選択者名を by に残す
+  hist.push({ value: nv, from: f, to: to || null, note: valChanged ? '' : '認定更新', by: _activeStaffName() || undefined });
   return hist;
 }
 
@@ -1921,6 +1924,7 @@ function ValueHistoryList({ title, hist, onChangeHist, valueOptions }) {
               <span style={{ color: '#94a3b8' }}>{fmt(h.from)}{h.to ? ` 〜 ${fmt(h.to)}` : ' 〜'}</span>　<b style={{ color: '#334155' }}>{h.value}</b>
               {h.from && h.from > today ? <span style={{ marginLeft: 4, fontSize: 10, background: '#dbeafe', color: '#2563eb', padding: '0 5px', borderRadius: 4, fontWeight: 'bold' }}>予定</span> : null}
               {h.note ? `（${h.note}）` : ''}
+              {h.by ? <span style={{ color: '#94a3b8', fontSize: 10 }}>　記入: {h.by}</span> : null}
             </span>
             {editable && <button type="button" onClick={() => startEdit(realIdx, h)} title="編集" style={{ color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, padding: 2 }}>✎</button>}
             {editable && <button type="button" onClick={() => del(realIdx)} title="削除" style={{ color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 'bold', padding: 2 }}>×</button>}
@@ -30930,12 +30934,23 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const oOpts = appData?.systemSettings?.onyokuTypes || ["腰", "肩", "無し"];
   const careLevelOrder = ['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'];
   const isBirthMonth = (p) => { if (!p.birthDate) return false; const m = new Date(p.birthDate).getMonth()+1; return m === new Date().getMonth()+1; };
-  const isInsuranceExpiring = (p) => {
-    if (!p.careLevelTo) return false;
-    const exp = new Date(p.careLevelTo);
-    const now = new Date();
-    return exp.getFullYear() === now.getFullYear() && exp.getMonth() === now.getMonth();
+  // ★ 期限もの(保険証/負担割合証)の更新状態(2026-08-26 店舗要望):
+  //   'expired'=期限切れで未更新 / 'expiring'=期限60日以内で未更新 / 'updated'=新期間・変更予定を登録済み / ''=問題なし
+  //   「誰がまだ更新していないか」を名簿でひと目で分かるようにする(チェックリストは作らない)。
+  const _hasFutureHist = (hist) => { const t = new Date().toISOString().slice(0,10); return (hist||[]).some(h => h && h.from && h.from > t && h.value); };
+  const _expiryState = (toDate, hist) => {
+    if (_hasFutureHist(hist)) return 'updated';
+    if (!toDate) return '';
+    const t = new Date(); t.setHours(0,0,0,0);
+    const exp = new Date(toDate); if (isNaN(exp.getTime())) return '';
+    const diff = (exp - t) / 86400000;
+    if (diff < 0) return 'expired';
+    if (diff <= 60) return 'expiring';
+    return '';
   };
+  const _insState = (p) => _expiryState(p.careLevelTo, p.careLevelHistory);
+  const _burdenState = (p) => _expiryState(p.costBurdenTo, p.costBurdenHistory);
+  const isInsuranceExpiring = (p) => { const s = _insState(p); return s === 'expired' || s === 'expiring'; };
   // ★ 初回ご利用報告が未報告の利用者 (初回通所日が今日以前 かつ initialReports 未登録)
   const pendingInitialReportSet = React.useMemo(() => {
     const reported = new Set((appData.initialReports||[]).map(r => r.patientId));
@@ -31348,6 +31363,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               ))}
             </div>
           </div>
+          {/* ★ 期限もののまとめ(2026-08-26): 誰が未更新かは名簿の赤い表示で分かる */}
+          {(() => { const _bp = dPats.filter(p => { const s = _burdenState(p); return s === 'expired' || s === 'expiring'; }); return (expiringPats.length > 0 || _bp.length > 0) ? (
+            <div className="px-2.5 py-1.5 bg-red-50 border-b border-red-200 text-[11px] font-bold text-red-700 shrink-0">
+              更新の確認が必要: {expiringPats.length > 0 ? `保険証 ${expiringPats.length}名` : ''}{expiringPats.length > 0 && _bp.length > 0 ? '・' : ''}{_bp.length > 0 ? `負担割合証 ${_bp.length}名` : ''}（下の赤い表示の方。個人ファイルの保険証/負担割合証で新しい期間を登録すると消えます）
+            </div>
+          ) : null; })()}
           <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-0.5 bg-slate-50">{dPats.map(p => { const inf = subInfo(p); const bday = isBirthMonth(p); const expiring = isInsuranceExpiring(p); const bdayDate = bday && p.birthDate ? `${new Date(p.birthDate).getMonth()+1}/${new Date(p.birthDate).getDate()}` : null; const _age = calcAge(p.birthDate);
             // 並び順による追加バッジ（事業所・ケアマネ・介護度は常に表示するので除外）
             const _sortExtra =
@@ -31376,7 +31397,18 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {/* ★ 未来の介護度変更予定(認定開始日前)を名簿にも表示(2026-08-26 店舗要望) */}
                 {(() => { const _t = new Date().toISOString().slice(0,10); const _f = (p.careLevelHistory||[]).filter(h=>h.from&&h.from>_t&&h.value).sort((a,b)=>a.from.localeCompare(b.from))[0]; return _f ? <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded px-1 py-0.5 w-fit">{parseInt(_f.from.slice(5,7))}月から{_f.value}</span> : null; })()}
                 {_sortExtra}
-                {expiring && p.careLevelTo && <span className="text-[10px] text-red-600 font-bold">⚠ 保険更新 {p.careLevelTo.replace(/-/g,'/')}迄</span>}
+                {(() => {
+                  const st = _insState(p);
+                  if (st === 'expired') return <span className="text-[10px] font-bold text-white bg-red-600 rounded px-1 py-0.5 w-fit">保険証 期限切れ・未更新（{(p.careLevelTo||'').replace(/-/g,'/')}迄）</span>;
+                  if (st === 'expiring') return <span className="text-[10px] text-red-600 font-bold">⚠ 保険証の更新確認 {(p.careLevelTo||'').replace(/-/g,'/')}迄</span>;
+                  return null;
+                })()}
+                {(() => {
+                  const st = _burdenState(p);
+                  if (st === 'expired') return <span className="text-[10px] font-bold text-white bg-red-500 rounded px-1 py-0.5 w-fit">負担割合証 期限切れ・未更新（{(p.costBurdenTo||'').replace(/-/g,'/')}迄）</span>;
+                  if (st === 'expiring') return <span className="text-[10px] text-orange-600 font-bold">⚠ 負担割合証の更新確認 {(p.costBurdenTo||'').replace(/-/g,'/')}迄</span>;
+                  return null;
+                })()}
                 {patientStatusFilter === '休止' && inf.reason && <span className="text-[9px] text-orange-500 truncate mt-0.5">{inf.reason}</span>}
               </div>
               {/* 事業所/ケアマネ常時表示（並び順に関わらず）。利用者名にかぶらないよう幅を絞る */}
@@ -33336,7 +33368,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
                 if (isFuture) {
                   // 予定：履歴に追加するだけ（現在値は変えない）
-                  hist.push({ value: careLevelModal.newValue, from: careLevelModal.from, to: careLevelModal.to||null, note: careLevelModal.note||'' });
+                  hist.push({ value: careLevelModal.newValue, from: careLevelModal.from, to: careLevelModal.to||null, note: careLevelModal.note||'', by: _activeStaffName() || undefined });
                   const upd = { ...localPatient, [histKey]: hist };
                   setLocalPatient(upd);
                   if (dirtyRef) dirtyRef.current = false;
@@ -33350,7 +33382,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                       hist.push({ value: oldValue, from: isCB ? null : (localPatient.careLevelFrom||null), to: careLevelModal.from||today, note:'' });
                     }
                   }
-                  hist.push({ value: careLevelModal.newValue, from: careLevelModal.from, to: careLevelModal.to||null, note: careLevelModal.note||'' });
+                  hist.push({ value: careLevelModal.newValue, from: careLevelModal.from, to: careLevelModal.to||null, note: careLevelModal.note||'', by: _activeStaffName() || undefined });
                   const updates = isCB
                     ? { costBurden: careLevelModal.newValue, [histKey]: hist }
                     : { careLevel: careLevelModal.newValue, careLevelFrom: careLevelModal.from, careLevelTo: careLevelModal.to||'', [histKey]: hist };
