@@ -18606,13 +18606,14 @@ export default function App() {
       }
 
       // 負担割合の予定変更チェック
+      // ★ 2026-08-26: 介護度と同じ「costBurdenFrom基準」に変更。 従来の「未終了エントリのfrom基準」だと、
+      //   未来日の予約エントリ(終了日なし)自身がfrom基準になり、開始日が来ても永久に適用されなかった。
       if (upd.costBurdenHistory && upd.costBurdenHistory.length > 0) {
-        const curFrom = upd.costBurdenHistory.filter(h=>h.to===null||h.to===undefined||h.to==='').sort((a,b)=>(b.from||'').localeCompare(a.from||''))[0]?.from||'';
-        const applicable = upd.costBurdenHistory.filter(h => h.from && h.from <= today && h.from > curFrom);
+        const applicable = upd.costBurdenHistory.filter(h => h.from && h.from <= today && h.from > (upd.costBurdenFrom||''));
         if (applicable.length > 0) {
           const latest = applicable.sort((a,b) => b.from.localeCompare(a.from))[0];
           if (latest.value !== upd.costBurden) {
-            upd = {...upd, costBurden: latest.value};
+            upd = {...upd, costBurden: latest.value, costBurdenFrom: latest.from, costBurdenTo: latest.to || upd.costBurdenTo || ''};
             changed = true;
           }
         }
@@ -31372,6 +31373,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <div className="flex flex-col min-w-0 flex-1">
                 <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{pendingInitialReportSet.has(p.id) && <span title="初回ご利用報告が未報告です" className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded px-1 py-0.5 shrink-0">初回報告</span>}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
                 {p.careLevel && <span className="text-[11px] text-blue-600 font-bold">{p.careLevel}</span>}
+                {/* ★ 未来の介護度変更予定(認定開始日前)を名簿にも表示(2026-08-26 店舗要望) */}
+                {(() => { const _t = new Date().toISOString().slice(0,10); const _f = (p.careLevelHistory||[]).filter(h=>h.from&&h.from>_t&&h.value).sort((a,b)=>a.from.localeCompare(b.from))[0]; return _f ? <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded px-1 py-0.5 w-fit">{parseInt(_f.from.slice(5,7))}月から{_f.value}</span> : null; })()}
                 {_sortExtra}
                 {expiring && p.careLevelTo && <span className="text-[10px] text-red-600 font-bold">⚠ 保険更新 {p.careLevelTo.replace(/-/g,'/')}迄</span>}
                 {patientStatusFilter === '休止' && inf.reason && <span className="text-[9px] text-orange-500 truncate mt-0.5">{inf.reason}</span>}
@@ -43906,7 +43909,29 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     if (np.careLevelHistory) _cmItems.push(`介護保険証を更新（要介護度: ${patient.careLevel||'－'} → ${np.careLevel ?? patient.careLevel ?? '－'}）`);
     if (np.costBurdenHistory) _cmItems.push(`負担割合証を更新（${patient.costBurden||'－'} → ${np.costBurden ?? patient.costBurden ?? '－'}）`);
     if (_cmItems.length) np.docUpdates = withOfficeDocUpdate(_cmItems);
-    savePatientTop(np, { manual:true, message:'✓ 利用者マスタに反映しました' });
+    // ★ 認定/適用期間の開始日が未来なら「予約」扱い(2026-08-26 店舗要望): 現在の介護度/負担割合は
+    //   開始日まで変えない(名簿・帳票・加算計算に未来の介護度が先に出ないように)。 履歴には未来日の
+    //   エントリとして残り、開始日当日に起動時の自動適用が反映する(利用者マスタの保険更新モーダルと同挙動)。
+    const _today2 = new Date().toISOString().slice(0,10);
+    let _reservedMsg = '';
+    const _fmtMD = (f) => `${parseInt(f.slice(5,7))}月${parseInt(f.slice(8,10))}日`;
+    if (np.careLevelHistory) {
+      const _f = String((('careLevelFrom' in patch) ? patch.careLevelFrom : patient.careLevelFrom) || '');
+      const _v = String((('careLevel' in patch) ? patch.careLevel : patient.careLevel) || '');
+      if (_f > _today2 && _v !== String(patient.careLevel || '')) {
+        delete np.careLevel; delete np.careLevelFrom; delete np.careLevelTo;
+        _reservedMsg = `${_fmtMD(_f)}から「${_v}」`;
+      }
+    }
+    if (np.costBurdenHistory) {
+      const _f = String((('costBurdenFrom' in patch) ? patch.costBurdenFrom : patient.costBurdenFrom) || '');
+      const _v = String((('costBurden' in patch) ? patch.costBurden : patient.costBurden) || '');
+      if (_f > _today2 && _v !== String(patient.costBurden || '')) {
+        delete np.costBurden; delete np.costBurdenFrom; delete np.costBurdenTo;
+        _reservedMsg = _reservedMsg || `${_fmtMD(_f)}から「${_v}」`;
+      }
+    }
+    savePatientTop(np, { manual:true, message: _reservedMsg ? `✓ ${_reservedMsg}に変更予定として保存しました（開始日に自動で切り替わります）` : '✓ 利用者マスタに反映しました' });
   };
 
   // ★ 支援経過表 (カテゴリ9)。 既存データを自動でマージ表示し、手動編集・追加もできる。
@@ -44437,6 +44462,12 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       return (
                       <div ref={insuranceSecRef} className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200 space-y-2">
                         <div className="text-[11px] font-bold text-slate-500">保険証の内容（選んで「保存」を押すと利用者マスタに反映）</div>
+                        {(() => { const _t = new Date().toISOString().slice(0,10); const _f = (patient.careLevelHistory||[]).filter(h=>h.from&&h.from>_t&&h.value).sort((a,b)=>a.from.localeCompare(b.from))[0]; return _f ? (
+                          <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-2.5 py-1.5">
+                            {_f.from.replace(/-/g,'/')} から「{_f.value}」に変更予定（開始日に自動で切り替わります。それまで現在の介護度のままです）
+                          </div>
+                        ) : null; })()}
+                        <div className="text-[10px] text-slate-400">認定開始日が未来の日付の場合は「変更予定」として保存され、開始日までは現在の介護度のまま表示・計算されます。</div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-500 mb-0.5">介護度</label>
                           <select value={d.careLevel} onChange={e=>upd({careLevel:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
@@ -44475,6 +44506,11 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                       const upd = (patch) => setDocBurDraft({ ...d, ...patch });
                       return (
                       <div className="mt-3 bg-slate-50 rounded-lg p-2.5 border border-slate-200">
+                        {(() => { const _t = new Date().toISOString().slice(0,10); const _f = (patient.costBurdenHistory||[]).filter(h=>h.from&&h.from>_t&&h.value).sort((a,b)=>a.from.localeCompare(b.from))[0]; return _f ? (
+                          <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-2.5 py-1.5 mb-2">
+                            {_f.from.replace(/-/g,'/')} から「{_f.value}」に変更予定（開始日に自動で切り替わります）
+                          </div>
+                        ) : null; })()}
                         <label className="block text-[11px] font-bold text-slate-500 mb-0.5">負担割合（選んで「保存」を押すと利用者マスタに反映）</label>
                         <select value={d.costBurden} onChange={e=>upd({costBurden:e.target.value})} style={{maxWidth:200}} className="w-full px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-sm font-bold outline-none">
                           <option value="">未選択</option><option value="70%">70%（3割）</option><option value="80%">80%（2割）</option><option value="90%">90%（1割）</option>
