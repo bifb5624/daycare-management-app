@@ -30935,7 +30935,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const careLevelOrder = ['事業対象者','要支援1','要支援2','要介護1','要介護2','要介護3','要介護4','要介護5'];
   const isBirthMonth = (p) => { if (!p.birthDate) return false; const m = new Date(p.birthDate).getMonth()+1; return m === new Date().getMonth()+1; };
   // ★ 期限もの(保険証/負担割合証)の更新状態(2026-08-26 店舗要望):
-  //   'expired'=期限切れで未更新 / 'expiring'=期限60日以内で未更新 / 'updated'=新期間・変更予定を登録済み / ''=問題なし
+  //   'expired'=期限切れで未更新 / 'expiring'=期限30日以内で未更新 / 'updated'=新期間・変更予定を登録済み / ''=問題なし
   //   「誰がまだ更新していないか」を名簿でひと目で分かるようにする(チェックリストは作らない)。
   const _hasFutureHist = (hist) => { const t = new Date().toISOString().slice(0,10); return (hist||[]).some(h => h && h.from && h.from > t && h.value); };
   const _expiryState = (toDate, hist) => {
@@ -30945,7 +30945,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const exp = new Date(toDate); if (isNaN(exp.getTime())) return '';
     const diff = (exp - t) / 86400000;
     if (diff < 0) return 'expired';
-    if (diff <= 60) return 'expiring';
+    if (diff <= 30) return 'expiring';
     return '';
   };
   const _insState = (p) => _expiryState(p.careLevelTo, p.careLevelHistory);
@@ -31434,7 +31434,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   const exp = new Date(localPatient.careLevelTo);
                   const now = new Date();
                   const diffDays = (exp - now) / (1000*60*60*24);
-                  return diffDays >= 0 && diffDays <= 60;
+                  return diffDays >= 0 && diffDays <= 30;
                 })();
                 // 利用日変更（直近の変更）
                 const schedHist = localPatient.scheduleChangeHistory || [];
