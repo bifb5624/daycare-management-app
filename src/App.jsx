@@ -26652,13 +26652,18 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
               displayMonths.push({ yr, mo, key: `${yr}-${String(mo).padStart(2,'0')}` });
             }
             
-            // 営業日数計算（月〜金の日数、日曜定休）
+            // ★ 営業日数計算(2026-08-27): 各種設定の定休日(closedDays)と休業日(holidays)を除外して数える。
+            //   従来は「月〜金固定」で、休業日を設定しても稼働日数に反映されなかった。
             const getWorkingDays = (year, month) => {
               const daysInMonth = new Date(year, month, 0).getDate();
+              const _closed = appData.systemSettings?.facilityInfo?.closedDays || [0];
+              const _hset = new Set((appData.holidays||[]).map(h => String((h && (h.date||h)) || '')));
               let workDays = 0;
               for (let d = 1; d <= daysInMonth; d++) {
                 const dow = new Date(year, month - 1, d).getDay();
-                if (dow >= 1 && dow <= 5) workDays++; // 月〜金
+                if (_closed.includes(dow)) continue;
+                if (_hset.has(`${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`)) continue;
+                workDays++;
               }
               return workDays;
             };
@@ -36303,7 +36308,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     // ★ 送迎の1週間前自動コピー (設定ON かつ 当日の送迎データが空のとき、7日前の同時間帯から複写)
     let _didAutoCopy = false;
     const SOUGEI_FIELDS = ['pick','drop','pick_walk','drop_walk','driver','carTimes'];
-    if (appData.diarySettings?.autoCopySougei) {
+    // ★ 休業日(各種設定の休業日・定休日)は送迎の自動コピーをしない(2026-08-27)
+    if (appData.diarySettings?.autoCopySougei && !_dayIsKyugyo(selectedDate, dow)) {
       const sougeiEmpty = !SOUGEI_FIELDS.some(f => loaded[f] && Object.keys(loaded[f]).length);
       if (sougeiEmpty) {
         const _d = new Date(selectedDate); _d.setDate(_d.getDate() - 7);
@@ -36341,6 +36347,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               if(pid==null) return;
               if(!_curPidSet.has(pid)) return;            // 今週いない人はコピーしない
               if(_absentNow.has(+pid)) return;            // 今週欠席/休止の人はコピーしない
+              if(_shiftKyugyo(+pid, selectedDate)) return; // ★ 月間スケジュールで休業の人もコピーしない(2026-08-27)
               out[pid+suf]=obj[k];                         // ★今週のキーは常に利用者ID基準
             });
             return out;
@@ -36432,6 +36439,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const saveLog = () => {
     // ★ _savedAt を付与 (端末間マージで新しい方を採用するため)
     const _logToSave = { ...localLog, _savedAt: syncNow() };
+    // ★ 手動保存=内容を確認して確定した扱い(2026-08-27): 送迎自動コピーの「未確認」を解消する。
+    //   これが残り続けると、AM/PMとも入力済みの日にカレンダーの緑丸が永久に付かなかった
+    //   (コピー内容が正しく編集不要だった日は個別編集による解除が起きないため)。
+    if (_logToSave._sougeiPending) { delete _logToSave._sougeiPending; setLocalLog(l => { const n = { ...l }; delete n._sougeiPending; return n; }); }
     const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: _logToSave }};
     if (pendingStaff) {
       next.diarySettings = { ..._baseDs, staff: pendingStaff };
@@ -36475,6 +36486,17 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   };
   // ソート: 出席 → 振替 → 欠席 → 休止 → 休業 → その他
   const _statusRank = (st) => st === '出席' ? 0 : st === '振替' ? 1 : st === '欠席' ? 2 : st === '休止' ? 3 : st === '休業' ? 4 : 5;
+  // ★ 休業日の連動(2026-08-27 店舗要望): 各種設定の休業日・定休日、月間スケジュールの「休業」を日誌にも反映。
+  //   これまで日誌は ticketRecords と基本曜日だけで行を作っていたため、休業設定した日(8/12-14等)でも
+  //   「出席」で表示され、送迎の自動コピーまで入っていた。
+  const _dayIsKyugyo = (iso, dw) => ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso)) || ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw));
+  const _shiftKyugyo = (pid, iso) => {
+    const _d = new Date(iso); if (isNaN(_d.getTime())) return false;
+    const sh = appData.monthlyShifts?.[`${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}`]?.[pid] || {};
+    return sh[`${_d.getDate()}_AM`] === '休業' || sh[`${_d.getDate()}_PM`] === '休業';
+  };
+  // 記録の状態を休業設定で上書き(欠席/休止は本人事由なのでそのまま)
+  const _applyKyugyo = (st, pid, iso, dw) => ((st === '出席' || st === '振替' || !st) && (_dayIsKyugyo(iso, dw) || _shiftKyugyo(pid, iso))) ? '休業' : st;
   // 既存の ticketRecords から該当者を抽出
   const _recordedRaw = (appData.ticketRecords||[])
     .filter(r=>r.date===dateStr)
@@ -36483,7 +36505,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const _rpMap = new Map();
   _recordedRaw.forEach(r => { const ex=_rpMap.get(r.patientId); const sc=(x)=>Object.keys(x).filter(k=>k[0]!=='_'&&x[k]!==''&&x[k]!=null).length; if(!ex || sc(r)>sc(ex)) _rpMap.set(r.patientId, r); });
   const recordedPatients = [..._rpMap.values()]
-    .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; });
+    .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:_applyKyugyo(r.status, r.patientId, selectedDate, dow)}; });
   const recordedPids = new Set(recordedPatients.map(r=>r.patientId));
   // ★ ticketRecords にまだ記録が無くても、当日の曜日スケジュールに該当する利用者を表示
   //   (体温などを入力しなくても日誌に名前が出るように)
@@ -36495,7 +36517,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       if (ampm === '1日') return ['AM','PM','1日'].includes(slot);
       return slot === ampm || slot === '1日';
     })
-    .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:'出席' }));
+    .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:_applyKyugyo('出席', p.id, selectedDate, dow) }));
   // ★ 状態ランク→同状態内はかな順(提供記録入力・プレビューと同じ並び)
   const patients = [...recordedPatients, ...scheduledExtras]
     .sort((a, b) => (_statusRank(a.status) - _statusRank(b.status)) || String(a.kana||a.name||'').localeCompare(String(b.kana||b.name||''), 'ja'));
@@ -36661,7 +36683,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const _dmap = new Map();
     _rawRecs.forEach(r => { const ex=_dmap.get(r.patientId); const sc=(x)=>Object.keys(x).filter(k=>k[0]!=='_'&&x[k]!==''&&x[k]!=null).length; if(!ex || sc(r)>sc(ex)) _dmap.set(r.patientId, r); });
     const _recd = [..._dmap.values()]
-      .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:r.status}; });
+      .map(r=>{ const p=(appData.patients||[]).find(pp=>pp.id===r.patientId)||{}; return {id:r.id,patientId:r.patientId,name:p.name||r.name||'',kana:p.kana||'',careLevel:p.careLevel||'',tokki:r.tokki||'',status:_applyKyugyo(r.status, r.patientId, selectedDate, dow)}; });
     const _recdIds = new Set(_recd.map(r=>r.patientId));
     const _extras = (appData.patients||[])
       .filter(p => {
@@ -36670,7 +36692,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         const slot = p.scheduleAmPm?.[dow] || '';
         return slot === ap || slot === '1日';
       })
-      .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:'出席' }));
+      .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:_applyKyugyo('出席', p.id, selectedDate, dow) }));
     const _patients = [..._recd, ..._extras]
       .sort((a, b) => (_rankS(a.status) - _rankS(b.status)) || String(a.kana||a.name||'').localeCompare(String(b.kana||b.name||''), 'ja'));
     const _serviceTime = ap==='AM' ? (fi.serviceTimeAM||'9:00〜12:05') : (fi.serviceTimePM||'13:25〜16:30');
