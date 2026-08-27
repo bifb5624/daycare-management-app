@@ -36321,10 +36321,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           //   driver(運転者)・carTimes(車別の時間)は利用者非依存なのでそのままコピー。
           const _rankG = (st)=>st==='出席'?0:st==='振替'?1:st==='欠席'?2:st==='休止'?3:st==='休業'?4:5;
           const _matchG = (r,p,dw)=>{ if(ampm==='1日')return true; if(r.status==='振替'){ const fa=r.furikaeAmpm; if(fa)return fa===ampm||fa==='1日'; if(typeof r.tokki==='string'){ if(r.tokki.includes('1日分振替'))return true; if(ampm==='AM'&&r.tokki.includes('AM分振替'))return true; if(ampm==='PM'&&r.tokki.includes('PM分振替'))return true; } const slot=p.scheduleAmPm?.[dw]||''; if(['AM','PM','1日'].includes(slot))return [ampm,'1日'].includes(slot); return ampm==='AM'; } return [ampm,'1日'].includes(p.scheduleAmPm?.[dw]); };
-          const _pidsForDate=(dStr,dw)=>{ const rec=(appData.ticketRecords||[]).filter(r=>r.date===dStr).filter(r=>{const p=(appData.patients||[]).find(pp=>pp.id===r.patientId);if(!p)return false;return _matchG(r,p,dw);}).map(r=>({pid:r.patientId,status:r.status})); const recPids=new Set(rec.map(r=>r.pid)); const extra=(appData.patients||[]).filter(p=>{ if(recPids.has(p.id))return false; if(getPatientDisplayStatus&&getPatientDisplayStatus(p)!=='利用中')return false; const slot=p.scheduleAmPm?.[dw]||''; if(ampm==='1日')return ['AM','PM','1日'].includes(slot); return slot===ampm||slot==='1日'; }).map(p=>({pid:p.id,status:'出席'})); return [...new Set([...rec,...extra].sort((a,b)=>_rankG(a.status)-_rankG(b.status)).map(x=>x.pid))]; }; /* ★ Setで利用者ID重複排除(振替の重複記録で送迎が二重に出ないように) */
+          const _pidsForDate=(dStr,dw,iso)=>{ const rec=(appData.ticketRecords||[]).filter(r=>r.date===dStr).filter(r=>{const p=(appData.patients||[]).find(pp=>pp.id===r.patientId);if(!p)return false;return _matchG(r,p,dw);}).map(r=>({pid:r.patientId,status:r.status})); const recPids=new Set(rec.map(r=>r.pid)); const extra=(appData.patients||[]).filter(p=>{ if(recPids.has(p.id))return false; if(iso && !isPatientActiveOnDate(p, iso))return false; if(getPatientDisplayStatus&&getPatientDisplayStatus(p)!=='利用中')return false; const slot=(iso?(getScheduleOnDate(p,iso)||[]):(p.scheduleAmPm||[]))[dw]||''; if(ampm==='1日')return ['AM','PM','1日'].includes(slot); return slot===ampm||slot==='1日'; }).map(p=>({pid:p.id,status:'出席'})); return [...new Set([...rec,...extra].sort((a,b)=>_rankG(a.status)-_rankG(b.status)).map(x=>x.pid))]; }; /* ★ Setで利用者ID重複排除(振替の重複記録で送迎が二重に出ないように) */
           const _curDow = new Date(selectedDate).getDay();
-          const curPids = _pidsForDate(dateStr, _curDow);
-          const prevPids = _pidsForDate(`${_d.getMonth()+1}月${_d.getDate()}日`, _d.getDay());
+          const curPids = _pidsForDate(dateStr, _curDow, selectedDate);
+          const prevPids = _pidsForDate(`${_d.getMonth()+1}月${_d.getDate()}日`, _d.getDay(), prevKey.slice(0,10));
           // ★ 当週(コピー先)で欠席/休止/休業の人は、その人の車(送迎)を表示しない → 対応付けから除外
           const _absentNow = new Set((appData.ticketRecords||[]).filter(r=>r.date===dateStr && (r.status==='欠席'||r.status==='休業'||r.status==='休止')).map(r=>r.patientId));
           // ★ 送迎キーは「利用者ID」で統一する(手動保存・表示もID基準)。 先週のキーが行番号なら
@@ -36512,8 +36512,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const scheduledExtras = (appData.patients||[])
     .filter(p => {
       if (recordedPids.has(p.id)) return false;
+      // ★ 提供記録入力と同じ日付基準(2026-08-27): 利用開始日前/終了日後は載せない・基本曜日はその日付時点の値
+      if (!isPatientActiveOnDate(p, selectedDate)) return false;
       if (getPatientDisplayStatus && getPatientDisplayStatus(p) !== '利用中') return false;
-      const slot = p.scheduleAmPm?.[dow] || '';
+      const slot = getScheduleOnDate(p, selectedDate)?.[dow] || '';
       if (ampm === '1日') return ['AM','PM','1日'].includes(slot);
       return slot === ampm || slot === '1日';
     })
@@ -36688,8 +36690,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const _extras = (appData.patients||[])
       .filter(p => {
         if (_recdIds.has(p.id)) return false;
+        // ★ 提供記録入力と同じ日付基準(2026-08-27): 利用開始日前/終了日後は載せない・基本曜日はその日付時点の値
+        if (!isPatientActiveOnDate(p, selectedDate)) return false;
         if (getPatientDisplayStatus && getPatientDisplayStatus(p) !== '利用中') return false;
-        const slot = p.scheduleAmPm?.[dow] || '';
+        const slot = getScheduleOnDate(p, selectedDate)?.[dow] || '';
         return slot === ap || slot === '1日';
       })
       .map(p => ({ id:`auto-${p.id}`, patientId:p.id, name:p.name||'', kana:p.kana||'', careLevel:p.careLevel||'', tokki:'', status:_applyKyugyo('出席', p.id, selectedDate, dow) }));
