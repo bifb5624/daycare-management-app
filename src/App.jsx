@@ -11161,17 +11161,12 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               const _seg = (ap) => { const l = (appData.diaryLogs||{})[`${_iso}_${ap}`]; const it = diaryPendingItems(l); return { ap: ap==='AM'?'午前':'午後', missing: it === null, items: it || [] }; };
               const _segs = [_seg('AM'), _seg('PM')].filter(s => s.missing || s.items.length);
               if (!_segs.length) return null;
+              // ★ スケジュールの邪魔にならないよう1行のスリム表示(2026-08-28)
               return (
-                <button onClick={()=>navigateTo('diary')} title="日誌を開く"
-                  style={{width:'100%',textAlign:'left',cursor:'pointer',background:'#fffbeb',border:'2px solid #fbbf24',borderRadius:10,padding:'8px 12px',marginBottom:8,display:'flex',flexDirection:'column',gap:4}}>
-                  <span style={{fontSize:13,fontWeight:'bold',color:'#92400e',display:'flex',alignItems:'center',gap:6}}>⚠ 日誌の入力・確認が残っています（タップで日誌へ）</span>
-                  <span style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                    {_segs.map(s => (
-                      <span key={s.ap} style={{fontSize:11,fontWeight:'bold',color:s.missing?'#b91c1c':'#92400e',background:'white',border:`1px solid ${s.missing?'#fca5a5':'#fbbf24'}`,borderRadius:12,padding:'2px 8px'}}>
-                        {s.ap}: {s.missing ? '未入力' : `${s.items.join('・')} 未確認`}
-                      </span>
-                    ))}
-                  </span>
+                <button onClick={()=>navigateTo('diary')} title={_segs.map(s=>`${s.ap}: ${s.missing?'未入力':`${s.items.join('・')} 未確認`}`).join(' / ')}
+                  style={{width:'100%',textAlign:'left',cursor:'pointer',background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:8,padding:'4px 10px',marginBottom:6,fontSize:11,fontWeight:'bold',color:'#92400e',display:'flex',alignItems:'center',gap:6,flexWrap:'wrap'}}>
+                  <span>⚠ 日誌の未確認: {_segs.map(s=>`${s.ap}${s.missing?'(未入力)':''}`).join('・')}</span>
+                  <span style={{fontWeight:'normal',color:'#b45309',marginLeft:'auto'}}>日誌へ →</span>
                 </button>
               );
             })()}
@@ -30333,6 +30328,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   };
   // ★ 利用者切替時の未保存確認モーダル (保存/破棄/キャンセル の 3 択)
   const [switchPatientConfirm, setSwitchPatientConfirm] = useState(null); // {targetPatient}
+  const _pendingPatSwitchRef = React.useRef(null); // ★ 適用日モーダル確定後に切り替える利用者(2026-08-28)
   const [docDeleteConfirm, setDocDeleteConfirm] = useState(null); // {key, imgId, name}
   const [newPatientModal, setNewPatientModal] = useState(false);
   const [csvModal, setCsvModal] = useState({isOpen:false, mode:null, importText:'', error:''});
@@ -30808,6 +30804,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     setPauseModal({ isOpen: false, reason: "", fromDate: "" });
   };
 
+  // ★ 反映日未確定の運動メニュー変更を旧値へ書き戻す(2026-08-28)。 自動保存が先に新値をクラウドへ
+  //   保存しているため、「破棄」はこの書き戻しをして初めて実際の破棄になる。 戻した患者データを返す。
+  const discardPendingEx = () => {
+    const b = _pendingExBaseRef.current;
+    _pendingExBaseRef.current = null;
+    if (exPendingRef) exPendingRef.current = false;
+    if (!b || !editingPatientId) return null;
+    const cur = (appData.patients||[]).find(p => p.id === editingPatientId);
+    if (!cur) return null;
+    const reverted = { ...cur, plannedExercises: b.prevPlanned, plannedExercisesHistory: b.prevHistory, individualExercises: b.prevIndividual, individualExercisesHistory: b.prevIndHistory };
+    onSave({ ...appData, patients: appData.patients.map(p => p.id === reverted.id ? reverted : p) }, { silent: true });
+    return reverted;
+  };
   const saveMasterInfo = (auto = false) => {
     if (!localPatient) return;
     if (dirtyRef) dirtyRef.current = false;
@@ -30931,8 +30940,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (!ctxOverride) setPlannedExModal(null);
     if (opts.silent) onSave(next2, { silent: true });
     else onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
-    // ★ 画面移動を保留していた場合は、確定後に移動先へ自動で移る(2026-08-28)
+    // ★ 画面移動/利用者切替を保留していた場合は、確定後に自動で続行(2026-08-28)
     if (navAfterExRef && navAfterExRef.current) { const _nv = navAfterExRef.current; navAfterExRef.current = null; if (dirtyRef) dirtyRef.current = false; setTimeout(() => { navigateTo && navigateTo(_nv.view, _nv.patientId, _nv.focus); }, 0); }
+    if (_pendingPatSwitchRef.current) { const _tp = _pendingPatSwitchRef.current; _pendingPatSwitchRef.current = null; if (dirtyRef) dirtyRef.current = false; setTimeout(() => { setEditingPatientId(_tp.id); onPatientChange && onPatientChange(_tp.id); }, 0); }
   };
   // ★ サービス提供内容(規定値)の変更を「過去全ての記録」に反映(2026-08-10)。
   //   従来の「指定せず保存」は現在値だけ更新し履歴を触らなかったため、過去に日付指定の変更履歴が
@@ -30970,8 +30980,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (exPendingRef) exPendingRef.current = false;
     setPlannedExModal(null);
     onSave(next2, { manual: true, message: '✓ 保存しました（過去全ての記録に反映）' });
-    // ★ 画面移動を保留していた場合は、確定後に移動先へ自動で移る(2026-08-28)
+    // ★ 画面移動/利用者切替を保留していた場合は、確定後に自動で続行(2026-08-28)
     if (navAfterExRef && navAfterExRef.current) { const _nv = navAfterExRef.current; navAfterExRef.current = null; if (dirtyRef) dirtyRef.current = false; setTimeout(() => { navigateTo && navigateTo(_nv.view, _nv.patientId, _nv.focus); }, 0); }
+    if (_pendingPatSwitchRef.current) { const _tp = _pendingPatSwitchRef.current; _pendingPatSwitchRef.current = null; if (dirtyRef) dirtyRef.current = false; setTimeout(() => { setEditingPatientId(_tp.id); onPatientChange && onPatientChange(_tp.id); }, 0); }
   };
 
   // ★ 自動保存: 基本情報/サービス提供内容/月間スケジュールの変更を、入力が止まって約1.5秒後に自動でクラウド保存。
@@ -33419,11 +33430,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             <div className="flex flex-col gap-2">
               <button onClick={() => {
                 // 保存して切替
-                if (saveFnRef && saveFnRef.current) {
-                  try { saveFnRef.current(); } catch(_){}
-                }
-                if (dirtyRef) dirtyRef.current = false;
+                // ★ 運動メニューの反映日が未確定なら適用日モーダルを表示し、確定後に切替を続行(2026-08-28)
                 const target = switchPatientConfirm.targetPatient;
+                let _r = null;
+                if (saveFnRef && saveFnRef.current) {
+                  try { _r = saveFnRef.current(); } catch(_){}
+                }
+                if (_r === 'modal') { _pendingPatSwitchRef.current = target; setSwitchPatientConfirm(null); return; }
+                if (dirtyRef) dirtyRef.current = false;
                 setSwitchPatientConfirm(null);
                 setEditingPatientId(target.id);
                 onPatientChange && onPatientChange(target.id);
@@ -33437,9 +33451,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 setPendingTickets(null);
                 const target = switchPatientConfirm.targetPatient;
                 setSwitchPatientConfirm(null);
+                // ★ 反映日未確定の運動メニュー変更は自動保存で先にクラウドへ入っているため、
+                //   「破棄」は旧値を書き戻して初めて破棄になる(2026-08-28: 破棄しても入力が残っていた問題の修正)
+                const _rev = discardPendingEx();
                 // ★ 現在の localPatient を appData の元データで強制リフレッシュ (現患者の変更も巻き戻す)
                 if (editingPatientId) {
-                  const origP = (appData.patients||[]).find(pp => pp.id === editingPatientId);
+                  const origP = _rev || (appData.patients||[]).find(pp => pp.id === editingPatientId);
                   if (origP) setLocalPatient(JSON.parse(JSON.stringify(origP)));
                 }
                 setEditingPatientId(target.id);
