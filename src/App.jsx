@@ -16733,7 +16733,22 @@ export default function App() {
       return { kind, email, ts };
     } catch { return null; }
   }, []);
-  const [currentView, setCurrentView] = useState('dashboard');
+  // ★ 「今すぐ更新」後は更新前に見ていた画面へ戻る(2026-08-28 店舗要望)。 リロード直前にsessionStorageへ
+  //   保存した画面名を初期値に採用(5分以内のみ有効・使い捨て)。 通常の起動はこれまで通りホーム。
+  const [currentView, setCurrentView] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('tsumugi_resume_view');
+      if (raw) {
+        sessionStorage.removeItem('tsumugi_resume_view');
+        const o = JSON.parse(raw);
+        if (o && o.view && Date.now() - (o.t||0) < 5*60*1000) {
+          if (o.pid != null) window.__tsumugiResumePid = o.pid;
+          return o.view;
+        }
+      }
+    } catch {}
+    return 'dashboard';
+  });
   const [appData, setAppData] = useState(()=>{
     // localStorage 復元: 過去にセッション中で保存したデータがあれば優先
     try {
@@ -17837,7 +17852,7 @@ export default function App() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   });
-  const [targetPatientId, setTargetPatientId] = useState(null);
+  const [targetPatientId, setTargetPatientId] = useState(() => (window.__tsumugiResumePid != null ? window.__tsumugiResumePid : null)); // ★ 今すぐ更新の復帰時は選択中の利用者も引き継ぐ
   // ★ 定休日(土日等)にアプリを開いたら「次の営業日」を初期表示にする(店舗要望)。
   //   カレンダーの nearestOpenDate は土曜→金曜と後退するが、起動時は必ず前進(未来の営業日)。
   //   設定(closedDays)が読み込めた最初の1回だけ実行し、ユーザーが日付を動かした後は触らない。
@@ -19248,6 +19263,8 @@ export default function App() {
                 await Promise.all(rs.map(r=>r.unregister()));
               }
             } catch {}
+            // ★ 更新前に見ていた画面へ戻れるように保存(2026-08-28)
+            try { sessionStorage.setItem('tsumugi_resume_view', JSON.stringify({ view: currentView, pid: targetPatientId ?? null, t: Date.now() })); } catch {}
             try {
               const u = new URL(window.location.href);
               u.searchParams.set('_v', String(Date.now()));
