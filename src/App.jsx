@@ -11005,6 +11005,21 @@ const obsMarkRecEditRec = (rec, field) => {
 // ★ 実編集ゲートの対象フィールド(提供記録入力が管理する項目のみ。 連絡帳の次回予定等は従来どおり差分刻印)
 const _REC_GATED = (k) => k==='status'||k==='tokki'||k==='massage'||k==='onyoku'||k==='actualTime'||k==='furikaeAmpm'||k==='exercises'||k==='individualExercises'||/^temp/.test(k)||/^bp/.test(k)||/^pl/.test(k)||/^kibun/.test(k);
 
+// ★ 日誌の未確認項目を判定(2026-08-28): ホームの「日誌が未入力です」表示と日誌の要確認バッジで共用。
+//   戻り値: null=日誌自体が未入力 / 配列=未確認の項目名(空配列=すべてOK)
+const diaryPendingItems = (log) => {
+  if (!log || Object.keys(log).length === 0) return null;
+  const sp = log._sougeiPending || {};
+  const items = [];
+  const _hasAny = (o) => !!o && Object.values(o).some(v => Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : String(v ?? '').trim() !== ''));
+  if (sp['迎え'] || (!_hasAny(log.pick) && !_hasAny(log.pick_walk))) items.push('迎え');
+  if (sp['送り'] || (!_hasAny(log.drop) && !_hasAny(log.drop_walk))) items.push('送り');
+  if (!Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart))) items.push('送迎時間');
+  if (!Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k])) items.push('記録者');
+  if (!log.managerConfirmed) items.push('管理者確認');
+  return items;
+};
+
 // === ホーム / ダッシュボード ===
 // ★ Card/Tile は必ずモジュールレベルで定義する(2026-08-12)。 DashboardView 内で定義すると
 //   4秒ごとの同期のたびにコンポーネントの同一性が変わり、React がホームのDOM全体を
@@ -11136,6 +11151,30 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
                 <button onClick={()=>navigateTo('schedule')} style={{fontSize:11,fontWeight:'bold',color:'#6366f1',background:'#eef2ff',border:'none',borderRadius:8,padding:'3px 10px',cursor:'pointer'}}>カレンダー →</button>
               </span>
             </div>
+            {/* ★ 日誌の未入力/未確認お知らせ(2026-08-28 店舗要望): AM/PM別に未入力・未確認項目を表示。 休業日/定休日は出さない */}
+            {(() => {
+              const _t = new Date();
+              const _iso = `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
+              const _dw = _t.getDay();
+              const _closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(_dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === _iso));
+              if (_closed) return null;
+              const _seg = (ap) => { const l = (appData.diaryLogs||{})[`${_iso}_${ap}`]; const it = diaryPendingItems(l); return { ap: ap==='AM'?'午前':'午後', missing: it === null, items: it || [] }; };
+              const _segs = [_seg('AM'), _seg('PM')].filter(s => s.missing || s.items.length);
+              if (!_segs.length) return null;
+              return (
+                <button onClick={()=>navigateTo('diary')} title="日誌を開く"
+                  style={{width:'100%',textAlign:'left',cursor:'pointer',background:'#fffbeb',border:'2px solid #fbbf24',borderRadius:10,padding:'8px 12px',marginBottom:8,display:'flex',flexDirection:'column',gap:4}}>
+                  <span style={{fontSize:13,fontWeight:'bold',color:'#92400e',display:'flex',alignItems:'center',gap:6}}>⚠ 日誌の入力・確認が残っています（タップで日誌へ）</span>
+                  <span style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                    {_segs.map(s => (
+                      <span key={s.ap} style={{fontSize:11,fontWeight:'bold',color:s.missing?'#b91c1c':'#92400e',background:'white',border:`1px solid ${s.missing?'#fca5a5':'#fbbf24'}`,borderRadius:12,padding:'2px 8px'}}>
+                        {s.ap}: {s.missing ? '未入力' : `${s.items.join('・')} 未確認`}
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              );
+            })()}
             {todayEvents.length===0 ? <div style={{fontSize:13,color:'#64748b'}}>今日の予定はありません。</div> : (
               <div style={{display:'flex',flexDirection:'column',gap:6}}>
                 {todayEvents.map(e=>{
@@ -11603,27 +11642,28 @@ function ScheduleView({ appData, onSave, navigateTo }) {
       {/* ★ 予定の確認ポップアップ: クリック→内容確認→編集/削除(2026-08-21) */}
       {evDetail && (()=>{ const e=evDetail; const REP={daily:'毎日',weekly:'毎週',monthly:'毎月(同じ日)',monthly_nth:'毎月(第◯曜日)',yearly:'毎年'}; return (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.45)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setEvDetail(null)}>
-          <div onClick={ev=>ev.stopPropagation()} style={{background:'white',borderRadius:16,width:400,maxWidth:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',overflow:'hidden'}}>
-            <div style={{height:8,background:e.color||'#6366f1'}}/>
-            <div style={{padding:'16px 20px 6px'}}>
-              <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b',lineHeight:1.4}}>{e.title||'（無題の予定）'}</div>
-              <div style={{fontSize:13,color:'#475569',marginTop:6,display:'flex',alignItems:'center',gap:6}}><Clock size={14}/>{fmtJp(e.date)}　{timeLabel(e)}</div>
-              {e.repeat && e.repeat!=='none' && <div style={{fontSize:12,color:'#64748b',marginTop:4}}>繰り返し: {REP[e.repeat]||e.repeat}{e.repeatEvery>1?`（${e.repeatEvery}ごと）`:''}</div>}
-              {patName(e) && <div style={{fontSize:13,color:'#4338ca',marginTop:4,display:'flex',alignItems:'center',gap:6}}><Users size={14}/>
+          {/* ★ ポップアップ拡大(2026-08-28 店舗要望): 幅560・文字/ボタンを大きく */}
+          <div onClick={ev=>ev.stopPropagation()} style={{background:'white',borderRadius:18,width:560,maxWidth:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)',overflow:'hidden'}}>
+            <div style={{height:10,background:e.color||'#6366f1'}}/>
+            <div style={{padding:'20px 24px 8px'}}>
+              <div style={{fontSize:23,fontWeight:'bold',color:'#1e293b',lineHeight:1.4}}>{e.title||'（無題の予定）'}</div>
+              <div style={{fontSize:16,color:'#475569',marginTop:10,display:'flex',alignItems:'center',gap:8}}><Clock size={17}/>{fmtJp(e.date)}　{timeLabel(e)}</div>
+              {e.repeat && e.repeat!=='none' && <div style={{fontSize:14,color:'#64748b',marginTop:6}}>繰り返し: {REP[e.repeat]||e.repeat}{e.repeatEvery>1?`（${e.repeatEvery}ごと）`:''}</div>}
+              {patName(e) && <div style={{fontSize:16,color:'#4338ca',marginTop:6,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}><Users size={17}/>
                 {/* ★ 利用者名タップで利用者マスタへ(2026-08-28) */}
                 <button type="button" onClick={()=>{ setEvDetail(null); _goMaster(e.patientId); }} title="利用者マスタを開く"
-                  style={{background:'none',border:'none',padding:0,color:'#4338ca',fontWeight:'bold',fontSize:13,cursor:'pointer',textDecoration:'underline'}}>{patName(e)} 様</button>
+                  style={{background:'none',border:'none',padding:0,color:'#4338ca',fontWeight:'bold',fontSize:16,cursor:'pointer',textDecoration:'underline'}}>{patName(e)} 様</button>
                 {(()=>{const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p?.cmName?`（担当CM: ${p.cmName}）`:'';})()}</div>}
-              {e.note && <div style={{fontSize:13,color:'#334155',marginTop:8,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'8px 10px',whiteSpace:'pre-wrap'}}>{e.note}</div>}
+              {e.note && <div style={{fontSize:15,color:'#334155',marginTop:10,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:10,padding:'10px 12px',whiteSpace:'pre-wrap',lineHeight:1.6}}>{e.note}</div>}
             </div>
             {/* ★ ボタンは横一列(2026-08-28): 左に担当者会議を記録(利用者が紐付いていれば必ず表示)・右に削除/編集/閉じる */}
-            <div style={{display:'flex',alignItems:'center',gap:8,padding:'12px 16px',flexWrap:'wrap'}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,padding:'14px 20px 18px',flexWrap:'wrap'}}>
               {e.patientId && <button type="button" onClick={()=>{ setEvDetail(null); _goMeeting(e.patientId); }}
-                style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',marginRight:'auto'}}>担当者会議を記録</button>}
+                style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'11px 18px',fontWeight:'bold',fontSize:15,cursor:'pointer',marginRight:'auto'}}>担当者会議を記録</button>}
               {!e.patientId && <span style={{marginRight:'auto'}}/>}
-              <button onClick={()=>{ if(window.confirm('この予定を削除しますか？')){ delEvent(e); setEvDetail(null); } }} style={{background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
-              <button onClick={()=>{ setEvDetail(null); editEvent(e); }} style={{background:'#4f46e5',border:'none',color:'white',borderRadius:8,padding:'7px 18px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>編集</button>
-              <button onClick={()=>setEvDetail(null)} style={{background:'#f1f5f9',border:'none',color:'#475569',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>閉じる</button>
+              <button onClick={()=>{ if(window.confirm('この予定を削除しますか？')){ delEvent(e); setEvDetail(null); } }} style={{background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',borderRadius:10,padding:'11px 18px',fontWeight:'bold',fontSize:15,cursor:'pointer'}}>削除</button>
+              <button onClick={()=>{ setEvDetail(null); editEvent(e); }} style={{background:'#4f46e5',border:'none',color:'white',borderRadius:10,padding:'11px 22px',fontWeight:'bold',fontSize:15,cursor:'pointer'}}>編集</button>
+              <button onClick={()=>setEvDetail(null)} style={{background:'#f1f5f9',border:'none',color:'#475569',borderRadius:10,padding:'11px 18px',fontWeight:'bold',fontSize:15,cursor:'pointer'}}>閉じる</button>
             </div>
           </div>
         </div>
@@ -17961,6 +18001,10 @@ export default function App() {
   const recordDirtyRef = React.useRef(false);
   const recordSaveFnRef = React.useRef(null);
   const masterDirtyRef = React.useRef(false);
+  // ★ 運動メニューの反映日が未確定かどうか(2026-08-28): trueの間に他画面へ移動しようとしたら、
+  //   「未保存確認」を飛ばして適用日モーダルを直接出し、確定後に移動先へ自動で移る。
+  const masterExPendingRef = React.useRef(false);
+  const masterNavAfterExRef = React.useRef(null); // {view, patientId, focus}
   const masterSaveFnRef = React.useRef(null);
   const settingsDirtyRef = React.useRef(false);
   const settingsSaveFnRef = React.useRef(null);
@@ -18724,6 +18768,20 @@ export default function App() {
                    (currentView === 'seikatsu_kinou' && seikatsuKinouDirtyRef.current) ||
                    (currentView === 'kyomi_kanshin' && kyomiKanshinDirtyRef.current);
     if (isDirty && view !== currentView) {
+      // ★ 運動メニューの反映日が未確定なら「未保存確認」を出さず、適用日モーダルを直接表示。
+      //   確定すると移動先へ自動で移る(2026-08-28 店舗要望)
+      if (currentView === 'master' && masterExPendingRef.current && masterSaveFnRef.current) {
+        masterNavAfterExRef.current = { view, patientId, focus };
+        let _r = null;
+        try { _r = masterSaveFnRef.current(); } catch(_) {}
+        if (_r === 'modal') return; // モーダル表示中: 確定後にMasterView側が移動する
+        masterNavAfterExRef.current = null; // モーダル不要=保存済み → そのまま移動
+        masterDirtyRef.current = false;
+        if (patientId) setTargetPatientId(patientId);
+        setNavFocus(focus || null);
+        setCurrentView(view);
+        return;
+      }
       setNavConfirm({ view, patientId, focus });
       return;
     }
@@ -19725,7 +19783,7 @@ export default function App() {
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} deviceName={deviceName} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
              currentView === 'print' ? <ContactBookView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={printDirtyRef} saveFnRef={printSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} /> :
-             currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} /> :
+             currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} exPendingRef={masterExPendingRef} navAfterExRef={masterNavAfterExRef} /> :
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
              currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} deviceName={deviceName} updateDeviceName={updateDeviceName} lastSync={appData._lastSync} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
@@ -19883,8 +19941,8 @@ export default function App() {
                 try {
                   const ref = saveFnMap[currentView];
                   // ★ 保存処理が確認モーダル(運動メニューの適用日など)を出した場合は移動を中断し、
-                  //   モーダルで確定してから改めて移動してもらう(勝手に保存されて確認が出ない問題の対策)
-                  if (ref && ref.current) { const _r = ref.current(); if (_r === 'modal') { setNavConfirm(null); return; } }
+                  //   モーダルで確定したら選んでいた移動先へ自動で移る(勝手に保存されて確認が出ない問題の対策)
+                  if (ref && ref.current) { const _r = ref.current(); if (_r === 'modal') { if (currentView === 'master') masterNavAfterExRef.current = { view: navConfirm.view, patientId: navConfirm.patientId, focus: navConfirm.focus }; setNavConfirm(null); return; } }
                 } catch(_){}
                 recordDirtyRef.current = false;
                 masterDirtyRef.current = false;
@@ -30252,7 +30310,7 @@ function InfoRow({ label, children }) {
     </div>
   );
 }
-function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef, navFocus, onFocusHandled }) {
+function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientChange, dirtyRef, saveFnRef, navFocus, onFocusHandled, exPendingRef, navAfterExRef }) {
   const [editingPatientId, setEditingPatientId] = useState(targetPatientId || null);
   const scheduleSectionRef = React.useRef(null);
   const [localPatient, setLocalPatient] = useState(null);
@@ -30540,6 +30598,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       if (!localPatient || localPatient.id !== editingPatientId) {
         lastLoadedPatientSigRef.current = JSON.stringify(p || null);
         _pendingExBaseRef.current = null; // ★ 利用者切替=運動メニューの反映日確認の基準値をリセット
+        if (exPendingRef) exPendingRef.current = false;
         setLocalPatient(_buildLocalPatient(p));
       }
     } else {
@@ -30808,6 +30867,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (_exChangedVsBase) {
       // 編集開始前の基準値を初回だけ確保(自動保存で appData が上書きされる前に)
       if (!_exBase) _pendingExBaseRef.current = { prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[] };
+      if (exPendingRef) exPendingRef.current = true; // ★ 反映日未確定をApp側へ通知(画面移動時に適用日モーダルを直行表示)
       // ★ 自動保存: 値だけ保存し、反映日の確定は「保存」時に回す。 反映日が未確定のため dirty は維持する
       //   (2026-08-28: これを消していたため、サイドバー移動で勝手に保存され「いつから適用するか」が出なかった)
       if (auto) { if (dirtyRef) dirtyRef.current = true; onSave(next, { silent: true }); return; }
@@ -30867,9 +30927,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
     _pendingExBaseRef.current = null; // ★ 反映日を確定したので基準値をリセット
+    if (exPendingRef) exPendingRef.current = false;
     if (!ctxOverride) setPlannedExModal(null);
     if (opts.silent) onSave(next2, { silent: true });
     else onSave(next2, { manual: true, message: `✓ 保存しました（提供記録入力は${dd.getMonth()+1}月${dd.getDate()}日から／月別の設定数値は翌月から反映）` });
+    // ★ 画面移動を保留していた場合は、確定後に移動先へ自動で移る(2026-08-28)
+    if (navAfterExRef && navAfterExRef.current) { const _nv = navAfterExRef.current; navAfterExRef.current = null; if (dirtyRef) dirtyRef.current = false; setTimeout(() => { navigateTo && navigateTo(_nv.view, _nv.patientId, _nv.focus); }, 0); }
   };
   // ★ サービス提供内容(規定値)の変更を「過去全ての記録」に反映(2026-08-10)。
   //   従来の「指定せず保存」は現在値だけ更新し履歴を触らなかったため、過去に日付指定の変更履歴が
@@ -30904,8 +30967,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const next2 = { ...next, patients: next.patients.map(p => p.id === pat2.id ? pat2 : p) };
     setLocalPatient(pat2);
     _pendingExBaseRef.current = null;
+    if (exPendingRef) exPendingRef.current = false;
     setPlannedExModal(null);
     onSave(next2, { manual: true, message: '✓ 保存しました（過去全ての記録に反映）' });
+    // ★ 画面移動を保留していた場合は、確定後に移動先へ自動で移る(2026-08-28)
+    if (navAfterExRef && navAfterExRef.current) { const _nv = navAfterExRef.current; navAfterExRef.current = null; if (dirtyRef) dirtyRef.current = false; setTimeout(() => { navigateTo && navigateTo(_nv.view, _nv.patientId, _nv.focus); }, 0); }
   };
 
   // ★ 自動保存: 基本情報/サービス提供内容/月間スケジュールの変更を、入力が止まって約1.5秒後に自動でクラウド保存。
@@ -36413,7 +36479,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     lastRemoteSigRef.current = JSON.stringify(latest);
     const loaded = JSON.parse(JSON.stringify(latest));
     // ★ 新規ログ (担当職員 / 記録者未指定) のときは アクティブ記録者を両方に自動チェック
-    const activeName = getActiveRecorderName();
+    //   休業日・定休日は勤務ではないため自動チェックしない(2026-08-28 店舗要望)
+    const activeName = _dayIsKyugyo(selectedDate, dow) ? '' : getActiveRecorderName();
     if (activeName) {
       const matched = (appData.diarySettings?.staff || []).find(s => s.name === activeName);
       if (matched) {
@@ -36504,6 +36571,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const _activeRecForDailyLog = getActiveRecorderName();
   React.useEffect(() => {
     if (!_activeRecForDailyLog) return;
+    if (_dayIsKyugyo(selectedDate, dow)) return; // ★ 休業日・定休日は自動チェックしない(2026-08-28)
     const matched = (appData.diarySettings?.staff || []).find(s => s.name === _activeRecForDailyLog);
     if (!matched) return;
     const prevId = prevAutoCheckIdRef.current;
