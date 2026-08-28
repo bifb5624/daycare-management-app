@@ -17735,6 +17735,13 @@ export default function App() {
     } catch { return { tsusho: 0, kinou: 0 }; }
   }, [appData]);
   const [printPreviewContent, setPrintPreviewContent] = useState(null);
+  // ★ 担当者会議フロートメモ(2026-08-28): {patientId, meetingId}。 画面切替でも消えない小窓。
+  const [meetingFloat, setMeetingFloat] = useState(null);
+  React.useEffect(() => {
+    const h = (e) => setMeetingFloat({ patientId: e.detail.patientId, meetingId: e.detail.meetingId });
+    window.addEventListener('tsumugi-meeting-float', h);
+    return () => window.removeEventListener('tsumugi-meeting-float', h);
+  }, []);
   useEffect(()=>{
     const handler = (e) => setPrintPreviewContent(e.detail);
     window.addEventListener('setPrintHtml', handler);
@@ -18959,6 +18966,7 @@ export default function App() {
         );
       })()}
       {/* グローバルプリントプレビュー */}
+      {meetingFloat && <MeetingFloatWidget appData={appData} onSave={handleSaveToCloud} float={meetingFloat} onClose={()=>setMeetingFloat(null)} />}
       {printPreviewContent && (() => {
           // ★ PreviewModalを毎回作り直さず、このIIFE内に直接JSXを描く(iframe再マウント=チカチカ防止)。 ifH/srcDocはApp直下のstateを使用
           const ifH = previewIfH, setIfH = setPreviewIfH;
@@ -44963,10 +44971,16 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           {/* ケアマネジメントタブのみ: 担当者会議記録 機能 */}
           {isCMTab && (
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                 <div className="text-sm font-bold text-blue-900">サービス担当者会議記録 (担会)</div>
-                <button onClick={()=>{ setEditingMeeting(null); setShowMeetingForm(true); }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">+ 新規作成</button>
+                <div className="flex gap-1.5">
+                  {/* ★ 小窓で記録(2026-08-28): 会議記録を新規作成してフロートメモで開く。 他の画面(分析個人等)を見ながら入力できる */}
+                  <button onClick={()=>{ const _id = `meet_${Date.now()}`; const _td = new Date().toISOString().slice(0,10); updatePatient({ meetings: [...meetings, { id:_id, date:_td, dateLabel: toWarekiDateLabel(_td), dayOfWeek: dayOfWeekJp(_td), locationType:'事業所', location:'事業所', timeStart:'', timeEnd:'', attendees:'', reason:'', content:'' }] }, { silent:true }); window.dispatchEvent(new CustomEvent('tsumugi-meeting-float',{detail:{patientId: patient.id, meetingId:_id}})); onClose && onClose(); }}
+                    title="小窓(フロートメモ)で会議記録を作成。画面を切り替えても小窓は残るので、分析や提供記録を見ながら入力できます"
+                    className="px-3 py-1.5 bg-white border border-blue-300 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">小窓で記録</button>
+                  <button onClick={()=>{ setEditingMeeting(null); setShowMeetingForm(true); }}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold">+ 新規作成</button>
+                </div>
               </div>
               {meetings.length === 0 ? (
                 <div className="text-xs text-slate-500">まだ会議記録がありません。「新規作成」から入力してください。</div>
@@ -44979,6 +44993,9 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                         <div className="text-[11px] text-slate-500">{m.location} / 開催理由: {m.reason || '未記入'}</div>
                       </div>
                       <div className="flex gap-1">
+                        <button onClick={()=>{ window.dispatchEvent(new CustomEvent('tsumugi-meeting-float',{detail:{patientId: patient.id, meetingId: m.id}})); onClose && onClose(); }}
+                          title="小窓(フロートメモ)で開く。他の画面を見ながら入力できます"
+                          className="px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded text-[11px] font-bold">小窓</button>
                         <button onClick={()=>setPdfPreviewMeeting(m)} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold">PDF</button>
                         <button onClick={()=>{ setEditingMeeting(m); setShowMeetingForm(true); }} className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded text-[11px] font-bold">編集</button>
                         <button onClick={()=>{ if(window.confirm('この会議記録を削除しますか?')) updatePatient({ meetings: meetings.filter(x => x.id !== m.id) }); }}
@@ -45227,6 +45244,107 @@ const dayOfWeekJp = (yyyy_mm_dd) => {
     return ['日','月','火','水','木','金','土'][d.getDay()];
   } catch { return ''; }
 };
+
+// ★ 担当者会議のフロートメモ(2026-08-28 店舗要望): iPadのクイックメモ風の小窓。 画面(分析個人・提供記録等)を
+//   切り替えても消えず、ドラッグ移動・最小化できる。 編集は1秒後に自動保存(personalFile.meetings)。
+//   下書きは小窓のローカル状態に持ち、4秒同期の再レンダーでは読み直さない(入力が消えない)。
+function MeetingFloatWidget({ appData, onSave, float, onClose }) {
+  const patient = (appData.patients||[]).find(p => p.id === float.patientId);
+  const meeting = (patient?.personalFile?.meetings||[]).find(m => m.id === float.meetingId);
+  const [min, setMin] = React.useState(false);
+  const [pos, setPos] = React.useState(null); // null=既定(右下)
+  const [draft, setDraft] = React.useState(null);
+  const [savedAt, setSavedAt] = React.useState(null);
+  const dataRef = React.useRef(null);
+  dataRef.current = { appData, onSave, float };
+  const draftRef = React.useRef(null);
+  draftRef.current = draft;
+  const timerRef = React.useRef(null);
+  React.useEffect(() => {
+    const m = ((dataRef.current.appData.patients||[]).find(p=>p.id===float.patientId)?.personalFile?.meetings||[]).find(x=>x.id===float.meetingId);
+    setDraft(m ? { date: m.date||'', timeStart: m.timeStart||'', timeEnd: m.timeEnd||'', attendees: m.attendees||'', reason: m.reason||'', content: m.content||'' } : null);
+  }, [float.patientId, float.meetingId]); // eslint-disable-line
+  const flush = () => {
+    const { appData: ad, onSave: sv, float: fl } = dataRef.current;
+    const dr = draftRef.current; if (!dr) return;
+    const pt = (ad.patients||[]).find(p=>p.id===fl.patientId); if (!pt) return;
+    const pf = pt.personalFile || {};
+    if (!(pf.meetings||[]).some(m=>m.id===fl.meetingId)) return;
+    const list = (pf.meetings||[]).map(m => m.id===fl.meetingId ? { ...m, ...dr, dateLabel: toWarekiDateLabel(dr.date)||m.dateLabel||'', dayOfWeek: dayOfWeekJp(dr.date)||m.dayOfWeek||'' } : m);
+    sv({ ...ad, patients: ad.patients.map(p=>p.id===pt.id?{...pt, personalFile:{...pf, meetings:list}}:p) }, { silent: true });
+    setSavedAt(new Date());
+  };
+  const upd = (patch) => {
+    setDraft(d => ({ ...(d||{}), ...patch }));
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => { timerRef.current = null; flush(); }, 1000);
+  };
+  React.useEffect(() => () => { if (timerRef.current) { clearTimeout(timerRef.current); flush(); } }, []); // eslint-disable-line
+  const boxRef = React.useRef(null);
+  const onDragStart = (e) => {
+    const el = boxRef.current; if (!el) return;
+    if (e.target.closest('button,input,textarea,select')) return;
+    const rect = el.getBoundingClientRect();
+    const dx = e.clientX - rect.left, dy = e.clientY - rect.top;
+    const move = (ev) => setPos({ x: Math.max(4, Math.min(window.innerWidth - 90, ev.clientX - dx)), y: Math.max(4, Math.min(window.innerHeight - 44, ev.clientY - dy)) });
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+    e.preventDefault();
+  };
+  if (!patient || !meeting || !draft) return null;
+  const _posStyle = pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 };
+  const _iSt = { border:'1px solid #cbd5e1', borderRadius:8, padding:'5px 8px', fontSize:12, outline:'none', background:'white', width:'100%', boxSizing:'border-box' };
+  const _lb = { fontSize:10, fontWeight:'bold', color:'#64748b', marginBottom:2, display:'block' };
+  const _node = min ? (
+    <div style={{ position:'fixed', zIndex:55, ..._posStyle }}>
+      <button type="button" onClick={()=>setMin(false)}
+        style={{ background:'#1d4ed8', color:'white', border:'none', borderRadius:20, padding:'8px 16px', fontSize:12, fontWeight:'bold', boxShadow:'0 4px 16px rgba(0,0,0,0.3)', cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+        担会メモ: {patient.name} 様（タップで開く）
+      </button>
+    </div>
+  ) : (
+    <div ref={boxRef} style={{ position:'fixed', zIndex:55, ..._posStyle, width:340, maxWidth:'calc(100vw - 16px)', maxHeight:'72vh', display:'flex', flexDirection:'column', background:'white', border:'1px solid #cbd5e1', borderRadius:14, boxShadow:'0 12px 40px rgba(0,0,0,0.28)', overflow:'hidden' }}>
+      <div onPointerDown={onDragStart} style={{ background:'#1e3a8a', color:'white', padding:'8px 12px', display:'flex', alignItems:'center', gap:8, cursor:'move', touchAction:'none', userSelect:'none', flexShrink:0 }}>
+        <span style={{ fontSize:12, fontWeight:'bold', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>担当者会議メモ — {patient.name} 様</span>
+        <button type="button" onClick={()=>setMin(true)} title="最小化" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>−</button>
+        <button type="button" onClick={()=>{ if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; } flush(); onClose(); }} title="閉じる(保存されます)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>×</button>
+      </div>
+      <div style={{ padding:10, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
+        <div style={{ display:'flex', gap:6 }}>
+          <div style={{ flex:1 }}>
+            <label style={_lb}>開催日</label>
+            <input type="date" value={draft.date} onChange={e=>upd({date:e.target.value})} style={_iSt}/>
+          </div>
+          <div style={{ width:78 }}>
+            <label style={_lb}>開始</label>
+            <input type="time" value={draft.timeStart} onChange={e=>upd({timeStart:e.target.value})} style={_iSt}/>
+          </div>
+          <div style={{ width:78 }}>
+            <label style={_lb}>終了</label>
+            <input type="time" value={draft.timeEnd} onChange={e=>upd({timeEnd:e.target.value})} style={_iSt}/>
+          </div>
+        </div>
+        <div>
+          <label style={_lb}>出席者</label>
+          <textarea value={draft.attendees} onChange={e=>upd({attendees:e.target.value})} rows={2} style={{ ..._iSt, resize:'vertical' }}/>
+        </div>
+        <div>
+          <label style={_lb}>開催理由</label>
+          <input value={draft.reason} onChange={e=>upd({reason:e.target.value})} style={_iSt}/>
+        </div>
+        <div>
+          <label style={_lb}>検討した項目・内容・結論</label>
+          <textarea value={draft.content} onChange={e=>upd({content:e.target.value})} rows={9} style={{ ..._iSt, resize:'vertical', minHeight:120 }}/>
+        </div>
+        <div style={{ fontSize:10, color:'#64748b', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span>1秒後に自動保存されます</span>
+          {savedAt && <span style={{ color:'#059669', fontWeight:'bold' }}>✓ 保存済 {savedAt.toLocaleTimeString('ja-JP')}</span>}
+        </div>
+      </div>
+    </div>
+  );
+  return (typeof document !== 'undefined' && document.body) ? ReactDOM.createPortal(_node, document.body) : _node;
+}
 
 function MeetingRecordForm({ patient, meeting, onSave, onClose }) {
   const [form, setForm] = useState({
