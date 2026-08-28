@@ -30761,7 +30761,22 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
   // 「保存して移動」用：最新のlocalPatientを保存
   React.useEffect(() => {
-    if (saveFnRef) saveFnRef.current = flushLP;
+    // ★ 2026-08-28: 「保存して切替/移動」経路はflushLPを直接呼んでいたため、運動メニューの反映日確認
+    //   (saveMasterInfo内の適用日モーダル)を素通りしていた。 運動メニューに未確定の差分がある場合
+    //   (自動保存済みのpendingだけでなく、自動保存前の直近編集も差分比較で検知)はsaveMasterInfoへ委譲し、
+    //   'modal'を返して呼び出し元(切替確認/ナビゲーション)が移動を保留できるようにする。
+    if (saveFnRef) saveFnRef.current = () => {
+      try {
+        const _prevP = (appData.patients||[]).find(p => p.id === localPatient?.id) || {};
+        const _n = (o) => { const r={}; Object.keys(o||{}).forEach(k=>{ const v=o[k]; if(v!==''&&v!=null) r[k]=String(v); }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
+        const _ni = (arr) => { const r={}; (Array.isArray(arr)?arr:[]).forEach(x=>{ if(x&&x.itemId){ const v=(x.defaultValue==null?'':String(x.defaultValue)); if(v!=='') r[x.itemId]=v; } }); return JSON.stringify(Object.keys(r).sort().reduce((a,k)=>{a[k]=r[k];return a;},{})); };
+        const _b = _pendingExBaseRef.current;
+        const _bp = _b ? _b.prevPlanned : (_prevP.plannedExercises||{});
+        const _bi = _b ? _b.prevIndividual : (_prevP.individualExercises||[]);
+        if (localPatient && (_n(_bp) !== _n(localPatient.plannedExercises) || _ni(_bi) !== _ni(localPatient.individualExercises))) return saveMasterInfo(false);
+      } catch(_){}
+      return flushLP();
+    };
   });
 
   const executeDelete = async () => {
@@ -32405,7 +32420,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       })()}
       {plannedExModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+          {/* ★ 幅を拡大しボタンの改行を防止(2026-08-28) */}
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl p-6">
             <h3 className="text-base font-bold text-slate-800 mb-1">サービス提供内容の変更を反映</h3>
             <p className="text-xs text-slate-500 mb-4">運動メニュー／個別運動の設定値が変わりました。反映方法を選んでください。</p>
             <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-3 text-[11px] text-slate-600 leading-relaxed">
@@ -32416,9 +32432,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               <span className="text-sm text-slate-500">変更日：</span>
               <input type="date" value={plannedExModal.fromDate||''} onChange={e=>setPlannedExModal(m=>({...m,fromDate:e.target.value}))} className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-bold text-sm outline-none"/>
             </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={applyPlannedExAllPast} className="px-4 py-2 rounded-xl font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-sm" title="変更した項目を過去の全期間にさかのぼって反映します（他の項目の日付つき変更履歴はそのまま残ります）">過去全ての記録に反映</button>
-              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm">日付を指定して反映</button>
+            {/* ★ ボタンは横一列・改行なし(2026-08-28)。 キャンセル=移動/切替を取りやめて編集を続ける */}
+            <div className="flex justify-end items-center gap-3 flex-wrap">
+              <button onClick={()=>{ if (navAfterExRef) navAfterExRef.current = null; _pendingPatSwitchRef.current = null; setPlannedExModal(null); if (dirtyRef) dirtyRef.current = true; }}
+                className="px-4 py-2.5 rounded-xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 text-sm whitespace-nowrap mr-auto" title="反映せずにこの画面に留まり、編集を続けます">キャンセル</button>
+              <button onClick={applyPlannedExAllPast} className="px-4 py-2.5 rounded-xl font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-sm whitespace-nowrap" title="変更した項目を過去の全期間にさかのぼって反映します（他の項目の日付つき変更履歴はそのまま残ります）">過去全ての記録に反映</button>
+              <button onClick={()=>applyPlannedExChange(plannedExModal.fromDate)} className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow active:scale-95 text-sm whitespace-nowrap">日付を指定して反映</button>
             </div>
           </div>
         </div>
