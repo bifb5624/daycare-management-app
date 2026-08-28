@@ -22446,6 +22446,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
     : [['sec-basicinfo','基本情報','短'],['sec-latest','今回の記録','短'],['sec-trend','通所','長'],['sec-kibun','気分','中'],['sec-vital','バイタルトレンド','長'],['sec-exercise','運動トレンド','長'],['sec-fitness','体力測定','長'],['sec-absence','欠席一覧','短'],['sec-kyushi','休止一覧','短'],['sec-monitoring','モニタリング','中'],['sec-detail','詳細記録','長']];
   // Hoisted from IIFEs to satisfy React hook rules
   const [vitalTooltip, setVitalTooltip] = useState(null);
+  const [showScopeInfo, setShowScopeInfo] = useState(false); // ★ 「表示内容」ポップアップ(事業所のみ)
   const [vitalPhase, setVitalPhase] = useState('start'); // 血圧・脈グラフの表示: 'start'(通所時) / 'end'(終了時) / 'both'(両方)
   const [selExId, setSelExId] = useState(null);
   const [selFitId, setSelFitId] = useState(null);
@@ -22774,6 +22775,9 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
               <div style={{fontSize:11,opacity:0.7,fontWeight:'bold'}}>分析・個人</div>
               <div style={{fontSize:18,fontWeight:'bold'}}>{selectedPatient.name} 様</div>
             </div>
+            {/* ★ 表示内容ポップアップ(2026-08-28 店舗要望): 本人/家族/ケアマネ・他関係者に何が見えるか。事業所のみ表示 */}
+            <button type="button" onClick={()=>setShowScopeInfo(true)} title="ご本人・ご家族・ケアマネ/他関係者に表示される内容の一覧"
+              style={{background:'rgba(255,255,255,0.6)',border:'1px solid rgba(255,255,255,0.8)',color:'#1e40af',borderRadius:10,padding:'6px 12px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>表示内容</button>
           </div>
         )}
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
@@ -23292,41 +23296,47 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       </div>{/* end sticky wrapper */}
       <div id="print-content-analysis" style={{padding:'20px 24px',maxWidth:1280,margin:'0 auto'}}>
 
-        {/* ★ 閲覧範囲の一覧(2026-08-28 店舗要望): ご本人/ご家族/ケアマネにそれぞれ何が表示されるかを事業所側で確認できる */}
-        {!familyMode && !cmViewerMode && !selfMode && (
-          <details className="no-print" style={{marginBottom:14,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:12,padding:'8px 14px'}}>
-            <summary style={{cursor:'pointer',fontSize:12,fontWeight:'bold',color:'#475569',userSelect:'none'}}>ご本人・ご家族・ケアマネにはどこまで表示される？（タップで開く）</summary>
-            <div style={{marginTop:8,overflowX:'auto'}}>
-              <table style={{borderCollapse:'collapse',fontSize:11,minWidth:520}}>
-                <thead><tr>
-                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px',textAlign:'left'}}>項目</th>
-                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px'}}>ご本人</th>
-                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px'}}>ご家族</th>
-                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px'}}>ケアマネ</th>
-                </tr></thead>
-                <tbody>
-                  {[
-                    ['基本情報（生年月日・利用開始日・既往歴・留意点）','○','○','○'],
-                    ['今回の記録（バイタル・実施内容）','○','○','○'],
-                    ['今回の様子・特記事項','×（表示されません）','○（「家族非表示」の特記を除く）','○（常に表示）'],
-                    ['基本指標（簡易通所率）','○','○','○'],
-                    ['気分・バイタルトレンド・体力測定','○','○','○'],
-                    ['月別通所状況・運動トレンド','×','×','○'],
-                    ['欠席一覧・休止一覧・詳細記録','×','×','○'],
-                    ['モニタリング','×','×','○'],
-                  ].map((row,i)=>(
-                    <tr key={i} style={{background:i%2?'#f8fafc':'white'}}>
-                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',fontWeight:'bold',color:'#334155'}}>{row[0]}</td>
-                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',textAlign:'center',color:row[1].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[1]}</td>
-                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',textAlign:'center',color:row[2].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[2]}</td>
-                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',textAlign:'center',color:row[3].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[3]}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div style={{fontSize:10,color:'#64748b',marginTop:6}}>※ ご本人=続柄「本人」のアカウント。特記事項はご本人には表示されず、ご家族には「家族非表示」にしたもの以外が表示され、ケアマネには常に表示されます。</div>
+        {/* ★ 表示内容ポップアップ(2026-08-28): 事業所のみ。 ご本人/ご家族/ケアマネ・他関係者の閲覧範囲一覧 */}
+        {!familyMode && !cmViewerMode && !selfMode && showScopeInfo && (
+          <div className="no-print" onClick={()=>setShowScopeInfo(false)}
+            style={{position:'fixed',inset:0,zIndex:70,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,boxShadow:'0 20px 60px rgba(0,0,0,0.3)',maxWidth:680,width:'100%',maxHeight:'85vh',overflowY:'auto',padding:'16px 18px'}}>
+              <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+                <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>閲覧アカウント別の表示内容</div>
+                <button type="button" onClick={()=>setShowScopeInfo(false)} style={{background:'none',border:'none',color:'#94a3b8',fontSize:20,cursor:'pointer',lineHeight:1}}>×</button>
+              </div>
+              <div style={{overflowX:'auto'}}>
+                <table style={{borderCollapse:'collapse',fontSize:11,minWidth:560,width:'100%'}}>
+                  <thead><tr>
+                    <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'5px 8px',textAlign:'left'}}>項目</th>
+                    <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'5px 8px'}}>ご本人</th>
+                    <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'5px 8px'}}>ご家族</th>
+                    <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'5px 8px'}}>ケアマネ・他関係者</th>
+                  </tr></thead>
+                  <tbody>
+                    {[
+                      ['基本情報（生年月日・利用開始日・既往歴・留意点）','○','○','○'],
+                      ['今回の記録（バイタル・実施内容）','○','○','○'],
+                      ['今回の様子・特記事項','×','○（「家族非表示」を除く）','○（常に表示）'],
+                      ['基本指標（簡易通所率）','○','○','○'],
+                      ['気分・バイタルトレンド・体力測定','○','○','○'],
+                      ['月別通所状況・運動トレンド','×','×','○'],
+                      ['欠席一覧・休止一覧・詳細記録','×','×','○'],
+                      ['モニタリング','×','×','○'],
+                    ].map((row,i)=>(
+                      <tr key={i} style={{background:i%2?'#f8fafc':'white'}}>
+                        <td style={{border:'1px solid #cbd5e1',padding:'5px 8px',fontWeight:'bold',color:'#334155'}}>{row[0]}</td>
+                        <td style={{border:'1px solid #cbd5e1',padding:'5px 8px',textAlign:'center',color:row[1].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[1]}</td>
+                        <td style={{border:'1px solid #cbd5e1',padding:'5px 8px',textAlign:'center',color:row[2].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[2]}</td>
+                        <td style={{border:'1px solid #cbd5e1',padding:'5px 8px',textAlign:'center',color:row[3].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[3]}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{fontSize:10,color:'#64748b',marginTop:8,lineHeight:1.6}}>※ ご本人=続柄「本人」のアカウント。他関係者=ケアマネ以外の関係者アカウント(ケアマネと同じ内容が表示されます)。特記事項はご本人には表示されず、ご家族には「家族非表示」にしたもの以外が表示され、ケアマネ・他関係者には常に表示されます。この一覧は事業所の画面にだけ表示されます。</div>
             </div>
-          </details>
+          </div>
         )}
         {/* === 基本指標 === */}
         {/* === 基本情報 === 簡素化版 */}
@@ -45349,20 +45359,19 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
     e.preventDefault();
   };
-  // ★ 拡大縮小(2026-08-28): ヘッダの−/+ボタンとピンチ操作で0.7〜1.5倍。 CSS transformのみなので軽い。
+  // ★ 拡大縮小(2026-08-28): ヘッダのＡ−/Ａ＋ボタンと右下のリサイズつまみで0.7〜1.5倍。 CSSの幅/文字サイズ変更のみで軽量。
+  //   (ピンチはOS側の画面全体ズームと競合して小窓だけを拡大できないため、つまみ方式に変更)
   const [scale, setScale] = React.useState(1);
-  const pinchRef = React.useRef(null);
-  React.useEffect(() => {
-    const el = boxRef.current; if (!el) return;
-    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
-    const ts = (e) => { if (e.touches.length === 2) { pinchRef.current = { d: dist(e.touches), s: scale }; } };
-    const tm = (e) => { if (e.touches.length === 2 && pinchRef.current) { e.preventDefault(); const r = dist(e.touches) / pinchRef.current.d; setScale(Math.max(0.7, Math.min(1.5, Number((pinchRef.current.s * r).toFixed(2))))); } };
-    const te = () => { pinchRef.current = null; };
-    el.addEventListener('touchstart', ts, { passive: true });
-    el.addEventListener('touchmove', tm, { passive: false });
-    el.addEventListener('touchend', te, { passive: true });
-    return () => { el.removeEventListener('touchstart', ts); el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); };
-  }, [scale, min]); // eslint-disable-line
+  const onResizeStart = (e) => {
+    const s0 = scale, x0 = e.clientX, y0 = e.clientY;
+    const move = (ev) => {
+      const d = ((ev.clientX - x0) + (ev.clientY - y0)) / 2;
+      setScale(Math.max(0.7, Math.min(1.5, Number((s0 + d / 220).toFixed(2)))));
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+    e.preventDefault(); e.stopPropagation();
+  };
   if (!patient || !meeting || !draft) return null;
   const _posStyle = pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 };
   const _iSt = { border:'1px solid #cbd5e1', borderRadius:8, padding:'5px 6px', fontSize:Math.round(12*scale), outline:'none', background:'white', width:'100%', minWidth:0, boxSizing:'border-box' };
@@ -45378,10 +45387,10 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
     <div ref={boxRef} style={{ position:'fixed', zIndex:55, ..._posStyle, width:Math.round(340*scale), maxWidth:'calc(100vw - 16px)', maxHeight:'80vh', display:'flex', flexDirection:'column', background:'white', border:'1px solid #cbd5e1', borderRadius:14, boxShadow:'0 12px 40px rgba(0,0,0,0.28)', overflow:'hidden', fontSize:Math.round(12*scale) }}>
       <div onPointerDown={onDragStart} style={{ background:'#1e3a8a', color:'white', padding:'8px 12px', display:'flex', alignItems:'center', gap:6, cursor:'move', touchAction:'none', userSelect:'none', flexShrink:0 }}>
         <span style={{ fontSize:12, fontWeight:'bold', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>担当者会議メモ — {patient.name} 様</span>
-        <button type="button" onClick={()=>setScale(s=>Math.max(0.7, Number((s-0.1).toFixed(2))))} title="縮小(ピンチ操作でも可)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:12, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ−</button>
-        <button type="button" onClick={()=>setScale(s=>Math.min(1.5, Number((s+0.1).toFixed(2))))} title="拡大(ピンチ操作でも可)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:12, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ＋</button>
-        <button type="button" onClick={()=>setMin(true)} title="最小化" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>−</button>
-        <button type="button" onClick={handleCancel} title="閉じる(未保存の変更は確認します)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>×</button>
+        <button type="button" onClick={()=>setScale(s=>Math.max(0.7, Number((s-0.15).toFixed(2))))} title="縮小(右下のつまみでも調整できます)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, minWidth:40, height:32, padding:'0 6px', fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ−</button>
+        <button type="button" onClick={()=>setScale(s=>Math.min(1.5, Number((s+0.15).toFixed(2))))} title="拡大(右下のつまみでも調整できます)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, minWidth:40, height:32, padding:'0 6px', fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ＋</button>
+        <button type="button" onClick={()=>setMin(true)} title="最小化" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, width:32, height:32, fontSize:15, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>−</button>
+        <button type="button" onClick={handleCancel} title="閉じる(未保存の変更は確認します)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, width:32, height:32, fontSize:15, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>×</button>
       </div>
       <div style={{ padding:10, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
         {/* ★ iPad対策(2026-08-28): 日付/時刻inputは固有の最小幅が広く1行だと重なるため、開催日と開始/終了を2行に分離 */}
@@ -45389,15 +45398,13 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
           <label style={_lb}>開催日</label>
           <input type="date" value={draft.date} onChange={e=>upd({date:e.target.value})} style={{ ..._iSt, maxWidth:170 }}/>
         </div>
-        <div style={{ display:'flex', gap:6 }}>
-          <div style={{ flex:1, minWidth:0 }}>
-            <label style={_lb}>開始</label>
-            <input type="time" value={draft.timeStart} onChange={e=>upd({timeStart:e.target.value})} style={_iSt}/>
-          </div>
-          <div style={{ flex:1, minWidth:0 }}>
-            <label style={_lb}>終了</label>
-            <input type="time" value={draft.timeEnd} onChange={e=>upd({timeEnd:e.target.value})} style={_iSt}/>
-          </div>
+        <div>
+          <label style={_lb}>開始</label>
+          <input type="time" value={draft.timeStart} onChange={e=>upd({timeStart:e.target.value})} style={{ ..._iSt, maxWidth:140 }}/>
+        </div>
+        <div>
+          <label style={_lb}>終了</label>
+          <input type="time" value={draft.timeEnd} onChange={e=>upd({timeEnd:e.target.value})} style={{ ..._iSt, maxWidth:140 }}/>
         </div>
         <div>
           <label style={_lb}>出席者</label>
@@ -45422,6 +45429,11 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
           <span>{dirty ? '未保存の変更があります' : ''}</span>
           {savedAt && <span style={{ color:'#059669', fontWeight:'bold' }}>✓ 保存済 {savedAt.toLocaleTimeString('ja-JP')}</span>}
         </div>
+      </div>
+      {/* ★ 右下のリサイズつまみ(2026-08-28): 指/マウスでドラッグして小窓だけを拡大縮小(画面全体はズームしない) */}
+      <div onPointerDown={onResizeStart} title="ドラッグで拡大縮小"
+        style={{ position:'absolute', right:0, bottom:0, width:34, height:34, cursor:'nwse-resize', touchAction:'none', display:'flex', alignItems:'flex-end', justifyContent:'flex-end', padding:4 }}>
+        <svg width="16" height="16" viewBox="0 0 16 16"><path d="M15 1 L1 15 M15 7 L7 15 M15 12 L12 15" stroke="#94a3b8" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
       </div>
     </div>
   );
