@@ -11287,7 +11287,10 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
   );
 }
 // === スケジュール管理 ===
-function ScheduleView({ appData, onSave }) {
+function ScheduleView({ appData, onSave, navigateTo }) {
+  // ★ 予定カードから利用者マスタ/担会記録へジャンプ(2026-08-28 店舗要望・ホームの本日スケジュールと同じ動線)
+  const _goMaster = (pid) => { if (navigateTo) navigateTo('master', pid); };
+  const _goMeeting = (pid) => { try { sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({ patientId: pid, tab: 'cat_3', focus: 'meeting' })); } catch {} if (navigateTo) navigateTo('master', pid); };
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   const [curMonth, setCurMonth] = useState(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
@@ -11561,7 +11564,10 @@ function ScheduleView({ appData, onSave }) {
                       <span style={{fontSize:13,fontWeight:'bold',color:'#1e293b',minWidth:96,fontVariantNumeric:'tabular-nums'}}>{timeLabel(e)}</span>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>{e.title}{patName(e)?<span style={{fontSize:12,color:'#6366f1',marginLeft:6}}>／{patName(e)} 様</span>:null}</div>
-                        {e.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p ? <div style={{fontSize:11,color:'#4338ca',fontWeight:'bold'}}>{p.name}{p.cmOffice?`（${p.cmOffice}${p.cmName?` ${p.cmName}様`:''}）`:''}</div> : null; })()}
+                        {e.patientId && (()=>{ const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p ? <div style={{fontSize:11,color:'#4338ca',fontWeight:'bold'}}>
+                          {/* ★ 利用者名タップで利用者マスタへ(2026-08-28) */}
+                          <button type="button" onClick={()=>_goMaster(p.id)} title="利用者マスタを開く" style={{background:'none',border:'none',padding:0,color:'#4338ca',fontWeight:'bold',fontSize:11,cursor:'pointer',textDecoration:'underline'}}>{p.name}</button>
+                          {p.cmOffice?`（${p.cmOffice}${p.cmName?` ${p.cmName}様`:''}）`:''}</div> : null; })()}
                         {e.note && <div style={{fontSize:12,color:'#64748b',whiteSpace:'pre-wrap'}}>{e.note}</div>}
                       </div>
                       <button onClick={()=>editEvent(e)} style={{background:'#e2e8f0',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>編集</button>
@@ -11584,8 +11590,21 @@ function ScheduleView({ appData, onSave }) {
               <div style={{fontSize:18,fontWeight:'bold',color:'#1e293b',lineHeight:1.4}}>{e.title||'（無題の予定）'}</div>
               <div style={{fontSize:13,color:'#475569',marginTop:6,display:'flex',alignItems:'center',gap:6}}><Clock size={14}/>{fmtJp(e.date)}　{timeLabel(e)}</div>
               {e.repeat && e.repeat!=='none' && <div style={{fontSize:12,color:'#64748b',marginTop:4}}>繰り返し: {REP[e.repeat]||e.repeat}{e.repeatEvery>1?`（${e.repeatEvery}ごと）`:''}</div>}
-              {patName(e) && <div style={{fontSize:13,color:'#4338ca',marginTop:4,display:'flex',alignItems:'center',gap:6}}><Users size={14}/>{patName(e)} 様{(()=>{const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p?.cmName?`（担当CM: ${p.cmName}）`:'';})()}</div>}
+              {patName(e) && <div style={{fontSize:13,color:'#4338ca',marginTop:4,display:'flex',alignItems:'center',gap:6}}><Users size={14}/>
+                {/* ★ 利用者名タップで利用者マスタへ(2026-08-28) */}
+                <button type="button" onClick={()=>{ setEvDetail(null); _goMaster(e.patientId); }} title="利用者マスタを開く"
+                  style={{background:'none',border:'none',padding:0,color:'#4338ca',fontWeight:'bold',fontSize:13,cursor:'pointer',textDecoration:'underline'}}>{patName(e)} 様</button>
+                {(()=>{const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p?.cmName?`（担当CM: ${p.cmName}）`:'';})()}</div>}
               {e.note && <div style={{fontSize:13,color:'#334155',marginTop:8,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'8px 10px',whiteSpace:'pre-wrap'}}>{e.note}</div>}
+              {/* ★ ホームの本日スケジュールと同じジャンプ(2026-08-28): 担会記録の入力・利用者マスタ */}
+              {e.patientId && (
+                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
+                  {String(e.title||'').includes('担当者会議') && <button type="button" onClick={()=>{ setEvDetail(null); _goMeeting(e.patientId); }}
+                    style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>担当者会議記録を入力</button>}
+                  <button type="button" onClick={()=>{ setEvDetail(null); _goMaster(e.patientId); }}
+                    style={{background:'#4338ca',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>利用者マスタを開く</button>
+                </div>
+              )}
             </div>
             <div style={{display:'flex',justifyContent:'flex-end',gap:8,padding:'12px 16px'}}>
               <button onClick={()=>{ if(window.confirm('この予定を削除しますか？')){ delEvent(e); setEvDetail(null); } }} style={{background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
@@ -17752,6 +17771,7 @@ export default function App() {
   const [printPreviewContent, setPrintPreviewContent] = useState(null);
   // ★ 担当者会議フロートメモ(2026-08-28): {patientId, meetingId}。 画面切替でも消えない小窓。
   const [meetingFloat, setMeetingFloat] = useState(null);
+  const [appUpdating, setAppUpdating] = useState(false); // ★ 「今すぐ更新」実行中の表示
   React.useEffect(() => {
     const h = (e) => setMeetingFloat({ patientId: e.detail.patientId, meetingId: e.detail.meetingId, isNew: !!e.detail.isNew });
     window.addEventListener('tsumugi-meeting-float', h);
@@ -19241,7 +19261,10 @@ export default function App() {
           {/* ★ 単なる reload だとブラウザのキャッシュから古いプログラムが読み直されることがあり、
               「押しても更新されない/しばらく経ってから反映」という症状になる。
               キャッシュとService Workerを消してから、URLに印を付けて確実に取り直す。 */}
-          <button onClick={async ()=>{
+          <button disabled={appUpdating} onClick={async ()=>{
+            // ★ 更新中表示(2026-08-28): 保存→キャッシュ削除→再読込に数秒かかるため、押した直後から「更新中…」を出す
+            if (appUpdating) return;
+            setAppUpdating(true);
             // ★ リロードで入力が消えないよう、先に未保存を確実にクラウドへ送り切る。
             try {
               const ae = document.activeElement; if (ae && typeof ae.blur === 'function') ae.blur();  // 入力欄を確定
@@ -19253,6 +19276,7 @@ export default function App() {
                 try { await flushOps(staffSession.storeId); } catch {}
               }
             } catch (e) { console.warn('[update] 保存に失敗、リロードを中止', e);
+              setAppUpdating(false);
               setToastMsg('⚠ 保存に失敗しました。通信を確認してから更新してください'); setShowToast(true); setTimeout(()=>setShowToast(false),5000); return; }
             try {
               if (window.caches && caches.keys) { const ks = await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))); }
@@ -19270,7 +19294,7 @@ export default function App() {
               u.searchParams.set('_v', String(Date.now()));
               window.location.replace(u.toString());
             } catch { try { window.location.reload(); } catch {} }
-          }} style={{background:'#7daa3d',color:'white',border:'none',borderRadius:8,padding:'6px 14px',fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>今すぐ更新</button>
+          }} style={{background:appUpdating?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:8,padding:'6px 14px',fontSize:13,fontWeight:'bold',cursor:appUpdating?'wait':'pointer',whiteSpace:'nowrap'}}>{appUpdating ? '更新中…（そのままお待ちください）' : '今すぐ更新'}</button>
         </div>,
         document.body
       )}
@@ -19689,7 +19713,7 @@ export default function App() {
              currentView === 'general_fax' ? <GeneralFaxView appData={appData} onSave={handleSaveToCloud} dirtyRef={generalFaxDirtyRef} saveFnRef={generalFaxSaveFnRef} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?captureElHtmlWithValues(el):null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'fitness' ? <FitnessView appData={appData} onSave={handleSaveToCloud} selectedDate={selectedDate} sharedAmpm={sharedAmpm} navigateTo={navigateTo} targetPatientId={targetPatientId} onPatientChange={setTargetPatientId} dirtyRef={fitnessDirtyRef} saveFnRef={fitnessSaveFnRef} /> :
              currentView === 'monitoring' ? <MonitoringView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} dirtyRef={monitoringDirtyRef} saveFnRef={monitoringSaveFnRef} /> :
-             currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} /> :
+             currentView === 'schedule' ? <ScheduleView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} /> :
              currentView === 'roster' ? <RosterView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'kinou_keikaku' ? <KinouKeikakuView appData={appData} onSave={handleSaveToCloud} navigateTo={navigateTo} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} dirtyRef={kinouKeikakuDirtyRef} saveFnRef={kinouKeikakuSaveFnRef} /> :
              currentView === 'keikaku_yotei' ? <KeikakuYoteiView appData={appData} navigateTo={navigateTo} family="tsusho" /> :
@@ -21294,6 +21318,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               {searchQuery && <button onClick={() => setSearchQuery('')} className="text-slate-400 hover:text-slate-600 ml-1"><X size={16} /></button>}
             </div>
             <div className="sm:ml-auto flex items-center gap-2 flex-wrap">
+              {/* ★ 連絡帳は一番左(全画面の左)に配置(2026-08-28 店舗要望) */}
+              <button onClick={() => { handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 whitespace-nowrap">連絡帳</button>
               <button onClick={()=>setIsFullscreen(v=>!v)} className="bg-slate-700 hover:bg-slate-800 text-white px-3 py-2 rounded-xl text-sm font-bold transition-all active:scale-95 whitespace-nowrap" title={isFullscreen?'通常表示':'全画面表示'}>
                 {isFullscreen ? '通常表示' : '全画面'}
               </button>
@@ -21301,7 +21327,6 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               {/* ★ onClick={handleSaveClick} だとクリックイベントが第1引数(auto)に渡り auto=truthy(自動保存扱い)になり、
                   「保存しました」が出ず担当者チェックも飛ばされていた。 明示的に auto=false で呼ぶ。 */}
               <button onClick={()=>handleSaveClick(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 whitespace-nowrap">保存</button>
-              <button onClick={() => { handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95 whitespace-nowrap">連絡帳</button>
             </div>
       </div>
       ) : (
@@ -21310,10 +21335,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           <span className="text-white font-bold text-sm">サービス提供記録 入力 {selectedDate && new Date(selectedDate).toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'})}</span>
           {attCountChips && <div className="ml-2">{attCountChips}</div>}
           <div className="flex-1"/>
+          <button onClick={()=>{ handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap" title="連絡帳の作成・印刷へ"><Printer size={13} className="mr-1"/>連絡帳</button>
           <button onClick={()=>setIsFullscreen(false)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap">⛶ 通常表示に戻る</button>
           <button onClick={()=>setRestoreModal(true)} className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap" title="保存した記録を丸ごと復元">⟲ 元に戻す</button>
           <button onClick={()=>handleSaveClick(false)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap"><CloudUpload size={13} className="mr-1"/>保存</button>
-          <button onClick={()=>{ handleSaveClick(); navigateTo('print'); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center whitespace-nowrap" title="連絡帳の作成・印刷へ"><Printer size={13} className="mr-1"/>連絡帳</button>
         </div>
       )}
 
