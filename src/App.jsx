@@ -10046,6 +10046,23 @@ const generateMonthlySchedule = (patients, year, month, monthlyShifts, ticketRec
 
 // === 共通コンポーネント ===
 
+// ★ 長押しでもタップとして反応するボタン用props(2026-08-28 店舗要望): 利用者が気分ボタンを強く長押しすると、
+//   ブラウザの長押しメニュー/文字選択が働いてclickが発火せず「押したのに反応しない」となる端末があるため、
+//   pointerup(指を離した時)で確定する。 12px以上動いた場合はスクロール操作とみなして無視。
+//   直後に発火するclickは時刻ガードで二重実行を防ぐ(再レンダー跨ぎでも安全なようモジュール変数で判定)。
+let _lpLastFireAt = 0;
+const longPressTapProps = (fn) => ({
+  onPointerDown: (e) => { const t = e.currentTarget; t._lpSx = e.clientX; t._lpSy = e.clientY; },
+  onPointerUp: (e) => {
+    const t = e.currentTarget;
+    const dx = e.clientX - (t._lpSx ?? e.clientX), dy = e.clientY - (t._lpSy ?? e.clientY);
+    if (Math.hypot(dx, dy) < 12) { _lpLastFireAt = Date.now(); fn(); }
+  },
+  onClick: (e) => { if (Date.now() - _lpLastFireAt < 500) { e.preventDefault(); return; } _lpLastFireAt = Date.now(); fn(); },
+  onContextMenu: (e) => e.preventDefault(),
+  style: { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none', touchAction: 'manipulation' },
+});
+
 function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnter, onTab, onClose, mode, quickButtons, prefixButtons, zoom = 1, unitSep = '', unit2 = '' }) {
   const keypadRef = useRef(null);
   const dragRef = useRef({ dragging: false, startX: 0, startY: 0, origX: 0, origY: 0 });
@@ -22353,10 +22370,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 </div>
                 <div className="grid grid-cols-5 gap-5 w-full max-w-5xl">
                   {KIBUN_MOODS.map(mood => (
-                    <button key={mood.key} onClick={() => { setKibunTempMood(mood.key); setKibunStep('reason'); }}
+                    <button key={mood.key} {...longPressTapProps(() => { setKibunTempMood(mood.key); setKibunStep('reason'); })}
                       className={`flex flex-col items-center gap-3 px-3 py-7 rounded-3xl border-4 border-transparent hover:border-slate-500 transition-all active:scale-95 shadow-lg ${mood.color}`}>
-                      <span className="leading-none" style={{fontSize:'5.5rem'}}>{mood.emoji}</span>
-                      <span className={`font-bold text-3xl ${mood.textColor}`}>{mood.label}</span>
+                      <span className="leading-none" style={{fontSize:'5.5rem',pointerEvents:'none'}}>{mood.emoji}</span>
+                      <span className={`font-bold text-3xl ${mood.textColor}`} style={{pointerEvents:'none'}}>{mood.label}</span>
                     </button>
                   ))}
                 </div>
@@ -22373,11 +22390,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     const cur = currentRec?.[reasonKey] || '';
                     const selected = cur.split('・').includes(reason);
                     return (
-                      <button key={reason} onClick={() => {
+                      <button key={reason} {...longPressTapProps(() => {
                         const parts = cur ? cur.split('・') : [];
                         const np = parts.includes(reason) ? parts.filter(r=>r!==reason) : [...parts, reason];
                         updateRecord(recId, reasonKey, np.join('・'));
-                      }} className={`py-6 px-5 rounded-2xl text-2xl font-bold border-4 transition-all active:scale-95 ${selected ? 'bg-emerald-600 text-white border-emerald-700 shadow-lg' : 'bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-500'}`}>
+                      })} className={`py-6 px-5 rounded-2xl text-2xl font-bold border-4 transition-all active:scale-95 ${selected ? 'bg-emerald-600 text-white border-emerald-700 shadow-lg' : 'bg-slate-50 text-slate-800 border-slate-300 hover:border-slate-500'}`}>
                         {selected && <span className="mr-2">✓</span>}
                         {reason}
                       </button>
@@ -22397,8 +22414,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                     placeholder="自由に入力..." className="w-full px-5 py-5 rounded-2xl bg-slate-100 text-slate-800 border-2 border-slate-300 outline-none text-2xl" />
                 </div>
                 <div className="flex gap-5 mt-6 pb-6">
-                  <button onClick={() => setKibunStep('mood')} className="px-10 py-5 bg-slate-200 text-slate-700 rounded-full text-2xl font-bold hover:bg-slate-300 active:scale-95">← 戻る</button>
-                  <button onClick={() => { updateRecord(recId, moodKey, kibunTempMood); closeKibunModal(); }}
+                  <button {...longPressTapProps(() => setKibunStep('mood'))} className="px-10 py-5 bg-slate-200 text-slate-700 rounded-full text-2xl font-bold hover:bg-slate-300 active:scale-95">← 戻る</button>
+                  <button {...longPressTapProps(() => { updateRecord(recId, moodKey, kibunTempMood); closeKibunModal(); })}
                     className="px-16 py-5 bg-emerald-500 text-white rounded-full text-2xl font-bold hover:bg-emerald-600 shadow-lg active:scale-95">決定</button>
                 </div>
               </div>
