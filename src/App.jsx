@@ -17738,7 +17738,7 @@ export default function App() {
   // ★ 担当者会議フロートメモ(2026-08-28): {patientId, meetingId}。 画面切替でも消えない小窓。
   const [meetingFloat, setMeetingFloat] = useState(null);
   React.useEffect(() => {
-    const h = (e) => setMeetingFloat({ patientId: e.detail.patientId, meetingId: e.detail.meetingId });
+    const h = (e) => setMeetingFloat({ patientId: e.detail.patientId, meetingId: e.detail.meetingId, isNew: !!e.detail.isNew });
     window.addEventListener('tsumugi-meeting-float', h);
     return () => window.removeEventListener('tsumugi-meeting-float', h);
   }, []);
@@ -23292,6 +23292,42 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
       </div>{/* end sticky wrapper */}
       <div id="print-content-analysis" style={{padding:'20px 24px',maxWidth:1280,margin:'0 auto'}}>
 
+        {/* ★ 閲覧範囲の一覧(2026-08-28 店舗要望): ご本人/ご家族/ケアマネにそれぞれ何が表示されるかを事業所側で確認できる */}
+        {!familyMode && !cmViewerMode && !selfMode && (
+          <details className="no-print" style={{marginBottom:14,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:12,padding:'8px 14px'}}>
+            <summary style={{cursor:'pointer',fontSize:12,fontWeight:'bold',color:'#475569',userSelect:'none'}}>ご本人・ご家族・ケアマネにはどこまで表示される？（タップで開く）</summary>
+            <div style={{marginTop:8,overflowX:'auto'}}>
+              <table style={{borderCollapse:'collapse',fontSize:11,minWidth:520}}>
+                <thead><tr>
+                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px',textAlign:'left'}}>項目</th>
+                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px'}}>ご本人</th>
+                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px'}}>ご家族</th>
+                  <th style={{border:'1px solid #cbd5e1',background:'#e2e8f0',padding:'4px 8px'}}>ケアマネ</th>
+                </tr></thead>
+                <tbody>
+                  {[
+                    ['基本情報（生年月日・利用開始日・既往歴・留意点）','○','○','○'],
+                    ['今回の記録（バイタル・実施内容）','○','○','○'],
+                    ['今回の様子・特記事項','×（表示されません）','○（「家族非表示」の特記を除く）','○（常に表示）'],
+                    ['基本指標（簡易通所率）','○','○','○'],
+                    ['気分・バイタルトレンド・体力測定','○','○','○'],
+                    ['月別通所状況・運動トレンド','×','×','○'],
+                    ['欠席一覧・休止一覧・詳細記録','×','×','○'],
+                    ['モニタリング','×','×','○'],
+                  ].map((row,i)=>(
+                    <tr key={i} style={{background:i%2?'#f8fafc':'white'}}>
+                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',fontWeight:'bold',color:'#334155'}}>{row[0]}</td>
+                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',textAlign:'center',color:row[1].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[1]}</td>
+                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',textAlign:'center',color:row[2].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[2]}</td>
+                      <td style={{border:'1px solid #cbd5e1',padding:'4px 8px',textAlign:'center',color:row[3].startsWith('×')?'#dc2626':'#059669',fontWeight:'bold'}}>{row[3]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{fontSize:10,color:'#64748b',marginTop:6}}>※ ご本人=続柄「本人」のアカウント。特記事項はご本人には表示されず、ご家族には「家族非表示」にしたもの以外が表示され、ケアマネには常に表示されます。</div>
+            </div>
+          </details>
+        )}
         {/* === 基本指標 === */}
         {/* === 基本情報 === 簡素化版 */}
         {/*   事業所モード: 利用者名 / 年齢 (生年月日+(n歳)) / 利用開始日 / 経過日数 / 既往歴 / 留意点 */}
@@ -44975,7 +45011,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 <div className="text-sm font-bold text-blue-900">サービス担当者会議記録 (担会)</div>
                 <div className="flex gap-1.5">
                   {/* ★ 小窓で記録(2026-08-28): 会議記録を新規作成してフロートメモで開く。 他の画面(分析個人等)を見ながら入力できる */}
-                  <button onClick={()=>{ const _id = `meet_${Date.now()}`; const _td = new Date().toISOString().slice(0,10); updatePatient({ meetings: [...meetings, { id:_id, date:_td, dateLabel: toWarekiDateLabel(_td), dayOfWeek: dayOfWeekJp(_td), locationType:'事業所', location:'事業所', timeStart:'', timeEnd:'', attendees:'', reason:'', content:'' }] }, { silent:true }); window.dispatchEvent(new CustomEvent('tsumugi-meeting-float',{detail:{patientId: patient.id, meetingId:_id}})); onClose && onClose(); }}
+                  <button onClick={()=>{ const _id = `meet_${Date.now()}`; const _td = new Date().toISOString().slice(0,10); updatePatient({ meetings: [...meetings, { id:_id, date:_td, dateLabel: toWarekiDateLabel(_td), dayOfWeek: dayOfWeekJp(_td), locationType:'事業所', location:'事業所', timeStart:'', timeEnd:'', attendees:'', reason:'', content:'' }] }, { silent:true }); window.dispatchEvent(new CustomEvent('tsumugi-meeting-float',{detail:{patientId: patient.id, meetingId:_id, isNew:true}})); onClose && onClose(); }}
                     title="小窓(フロートメモ)で会議記録を作成。画面を切り替えても小窓は残るので、分析や提供記録を見ながら入力できます"
                     className="px-3 py-1.5 bg-white border border-blue-300 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">小窓で記録</button>
                   <button onClick={()=>{ setEditingMeeting(null); setShowMeetingForm(true); }}
@@ -45140,6 +45176,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             setEditingMeeting(null);
           }}
           onClose={()=>{ setShowMeetingForm(false); setEditingMeeting(null); }}
+          onFloat={(m)=>{
+            const _id = editingMeeting ? editingMeeting.id : `meet_${Date.now()}`;
+            const list = editingMeeting ? meetings.map(x => x.id === _id ? { ...m, id: _id } : x) : [...meetings, { ...m, id: _id }];
+            updatePatient({ meetings: list }, { silent: true });
+            setShowMeetingForm(false); setEditingMeeting(null);
+            window.dispatchEvent(new CustomEvent('tsumugi-meeting-float',{detail:{patientId: patient.id, meetingId: _id}}));
+            onClose && onClose();
+          }}
         />
       )}
       {/* 担当者会議 PDF プレビュー */}
@@ -45274,12 +45318,26 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
     sv({ ...ad, patients: ad.patients.map(p=>p.id===pt.id?{...pt, personalFile:{...pf, meetings:list}}:p) }, { silent: true });
     setSavedAt(new Date());
   };
-  const upd = (patch) => {
-    setDraft(d => ({ ...(d||{}), ...patch }));
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => { timerRef.current = null; flush(); }, 1000);
+  // ★ 明示保存型(2026-08-28 店舗要望): 自動保存はせず、下部の「保存」で確定・「キャンセル」で破棄。
+  const [dirty, setDirty] = React.useState(false);
+  const savedOnceRef = React.useRef(false);
+  const upd = (patch) => { setDraft(d => ({ ...(d||{}), ...patch })); setDirty(true); };
+  const doSave = () => { flush(); savedOnceRef.current = true; setDirty(false); };
+  const discardNew = () => {
+    const { appData: ad, onSave: sv, float: fl } = dataRef.current;
+    const pt = (ad.patients||[]).find(p=>p.id===fl.patientId); if (!pt) return;
+    const pf = pt.personalFile || {};
+    sv({ ...ad, patients: ad.patients.map(p=>p.id===pt.id?{...pt, personalFile:{...pf, meetings:(pf.meetings||[]).filter(m=>m.id!==fl.meetingId)}}:p) }, { silent: true });
   };
-  React.useEffect(() => () => { if (timerRef.current) { clearTimeout(timerRef.current); flush(); } }, []); // eslint-disable-line
+  const handleCancel = () => {
+    if (float.isNew && !savedOnceRef.current) {
+      if (dirty && !window.confirm('入力内容を保存せずに閉じます。よろしいですか？\n（この小窓で新規作成した会議記録は削除されます）')) return;
+      discardNew();
+    } else if (dirty) {
+      if (!window.confirm('変更を保存せずに閉じます。よろしいですか？')) return;
+    }
+    onClose();
+  };
   const boxRef = React.useRef(null);
   const onDragStart = (e) => {
     const el = boxRef.current; if (!el) return;
@@ -45291,10 +45349,24 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
     e.preventDefault();
   };
+  // ★ 拡大縮小(2026-08-28): ヘッダの−/+ボタンとピンチ操作で0.7〜1.5倍。 CSS transformのみなので軽い。
+  const [scale, setScale] = React.useState(1);
+  const pinchRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = boxRef.current; if (!el) return;
+    const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    const ts = (e) => { if (e.touches.length === 2) { pinchRef.current = { d: dist(e.touches), s: scale }; } };
+    const tm = (e) => { if (e.touches.length === 2 && pinchRef.current) { e.preventDefault(); const r = dist(e.touches) / pinchRef.current.d; setScale(Math.max(0.7, Math.min(1.5, Number((pinchRef.current.s * r).toFixed(2))))); } };
+    const te = () => { pinchRef.current = null; };
+    el.addEventListener('touchstart', ts, { passive: true });
+    el.addEventListener('touchmove', tm, { passive: false });
+    el.addEventListener('touchend', te, { passive: true });
+    return () => { el.removeEventListener('touchstart', ts); el.removeEventListener('touchmove', tm); el.removeEventListener('touchend', te); };
+  }, [scale, min]); // eslint-disable-line
   if (!patient || !meeting || !draft) return null;
   const _posStyle = pos ? { left: pos.x, top: pos.y } : { right: 16, bottom: 16 };
-  const _iSt = { border:'1px solid #cbd5e1', borderRadius:8, padding:'5px 8px', fontSize:12, outline:'none', background:'white', width:'100%', boxSizing:'border-box' };
-  const _lb = { fontSize:10, fontWeight:'bold', color:'#64748b', marginBottom:2, display:'block' };
+  const _iSt = { border:'1px solid #cbd5e1', borderRadius:8, padding:'5px 6px', fontSize:Math.round(12*scale), outline:'none', background:'white', width:'100%', minWidth:0, boxSizing:'border-box' };
+  const _lb = { fontSize:Math.max(9, Math.round(10*scale)), fontWeight:'bold', color:'#64748b', marginBottom:2, display:'block' };
   const _node = min ? (
     <div style={{ position:'fixed', zIndex:55, ..._posStyle }}>
       <button type="button" onClick={()=>setMin(false)}
@@ -45303,23 +45375,26 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
       </button>
     </div>
   ) : (
-    <div ref={boxRef} style={{ position:'fixed', zIndex:55, ..._posStyle, width:340, maxWidth:'calc(100vw - 16px)', maxHeight:'72vh', display:'flex', flexDirection:'column', background:'white', border:'1px solid #cbd5e1', borderRadius:14, boxShadow:'0 12px 40px rgba(0,0,0,0.28)', overflow:'hidden' }}>
-      <div onPointerDown={onDragStart} style={{ background:'#1e3a8a', color:'white', padding:'8px 12px', display:'flex', alignItems:'center', gap:8, cursor:'move', touchAction:'none', userSelect:'none', flexShrink:0 }}>
+    <div ref={boxRef} style={{ position:'fixed', zIndex:55, ..._posStyle, width:Math.round(340*scale), maxWidth:'calc(100vw - 16px)', maxHeight:'80vh', display:'flex', flexDirection:'column', background:'white', border:'1px solid #cbd5e1', borderRadius:14, boxShadow:'0 12px 40px rgba(0,0,0,0.28)', overflow:'hidden', fontSize:Math.round(12*scale) }}>
+      <div onPointerDown={onDragStart} style={{ background:'#1e3a8a', color:'white', padding:'8px 12px', display:'flex', alignItems:'center', gap:6, cursor:'move', touchAction:'none', userSelect:'none', flexShrink:0 }}>
         <span style={{ fontSize:12, fontWeight:'bold', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>担当者会議メモ — {patient.name} 様</span>
+        <button type="button" onClick={()=>setScale(s=>Math.max(0.7, Number((s-0.1).toFixed(2))))} title="縮小(ピンチ操作でも可)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:12, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ−</button>
+        <button type="button" onClick={()=>setScale(s=>Math.min(1.5, Number((s+0.1).toFixed(2))))} title="拡大(ピンチ操作でも可)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:12, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ＋</button>
         <button type="button" onClick={()=>setMin(true)} title="最小化" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>−</button>
-        <button type="button" onClick={()=>{ if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; } flush(); onClose(); }} title="閉じる(保存されます)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>×</button>
+        <button type="button" onClick={handleCancel} title="閉じる(未保存の変更は確認します)" style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:6, width:24, height:24, fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>×</button>
       </div>
       <div style={{ padding:10, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
+        {/* ★ iPad対策(2026-08-28): 日付/時刻inputは固有の最小幅が広く1行だと重なるため、開催日と開始/終了を2行に分離 */}
+        <div>
+          <label style={_lb}>開催日</label>
+          <input type="date" value={draft.date} onChange={e=>upd({date:e.target.value})} style={{ ..._iSt, maxWidth:170 }}/>
+        </div>
         <div style={{ display:'flex', gap:6 }}>
-          <div style={{ flex:1 }}>
-            <label style={_lb}>開催日</label>
-            <input type="date" value={draft.date} onChange={e=>upd({date:e.target.value})} style={_iSt}/>
-          </div>
-          <div style={{ width:78 }}>
+          <div style={{ flex:1, minWidth:0 }}>
             <label style={_lb}>開始</label>
             <input type="time" value={draft.timeStart} onChange={e=>upd({timeStart:e.target.value})} style={_iSt}/>
           </div>
-          <div style={{ width:78 }}>
+          <div style={{ flex:1, minWidth:0 }}>
             <label style={_lb}>終了</label>
             <input type="time" value={draft.timeEnd} onChange={e=>upd({timeEnd:e.target.value})} style={_iSt}/>
           </div>
@@ -45336,8 +45411,15 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
           <label style={_lb}>検討した項目・内容・結論</label>
           <textarea value={draft.content} onChange={e=>upd({content:e.target.value})} rows={9} style={{ ..._iSt, resize:'vertical', minHeight:120 }}/>
         </div>
-        <div style={{ fontSize:10, color:'#64748b', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <span>1秒後に自動保存されます</span>
+        {/* ★ 明示保存(2026-08-28): 単体の新規作成フォームと同じく保存/キャンセルを選ぶ */}
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <button type="button" onClick={doSave}
+            style={{ flex:1, background:'#2563eb', color:'white', border:'none', borderRadius:10, padding:'8px 0', fontSize:Math.round(13*scale), fontWeight:'bold', cursor:'pointer' }}>保存</button>
+          <button type="button" onClick={handleCancel}
+            style={{ flex:1, background:'#f1f5f9', color:'#475569', border:'1px solid #e2e8f0', borderRadius:10, padding:'8px 0', fontSize:Math.round(13*scale), fontWeight:'bold', cursor:'pointer' }}>キャンセル</button>
+        </div>
+        <div style={{ fontSize:10, color:'#64748b', display:'flex', justifyContent:'space-between', alignItems:'center', minHeight:14 }}>
+          <span>{dirty ? '未保存の変更があります' : ''}</span>
           {savedAt && <span style={{ color:'#059669', fontWeight:'bold' }}>✓ 保存済 {savedAt.toLocaleTimeString('ja-JP')}</span>}
         </div>
       </div>
@@ -45346,7 +45428,7 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
   return (typeof document !== 'undefined' && document.body) ? ReactDOM.createPortal(_node, document.body) : _node;
 }
 
-function MeetingRecordForm({ patient, meeting, onSave, onClose }) {
+function MeetingRecordForm({ patient, meeting, onSave, onClose, onFloat }) {
   const [form, setForm] = useState({
     date: meeting?.date || '',                 // YYYY-MM-DD (カレンダー入力)
     timeStart: meeting?.timeStart || '',
@@ -45375,7 +45457,13 @@ function MeetingRecordForm({ patient, meeting, onSave, onClose }) {
       <div className="bg-white rounded-none sm:rounded-2xl shadow-2xl w-full max-w-3xl h-full sm:h-[90vh] flex flex-col" onClick={e=>e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
           <div className="text-base font-bold text-slate-800">サービス担当者会議記録表 (担会)</div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+          <div className="flex items-center gap-1.5">
+            {/* ★ 小窓に切替(2026-08-28): 入力中の内容を保存して、画面切替でも残るフロートメモで続きを入力 */}
+            {onFloat && <button onClick={()=>{ const d = form.date || new Date().toISOString().slice(0,10); onFloat({ ...form, date: d, dateLabel: toWarekiDateLabel(d), dayOfWeek: dayOfWeekJp(d), location: locationLabel }); }}
+              title="ここまでの内容を保存して小窓(フロートメモ)に切り替えます。他の画面を見ながら続きを入力できます"
+              className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-bold">小窓にする</button>}
+            <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+          </div>
         </div>
         <div className="flex-1 overflow-auto p-5 space-y-3 text-sm">
           {/* 介護区分 + 利用者名 (自動表示) */}
