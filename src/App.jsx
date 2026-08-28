@@ -11276,7 +11276,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               </div>
             )}
             <div style={{display:'flex',gap:8,marginTop:20,justifyContent:'flex-end'}}>
-              {noticeDetail.isMeeting && noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId; try{sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({patientId:pid, tab:'cat_3', focus:'meeting'}));}catch{} setNoticeDetail(null); navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>担当者会議記録を入力</button>}
+              {noticeDetail.isMeeting && noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId; try{sessionStorage.setItem('tsumugiReopenPF', JSON.stringify({patientId:pid, tab:'cat_3', focus:'meeting'}));}catch{} setNoticeDetail(null); navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>担会を記録</button>}
               {noticeDetail.patientId && <button onClick={()=>{const pid=noticeDetail.patientId;setNoticeDetail(null);navigateTo('master',pid);}} style={{padding:'9px 18px',borderRadius:10,border:'none',background:'#4338ca',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>利用者を開く</button>}
               <button onClick={()=>setNoticeDetail(null)} style={{padding:'9px 18px',borderRadius:10,border:'1px solid #cbd5e1',background:'#f8fafc',color:'#475569',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>閉じる</button>
             </div>
@@ -11570,6 +11570,8 @@ function ScheduleView({ appData, onSave, navigateTo }) {
                           {p.cmOffice?`（${p.cmOffice}${p.cmName?` ${p.cmName}様`:''}）`:''}</div> : null; })()}
                         {e.note && <div style={{fontSize:12,color:'#64748b',whiteSpace:'pre-wrap'}}>{e.note}</div>}
                       </div>
+                      {e.patientId && String(e.title||'').includes('担当者会議') && <button onClick={()=>_goMeeting(e.patientId)} title="個人ファイルの担当者会議記録を開く"
+                        style={{background:'#2563eb',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'white',cursor:'pointer',whiteSpace:'nowrap'}}>担会を記録</button>}
                       <button onClick={()=>editEvent(e)} style={{background:'#e2e8f0',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#334155',cursor:'pointer'}}>編集</button>
                       <button onClick={()=>delEvent(e)} style={{background:'#fee2e2',border:'none',borderRadius:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#b91c1c',cursor:'pointer'}}>削除</button>
                     </div>
@@ -11596,13 +11598,11 @@ function ScheduleView({ appData, onSave, navigateTo }) {
                   style={{background:'none',border:'none',padding:0,color:'#4338ca',fontWeight:'bold',fontSize:13,cursor:'pointer',textDecoration:'underline'}}>{patName(e)} 様</button>
                 {(()=>{const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p?.cmName?`（担当CM: ${p.cmName}）`:'';})()}</div>}
               {e.note && <div style={{fontSize:13,color:'#334155',marginTop:8,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'8px 10px',whiteSpace:'pre-wrap'}}>{e.note}</div>}
-              {/* ★ ホームの本日スケジュールと同じジャンプ(2026-08-28): 担会記録の入力・利用者マスタ */}
-              {e.patientId && (
+              {/* ★ 担会の記録ジャンプ(2026-08-28)。 利用者マスタへは上の利用者名タップで移動できるためボタンは置かない */}
+              {e.patientId && String(e.title||'').includes('担当者会議') && (
                 <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
-                  {String(e.title||'').includes('担当者会議') && <button type="button" onClick={()=>{ setEvDetail(null); _goMeeting(e.patientId); }}
-                    style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>担当者会議記録を入力</button>}
-                  <button type="button" onClick={()=>{ setEvDetail(null); _goMaster(e.patientId); }}
-                    style={{background:'#4338ca',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>利用者マスタを開く</button>
+                  <button type="button" onClick={()=>{ setEvDetail(null); _goMeeting(e.patientId); }}
+                    style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>担会を記録</button>
                 </div>
               )}
             </div>
