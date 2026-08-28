@@ -11297,6 +11297,8 @@ function ScheduleView({ appData, onSave, navigateTo }) {
   const [selDay, setSelDay] = useState(todayStr);
   const [modal, setModal] = useState(null); // {id?, date, start, end, title, note, color, repeat, repeatUntil}
   const [labelEditorOpen, setLabelEditorOpen] = useState(false); // ラベル編集モーダル(ヘッダから・色/名前/追加)
+  // ★ ラベル編集は自動保存をやめ下書き+保存/キャンセル方式に(2026-08-28 店舗要望)
+  const [labelDraft, setLabelDraft] = useState(null);
   const [repeatMgrOpen, setRepeatMgrOpen] = useState(false); // 繰り返し設定 管理モーダル
   const [mgrDates, setMgrDates] = useState({}); // {eventId: 'YYYY-MM-DD'} 指定日以降削除用
   const [iconPopup, setIconPopup] = useState(null); // {date, birthdays:[], expiries:[]}
@@ -11613,16 +11615,12 @@ function ScheduleView({ appData, onSave, navigateTo }) {
                   style={{background:'none',border:'none',padding:0,color:'#4338ca',fontWeight:'bold',fontSize:13,cursor:'pointer',textDecoration:'underline'}}>{patName(e)} 様</button>
                 {(()=>{const p=(appData.patients||[]).find(x=>x.id===e.patientId); return p?.cmName?`（担当CM: ${p.cmName}）`:'';})()}</div>}
               {e.note && <div style={{fontSize:13,color:'#334155',marginTop:8,background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'8px 10px',whiteSpace:'pre-wrap'}}>{e.note}</div>}
-              {/* ★ 担会の記録ジャンプ(2026-08-28)。 利用者が紐付いていれば必ず表示(タイトル不問)。
-                  利用者マスタへは上の利用者名タップで移動できるためボタンは置かない */}
-              {e.patientId && (
-                <div style={{display:'flex',gap:8,marginTop:10,flexWrap:'wrap'}}>
-                  <button type="button" onClick={()=>{ setEvDetail(null); _goMeeting(e.patientId); }}
-                    style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>担当者会議を記録</button>
-                </div>
-              )}
             </div>
-            <div style={{display:'flex',justifyContent:'flex-end',gap:8,padding:'12px 16px'}}>
+            {/* ★ ボタンは横一列(2026-08-28): 左に担当者会議を記録(利用者が紐付いていれば必ず表示)・右に削除/編集/閉じる */}
+            <div style={{display:'flex',alignItems:'center',gap:8,padding:'12px 16px',flexWrap:'wrap'}}>
+              {e.patientId && <button type="button" onClick={()=>{ setEvDetail(null); _goMeeting(e.patientId); }}
+                style={{background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',marginRight:'auto'}}>担当者会議を記録</button>}
+              {!e.patientId && <span style={{marginRight:'auto'}}/>}
               <button onClick={()=>{ if(window.confirm('この予定を削除しますか？')){ delEvent(e); setEvDetail(null); } }} style={{background:'#fef2f2',border:'1px solid #fecaca',color:'#dc2626',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
               <button onClick={()=>{ setEvDetail(null); editEvent(e); }} style={{background:'#4f46e5',border:'none',color:'white',borderRadius:8,padding:'7px 18px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>編集</button>
               <button onClick={()=>setEvDetail(null)} style={{background:'#f1f5f9',border:'none',color:'#475569',borderRadius:8,padding:'7px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>閉じる</button>
@@ -11724,37 +11722,43 @@ function ScheduleView({ appData, onSave, navigateTo }) {
           </div>
         </div>
       )}
-      {labelEditorOpen && (
-        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setLabelEditorOpen(false)}>
+      {labelEditorOpen && (()=>{
+        const dl = labelDraft || colorLabels;
+        const _dirtyL = JSON.stringify(dl) !== JSON.stringify(colorLabels);
+        const _closeL = () => { if (_dirtyL && !window.confirm('変更を保存せずに閉じます。よろしいですか？')) return; setLabelEditorOpen(false); setLabelDraft(null); };
+        return (
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={_closeL}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:460,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
               <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>色ラベル（分類）の編集</div>
-              <button onClick={()=>setLabelEditorOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
+              <button onClick={_closeL} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
             </div>
-            <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>予定入力で色を押すと、その色と名前がタイトルに入ります。<b>色（丸を押す）</b>と<b>名前</b>を設定でき、<b>最大15件</b>まで追加できます。上の3件（担当者会議・契約・見学）は固定で、色のみ変更できます。</div>
+            <div style={{fontSize:11,color:'#64748b',marginBottom:12,lineHeight:1.6}}>予定入力で色を押すと、その色と名前がタイトルに入ります。<b>色（丸を押す）</b>と<b>名前</b>を設定でき、<b>最大15件</b>まで追加できます。上の3件（担当者会議・契約・見学）は固定で、色のみ変更できます。編集は「保存」を押すと確定します。</div>
             <div style={{display:'grid',gap:8}}>
-              {colorLabels.map((cl,i)=>{ const _fixed = i < FIXED_SCHED_LABELS.length; return (
+              {dl.map((cl,i)=>{ const _fixed = i < FIXED_SCHED_LABELS.length; return (
                 <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
                   <label style={{position:'relative',width:28,height:28,flexShrink:0,cursor:'pointer'}} title="色を変更">
                     <span style={{display:'block',width:28,height:28,borderRadius:'50%',background:cl.color,boxShadow:'0 0 0 1px #cbd5e1'}}/>
-                    <input type="color" value={cl.color||'#3b82f6'} onChange={e=>saveColorLabels(colorLabels.map((x,j)=>j===i?{...x,color:e.target.value}:x))} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer'}}/>
+                    <input type="color" value={cl.color||'#3b82f6'} onChange={e=>setLabelDraft(dl.map((x,j)=>j===i?{...x,color:e.target.value}:x))} style={{position:'absolute',inset:0,opacity:0,cursor:'pointer'}}/>
                   </label>
-                  <input value={cl.label} disabled={_fixed} onChange={e=>saveColorLabels(colorLabels.map((x,j)=>j===i?{...x,label:e.target.value}:x))} placeholder="分類名（例: 避難訓練）" style={{flex:1,boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:_fixed?'#f1f5f9':'white',color:_fixed?'#475569':'#1e293b',fontWeight:_fixed?'bold':'normal'}}/>
+                  <input value={cl.label} disabled={_fixed} onChange={e=>setLabelDraft(dl.map((x,j)=>j===i?{...x,label:e.target.value}:x))} placeholder="分類名（例: 避難訓練）" style={{flex:1,boxSizing:'border-box',padding:'8px 10px',border:'1px solid #cbd5e1',borderRadius:8,fontSize:13,outline:'none',background:_fixed?'#f1f5f9':'white',color:_fixed?'#475569':'#1e293b',fontWeight:_fixed?'bold':'normal'}}/>
                   {_fixed
                     ? <span style={{fontSize:10,fontWeight:'bold',color:'#94a3b8',width:30,textAlign:'center',flexShrink:0}}>固定</span>
-                    : <button onClick={()=>saveColorLabels(colorLabels.filter((_,j)=>j!==i))} title="このラベルを削除" style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:8,width:30,height:30,cursor:'pointer',fontWeight:'bold',flexShrink:0}}>×</button>}
+                    : <button onClick={()=>setLabelDraft(dl.filter((_,j)=>j!==i))} title="このラベルを削除(「保存」で確定)" style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:8,width:30,height:30,cursor:'pointer',fontWeight:'bold',flexShrink:0}}>×</button>}
                 </div>
               ); })}
             </div>
-            {colorLabels.length<15 ? (
-              <button onClick={()=>saveColorLabels([...colorLabels,{color:COLORS[colorLabels.length%COLORS.length],label:''}])} style={{marginTop:10,background:'#eef2ff',border:'1px dashed #a5b4fc',color:'#4338ca',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',width:'100%'}}>＋ ラベルを追加（{colorLabels.length}/15）</button>
+            {dl.length<15 ? (
+              <button onClick={()=>setLabelDraft([...dl,{color:COLORS[dl.length%COLORS.length],label:''}])} style={{marginTop:10,background:'#eef2ff',border:'1px dashed #a5b4fc',color:'#4338ca',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:13,cursor:'pointer',width:'100%'}}>＋ ラベルを追加（{dl.length}/15）</button>
             ) : <div style={{marginTop:10,fontSize:11,color:'#64748b',textAlign:'center'}}>上限の15件です。</div>}
-            <div style={{textAlign:'right',marginTop:14}}>
-              <button onClick={()=>setLabelEditorOpen(false)} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>完了</button>
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:14}}>
+              <button onClick={_closeL} style={{background:'#f1f5f9',border:'1px solid #e2e8f0',color:'#475569',borderRadius:8,padding:'9px 18px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
+              <button onClick={()=>{ saveColorLabels(dl); setLabelEditorOpen(false); setLabelDraft(null); }} style={{background:'#6366f1',border:'none',color:'white',borderRadius:8,padding:'9px 20px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
       {repeatMgrOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setRepeatMgrOpen(false)}>
           <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
@@ -19878,7 +19882,9 @@ export default function App() {
                 };
                 try {
                   const ref = saveFnMap[currentView];
-                  if (ref && ref.current) ref.current();
+                  // ★ 保存処理が確認モーダル(運動メニューの適用日など)を出した場合は移動を中断し、
+                  //   モーダルで確定してから改めて移動してもらう(勝手に保存されて確認が出ない問題の対策)
+                  if (ref && ref.current) { const _r = ref.current(); if (_r === 'modal') { setNavConfirm(null); return; } }
                 } catch(_){}
                 recordDirtyRef.current = false;
                 masterDirtyRef.current = false;
@@ -30802,11 +30808,13 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     if (_exChangedVsBase) {
       // 編集開始前の基準値を初回だけ確保(自動保存で appData が上書きされる前に)
       if (!_exBase) _pendingExBaseRef.current = { prevPlanned: prev.plannedExercises||{}, prevHistory: prev.plannedExercisesHistory||[], prevIndividual: prev.individualExercises||[], prevIndHistory: prev.individualExercisesHistory||[] };
-      if (auto) { onSave(next, { silent: true }); return; } // 自動保存: 値だけ保存し、反映日の確定は「保存」時に回す
+      // ★ 自動保存: 値だけ保存し、反映日の確定は「保存」時に回す。 反映日が未確定のため dirty は維持する
+      //   (2026-08-28: これを消していたため、サイドバー移動で勝手に保存され「いつから適用するか」が出なかった)
+      if (auto) { if (dirtyRef) dirtyRef.current = true; onSave(next, { silent: true }); return; }
       const _b = _pendingExBaseRef.current;
       const _ctx = { pat, next, prevPlanned: _b.prevPlanned, prevHistory: _b.prevHistory, prevIndividual: _b.prevIndividual, prevIndHistory: _b.prevIndHistory, fromDate: new Date().toISOString().slice(0,10) };
       if (!plannedExModal) setPlannedExModal(_ctx);
-      return;
+      return 'modal'; // ★ 画面移動の「保存して移動」から呼ばれた場合は移動を中断してモーダルを見せる
     }
     onSave(next, auto ? { silent: true } : { manual: true, message: '✓ 利用者マスタを保存しました' });
   };
