@@ -45389,8 +45389,8 @@ function MeetingFloatWidget({ appData, onSave, float, onClose }) {
         <span style={{ fontSize:12, fontWeight:'bold', flex:1, minWidth:0, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>担当者会議メモ — {patient.name} 様</span>
         <button type="button" onClick={()=>setScale(s=>Math.max(0.7, Number((s-0.15).toFixed(2))))} title="縮小(右下のつまみでも調整できます)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, minWidth:40, height:32, padding:'0 6px', fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ−</button>
         <button type="button" onClick={()=>setScale(s=>Math.min(1.5, Number((s+0.15).toFixed(2))))} title="拡大(右下のつまみでも調整できます)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, minWidth:40, height:32, padding:'0 6px', fontSize:14, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>Ａ＋</button>
-        <button type="button" onClick={()=>setMin(true)} title="最小化" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, width:32, height:32, fontSize:15, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>−</button>
-        <button type="button" onClick={handleCancel} title="閉じる(未保存の変更は確認します)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, width:32, height:32, fontSize:15, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>×</button>
+        {/* ★ ×ボタンは撤去(2026-08-28 店舗要望): 誤タップでそのまま消えるのを防ぐ。閉じるのは下部の保存/キャンセルで */}
+        <button type="button" onClick={()=>setMin(true)} title="最小化(たたむだけで消えません)" style={{ background:'rgba(255,255,255,0.2)', border:'none', color:'white', borderRadius:8, width:32, height:32, fontSize:15, fontWeight:'bold', cursor:'pointer', lineHeight:1 }}>−</button>
       </div>
       <div style={{ padding:10, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
         {/* ★ iPad対策(2026-08-28): 日付/時刻inputは固有の最小幅が広く1行だと重なるため、開催日と開始/終了を2行に分離 */}
@@ -45451,6 +45451,15 @@ function MeetingRecordForm({ patient, meeting, onSave, onClose, onFloat }) {
     reason: meeting?.reason || '',
     content: meeting?.content || '',
   });
+  // ★ ×で閉じる時、入力に変更があれば保存するか確認する(2026-08-28 店舗要望: 誤タップで入力が消えないように)
+  const _initialFormRef = React.useRef(null);
+  if (_initialFormRef.current === null) _initialFormRef.current = JSON.stringify({ date: meeting?.date || '', timeStart: meeting?.timeStart || '', timeEnd: meeting?.timeEnd || '', locationType: meeting?.locationType || '事業所', locationOther: meeting?.locationOther || '', attendees: meeting?.attendees || '', reason: meeting?.reason || '', content: meeting?.content || '' });
+  const _confirmClose = () => {
+    if (JSON.stringify(form) !== _initialFormRef.current) {
+      if (!window.confirm('入力内容を保存せずに閉じます。よろしいですか？\n（保存する場合はキャンセルして、下の「保存」を押してください）')) return;
+    }
+    onClose();
+  };
   const careLevel = patient.careLevel || '';
   const dateLabel = toWarekiDateLabel(form.date);
   const dayOfWeek = dayOfWeekJp(form.date);
@@ -45474,7 +45483,7 @@ function MeetingRecordForm({ patient, meeting, onSave, onClose, onFloat }) {
             {onFloat && <button onClick={()=>{ const d = form.date || new Date().toISOString().slice(0,10); onFloat({ ...form, date: d, dateLabel: toWarekiDateLabel(d), dayOfWeek: dayOfWeekJp(d), location: locationLabel }); }}
               title="ここまでの内容を保存して小窓(フロートメモ)に切り替えます。他の画面を見ながら続きを入力できます"
               className="px-3 py-1.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg text-xs font-bold">小窓にする</button>}
-            <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
+            <button onClick={_confirmClose} className="p-2 text-slate-400 hover:bg-slate-200 rounded-full"><X size={20}/></button>
           </div>
         </div>
         <div className="flex-1 overflow-auto p-5 space-y-3 text-sm">
@@ -45555,7 +45564,7 @@ function MeetingRecordForm({ patient, meeting, onSave, onClose, onFloat }) {
           </div>
         </div>
         <div className="flex gap-2 px-5 py-3 border-t border-slate-200 shrink-0">
-          <button onClick={onClose} className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold">キャンセル</button>
+          <button onClick={_confirmClose} className="flex-1 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-bold">キャンセル</button>
           <button onClick={handleSubmit} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold">保存</button>
         </div>
       </div>
