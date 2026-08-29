@@ -9,8 +9,10 @@ import json, re, os, datetime
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(REPO, 'api', 'changelog.js')
-VAULT = '/Users/masabou/Library/CloudStorage/GoogleDrive-honbu@ones-style.co.jp/マイドライブ/つむぎ アプリ開発/つむぎ アプリ開発'
-OUT = os.path.join(VAULT, 'つむぎ変更管理台帳.md')
+# ★ 出力先は scripts/obsidian_sync.json で管理(ボールト内でファイル名を変えたらそちらを直す)
+_cfg = json.load(open(os.path.join(REPO, 'scripts', 'obsidian_sync.json'), encoding='utf-8'))
+VAULT = _cfg['vault']
+OUT = os.path.join(VAULT, _cfg['files']['ledger'])
 ARTIFACT_URL = 'https://claude.ai/code/artifact/93519484-4d11-4358-a1b7-f1a4d39540a5'
 
 s = open(SRC, encoding='utf-8').read()
