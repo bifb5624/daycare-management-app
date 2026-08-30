@@ -42098,20 +42098,8 @@ ${optionsDesc}
           )}
         </div>
         <span style={{fontSize:11,fontWeight:'bold',color:'#0c4a6e'}}>{attendedPats.length+absentPats.length}名表示</span>
-        <span style={{marginLeft:'auto'}}/>
-        <input type="month" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)}
-          style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
-        <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
-          style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
-          プレビュー
-        </button>
-        <button type="button" onClick={()=>{ markClean(); onSave({...appData}, {manual:true, message:'✓ 保存しました'}); }}
-          style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
-          保存
-        </button>
-      </div>
-      {/* 選択バー（固定） */}
-      <div className="no-print" style={{flexShrink:0,background:'#e0f2fe',padding:'8px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:20}}>
+        {/* ★ 2026-08-30 店舗要望: 選択チップと一括ボタンも同じ1行に統合 */}
+        <span style={{borderLeft:'1px solid rgba(255,255,255,0.7)',height:18,margin:'0 2px'}}/>
         <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1',marginRight:2}}>選択：</span>
         {/* ★「未作成のみ」は絞り込みバーの「未作成」と重複のため撤去(絞り込み後に「全員」で同じ結果) */}
         {/* ★ 選択チップはAI下書き等と同じ大きさに統一(2026-08-30 店舗要望) */}
@@ -42157,6 +42145,18 @@ ${optionsDesc}
         <button type="button" onClick={autoFaxToCareManagers} disabled={autoFax?.running} title="各利用者のモニタリング表を、それぞれの担当ケアマネのFAX番号へ外部FAX(InterFAX)で自動送信します（送信は従量課金）"
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6366f1',background:autoFax?.running?'#e0e7ff':'#eef2ff',color:'#4338ca',cursor:autoFax?.running?'wait':'pointer'}}>
           {autoFax?.running ? `自動送信中… ${autoFax.done}/${autoFax.total}` : '自動FAX'}
+        </button>
+
+        <span style={{marginLeft:'auto'}}/>
+        <input type="month" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)}
+          style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+        <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
+          style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
+          プレビュー
+        </button>
+        <button type="button" onClick={()=>{ markClean(); onSave({...appData}, {manual:true, message:'✓ 保存しました'}); }}
+          style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
+          保存
         </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
