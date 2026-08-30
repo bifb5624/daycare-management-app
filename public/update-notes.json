@@ -1,7 +1,14 @@
 {
-  "version": "6b1cbc7",
-  "updatedAt": "2026-08-28",
+  "version": "5cc1b51",
+  "updatedAt": "2026-08-30",
   "notes": [
+    {
+      "id": "upd-2026-0830-persist-quota",
+      "date": "2026-08-30",
+      "type": "maintenance",
+      "title": "同期ログの「persist-fail」表示を抑制しました(動作への影響はありません)",
+      "body": "端末内の控え保存が容量上限に達した際に同期ログへ大量に出ていた「persist-fail (QuotaExceededError)」の表示を抑えました。このエラーはクラウド保存・同期には影響なく、端末内の控えを軽量版(設定・利用者情報のみ)に自動で切り替えて動作を続けています。今回の更新で、切り替え後は無駄な再試行をせず動作も軽くなります。"
+    },
     {
       "id": "upd-2026-0828-kibun-longpress",
       "date": "2026-08-28",
