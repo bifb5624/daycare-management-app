@@ -31637,7 +31637,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               setMobileRosterOpen(false); // ★ スマホ: 選択したら名簿を閉じて詳細を表示
             }} className={`w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between border gap-3 transition-all ${editingPatientId === p.id ? 'bg-blue-50 border-blue-200 shadow-sm' : expiring ? 'border-red-200 bg-red-50' : bday ? 'border-yellow-200 bg-yellow-50' : 'border-transparent hover:bg-white'}`}>
               <div className="flex flex-col min-w-0 flex-1">
-                <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{pendingInitialReportSet.has(p.id) && <span title="初回ご利用報告が未報告です" className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded px-1 py-0.5 shrink-0">初回報告</span>}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
+                <span className="font-bold text-[16px] text-slate-800 truncate flex items-center gap-1">{p.name}{pendingInitialReportSet.has(p.id) && <span title="初回ご利用報告が未報告です。タップで初回報告を開く" onClick={(e)=>{ e.stopPropagation(); setPersonalFileModal({ patient: p, initialTab: 'cat_7' }); }} className="inline-flex items-center gap-0.5 text-[9px] font-bold text-amber-800 bg-amber-100 border border-amber-300 rounded px-1 py-0.5 shrink-0 cursor-pointer hover:bg-amber-200">初回報告</span>}{bday && <><span title="今月が誕生月">👑</span>{bdayDate && <span className="text-[9px] text-yellow-600 font-bold">{bdayDate}</span>}</>}</span>
                 {p.careLevel && <span className="text-[11px] text-blue-600 font-bold">{p.careLevel}</span>}
                 {/* ★ 未来の介護度変更予定(認定開始日前)を名簿にも表示(2026-08-26 店舗要望) */}
                 {(() => { const _t = new Date().toISOString().slice(0,10); const _f = (p.careLevelHistory||[]).filter(h=>h.from&&h.from>_t&&h.value).sort((a,b)=>a.from.localeCompare(b.from))[0]; return _f ? <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded px-1 py-0.5 w-fit">{parseInt(_f.from.slice(5,7))}月から{_f.value}</span> : null; })()}
@@ -44349,8 +44349,14 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} }, 350);
   };
 
-  const handleFileUpload = async (e) => {
-    const files = rejectVideos(e.target.files);
+  const handleFileUpload = async (e, opts = {}) => {
+    // ★ opts.completeInitialReport: 添付と同時に初回ご利用報告を完了扱いにする(1回のonSaveで原子的に。2026-08-30)
+    let files = rejectVideos(e.target.files);
+    // ★ フォルダごと追加(webkitdirectory)に対応: 対応形式(画像/PDF)だけ拾い、その他はスキップして件数を案内
+    const _supported = (f) => (f.type||'').startsWith('image/') || f.type === 'application/pdf' || /\.(pdf|png|jpe?g|heic|heif|webp|gif|bmp)$/i.test(f.name);
+    const _skipped = files.filter(f => !_supported(f));
+    files = files.filter(_supported);
+    if (_skipped.length) alert(`対応していない形式のため ${_skipped.length} 件をスキップしました（画像とPDFのみ登録できます）`);
     if (files.length === 0) { e.target.value=''; return; }
     const newFiles = [];
     for (const f of files) {
@@ -44378,7 +44384,15 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
       newFiles.push(rec);
     }
     // ★ 写真/書類は即時クラウド保存 (デバウンス頼みだと別端末に反映されない)
-    updatePatient({ files: [...(personalFile.files || []), ...newFiles] }, { manual: true, message: '✓ ファイルを保存しました' });
+    if (opts.completeInitialReport && newFiles.length) {
+      // 添付+初回報告の完了を1回の保存で行う(2回に分けると後の保存が先の内容を巻き戻すため)
+      const _np = { ...patient, personalFile: { ...personalFile, files: [...(personalFile.files || []), ...newFiles] } };
+      const _others = (appData.initialReports||[]).filter(r => r.patientId !== patient.id);
+      const _entry = { id: `ir_${patient.id}`, patientId: patient.id, firstTicketId: null, firstDate: new Date().toISOString().slice(0,10), createdAt: new Date().toISOString(), byAttachment: true };
+      onSave({ ...appData, patients: (appData.patients||[]).map(p=>p.id===patient.id?_np:p), initialReports: [..._others, _entry] }, { manual: true, message: '✓ 書類を添付し、初回ご利用報告を完了にしました' });
+    } else {
+      updatePatient({ files: [...(personalFile.files || []), ...newFiles] }, { manual: true, message: '✓ ファイルを保存しました' });
+    }
     e.target.value = '';
   };
 
@@ -44471,6 +44485,7 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
   const _staffList = (appData.diarySettings?.staff || []).map(s => s.name).filter(Boolean);
   const _activeRec = getActiveRecorderName();
   const _savedIR = personalFile.initialReport || null;
+  const [irMode, setIrMode] = useState(null); // ★ null=状態に応じて自動(選択画面/完了ビュー) | 'form'=手入力フォーム表示
   const [irForm, setIrForm] = useState(() => _savedIR ? {exercise:'', ..._savedIR} : {
     date: _firstKey || new Date().toISOString().slice(0,10),
     recipientOffice: patient.cmOffice||'', recipientName: patient.cmName||'',
@@ -44482,16 +44497,17 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     const createdAt = new Date().toISOString();
     const report = { ...irForm, createdAt, patientId: patient.id, firstDate: _firstKey || irForm.date };
     const newPatient = { ...patient, personalFile: { ...personalFile, initialReport: report } };
-    const reportedEntry = { patientId: patient.id, firstTicketId: _ft?.id || null, firstDate: _firstKey || irForm.date, createdAt };
+    // ★ id必須(2026-08-30): idの無い行はクラウドマージ(mergeById)で捨てられ、保存後数秒でバッジが復活していた根因。
+    const reportedEntry = { id: `ir_${patient.id}`, patientId: patient.id, firstTicketId: _ft?.id || null, firstDate: _firstKey || irForm.date, createdAt };
     const others = (appData.initialReports||[]).filter(r => r.patientId !== patient.id);
-    onSave({ ...appData, patients: (appData.patients||[]).map(p=>p.id===patient.id?newPatient:p), initialReports: [...others, reportedEntry] });
-    alert('初回ご利用報告を保存しました。\n利用者マスタの「初回報告」バッジが消えます。');
+    onSave({ ...appData, patients: (appData.patients||[]).map(p=>p.id===patient.id?newPatient:p), initialReports: [...others, reportedEntry] }, { manual: true, message: '✓ 初回ご利用報告を保存しました' });
+    setIrMode(null);
   };
   // ★ 初回報告を印刷/PDF保存 (ブラウザの「PDFに保存」で PDF 化、 画面キャプチャで JPEG 化も可)
-  const printInitialReport = () => {
+  const printInitialReport = (dataOverride) => {
     const fac = appData.systemSettings?.facilityInfo || {};
     const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-    const f = irForm;
+    const f = (dataOverride && dataOverride.date !== undefined) ? dataOverride : irForm; // ★ 完了ビューからは保存済み内容で印刷
     const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>初回ご利用報告_${esc(patient.name)}</title>
       <style>@page{size:A4;margin:0}body{font-family:'Hiragino Mincho ProN','Yu Mincho',serif;color:#1e293b;line-height:1.9;font-size:14px;padding:18mm;box-sizing:border-box}
       h1{text-align:center;font-size:22px;letter-spacing:4px;margin:0 0 6px}.sub{text-align:center;color:#475569;font-size:12px;margin-bottom:20px}
@@ -45044,10 +45060,70 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             );
           })()}
           {/* サービス提供記録タブのみ: 月次スナップショット */}
-          {isInitialReportTab && (
+          {/* ★ 初回報告の選択式フロー(2026-08-30 店舗要望): 未完了=「手入力/書類添付」の2択 → どちらかで完了。
+              完了後=手入力なら報告書の内容を表示・添付なら下のファイル一覧に表示。編集/追加はいつでも可 */}
+          {isInitialReportTab && (() => {
+            const _irDone = (appData.initialReports||[]).some(r => r.patientId === patient.id);
+            // --- 未完了: 作成方法の選択 ---
+            if (!_irDone && irMode !== 'form') return (
+              <div className="space-y-4">
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
+                  初回ご利用報告は<b>どちらか一方</b>で完了できます。完了すると利用者マスタの「初回報告」バッジが消えます。
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button onClick={()=>setIrMode('form')} className="bg-amber-50 border-2 border-amber-300 hover:border-amber-500 rounded-2xl p-5 text-left active:scale-95">
+                    <div className="text-base font-bold text-amber-900 mb-1">手入力で作成</div>
+                    <div className="text-xs text-amber-700">バイタル・運動・様子を入力して報告書を作成します（初回通所の記録があれば自動で入ります）。印刷/PDFでケアマネへ送付できます。</div>
+                  </button>
+                  <label className="bg-emerald-50 border-2 border-emerald-300 hover:border-emerald-500 rounded-2xl p-5 text-left cursor-pointer active:scale-95 block">
+                    <div className="text-base font-bold text-emerald-900 mb-1">書類を添付して完了</div>
+                    <div className="text-xs text-emerald-700">作成済みの報告書（画像・PDF）を選ぶと、添付と同時に完了になります。複数枚まとめて選べます。</div>
+                    <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e)=>handleFileUpload(e, { completeInitialReport: true })}/>
+                  </label>
+                </div>
+              </div>
+            );
+            // --- 完了済み: 内容の表示 ---
+            if (_irDone && irMode !== 'form') {
+              const _e = (appData.initialReports||[]).find(r => r.patientId === patient.id) || {};
+              return (
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-3 text-sm font-bold text-emerald-800">
+                    ✓ 初回ご利用報告は完了しています（{String(_e.createdAt||_e.sentAt||'').slice(0,10)}{_savedIR ? '・手入力' : '・書類添付'}）
+                  </div>
+                  {_savedIR ? (
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-2 text-sm text-slate-700">
+                      <div className="text-base font-bold text-slate-800 text-center tracking-widest mb-1">初回ご利用報告書</div>
+                      <div><span className="font-bold text-slate-500">宛先：</span>{_savedIR.recipientOffice} {_savedIR.recipientName} 様</div>
+                      <div><span className="font-bold text-slate-500">初回通所日：</span>{_savedIR.date}</div>
+                      <div className="bg-slate-50 rounded-lg p-2.5"><span className="font-bold text-slate-600">■ バイタル</span><br/>
+                        体温：{_savedIR.temp||'－'} ℃　開始 血圧：{_savedIR.bpUpSt||'－'}/{_savedIR.bpDnSt||'－'}　脈：{_savedIR.plSt||'－'}<br/>
+                        終了 血圧：{_savedIR.bpUpEn||'－'}/{_savedIR.bpDnEn||'－'}　脈：{_savedIR.plEn||'－'}</div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 whitespace-pre-wrap"><span className="font-bold text-slate-600">■ 運動の記録</span><br/>{_savedIR.exercise||'－'}</div>
+                      <div className="bg-slate-50 rounded-lg p-2.5 whitespace-pre-wrap"><span className="font-bold text-slate-600">■ ご利用の様子</span><br/>{_savedIR.content||'－'}</div>
+                      <div className="text-right text-xs text-slate-500">報告者：{_savedIR.reporter||'－'}</div>
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button onClick={()=>printInitialReport(_savedIR)} className="px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1 active:scale-95"><Printer size={14}/>印刷 / PDF保存</button>
+                        <button onClick={()=>setIrMode('form')} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-xs active:scale-95">編集</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-700">
+                      書類の添付で完了済みです。添付した書類は下の<b>ファイル一覧</b>に表示されています（追加の添付も下の「ファイルを追加」からできます）。
+                      <div className="mt-3">
+                        <button onClick={()=>setIrMode('form')} className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-xl font-bold text-xs active:scale-95">手入力の報告書も作成する</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+            // --- 手入力フォーム(新規/編集) ---
+            return (
             <div className="space-y-4">
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-                初回通所時の様子をケアマネジャー向けにまとめます。 初回通所の記録があればバイタルが自動で入ります（編集可）。保存すると個人ファイルに保管され、利用者マスタの「初回報告」バッジが消えます。
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center justify-between gap-2 flex-wrap">
+                <span>初回通所時の様子をケアマネジャー向けにまとめます。 初回通所の記録があればバイタルが自動で入ります（編集可）。</span>
+                <button onClick={()=>setIrMode(null)} className="px-3 py-1 bg-white border border-amber-300 text-amber-800 rounded-lg font-bold text-xs shrink-0">← 戻る</button>
               </div>
               {_savedIR && <div className="text-[11px] text-emerald-700 font-bold">✓ 保存済み（{(_savedIR.createdAt||'').slice(0,10)} 作成）。 内容を編集して再保存できます。</div>}
               <div className="grid grid-cols-2 gap-3">
@@ -45084,11 +45160,12 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               <div><label className="block text-xs font-bold text-slate-500 mb-1">ご利用の様子（活動・表情など）</label>
                 <textarea value={irForm.content} onChange={e=>setIrForm(f=>({...f,content:e.target.value}))} rows={5} placeholder="例: 体操に積極的に取り組まれ、笑顔が見られました。運動メニューも一通りこなされ…" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
               <div className="flex justify-end gap-2">
-                <button onClick={printInitialReport} className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Printer size={16}/>印刷 / PDF保存</button>
+                <button onClick={()=>printInitialReport()} className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Printer size={16}/>印刷 / PDF保存</button>
                 <button onClick={saveInitialReport} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Save size={16}/>初回報告を保存</button>
               </div>
             </div>
-          )}
+            );
+          })()}
           {isServiceTab && (() => {
             // ★ この利用者の記録がある年月を新しい順に。 クリックで画面そのまま(提供記録の表)で開く
             const _set = new Set();
@@ -45254,10 +45331,17 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
           {/* ファイル一覧 */}
           <div className="mb-3 flex items-center justify-between">
             <div className="text-sm font-bold text-slate-700">ファイル ({filesInCat.length})</div>
-            <label className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
-              <CloudUpload size={14}/> ファイルを追加 (JPEG/PNG/PDF)
-              <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFileUpload}/>
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
+                <CloudUpload size={14}/> ファイルを追加 (JPEG/PNG/PDF)
+                <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFileUpload}/>
+              </label>
+              {/* ★ フォルダごと追加(2026-08-30 店舗要望): フォルダ内の画像/PDFを一括登録(サブフォルダ含む・非対応形式はスキップ) */}
+              <label className="px-3 py-1.5 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1" title="フォルダを選ぶと中の画像・PDFをまとめて登録します(サブフォルダも含む)">
+                フォルダごと追加
+                <input type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={handleFileUpload}/>
+              </label>
+            </div>
           </div>
           {filesInCat.length === 0 ? (
             <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-8 text-center">
