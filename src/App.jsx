@@ -17871,6 +17871,18 @@ export default function App() {
   // ★ 担当者会議フロートメモ(2026-08-28): {patientId, meetingId}。 画面切替でも消えない小窓。
   const [meetingFloat, setMeetingFloat] = useState(null);
   const [appUpdating, setAppUpdating] = useState(false); // ★ 「今すぐ更新」実行中の表示
+  // ★ サイドバー「日誌」バッジ(2026-08-31 店舗要望): 今日のAM/PMが未完了(未入力or未確認あり)なら1を表示。休業日・定休日は出さない
+  const diaryTodayBadge = React.useMemo(() => {
+    try {
+      const t = new Date();
+      const iso = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+      const dw = t.getDay();
+      const closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso));
+      if (closed) return 0;
+      const bad = ['AM','PM'].some(ap => { const it = diaryPendingItems((appData.diaryLogs||{})[`${iso}_${ap}`]); return it === null || it.length > 0; });
+      return bad ? 1 : 0;
+    } catch { return 0; }
+  }, [appData.diaryLogs, appData.holidays, appData.systemSettings?.facilityInfo?.closedDays]);
   React.useEffect(() => {
     const h = (e) => setMeetingFloat({ patientId: e.detail.patientId, meetingId: e.detail.meetingId, isNew: !!e.detail.isNew });
     window.addEventListener('tsumugi-meeting-float', h);
@@ -19638,7 +19650,7 @@ export default function App() {
               <SidebarItem icon={<ClipboardList size={18} />} label="サービス提供記録 入力" active={currentView === 'record'} onClick={() => navigateTo('record')} />
               <SidebarItem icon={<Printer size={18} />} label="連絡帳" active={currentView === 'print'} onClick={() => navigateTo('print')} />
               {/* ★ サービス提供記録はサイドバーから削除し、各利用者の個人ファイル内で年月を選んで開く形に集約 */}
-              <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} />
+              <SidebarItem icon={<PenTool size={18} />} label="日誌" active={currentView === 'diary'} onClick={() => navigateTo('diary')} badge={diaryTodayBadge || undefined} />
               {!(appData.systemSettings?.fitnessCycle?.disabled || appData.systemSettings?.fitnessCycle?.unit==='実施しない') && (()=>{
                 // 体力測定バッジ: 当日出席 かつ 当月測定対象の利用者数
                 const _now = new Date(); _now.setHours(0,0,0,0);
@@ -36875,7 +36887,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const DriverRow = ({carId, prefix}) => {
     // ★ 送迎者リスト: 担当時間帯フィルタ + 同姓同名で重複排除 (役職が違うだけの同名スタッフがいるとき片方だけ表示)
     const list = (() => {
-      const arr = ds.staff.filter(s=>s.name && _staffOk(s));
+      // ★ 2026-08-31 店舗要望: 担当職員でチェックした(=出勤している)人だけを送迎者候補に表示。
+      //   既にこの欄でチェック済みの人は担当から外れても表示を維持(データが見えなくならないように)。
+      //   担当職員が誰もチェックされていない場合は従来どおり全員表示。単なるフィルタなので動作は重くならない。
+      const _st = log.staff || {};
+      const _anySt = Object.keys(_st).some(k => _st[k]);
+      const arr = ds.staff.filter(s=>s.name && _staffOk(s) && (!_anySt || _st[s.id] || (log.driver||{})[prefix+s.id]));
       const seen = new Set();
       return arr.filter(s => {
         const key = normalizeName(s.name).trim();
@@ -37103,7 +37120,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
       {/* 利用者テーブル（pageInfo の showPatients が true の場合のみ） */}
       {_showPatients && (
-      <div style={{border:'1px solid #aab',borderRadius:2,marginBottom:3,overflow:'hidden'}}>
+      <div id={!data ? 'diary-sec-patients' : undefined} style={{border:'1px solid #aab',borderRadius:2,marginBottom:3,overflow:'hidden'}}>
       <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 6px'}}>利用者</div>
       <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
         <colgroup>
@@ -37255,7 +37272,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
       {/* 送迎テーブル（pageInfo の showExtras が true の場合のみ） */}
       {_showExtras && (
-      <div style={{border:'1px solid #aab',borderRadius:2,marginBottom:6,overflow:'hidden'}}>
+      <div id={!data ? 'diary-sec-cars' : undefined} style={{border:'1px solid #aab',borderRadius:2,marginBottom:6,overflow:'hidden'}}>
       <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 6px'}}>送迎</div>
       <table style={{width:'100%',borderCollapse:'collapse'}}>
         <thead>
@@ -37296,12 +37313,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       // ★ 未入力の強調は編集画面の「要確認」バッジに一本化。 ここ(帳票)は黄色枠を出さず常に通常表示。
       return (
       <div style={{display:'flex',gap:4,marginTop:'auto',paddingTop:4}}>
-        <div style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
+        <div id={!data ? 'diary-sec-recorder' : undefined} style={{flex:2,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
           <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>記録者</div>
           <div style={{padding:'3px 8px',display:'flex',flexWrap:'wrap',gap:'1px 0',minHeight:40,alignContent:'center'}}>
             {/* ★ 同姓同名のスタッフは重複排除 (役職違いの同名スタッフがいるとき片方だけ表示) */}
             {(() => {
-              const arr = ds.staff.filter(s=>s.name && _staffOk(s));
+              // ★ 2026-08-31: 担当職員でチェックした人だけを記録者候補に表示(チェック済みは維持・誰も無ければ全員)
+              const _st = _log.staff || {};
+              const _anySt = Object.keys(_st).some(k => _st[k]);
+              const arr = ds.staff.filter(s=>s.name && _staffOk(s) && (!_anySt || _st[s.id] || (_log.recorder||{})[s.id]));
               const seen = new Set();
               const dedup = arr.filter(s => { const k = normalizeName(s.name).trim(); if (seen.has(k)) return false; seen.add(k); return true; });
               return dedup;
@@ -37316,7 +37336,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             ))}
           </div>
         </div>
-        <div style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
+        <div id={!data ? 'diary-sec-manager' : undefined} style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
           <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>管理者確認</div>
           <div style={{padding:'5px 8px',display:'flex',alignItems:'center',gap:4,minHeight:38}}>
             <CB checked={!!(_log.managerConfirmed)} onChange={()=>_updateLog({managerConfirmed:!_log.managerConfirmed})} sz={12}/>
@@ -37795,9 +37815,14 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2 flex-wrap">
               <span className="text-lg">⚠</span>
               <span>要確認:</span>
-              {items.map(it=>(
-                <span key={it.label} className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold">{it.label}<span className="ml-1 text-[10px] font-normal text-amber-600">（{it.hint}）</span></span>
-              ))}
+              {items.map(it=>{
+                const _aid = ({'迎え':'diary-sec-patients','送り':'diary-sec-patients','送迎時間':'diary-sec-cars','記録者':'diary-sec-recorder','管理者確認':'diary-sec-manager'})[it.label];
+                return (
+                <button key={it.label} type="button" title="クリックで該当箇所へ移動"
+                  onClick={()=>{ const el=_aid&&document.getElementById(_aid); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); const _o=el.style.outline; el.style.outline='3px solid #f59e0b'; el.style.outlineOffset='3px'; setTimeout(()=>{ el.style.outline=_o||''; el.style.outlineOffset=''; },1800); }}
+                  className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold cursor-pointer hover:bg-amber-50">{it.label}<span className="ml-1 text-[10px] font-normal text-amber-600">（{it.hint}）</span></button>
+                );
+              })}
               <span className="text-xs font-normal text-amber-700">…入力/確認すると消えます</span>
             </div>
           );
