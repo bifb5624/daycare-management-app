@@ -41229,6 +41229,9 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [monitorSortDir, setMonitorSortDir] = React.useState('asc'); // 'asc'|'desc'
   const [monFilterPop, setMonFilterPop] = React.useState(false); // ★ 絞り込みポップアップ(2026-08-30)
   const [monSortPop, setMonSortPop] = React.useState(false);     // ★ 並び替えポップアップ
+  // ★ コンパクト表示(2026-08-30 店舗要望: 1画面2人は少ない): 既定=各項目1行の省略表示。展開で従来表示
+  const [monExpanded, setMonExpanded] = React.useState(() => new Set());
+  const toggleMonExpand = (pid) => setMonExpanded(prev => { const n = new Set(prev); n.has(pid) ? n.delete(pid) : n.add(pid); return n; });
   const [monitorDowFilter, setMonitorDowFilter] = React.useState([]); // 絞り込む曜日index(0=日..6=土)の配列。空=全曜日
   const [monitorStatusFilter, setMonitorStatusFilter] = React.useState('all'); // 'all'|'unentered'|'unconfirmed'
   const [sheetModal, setSheetModal] = React.useState(null); // {patientId} 正式モニタリング表の編集
@@ -42111,9 +42114,9 @@ ${optionsDesc}
           const isAct = activeSelection===key;
           return (
             <button key={key} type="button" onClick={()=>{fn();setActiveSelection(key);}}
-              style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',
-                border:`1px solid ${isAct?'#0284c7':'#bae6fd'}`,
-                background:isAct?'#0284c7':'white',
+              style={{padding:'7px 12px',borderRadius:10,fontSize:12,fontWeight:'bold',
+                border:`1px solid ${isAct?'#0284c7':'rgba(255,255,255,0.8)'}`,
+                background:isAct?'#0284c7':'rgba(255,255,255,0.6)',
                 color:isAct?'white':'#0369a1',cursor:'pointer'}}>
               {label}
             </button>
@@ -42127,23 +42130,23 @@ ${optionsDesc}
         {/* ★ AIで下書き (チェックした人、無ければ全員) */}
         {sheetBatchProg ? (
           <button type="button" onClick={cancelGenerate}
-            style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
+            style={{padding:'7px 12px',borderRadius:10,fontSize:12,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
             ⟳ {sheetBatchProg.done}/{sheetBatchProg.total}（中止）
           </button>
         ) : (
           <button type="button" onClick={generateAllSheets} title="選んだ(無ければ全員の)モニタリング表をAIで下書きします。編集・確定した内容は自動で個人ファイルに保存されます"
-            style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
+            style={{padding:'7px 12px',borderRadius:10,fontSize:12,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
             AI下書き
           </button>
         )}
         {/* ★ 2026-08-30 店舗要望: 「個人ファイルに保存」は編集・確定で自動保存されるため廃止。
             「印刷/複合機FAX用に出力」はプレビュー(ケアマネ宛先つき)で代替できるため廃止し、名称を短縮 */}
         <button type="button" onClick={faxToCareManagers} title="作成済みのモニタリング表をケアマネ宛先つきでプレビュー表示し、送付履歴に記録します(印刷/PDF/複合機FAXはプレビューから)"
-          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fdba74',background:'#fff7ed',color:'#c2410c',cursor:'pointer'}}>
-          印刷/PDF(ケアマネ宛)
+          style={{padding:'7px 12px',borderRadius:10,fontSize:12,fontWeight:'bold',border:'1px solid #fdba74',background:'#fff7ed',color:'#c2410c',cursor:'pointer'}}>
+          印刷/PDF
         </button>
         <button type="button" onClick={autoFaxToCareManagers} disabled={autoFax?.running} title="各利用者のモニタリング表を、それぞれの担当ケアマネのFAX番号へ外部FAX(InterFAX)で自動送信します（送信は従量課金）"
-          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6366f1',background:autoFax?.running?'#e0e7ff':'#eef2ff',color:'#4338ca',cursor:autoFax?.running?'wait':'pointer'}}>
+          style={{padding:'7px 12px',borderRadius:10,fontSize:12,fontWeight:'bold',border:'1px solid #6366f1',background:autoFax?.running?'#e0e7ff':'#eef2ff',color:'#4338ca',cursor:autoFax?.running?'wait':'pointer'}}>
           {autoFax?.running ? `自動送信中… ${autoFax.done}/${autoFax.total}` : '自動FAX'}
         </button>
 
@@ -42242,10 +42245,19 @@ ${optionsDesc}
                     {isBdayMonth(patient) && <span title="今月が誕生月" style={{fontSize:12}}>👑</span>}
                   </div>
                   <div style={{fontSize:10,color:'#64748b',marginTop:2}}>{patient.careLevel||''}</div>
+                  {/* ★ 並び替えの基準にしている項目(事業所/曜日)を名前の下に表示(2026-08-30 店舗要望) */}
+                  {monitorSort==='cmOffice' && patient.cmOffice && <div style={{fontSize:9,color:'#0369a1',marginTop:1,lineHeight:1.2,wordBreak:'break-all'}}>{patient.cmOffice}</div>}
+                  {monitorSort==='schedule' && <div style={{fontSize:9,color:'#0369a1',marginTop:1}}>{getSchedule(patient)||'—'}</div>}
                   {!isPrintMode && (
                     <button type="button" className="no-print" onClick={()=>toggleConfirm(patient)} title={confirmed?'クリックで確定を解除':'内容を確定します（確定後は編集ロック）'}
                       style={{marginTop:6,width:'92%',background:confirmed?'#d1fae5':'#10b981',border:confirmed?'1px solid #6ee7b7':'none',color:confirmed?'#059669':'white',borderRadius:8,padding:'7px 2px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
                       {confirmed ? '✓ 確定済' : '✓ 確定'}
+                    </button>
+                  )}
+                  {!isPrintMode && (
+                    <button type="button" className="no-print" onClick={()=>toggleMonExpand(patient.id)} title={monExpanded.has(patient.id)?'各項目を1行の省略表示にたたむ':'全文を表示して編集しやすくする'}
+                      style={{marginTop:4,width:'92%',background:'white',border:'1px solid #cbd5e1',color:'#475569',borderRadius:8,padding:'5px 2px',fontSize:10,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                      {monExpanded.has(patient.id) ? '▲ たたむ' : '▼ 展開'}
                     </button>
                   )}
                 </td>
@@ -42259,27 +42271,35 @@ ${optionsDesc}
                     return (
                       <div style={{fontSize:12,lineHeight:1.5,color:'#1e293b'}}>
                         {!persisted && <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>（未作成。プルダウンや本文を変更すると保存されます）</div>}
-                        {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; const copyId=`${patient.id}:${it.key}`; return (
-                          <div key={it.key} style={{marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'}}>
-                            <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:2}}>
-                              <span style={{fontWeight:'bold',color:'#0c4a6e',background:'#e0f2fe',borderRadius:5,padding:'1px 7px',fontSize:11}}>{it.no}{it.title}</span>
+                        {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; const copyId=`${patient.id}:${it.key}`; const _exp = monExpanded.has(patient.id) || editing2; return (
+                          <div key={it.key} style={_exp ? {marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'} : {marginBottom:3}}>
+                            <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:_exp?'wrap':'nowrap',marginBottom:_exp?2:0,minWidth:0}}>
+                              <span style={{fontWeight:'bold',color:'#0c4a6e',background:'#e0f2fe',borderRadius:5,padding:'1px 7px',fontSize:11,flexShrink:0,whiteSpace:'nowrap'}}>{it.no}{it.title}</span>
                               <select value={c.sel} disabled={confirmed} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
-                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:confirmed?'#f1f5f9':'white',color:'#0369a1'}}>
+                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:confirmed?'#f1f5f9':'white',color:'#0369a1',flexShrink:0}}>
                                 <option value="">— 選択 —</option>
                                 {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
                               </select>
-                              <button type="button" title="この項目をコピー" onClick={()=>copyText(copyId, `${it.no}${it.title}：${c.sel}${c.text?` / ${c.text}`:''}`)}
+                              {_exp && <button type="button" title="この項目をコピー" onClick={()=>copyText(copyId, `${it.no}${it.title}：${c.sel}${c.text?` / ${c.text}`:''}`)}
                                 style={{background:copiedId===copyId?'#d1fae5':'#f8fafc',border:'1px solid #e2e8f0',color:copiedId===copyId?'#059669':'#94a3b8',borderRadius:6,padding:'2px 6px',fontSize:10,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',gap:2}}>
                                 {copiedId===copyId?'✓':<Copy size={9}/>}
-                              </button>
+                              </button>}
+                              {/* ★ コンパクト時: 本文を同じ行に1行省略表示(クリックで編集=自動展開) */}
+                              {!_exp && (
+                                <div onClick={()=>{ if(!confirmed) { toggleMonExpand(patient.id); setEditTextCell(cellId); } else toggleMonExpand(patient.id); }}
+                                  title={confirmed?'クリックで全文表示':'クリックで展開して編集'}
+                                  style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:c.text?'#334155':'#cbd5e1',cursor:'pointer',fontSize:12}}>
+                                  {c.text || (confirmed?'—':'（クリックで入力）')}
+                                </div>
+                              )}
                             </div>
-                            {(!confirmed && editing2) ? (
+                            {_exp && ((!confirmed && editing2) ? (
                               <textarea autoFocus defaultValue={c.text} rows={2}
                                 onBlur={e=>{ updateSheetInline(patient, it.key, 'text', e.target.value); setEditTextCell(null); }}
                                 style={{width:'100%',boxSizing:'border-box',fontSize:12,border:'1px solid #93c5fd',borderRadius:6,padding:'4px 6px',outline:'none',fontFamily:'inherit',resize:'vertical'}}/>
                             ) : (
                               <div onClick={()=>{ if(!confirmed) setEditTextCell(cellId); }} title={confirmed?'確定済み（編集不可）':'クリックで編集'} style={{color:c.text?'#334155':'#cbd5e1',cursor:confirmed?'default':'text',minHeight:16,paddingLeft:2,whiteSpace:'pre-wrap'}}>{c.text || (confirmed?'—':'（タップで内容を入力）')}</div>
-                            )}
+                            ))}
                           </div>
                         );})}
                         <div style={{fontSize:10,color:'#64748b'}}>実施日 {sh.implDate||'—'} / 実施者 {sh.recorder||'—'}</div>
