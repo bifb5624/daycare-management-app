@@ -17900,7 +17900,10 @@ export default function App() {
       document.querySelectorAll('style').forEach(s=>{ head+='<style>'+(s.textContent||'')+'</style>'; });
       document.querySelectorAll('link[rel="stylesheet"]').forEach(l=>{ if(l.href) head+='<link rel="stylesheet" href="'+l.href+'">'; });
     }catch{}
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}</style></head><body>${printHtmlEff}</body></html>`;
+    // ★ 画面プレビューでは各ページを1枚ずつ影付きで分離表示(2026-08-30 店舗要望: 紙が繋がって見えるのを解消)。
+    //   印刷時(@media print)には影響しない。
+    const _pageSepCss = `@media screen{ body{background:#525659!important;padding:14px!important;} body>[style*="page-break"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}${_pageSepCss}</style></head><body>${printHtmlEff}</body></html>`;
   }, [printHtmlEff]);
   // グローバルツールチップ（fixed）
   const [globalTip, setGlobalTip] = useState(null); // {text, x, y}
@@ -19232,8 +19235,8 @@ export default function App() {
 
           return (
             <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',zIndex:9900,display:'flex',flexDirection:'column'}}>
-              {/* ★ プレビューを開いたら二度手間にならないよう、そのまま印刷ダイアログを自動で開く (iOSは新規タブがブロックされるため手動ボタンのまま) */}
-              {printPreviewContent.html && !isIOS && <AutoRun fn={()=>openPrintWindow(false)} />}
+              {/* ★ 2026-08-30 店舗要望: プレビューはまず画面で確認し、印刷ボタンを押した時だけ印刷画面へ
+                  (以前の「開いたら自動で印刷タブも開く」は廃止) */}
               {/* ヘッダー — ★ プレビュー内容(注入HTML)より必ず手前＆操作可能にする */}
               <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)',position:'relative',zIndex:10,pointerEvents:'auto'}}>
                 <div style={{flex:1}}>
@@ -41075,7 +41078,7 @@ function buildMonitoringTableHtml(patient, sheet, facility, monthLabel) {
   const fmt = (ymd) => { if(!ymd) return ''; try { return new Date(ymd).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}); } catch { return ymd; } };
   const rows = MON_ITEMS.map(it => { const c = cell(s[it.key]); return `<tr>
     <td style="${bd}background:#d9d9d9;padding:6px 8px;font-weight:bold;font-size:11px;width:170px;vertical-align:top;line-height:1.4;">${it.no}${it.title}<div style="font-weight:normal;font-size:9px;color:#444;margin-top:2px;">${_escMon(it.explain)}</div></td>
-    <td style="${bd}padding:6px;font-size:11px;font-weight:bold;text-align:center;width:96px;vertical-align:top;">${_escMon(c.sel)||'　'}</td>
+    <td style="${bd}padding:6px 4px;font-size:10.5px;font-weight:bold;text-align:center;width:130px;vertical-align:top;word-break:keep-all;">${_escMon(c.sel)||'　'}</td>
     <td style="${bd}padding:6px 9px;font-size:11px;vertical-align:top;line-height:1.6;">${_escMon(c.text)||'&nbsp;'}</td></tr>`; }).join('');
   return `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;color:#000;background:white;">
     <div style="text-align:center;font-size:17px;font-weight:bold;margin-bottom:10px;">通所介護モニタリング表</div>
@@ -41090,7 +41093,7 @@ function buildMonitoringTableHtml(patient, sheet, facility, monthLabel) {
     </table>
     <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
       <tr><td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:170px;">項目</td>
-          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:96px;">結果</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:130px;">結果</td>
           <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;">内容</td></tr>
       ${rows}
     </table></div>`;
@@ -41958,7 +41961,7 @@ ${optionsDesc}
       const c = _monCell(sheet[it.key]);
       return `<tr>
         <td style="${bd}background:#d9d9d9;padding:7px 8px;font-weight:bold;font-size:11px;width:170px;vertical-align:top;line-height:1.45;">${it.no}${it.title}<div style="font-weight:normal;font-size:9px;color:#444;margin-top:3px;">${it.explain}</div></td>
-        <td style="${bd}padding:7px 6px;font-size:11px;font-weight:bold;text-align:center;width:96px;vertical-align:top;">${escSheet(c.sel)||'　'}</td>
+        <td style="${bd}padding:7px 4px;font-size:10.5px;font-weight:bold;text-align:center;width:130px;vertical-align:top;word-break:keep-all;">${escSheet(c.sel)||'　'}</td>
         <td style="${bd}padding:7px 9px;font-size:11px;vertical-align:top;line-height:1.7;">${escSheet(c.text)||'&nbsp;'}</td>
       </tr>`;
     }).join('');
@@ -41991,7 +41994,7 @@ ${optionsDesc}
       <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
         <tr>
           <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:170px;">項目</td>
-          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:96px;">結果</td>
+          <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;width:130px;">結果</td>
           <td style="${bd}background:#d9d9d9;padding:5px 8px;font-weight:bold;font-size:10.5px;text-align:center;">内容</td>
         </tr>
         ${itemRows}
@@ -42095,6 +42098,7 @@ ${optionsDesc}
       <div className="no-print" style={{flexShrink:0,background:'#e0f2fe',padding:'8px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:20}}>
         <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1',marginRight:2}}>選択：</span>
         {/* ★「未作成のみ」は絞り込みバーの「未作成」と重複のため撤去(絞り込み後に「全員」で同じ結果) */}
+        {/* ★ 選択チップはAI下書き等と同じ大きさに統一(2026-08-30 店舗要望) */}
         {[
           ['全員','all',checkAll],
           ['通所なし','absent',checkAbsent],
@@ -42103,7 +42107,7 @@ ${optionsDesc}
           const isAct = activeSelection===key;
           return (
             <button key={key} type="button" onClick={()=>{fn();setActiveSelection(key);}}
-              style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',
+              style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',
                 border:`1px solid ${isAct?'#0284c7':'#bae6fd'}`,
                 background:isAct?'#0284c7':'white',
                 color:isAct?'white':'#0369a1',cursor:'pointer'}}>
@@ -42123,22 +42127,20 @@ ${optionsDesc}
             ⟳ {sheetBatchProg.done}/{sheetBatchProg.total}（中止）
           </button>
         ) : (
-          <button type="button" onClick={generateAllSheets} title="選んだ(無ければ全員の)モニタリング表をAIで下書きして個人ファイルに保存"
+          <button type="button" onClick={generateAllSheets} title="選んだ(無ければ全員の)モニタリング表をAIで下書きします。編集・確定した内容は自動で個人ファイルに保存されます"
             style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #c4b5fd',background:'#f5f3ff',color:'#6d28d9',cursor:'pointer'}}>
-            AIで下書き
+            AI下書き
           </button>
         )}
-        <button type="button" onClick={createAllDefault} title="選んだ利用者のモニタリング表を、利用者マスタの個人ファイル(ケアマネジメント)に表形式で保存(同月は最新で上書き)"
-          style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6ee7b7',background:'#ecfdf5',color:'#047857',cursor:'pointer'}}>
-          個人ファイルに保存
-        </button>
-        <button type="button" onClick={faxToCareManagers} title="作成済みのモニタリング表を、利用者ごとの担当ケアマネ宛て(宛先自動)で出力（印刷/複合機FAX用）し、送付履歴に記録します"
+        {/* ★ 2026-08-30 店舗要望: 「個人ファイルに保存」は編集・確定で自動保存されるため廃止。
+            「印刷/複合機FAX用に出力」はプレビュー(ケアマネ宛先つき)で代替できるため廃止し、名称を短縮 */}
+        <button type="button" onClick={faxToCareManagers} title="作成済みのモニタリング表をケアマネ宛先つきでプレビュー表示し、送付履歴に記録します(印刷/PDF/複合機FAXはプレビューから)"
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #fdba74',background:'#fff7ed',color:'#c2410c',cursor:'pointer'}}>
-          印刷/複合機FAX用に出力
+          印刷/PDF(ケアマネ宛)
         </button>
         <button type="button" onClick={autoFaxToCareManagers} disabled={autoFax?.running} title="各利用者のモニタリング表を、それぞれの担当ケアマネのFAX番号へ外部FAX(InterFAX)で自動送信します（送信は従量課金）"
           style={{padding:'5px 14px',borderRadius:16,fontSize:12,fontWeight:'bold',border:'1px solid #6366f1',background:autoFax?.running?'#e0e7ff':'#eef2ff',color:'#4338ca',cursor:autoFax?.running?'wait':'pointer'}}>
-          {autoFax?.running ? `自動送信中… ${autoFax.done}/${autoFax.total}` : '各ケアマネへ自動FAX送信'}
+          {autoFax?.running ? `自動送信中… ${autoFax.done}/${autoFax.total}` : '自動FAX'}
         </button>
       </div>
       <style>{`.mon-search::placeholder{color:rgba(255,255,255,0.75)!important;} @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
@@ -42215,13 +42217,19 @@ ${optionsDesc}
                   )}
                 </td>
                 {/* 名前列 */}
-                {/* ★ 名前列は幅を縮小(2026-08-30 店舗要望: 内容欄を広く) */}
-                <td style={{padding:'8px 4px',verticalAlign:'middle',borderRight:'1px solid #f1f5f9',width:96,textAlign:'center'}}>
+                {/* ★ 名前列は幅を縮小し、確定ボタンも名前の下に配置(2026-08-30 店舗要望) */}
+                <td style={{padding:'8px 4px',verticalAlign:'middle',borderRight:'1px solid #f1f5f9',width:104,textAlign:'center'}}>
                   <div style={{fontWeight:'bold',fontSize:12,color:isAbsent?'#94a3b8':'#1e293b',lineHeight:1.3,wordBreak:'keep-all'}}>
                     {patient.name}
                     {isBdayMonth(patient) && <span title="今月が誕生月" style={{fontSize:12}}>👑</span>}
                   </div>
                   <div style={{fontSize:10,color:'#64748b',marginTop:2}}>{patient.careLevel||''}</div>
+                  {!isPrintMode && (
+                    <button type="button" className="no-print" onClick={()=>toggleConfirm(patient)} title={confirmed?'クリックで確定を解除':'内容を確定します（確定後は編集ロック）'}
+                      style={{marginTop:6,width:'92%',background:confirmed?'#d1fae5':'#10b981',border:confirmed?'1px solid #6ee7b7':'none',color:confirmed?'#059669':'white',borderRadius:8,padding:'7px 2px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                      {confirmed ? '✓ 確定済' : '✓ 確定'}
+                    </button>
+                  )}
                 </td>
                 {/* 内容列 — ★ ①〜⑤を既定表示。 プルダウン変更・本文入力でその場保存。 確定済みは編集不可 */}
                 <td style={{padding:'10px 14px',verticalAlign:'middle'}}>
@@ -42261,15 +42269,7 @@ ${optionsDesc}
                     );
                   })()}
                 </td>
-                {/* ★ 操作列は「確定」のみに簡素化(2026-08-30 店舗要望): AI下書き/コピー/FAXは上部の一括ボタンから */}
-                {!isPrintMode && (
-                  <td style={{padding:'8px 8px',verticalAlign:'middle',width:96}} className="no-print">
-                    <button type="button" onClick={()=>toggleConfirm(patient)} title={confirmed?'クリックで確定を解除':'内容を確定します（確定後は編集ロック）'}
-                      style={{width:'100%',background:confirmed?'#d1fae5':'#10b981',border:confirmed?'1px solid #6ee7b7':'none',color:confirmed?'#059669':'white',borderRadius:8,padding:'8px 4px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-                      {confirmed ? '✓ 確定済' : '✓ 確定'}
-                    </button>
-                  </td>
-                )}
+                {/* ★ 操作列は廃止(2026-08-30): 確定は名前列へ、AI/コピー/FAXは上部の一括ボタンから */}
               </tr>
             );
           };
@@ -42279,13 +42279,13 @@ ${optionsDesc}
               {/* 通所あり */}
               <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.08)',border:'1px solid #e2e8f0',marginBottom:16}}>
                 <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                  <colgroup><col style={{width:36}}/><col style={{width:96}}/><col/>{!isPrintMode&&<col style={{width:96}}/>}</colgroup>
+                  <colgroup><col style={{width:36}}/><col style={{width:104}}/><col/></colgroup>
                   <thead>
                     <tr style={{background:'#0284c7',color:'white'}} className="thp">
                       <th style={{padding:'10px 8px',textAlign:'center',width:36,position:'sticky',top:0,zIndex:20,background:'#0284c7'}}></th>
                       <th style={{padding:'10px 14px',fontWeight:'bold',fontSize:12,textAlign:'center',position:'sticky',top:0,zIndex:20,background:'#0284c7'}}>利用者名</th>
                       <th style={{padding:'10px 14px',fontWeight:'bold',fontSize:12,position:'sticky',top:0,zIndex:20,background:'#0284c7'}}>モニタリング内容</th>
-                      {!isPrintMode && <th style={{padding:'10px 14px',textAlign:'center',fontWeight:'bold',fontSize:12,position:'sticky',top:0,zIndex:20,background:'#0284c7'}} className="no-print">操作</th>}
+                      
                     </tr>
                   </thead>
                   <tbody>
@@ -42304,13 +42304,13 @@ ${optionsDesc}
                     今月の通所なし（{absentPats.length}名）— 必要な場合のみ手入力・生成
                   </div>
                   <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                    <colgroup><col style={{width:36}}/><col style={{width:96}}/><col/>{!isPrintMode&&<col style={{width:96}}/>}</colgroup>
+                    <colgroup><col style={{width:36}}/><col style={{width:104}}/><col/></colgroup>
                     <thead>
                       <tr style={{background:'#94a3b8',color:'white'}}>
                         <th style={{padding:'8px',width:36}}></th>
                         <th style={{padding:'8px 14px',textAlign:'left',fontWeight:'bold',fontSize:12}}>利用者名</th>
                         <th style={{padding:'8px 14px',textAlign:'left',fontWeight:'bold',fontSize:12}}>モニタリング内容</th>
-                        {!isPrintMode && <th style={{padding:'8px',textAlign:'center',fontWeight:'bold',fontSize:12}} className="no-print">操作</th>}
+                        
                       </tr>
                     </thead>
                     <tbody>
