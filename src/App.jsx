@@ -41208,6 +41208,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [activeSelection, setActiveSelection] = React.useState(null);
   const [monitorSort, setMonitorSort] = React.useState('kana'); // 'kana'|'careLevel'|'cmOffice'|'schedule'
   const [monitorSortDir, setMonitorSortDir] = React.useState('asc'); // 'asc'|'desc'
+  const [monFilterPop, setMonFilterPop] = React.useState(false); // ★ 絞り込みポップアップ(2026-08-30)
+  const [monSortPop, setMonSortPop] = React.useState(false);     // ★ 並び替えポップアップ
   const [monitorDowFilter, setMonitorDowFilter] = React.useState([]); // 絞り込む曜日index(0=日..6=土)の配列。空=全曜日
   const [monitorStatusFilter, setMonitorStatusFilter] = React.useState('all'); // 'all'|'unentered'|'unconfirmed'
   const [sheetModal, setSheetModal] = React.useState(null); // {patientId} 正式モニタリング表の編集
@@ -41551,7 +41553,16 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
 
   // ★ 一覧で直接編集: 既存記録(なければ既定)に1項目だけ反映して保存(個人ファイルへ即格納)
+  // ★ 2026-08-30 店舗要望: 未保存の行に既定文を自動表示しない(自動で入っているとAIや人が書いたのか
+  //   分からなくなるため)。 表示・手入力の土台は「空のテンプレ」。 既定文はAI下書き・一括作成(既定)・
+  //   空のまま確定、の明示操作時だけ buildDefaultSheetFor で生成する。
   const getOrInitSheetFor = (patient) => {
+    const rec = getSheetRecord(patient.id);
+    if (rec?.sheet) return rec.sheet;
+    return { implDate: new Date().toISOString().slice(0,10), recorder: getActiveRecorderName()||'',
+      s1:{sel:'',text:''}, goal:{sel:'',text:''}, s2:{sel:'',text:''}, s3:{sel:'',text:''}, s4:{sel:'',text:''} };
+  };
+  const buildDefaultSheetFor = (patient) => {
     const rec = getSheetRecord(patient.id);
     if (rec?.sheet) return rec.sheet;
     const sel = buildAutoSel(patient); const noAtt = !hasAttendance(patient);
@@ -41583,7 +41594,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // ★ 確定/解除トグル (レコードの confirmed を反転)。 未作成なら既定シートを作って確定。
   const toggleConfirm = (patient) => {
     const rec = getSheetRecord(patient.id);
-    if (!rec || !rec.sheet) { const sheet = getOrInitSheetFor(patient); upsertSheet(patient, sheet, {manual:true, message:'✓ 確定しました'}, true); return; }
+    if (!rec || !rec.sheet) { const sheet = buildDefaultSheetFor(patient); upsertSheet(patient, sheet, {manual:true, message:'✓ 確定しました（内容未入力のため既定の文章で作成）'}, true); return; }
     upsertSheet(patient, rec.sheet, {manual:true, message: rec.confirmed ? '確定を解除しました' : '✓ 確定しました'}, !rec.confirmed);
   };
   // ★ 一覧の1行をAIで下書き (手入力済みの内容は残してAIは空欄のみ補完)。 確定はしない。
@@ -41594,7 +41605,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
       const out = await aiDraftSheet(patient);
-      const base = getOrInitSheetFor(patient);
+      const base = buildDefaultSheetFor(patient); // ★ AI使用時は既定文(出席率等)を土台に
       const merged = { ...base };
       MON_ITEMS.forEach(it => { const b=_monCell(base[it.key]); const o=out[it.key]||{}; merged[it.key] = { sel: b.sel || o.sel || '', text: b.text || o.text || '' }; });
       upsertSheet(patient, merged, {manual:true, message:`✓ AIで下書きしました（今月の残り${_aiRemaining-1}回）`}, false, { systemSettings: _bumpAiUsage(appData.systemSettings, 1) });
@@ -41613,7 +41624,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const newResults = {};
     for (const p of targets) {
       const prevRec = existing.find(r => r.patientId===p.id && r.period===monthLabelStr);
-      const sheet = (prevRec && prevRec.sheet) ? prevRec.sheet : getOrInitSheetFor(p); // 既存があれば温存
+      const sheet = (prevRec && prevRec.sheet) ? prevRec.sheet : buildDefaultSheetFor(p); // 既存があれば温存(新規は既定文を土台に=一括作成/AI経路)
       existing = existing.filter(r => !(r.patientId===p.id && r.period===monthLabelStr));
       const sm = _monSummary(sheet);
       existing.push({ id:(prevRec&&prevRec.id)||`${p.id}_${tY}-${String(tM).padStart(2,'0')}`, patientId:p.id, period:monthLabelStr, createdDate:(prevRec&&prevRec.createdDate)||new Date().toLocaleDateString('ja-JP'), createdAt:(prevRec&&prevRec.createdAt)||Date.now(), summary:sm, sheet, confirmed:(prevRec?!!prevRec.confirmed:false) });
@@ -41845,8 +41856,12 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     const _added = [...(_nowSet)].filter(x=>![..._prevSet].some(p=>_baseName(p)===_baseName(x)));
     const _removed = [..._prevSet].filter(x=>![..._nowSet].some(n=>_baseName(n)===_baseName(x)));
     const exerciseNowText = [..._nowSet].join('、') || '記録なし';
-    const exerciseChangeText = (_added.length||_removed.length)
-      ? `${_added.length?'今月から追加/再開: '+_added.join('、'):''}${_added.length&&_removed.length?' / ':''}${_removed.length?'今月は実施なし: '+_removed.join('、'):''}`
+    // ★ 量の変化も検出(2026-08-30 店舗要望): 種目の増減だけでなく「バイク: 3分→5分」のような時間・回数の伸びをAIに渡す
+    const _exVals = (recs) => { const m = new Map(); recs.forEach(r => _exItems.forEach(it => { let v = r.exercises?.[it.id]; let nm = it.name; if (v && typeof v === 'object') { const sel = _allInd.find(ii => ii.id === v.itemId); if (!sel) return; nm = sel.name; v = v.value; } if (v == null || String(v).trim() === '') return; const sv = String(v).trim(); if (/^[○×◯✕－ー\-]+$/.test(sv)) return; m.set(nm, sv); })); return m; };
+    const _nowV = _exVals(_nowRecs), _prevV = _exVals(_monthAttended(_prevM));
+    const _valChanged = [..._nowV.keys()].filter(k => _prevV.has(k) && _prevV.get(k) !== _nowV.get(k)).map(k => `${k}: ${_prevV.get(k)}→${_nowV.get(k)}`);
+    const exerciseChangeText = (_added.length||_removed.length||_valChanged.length)
+      ? [ _added.length ? '今月から追加/再開: '+_added.join('、') : '', _removed.length ? '今月は実施なし: '+_removed.join('、') : '', _valChanged.length ? '量の変化(前月→今月): '+_valChanged.join('、') : '' ].filter(Boolean).join(' / ')
       : '前月から運動メニューに大きな変更なし';
     // ★ 通所介護計画書 / 個別機能訓練計画書(あれば)の目標 → ②目標の達成・進捗の評価に使う
     const _tk = (appData.tsushoKeikakuRecords||[]).filter(r=>r.patientId===patient.id).sort((a,b)=>String(b.createdAt||b.createdDate||'').localeCompare(String(a.createdAt||a.createdDate||'')));
@@ -41869,6 +41884,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 ・【分量・優先順位（重要）】変化・気づき・特筆すべき点（血圧が高めの日・気分の変化・特記の出来事・運動や体力の変化 等）を優先して記載し、変化のない項目は「大きな変化なし」程度に簡潔にまとめてよい。全項目を細かく埋めようとせず、ケアマネが2分程度でサッと読める分量に。各項目のtextは原則1〜3文以内。
 ・ただし機能訓練・生活支援の【専門用語を適度に】交え、専門職らしい所見にしてください（例: 下肢筋力の維持、立位・歩行バランス、関節可動域、活動意欲、生活リハビリ、離床機会、転倒予防 等を文脈に応じて自然に）。専門用語の多用や堅すぎる表現は避け、読みやすさを保つこと。
 ・体力測定の数値が無くても構いません。運動の記録・通所の様子・気分・特記から柔軟に評価してください（体力測定にこだわらない）。
+・【運動の変化を最優先で反映】「運動メニューの変化」に時間・回数・負荷の伸び(例: バイク3分→5分)や新しい種目があれば、②や④で必ず具体的に言及する。血圧など数値の羅列に偏らず、運動・生活機能の変化を主役にする。
 ・運動メニューの変更（マシンの増減等）があれば、その点に触れてください。運動機能・筋力・気分の観点を重視してください。
 ・通所が無い/少ない場合: ①②は「記録がなく評価が難しい」旨を無理なく記載し、断定しない。④⑤は【休みの量と理由】で柔軟に判断すること。
 　- 入院・長期の体調不良で休んだ場合 → 筋力・運動機能の低下が想定されるため、再開時に運動プログラムの見直し(負荷・内容の調整)を検討する方向。
@@ -41887,7 +41903,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 体力測定(任意・行わない事業所もあり): ${fitnessText}
 特記（当月の記録・日付つき全件。体調・気分・出来事・ご家族/職員の気づき等。③満足度・④心身の変化・⑤今後の方向性に反映すること）:
 ${d.tokkiDetail && d.tokkiDetail.length ? '・'+d.tokkiDetail.join('\n・') : 'なし'}
-${_goalText ? `計画の目標（通所介護計画・個別機能訓練計画）:\n${_goalText}\n（②目標の達成・進捗は、これらの目標に対する取り組み状況・達成度を書いてください）` : '計画の目標: 未設定（一般的な生活機能の維持・向上の観点で評価してください）'}
+${_goalText ? `計画の目標（通所介護計画・個別機能訓練計画）:\n${_goalText}\n（②目標の達成・進捗は、これらの目標に対する取り組み状況・達成度を書いてください）` : '計画の目標: 未設定（※「目標が設定されていない」「計画書が確認できない」等の断り書きは絶対に書かないこと。今ある通所実績・運動・気分・特記だけを材料に、生活機能の維持・向上の観点で自然な所見として書く）'}
 
 各項目で、必ず下記の選択肢から最も適切なものを1つ"sel"に選び、"text"に2〜3文の所見を上記の文体・観点で書いてください。当月に通所が無い場合は①を必ず「実施できなかった」にしてください。
 ${optionsDesc}
@@ -41995,79 +42011,85 @@ ${optionsDesc}
     <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
       {/* ヘッダー固定（スクロール時も上部にとどまる） */}
       {/* ★ モニタリングヘッダ: 淡い水色、 文字は黒で読みやすく */}
-      <div className="no-print" style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#bae6fd,#7dd3fc)',color:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',justifyContent:'space-between',boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <ClipboardList size={20}/>
-          <span style={{fontSize:17,fontWeight:'bold'}}>モニタリング作成</span>
-          <span style={{fontSize:13,fontWeight:'bold',background:'rgba(255,255,255,0.2)',padding:'3px 10px',borderRadius:8}}>{tY}年{tM}月分</span>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-          <input type="month" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)}
-            style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
-          <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
-            style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-            プレビュー
+      {/* ★ 2026-08-30 店舗要望: 題名行を廃止し、絞り込み/並び替えはポップアップ化して1行に集約(画面領域の拡大) */}
+      <div className="no-print" style={{position:'sticky',top:0,zIndex:30,flexShrink:0,background:'linear-gradient(135deg,#bae6fd,#7dd3fc)',color:'#1e293b',padding:'7px 14px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',boxShadow:'0 2px 8px rgba(0,0,0,0.15)'}}>
+        {/* 絞り込みポップアップ */}
+        <div style={{position:'relative'}}>
+          <button type="button" onClick={()=>{ setMonFilterPop(v=>!v); setMonSortPop(false); }}
+            style={{background:(searchQuery||monitorStatusFilter!=='all'||monitorDowFilter.length)?'#0284c7':'rgba(255,255,255,0.6)',border:'1px solid rgba(255,255,255,0.8)',color:(searchQuery||monitorStatusFilter!=='all'||monitorDowFilter.length)?'white':'#1e293b',borderRadius:10,padding:'7px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
+            絞り込み {(searchQuery||monitorStatusFilter!=='all'||monitorDowFilter.length) ? '(適用中)' : '▾'}
           </button>
-          <button type="button" onClick={()=>{ markClean(); onSave({...appData}, {manual:true, message:'✓ 保存しました'}); }}
-            style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-            保存
-          </button>
+          {monFilterPop && (
+            <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:60,background:'white',border:'1px solid #bae6fd',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,0.2)',padding:12,width:300}}>
+              <div style={{fontSize:10,fontWeight:'bold',color:'#64748b',marginBottom:4}}>氏名</div>
+              <div style={{display:'flex',alignItems:'center',background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'4px 8px',gap:5,marginBottom:8}}>
+                <Search size={12} style={{color:'#64748b',flexShrink:0}}/>
+                <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="氏名で絞り込み" className="mon-search"
+                  style={{background:'transparent',border:'none',outline:'none',color:'#1e293b',fontSize:12,fontWeight:'bold',flex:1,minWidth:0}}/>
+                {searchQuery && <button type="button" onClick={()=>setSearchQuery('')} style={{background:'none',border:'none',color:'#64748b',cursor:'pointer',padding:0,lineHeight:1}}><X size={12}/></button>}
+              </div>
+              <div style={{fontSize:10,fontWeight:'bold',color:'#64748b',marginBottom:4}}>状態</div>
+              <div style={{display:'flex',gap:5,marginBottom:8}}>
+                {[['all','すべて'],['unentered','未作成'],['unconfirmed','未確認']].map(([k,l])=>{ const on = monitorStatusFilter===k; return (
+                  <button key={k} type="button" onClick={()=>setMonitorStatusFilter(k)}
+                    style={{flex:1,padding:'5px 0',borderRadius:8,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#cbd5e1'}`,background:on?'#0284c7':'white',color:on?'white':'#475569',cursor:'pointer'}}>{l}</button>
+                ); })}
+              </div>
+              <div style={{fontSize:10,fontWeight:'bold',color:'#64748b',marginBottom:4}}>利用曜日（複数選択可）</div>
+              <div style={{display:'flex',gap:4,marginBottom:8}}>
+                {_dowMonOrder.map(i=>{ const on = monitorDowFilter.includes(i); return (
+                  <button key={i} type="button" onClick={()=>setMonitorDowFilter(prev=>prev.includes(i)?prev.filter(x=>x!==i):[...prev,i])}
+                    style={{width:30,height:30,borderRadius:'50%',fontSize:12,fontWeight:'bold',padding:0,border:`1px solid ${on?'#0284c7':'#cbd5e1'}`,background:on?'#0284c7':'white',color:on?'white':(i===0?'#dc2626':i===6?'#2563eb':'#475569'),cursor:'pointer'}}>{dowStr[i]}</button>
+                ); })}
+              </div>
+              <div style={{display:'flex',justifyContent:'space-between',gap:8}}>
+                <button type="button" onClick={()=>{ setSearchQuery(''); setMonitorStatusFilter('all'); setMonitorDowFilter([]); }}
+                  style={{padding:'6px 12px',borderRadius:8,fontSize:11,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>すべて解除</button>
+                <button type="button" onClick={()=>setMonFilterPop(false)}
+                  style={{padding:'6px 16px',borderRadius:8,fontSize:11,fontWeight:'bold',border:'none',background:'#0284c7',color:'white',cursor:'pointer'}}>閉じる</button>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-      {/* ★ 絞り込み・並び替えバー(固定): 散在していた氏名検索/未作成/曜日/並び順を1本に集約 */}
-      <div className="no-print" style={{flexShrink:0,background:'#f0f9ff',padding:'7px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:25}}>
-        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1'}}>絞り込み：</span>
-        <div style={{display:'flex',alignItems:'center',background:'white',border:'1px solid #bae6fd',borderRadius:16,padding:'3px 10px',gap:5}}>
-          <Search size={12} style={{color:'#0369a1',flexShrink:0}}/>
-          <input type="text" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)} placeholder="氏名"
-            className="mon-search"
-            style={{background:'transparent',border:'none',outline:'none',color:'#1e293b',fontSize:11,fontWeight:'bold',width:80}}/>
-          {searchQuery && <button type="button" onClick={()=>setSearchQuery('')} style={{background:'none',border:'none',color:'#64748b',cursor:'pointer',padding:0,lineHeight:1}}><X size={11}/></button>}
-        </div>
-        {[['all','すべて'],['unentered','未作成'],['unconfirmed','未確認']].map(([k,l])=>{
-          const on = monitorStatusFilter===k;
-          return (
-            <button key={k} type="button" onClick={()=>setMonitorStatusFilter(k)}
-              title={k==='all'?'全員を表示':k==='unentered'?'今月のモニタリング表が未作成の方だけ表示':'確定されていない方だけ表示'}
-              style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#bae6fd'}`,background:on?'#0284c7':'white',color:on?'white':'#0369a1',cursor:'pointer'}}>
-              {l}
-            </button>
-          );
-        })}
-        <span style={{borderLeft:'1px solid #bae6fd',height:18,margin:'0 4px'}}/>
-        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1'}}>曜日：</span>
-        {_dowMonOrder.map(i=>{
-          const on = monitorDowFilter.includes(i);
-          return (
-            <button key={i} type="button" title={`${dowStr[i]}曜日に利用予定の方だけ表示(複数選択可)`}
-              onClick={()=>setMonitorDowFilter(prev=>prev.includes(i)?prev.filter(x=>x!==i):[...prev,i])}
-              style={{width:26,height:26,borderRadius:'50%',fontSize:11,fontWeight:'bold',padding:0,border:`1px solid ${on?'#0284c7':'#bae6fd'}`,background:on?'#0284c7':'white',color:on?'white':(i===0?'#dc2626':i===6?'#2563eb':'#0369a1'),cursor:'pointer'}}>
-              {dowStr[i]}
-            </button>
-          );
-        })}
-        {monitorDowFilter.length>0 && (
-          <button type="button" onClick={()=>setMonitorDowFilter([])}
-            style={{padding:'4px 8px',borderRadius:16,fontSize:10,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>
-            解除
+        {/* 並び替えポップアップ */}
+        <div style={{position:'relative'}}>
+          <button type="button" onClick={()=>{ setMonSortPop(v=>!v); setMonFilterPop(false); }}
+            style={{background:'rgba(255,255,255,0.6)',border:'1px solid rgba(255,255,255,0.8)',color:'#1e293b',borderRadius:10,padding:'7px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
+            並び替え: {({kana:'名前',careLevel:'介護度',cmOffice:'事業所',schedule:'曜日'})[monitorSort]||'名前'}{monitorSortDir==='asc'?'▲':'▼'}
           </button>
-        )}
-        <span style={{borderLeft:'1px solid #bae6fd',height:18,margin:'0 4px'}}/>
-        <span style={{fontSize:11,fontWeight:'bold',color:'#0369a1'}}>並び替え：</span>
-        {[['kana','名前'],['careLevel','介護度'],['cmOffice','事業所'],['schedule','曜日']].map(([k,l])=>{
-          const on = monitorSort===k;
-          return (
-            <button key={k} type="button" onClick={()=>setMonitorSort(k)}
-              style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#bae6fd'}`,background:on?'#0284c7':'white',color:on?'white':'#0369a1',cursor:'pointer'}}>
-              {l}
-            </button>
-          );
-        })}
-        <button type="button" onClick={()=>setMonitorSortDir(d=>d==='asc'?'desc':'asc')} title="昇順と降順を切り替え"
-          style={{padding:'4px 10px',borderRadius:16,fontSize:11,fontWeight:'bold',border:'1px solid #0284c7',background:'white',color:'#0284c7',cursor:'pointer'}}>
-          {monitorSortDir==='asc'?'▲ 昇順':'▼ 降順'}
+          {monSortPop && (
+            <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:60,background:'white',border:'1px solid #bae6fd',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,0.2)',padding:12,width:220}}>
+              <div style={{fontSize:10,fontWeight:'bold',color:'#64748b',marginBottom:4}}>並び替えの基準</div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5,marginBottom:8}}>
+                {[['kana','名前'],['careLevel','介護度'],['cmOffice','事業所'],['schedule','曜日']].map(([k,l])=>{ const on = monitorSort===k; return (
+                  <button key={k} type="button" onClick={()=>setMonitorSort(k)}
+                    style={{padding:'6px 0',borderRadius:8,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#cbd5e1'}`,background:on?'#0284c7':'white',color:on?'white':'#475569',cursor:'pointer'}}>{l}</button>
+                ); })}
+              </div>
+              <div style={{display:'flex',gap:5}}>
+                {[['asc','▲ 昇順'],['desc','▼ 降順']].map(([k,l])=>{ const on = monitorSortDir===k; return (
+                  <button key={k} type="button" onClick={()=>setMonitorSortDir(k)}
+                    style={{flex:1,padding:'6px 0',borderRadius:8,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#cbd5e1'}`,background:on?'#0284c7':'white',color:on?'white':'#475569',cursor:'pointer'}}>{l}</button>
+                ); })}
+              </div>
+              <div style={{textAlign:'right',marginTop:8}}>
+                <button type="button" onClick={()=>setMonSortPop(false)} style={{padding:'6px 16px',borderRadius:8,fontSize:11,fontWeight:'bold',border:'none',background:'#0284c7',color:'white',cursor:'pointer'}}>閉じる</button>
+              </div>
+            </div>
+          )}
+        </div>
+        <span style={{fontSize:11,fontWeight:'bold',color:'#0c4a6e'}}>{attendedPats.length+absentPats.length}名表示</span>
+        <span style={{marginLeft:'auto'}}/>
+        <input type="month" value={targetMonth} onChange={e=>setTargetMonth(e.target.value)}
+          style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'6px 10px',fontSize:12,fontWeight:'bold',outline:'none',cursor:'pointer'}}/>
+        <button type="button" onClick={previewSheets} title="選んだ(無ければ全員の)モニタリング表を表形式でプレビュー。この画面から印刷/PDF/FAXできます"
+          style={{background:'rgba(255,255,255,0.5)',border:'1px solid rgba(255,255,255,0.7)',color:'#1e293b',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
+          プレビュー
         </button>
-        <span style={{marginLeft:'auto',fontSize:11,fontWeight:'bold',color:'#0369a1'}}>{attendedPats.length+absentPats.length}名表示</span>
+        <button type="button" onClick={()=>{ markClean(); onSave({...appData}, {manual:true, message:'✓ 保存しました'}); }}
+          style={{background:'#2563eb',border:'none',color:'white',borderRadius:10,padding:'8px 14px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>
+          保存
+        </button>
       </div>
       {/* 選択バー（固定） */}
       <div className="no-print" style={{flexShrink:0,background:'#e0f2fe',padding:'8px 14px',borderBottom:'1px solid #bae6fd',display:'flex',alignItems:'center',gap:5,flexWrap:'wrap',zIndex:20}}>
@@ -42193,10 +42215,11 @@ ${optionsDesc}
                   )}
                 </td>
                 {/* 名前列 */}
-                <td style={{padding:'12px 10px',verticalAlign:'middle',borderRight:'1px solid #f1f5f9',width:160,textAlign:'center'}}>
-                  <div style={{fontWeight:'bold',fontSize:13,color:isAbsent?'#94a3b8':'#1e293b',display:'flex',alignItems:'center',justifyContent:'center',gap:4}}>
+                {/* ★ 名前列は幅を縮小(2026-08-30 店舗要望: 内容欄を広く) */}
+                <td style={{padding:'8px 4px',verticalAlign:'middle',borderRight:'1px solid #f1f5f9',width:96,textAlign:'center'}}>
+                  <div style={{fontWeight:'bold',fontSize:12,color:isAbsent?'#94a3b8':'#1e293b',lineHeight:1.3,wordBreak:'keep-all'}}>
                     {patient.name}
-                    {isBdayMonth(patient) && <span title="今月が誕生月" style={{fontSize:14}}>👑</span>}
+                    {isBdayMonth(patient) && <span title="今月が誕生月" style={{fontSize:12}}>👑</span>}
                   </div>
                   <div style={{fontSize:10,color:'#64748b',marginTop:2}}>{patient.careLevel||''}</div>
                 </td>
@@ -42209,7 +42232,7 @@ ${optionsDesc}
                     const sh = persisted ? sheetRec.sheet : getOrInitSheetFor(patient);
                     return (
                       <div style={{fontSize:12,lineHeight:1.5,color:'#1e293b'}}>
-                        {!persisted && <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>（既定の下書き。プルダウンや本文を変更すると保存されます）</div>}
+                        {!persisted && <div style={{fontSize:10,color:'#64748b',marginBottom:4}}>（未作成。プルダウンや本文を変更すると保存されます）</div>}
                         {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; const copyId=`${patient.id}:${it.key}`; return (
                           <div key={it.key} style={{marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'}}>
                             <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'wrap',marginBottom:2}}>
@@ -42238,29 +42261,13 @@ ${optionsDesc}
                     );
                   })()}
                 </td>
-                {/* 操作列（縦並び） */}
+                {/* ★ 操作列は「確定」のみに簡素化(2026-08-30 店舗要望): AI下書き/コピー/FAXは上部の一括ボタンから */}
                 {!isPrintMode && (
-                  <td style={{padding:'8px 10px',verticalAlign:'middle',width:150}} className="no-print">
-                    <div style={{display:'flex',flexDirection:'column',gap:6,alignItems:'stretch'}}>
-                      {!confirmed && (
-                        <button type="button" onClick={()=>aiDraftRow(patient)} disabled={res?.loading}
-                          style={{background:'#f5f3ff',border:'1px solid #c4b5fd',color:'#6d28d9',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-                          {res?.loading ? '⟳ 生成中...' : 'AIで下書き'}
-                        </button>
-                      )}
-                      <button type="button" onClick={()=>toggleConfirm(patient)} title={confirmed?'クリックで確定を解除':'内容を確定します（確定後は編集ロック）'}
-                        style={{background:confirmed?'#d1fae5':'#10b981',border:confirmed?'1px solid #6ee7b7':'none',color:confirmed?'#059669':'white',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-                        {confirmed ? '✓ 確定済（解除）' : '✓ 確定する'}
-                      </button>
-                      <button type="button" onClick={()=>{ const s=(sheetRec&&sheetRec.sheet)||getOrInitSheetFor(patient); const txt=MON_ITEMS.map(it=>{const c=_monCell(s[it.key]);return `${it.no}${it.title}：${c.sel}${c.text?` ${c.text}`:''}`;}).join('\n'); copyText(patient.id, txt); }}
-                        style={{background:copiedId===patient.id?'#d1fae5':'#f0fdf4',border:`1px solid ${copiedId===patient.id?'#6ee7b7':'#bbf7d0'}`,color:copiedId===patient.id?'#059669':'#10b981',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:3,whiteSpace:'nowrap'}}>
-                        {copiedId===patient.id ? '✓ コピー済' : <>全文コピー</>}
-                      </button>
-                      <button type="button" onClick={()=>faxRowToCareManager(patient)} title={`担当ケアマネ${patient.cmOffice?`（${patient.cmOffice}）`:'（未設定）'}宛てでこの表を出力し、送付履歴に記録します`}
-                        style={{background:'#fff7ed',border:'1px solid #fdba74',color:'#c2410c',borderRadius:8,padding:'6px 8px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
-                        ケアマネへFAX
-                      </button>
-                    </div>
+                  <td style={{padding:'8px 8px',verticalAlign:'middle',width:96}} className="no-print">
+                    <button type="button" onClick={()=>toggleConfirm(patient)} title={confirmed?'クリックで確定を解除':'内容を確定します（確定後は編集ロック）'}
+                      style={{width:'100%',background:confirmed?'#d1fae5':'#10b981',border:confirmed?'1px solid #6ee7b7':'none',color:confirmed?'#059669':'white',borderRadius:8,padding:'8px 4px',fontSize:11,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap'}}>
+                      {confirmed ? '✓ 確定済' : '✓ 確定'}
+                    </button>
                   </td>
                 )}
               </tr>
@@ -42272,7 +42279,7 @@ ${optionsDesc}
               {/* 通所あり */}
               <div style={{background:'white',borderRadius:14,boxShadow:'0 1px 6px rgba(0,0,0,0.08)',border:'1px solid #e2e8f0',marginBottom:16}}>
                 <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                  <colgroup><col style={{width:36}}/><col style={{width:160}}/><col/>{!isPrintMode&&<col style={{width:150}}/>}</colgroup>
+                  <colgroup><col style={{width:36}}/><col style={{width:96}}/><col/>{!isPrintMode&&<col style={{width:96}}/>}</colgroup>
                   <thead>
                     <tr style={{background:'#0284c7',color:'white'}} className="thp">
                       <th style={{padding:'10px 8px',textAlign:'center',width:36,position:'sticky',top:0,zIndex:20,background:'#0284c7'}}></th>
@@ -42297,7 +42304,7 @@ ${optionsDesc}
                     今月の通所なし（{absentPats.length}名）— 必要な場合のみ手入力・生成
                   </div>
                   <table style={{width:'100%',borderCollapse:'collapse',tableLayout:'fixed'}}>
-                    <colgroup><col style={{width:36}}/><col style={{width:160}}/><col/>{!isPrintMode&&<col style={{width:150}}/>}</colgroup>
+                    <colgroup><col style={{width:36}}/><col style={{width:96}}/><col/>{!isPrintMode&&<col style={{width:96}}/>}</colgroup>
                     <thead>
                       <tr style={{background:'#94a3b8',color:'white'}}>
                         <th style={{padding:'8px',width:36}}></th>
