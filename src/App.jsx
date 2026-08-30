@@ -18451,6 +18451,9 @@ export default function App() {
         const _fieldLevel = _FIELD_TS_KEYS.has(_key);
         let _ch = false;
         const _st = newData[_key].map(r => {
+          // ★ id無し行の検知(2026-08-30): idが無い行はクラウドマージ(mergeById)で両側から捨てられ、
+          //   「保存したのに数秒で消える」symptomになる(初回報告バッジ復活の根因と同型)。 見つけたら警告ログ。
+          if (r && r.id == null) { _obsStat.noId = (_obsStat.noId||0) + 1; if (!_obsStat.noIdKey) _obsStat.noIdKey = _key; return r; }
           if (!r || r.id == null) return r;
           const _old = _pm.get(String(r.id));
           if (_old && _old === r) return r; // 参照同一 = 未変更 → 据え置き
@@ -18504,6 +18507,7 @@ export default function App() {
       });
       // ★ 案A本適用(2026-08-24): 巻き戻り防止が働いた時だけログ(blk=ブロックした項目数・ex=最初の実例)
       if (_obsStat.mis) syncLog('stamp-gate', { rows:_obsStat.rows, blk:_obsStat.mis, ex:_obsStat.misEx });
+      if (_obsStat.noId) syncLog('no-id-row', { n: _obsStat.noId, key: _obsStat.noIdKey }); // ★ id無し行=マージで消える危険
       // ★ 各種設定・日誌設定・連絡帳設定は「変更されたフィールドだけ」に更新時刻(_fieldTs[field])を刻む。
       //   これにより、古い端末が1項目だけ編集して保存しても、触っていない項目(送迎自動コピー/ケアマネ/各設定/
       //   連絡事項・掲載期間)は フィールド単位マージで巻き戻らない(「1項目直すと他が復活」の恒久対策)。
@@ -44349,15 +44353,16 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     setTimeout(()=>{ try{ w.focus(); w.print(); }catch{} }, 350);
   };
 
-  const handleFileUpload = async (e, opts = {}) => {
+  // ★ アップロード本体(2026-08-30分離): ファイル選択・フォルダ選択・ドラッグ&ドロップの全経路で共用
+  const uploadFiles = async (fileList, opts = {}) => {
     // ★ opts.completeInitialReport: 添付と同時に初回ご利用報告を完了扱いにする(1回のonSaveで原子的に。2026-08-30)
-    let files = rejectVideos(e.target.files);
+    let files = rejectVideos(fileList);
     // ★ フォルダごと追加(webkitdirectory)に対応: 対応形式(画像/PDF)だけ拾い、その他はスキップして件数を案内
     const _supported = (f) => (f.type||'').startsWith('image/') || f.type === 'application/pdf' || /\.(pdf|png|jpe?g|heic|heif|webp|gif|bmp)$/i.test(f.name);
     const _skipped = files.filter(f => !_supported(f));
     files = files.filter(_supported);
     if (_skipped.length) alert(`対応していない形式のため ${_skipped.length} 件をスキップしました（画像とPDFのみ登録できます）`);
-    if (files.length === 0) { e.target.value=''; return; }
+    if (files.length === 0) return;
     const newFiles = [];
     for (const f of files) {
       const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
@@ -44393,7 +44398,37 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     } else {
       updatePatient({ files: [...(personalFile.files || []), ...newFiles] }, { manual: true, message: '✓ ファイルを保存しました' });
     }
-    e.target.value = '';
+  };
+  const handleFileUpload = async (e, opts = {}) => { await uploadFiles(e.target.files, opts); try { e.target.value = ''; } catch {} };
+  // ★ ドラッグ&ドロップ(2026-08-30): ファイルもフォルダも受け付ける(フォルダは再帰で中の画像/PDFを収集)。
+  //   1つの選択ダイアログでファイルとフォルダの両方は選べないというブラウザ制約の回避策。
+  const [pfDragOver, setPfDragOver] = useState(false);
+  const collectDroppedFiles = async (dt) => {
+    const out = [];
+    const walk = (entry) => new Promise((res) => {
+      try {
+        if (entry.isFile) entry.file(f => { out.push(f); res(); }, () => res());
+        else if (entry.isDirectory) {
+          const rd = entry.createReader();
+          const readAll = () => rd.readEntries(async (es) => {
+            if (!es.length) return res();
+            for (const e2 of es) await walk(e2);
+            readAll();
+          }, () => res());
+          readAll();
+        } else res();
+      } catch { res(); }
+    });
+    const items = [...((dt && dt.items) || [])];
+    const entries = items.map(it => (it.webkitGetAsEntry ? it.webkitGetAsEntry() : null)).filter(Boolean);
+    if (!entries.length) return [...((dt && dt.files) || [])];
+    for (const en of entries) await walk(en);
+    return out;
+  };
+  const handlePfDrop = async (e) => {
+    e.preventDefault(); setPfDragOver(false);
+    const fs = await collectDroppedFiles(e.dataTransfer);
+    if (fs.length) await uploadFiles(fs);
   };
 
   const handleDeleteFile = (fileId) => {
@@ -45159,8 +45194,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
                 <textarea value={irForm.exercise} onChange={e=>setIrForm(f=>({...f,exercise:e.target.value}))} rows={4} placeholder="初回通所の運動記録があれば自動で入ります（例: ①バイク: 10分 / 平行棒: 10/20 …）。編集できます。" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
               <div><label className="block text-xs font-bold text-slate-500 mb-1">ご利用の様子（活動・表情など）</label>
                 <textarea value={irForm.content} onChange={e=>setIrForm(f=>({...f,content:e.target.value}))} rows={5} placeholder="例: 体操に積極的に取り組まれ、笑顔が見られました。運動メニューも一通りこなされ…" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm outline-none resize-y"/></div>
+              {/* ★ フォーム中は保存のみ(2026-08-30 店舗要望)。 印刷/PDFは保存後の完了画面から */}
               <div className="flex justify-end gap-2">
-                <button onClick={()=>printInitialReport()} className="px-5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Printer size={16}/>印刷 / PDF保存</button>
                 <button onClick={saveInitialReport} className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-sm flex items-center gap-1.5 active:scale-95"><Save size={16}/>初回報告を保存</button>
               </div>
             </div>
@@ -45329,24 +45364,25 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
             </div>
           )}
           {/* ファイル一覧 */}
-          <div className="mb-3 flex items-center justify-between">
+          {/* ★ 初回ご利用報告タブでは、作成方法の選択中/手入力中はファイル欄を隠す(2026-08-30 店舗要望。
+              完了後のみ表示=添付書類の確認用) */}
+          {!(isInitialReportTab && (irMode === 'form' || !(appData.initialReports||[]).some(r => r.patientId === patient.id))) && (
+          <div onDragOver={(e)=>{ e.preventDefault(); setPfDragOver(true); }} onDragLeave={()=>setPfDragOver(false)} onDrop={handlePfDrop}
+            style={pfDragOver ? { outline: '3px dashed #10b981', outlineOffset: 4, borderRadius: 12, background: '#ecfdf5' } : undefined}>
+          <div className="mb-1 flex items-center justify-between">
             <div className="text-sm font-bold text-slate-700">ファイル ({filesInCat.length})</div>
-            <div className="flex items-center gap-1.5">
-              <label className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
-                <CloudUpload size={14}/> ファイルを追加 (JPEG/PNG/PDF)
-                <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFileUpload}/>
-              </label>
-              {/* ★ フォルダごと追加(2026-08-30 店舗要望): フォルダ内の画像/PDFを一括登録(サブフォルダ含む・非対応形式はスキップ) */}
-              <label className="px-3 py-1.5 bg-emerald-50 border border-emerald-300 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1" title="フォルダを選ぶと中の画像・PDFをまとめて登録します(サブフォルダも含む)">
-                フォルダごと追加
-                <input type="file" webkitdirectory="" directory="" multiple className="hidden" onChange={handleFileUpload}/>
-              </label>
-            </div>
+            {/* ★ ボタンは1つに統合(2026-08-30): ブラウザの制約で1つのダイアログでファイルとフォルダの両方は
+                選べないため、フォルダはこの枠へのドラッグ&ドロップで対応(下の案内文) */}
+            <label className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer flex items-center gap-1">
+              <CloudUpload size={14}/> ファイルを追加 (JPEG/PNG/PDF)
+              <input type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={handleFileUpload}/>
+            </label>
           </div>
+          <div className="mb-3 text-[10px] text-slate-400 text-right">フォルダやファイルは、この枠に<b>ドラッグ&ドロップ</b>でもまとめて追加できます（フォルダは中の画像/PDFを一括登録）</div>
           {filesInCat.length === 0 ? (
             <div className="bg-slate-50 border border-dashed border-slate-300 rounded-xl p-8 text-center">
               <div className="text-sm text-slate-500">まだファイルがありません</div>
-              <div className="text-[11px] text-slate-400 mt-1">「ファイルを追加」から JPEG / PNG / PDF をアップロード</div>
+              <div className="text-[11px] text-slate-400 mt-1">「ファイルを追加」または ファイル/フォルダのドラッグ&ドロップで登録</div>
             </div>
           ) : (() => {
             // ★ 1件ずつ・時系列 (新しい順)・年月フォルダでグループ表示。 タイトル/日付は編集可。
@@ -45395,6 +45431,8 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
               </div>
             );
           })()}
+          </div>
+          )}
           {/* ★ 支援経過表 (カテゴリ「9. 支援経過表」タブ) */}
           {isSpTab && (
           <div className="bg-white border-2 border-slate-300 rounded-xl p-4 mb-4 mt-4">
