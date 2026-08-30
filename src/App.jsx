@@ -17019,11 +17019,19 @@ export default function App() {
   const lastAppliedSigRef = React.useRef(null);
   // ★ 最後に実際にクラウド反映した時刻。 updated_at 判定が万一取りこぼしても、一定時間経過で必ず再取得する安全網。
   const lastAppliedAtRef = React.useRef(0);
+  // ★ 容量超過を一度検知したら10分間はフル保存を試みず軽量版へ直行する(2026-08-30)。
+  //   従来は保存のたびに フル→写真分離→軽量 と巨大JSONの変換を3回行ってから失敗しており、
+  //   CPUの無駄と persist-fail ログの洪水になっていた(動作自体は軽量版成功で問題なし)。
+  const persistQuotaUntilRef = React.useRef(0);
   useEffect(()=>{
     const isRemote = applyingRemoteRef.current;
     applyingRemoteRef.current = false;
     // ローカル編集の時だけ「最終編集時刻」を更新 (pull は編集ではない)
     if (!isRemote) lastLocalEditRef.current = Date.now();
+    // 容量超過モード中: 軽量版へ直行(10分ごとにフル保存を再挑戦)
+    if (TABLE_ENABLED && Date.now() < persistQuotaUntilRef.current) {
+      try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); } catch {}
+    } else
     try {
       localStorage.setItem('daycareAppData_v3', JSON.stringify(appData));
       // 成功時: 古い分離保存キーを掃除 (整合性確保)
@@ -17047,6 +17055,7 @@ export default function App() {
           if (TABLE_ENABLED) {
             localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] }));
             syncLog('persist-slim', {});
+            persistQuotaUntilRef.current = Date.now() + 10 * 60 * 1000; // ★ 以後10分は軽量版へ直行
           }
         } catch {}
       }
