@@ -1161,6 +1161,20 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   }
 }
 
+// ★ 軽量チェック用(2026-08-30): updated_at だけを取得する。 4秒ポーリングで毎回フルデータ(数MB)を
+//   取得・解析していたのが長時間表示でのメモリ肥大→WebViewクラッシュ(エラーコード5)の主因だったため、
+//   変化が無ければフル取得をスキップできるようにする。 エラー時はthrow(呼び出し側でフル取得にフォールバック)。
+export async function supabaseLoadStateMetaForStore(storeId) {
+  if (!supabase || !storeId) return null;
+  const { data, error } = await supabase
+    .from('app_state')
+    .select('updated_at')
+    .eq('key', storeId)
+    .maybeSingle();
+  if (error) throw new Error('loadStateMeta failed: ' + (error.message || error.code || 'unknown'));
+  return data; // 行が無ければ null
+}
+
 export async function supabaseLoadStateForStore(storeId) {
   if (!supabase || !storeId) return null;
   // ★ 重要: 通信エラー (529 Overloaded / ネットワーク断 / RLS) のときは null を返さず必ず throw する。

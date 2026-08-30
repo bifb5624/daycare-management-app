@@ -56,6 +56,7 @@ import {
 } from './lib/syncOps';
 import {
   supabaseLoadStateForStore,
+  supabaseLoadStateMetaForStore,
   supabaseStaffLogin,
   supabaseStaffChangePassword,
   supabaseListStores,
@@ -17354,6 +17355,19 @@ export default function App() {
     let _pullSkipCount = 0;
     const checkAndPull = async () => {
       try {
+        // ★ メモリ肥大対策(2026-08-30): まず updated_at だけの軽量チェック。 前回反映と同じで、
+        //   強制pull不要・最後の反映から60秒以内なら、フルデータ(数MB)の取得・解析ごとスキップする。
+        //   従来は毎4秒フル取得+ほぼ毎回setAppDataで全再構築しており、長時間表示の端末が
+        //   メモリ不足でクラッシュ(エラーコード5)していた。 60秒ごとの強制フル反映は取りこぼし対策の安全網。
+        if (dataLoadedForStoreRef.current === newStoreId && pendingPullForStoreRef.current !== newStoreId) {
+          try {
+            const _meta = await supabaseLoadStateMetaForStore(newStoreId);
+            const _msig = _meta && _meta.updated_at ? String(_meta.updated_at) : null;
+            if (_msig && lastAppliedSigRef.current === _msig && (Date.now() - (lastAppliedAtRef.current || 0)) < 60000) {
+              return; // クラウドに変化なし → 何もしない(フル取得もsetAppDataもしない)
+            }
+          } catch { /* メタ取得失敗時は従来どおりフル取得へ */ }
+        }
         const row = await supabaseLoadStateForStore(newStoreId);
         // ★ 新規店舗 (app_state 行が存在しない or data 空): BLANK で初期化 (店舗情報を facilityInfo へ転記)
         if (!row || !row.data || Object.keys(row.data).length === 0) {
@@ -17416,7 +17430,9 @@ export default function App() {
         //   ただし updated_at 判定の取りこぼし対策として、一定時間(10秒)反映が無ければ強制的に反映する
         //   (これが無いと「他端末の更新が自動で反映されず、再読み込みしないと出ない」不具合が起きる)。
         const _sig = row.updated_at || null;
-        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 4000;
+        // ★ 2026-08-30: 取りこぼし対策の強制反映は4秒→60秒に。 4秒だとポーリング毎にほぼ必ず
+        //   全再構築(setAppData)が走り、メモリ肥大クラッシュの主因になっていた。
+        const _stale = (Date.now() - (lastAppliedAtRef.current || 0)) > 60000;
         if (!forcePull && !_stale && _sig && lastAppliedSigRef.current === _sig) {
           dataLoadedForStoreRef.current = newStoreId;
           storeTransitionRef.current = false;
