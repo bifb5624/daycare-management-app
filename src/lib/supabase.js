@@ -319,6 +319,21 @@ export async function supabaseListInvitesAndAccountsForPatient(patientId, storeI
 // =========================================================
 // 患者IDから家族アカウント一覧 (親が他家族追加時の重複防止)
 // =========================================================
+// ★ 店舗の家族/関係者アカウント一覧(2026-08-31): ケアマネ担当者の登録状況表示用。
+//   利用者ごとのループを避けて store_id で一括取得する(最小限のフィールドのみ)。
+export async function supabaseListFamilyAccountsForStore(storeId) {
+  if (!supabase || !storeId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('family_accounts')
+      .select('id, patient_id, kind, relation, display_name, email, username, last_login')
+      .eq('store_id', storeId)
+      .is('deleted_at', null);
+    if (error) { console.warn('[supabase] listFamilyAccountsForStore error', error); return []; }
+    return data || [];
+  } catch (e) { console.warn('[supabase] listFamilyAccountsForStore exception', e); return []; }
+}
+
 export async function supabaseListFamilyByPatient(patientId, storeId) {
   if (!supabase) return [];
   // ★ 店舗IDを必須化(2026-08-09): 利用者IDは店舗間で重複するため、patient_id だけの検索は
@@ -934,6 +949,14 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
         if (!ls || !cs) { merged.systemSettings = ls || cs; }
         else {
           const out = mergeObjFieldLevel(ls, cs);
+          // ★ 削除の恒久反映(2026-08-31): 純unionだと片側で削除してもクラウド/他端末から必ず復活していた。
+          //   systemSettings.cmTombstones = { キー: 削除時刻 } を両側の最大値で統合し、墓石のある項目は除外する。
+          //   墓石より後に再追加された項目(_addedAt が墓石より新しい)だけ復活を許す(削除→再登録のケース)。
+          const _lt = (ls.cmTombstones && typeof ls.cmTombstones === 'object') ? ls.cmTombstones : {};
+          const _ct = (cs.cmTombstones && typeof cs.cmTombstones === 'object') ? cs.cmTombstones : {};
+          const cmTombs = {};
+          new Set([...Object.keys(_lt), ...Object.keys(_ct)]).forEach(k2 => { const t = Math.max(Number(_lt[k2]) || 0, Number(_ct[k2]) || 0); if (t) cmTombs[k2] = t; });
+          if (Object.keys(cmTombs).length) out.cmTombstones = cmTombs;
           // ★ 追加を失わない配列は union(両端末の追加を保持。 同一キーはローカル優先)。
           const unionBy = (k, keyFn) => {
             const a = Array.isArray(ls[k]) ? ls[k] : [], b = Array.isArray(cs[k]) ? cs[k] : [];
@@ -941,7 +964,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
             const m = new Map();
             b.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); });
             a.forEach(x => { const kk = keyFn(x); if (kk != null) m.set(kk, x); });
-            out[k] = [...m.values()];
+            out[k] = [...m.values()].filter(x => { const kk = keyFn(x); const tt = kk != null ? (cmTombs[kk] || 0) : 0; return !tt || (Number(x && x._addedAt) || 0) > tt; });
           };
           unionBy('cmOffices', o => (o && o.name != null) ? `off|${String(o.name).trim()}` : null);
           unionBy('careManagers', o => (o && (o.office != null || o.name != null)) ? `cm|${String(o.office||'').trim()}|${String(o.name||'').trim()}` : null);

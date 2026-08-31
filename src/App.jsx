@@ -12,6 +12,7 @@ import { encodeInviteToken, decodeInviteToken, normalizeInviteCode } from './lib
 import {
   isSupabaseEnabled,
   supabaseCreateInvite,
+  supabaseListFamilyAccountsForStore,
   supabaseSignupFamily,
   supabaseLoginFamily,
   supabaseFamilyUsernameExists, // ★ import 漏れ: ログインIDの重複チェックが常に失敗(catchで握り潰し)していた
@@ -13317,12 +13318,12 @@ function FamilyView() {
                   let nextCareManagers = (latest.systemSettings?.careManagers) || [];
                   if (isCaremanager) {
                     if (!nextCmOffices.some(o => o.name === cmOfficeName)) {
-                      nextCmOffices = [...nextCmOffices, { name: cmOfficeName, phone: cmOfficePhone, fax: cmOfficeFax }];
+                      nextCmOffices = [...nextCmOffices, { name: cmOfficeName, phone: cmOfficePhone, fax: cmOfficeFax, _addedAt: Date.now() }];
                     }
                     const cmFullName = `${cmManagerLast} ${cmManagerFirst}`.trim();
                     if (!nextCareManagers.some(c => c.office === cmOfficeName && c.name === cmFullName)) {
                       // ★ ふりがな(登録者本人=担当ケアマネ)も保存し、一覧のふりがな順ソート/表示に反映する。
-                      nextCareManagers = [...nextCareManagers, { office: cmOfficeName, name: cmFullName, phone: cmOfficePhone, phoneDirect: cmManagerDirect, lastName: cmManagerLast, firstName: cmManagerFirst, kana: `${ecKanaLast} ${ecKanaFirst}`.trim(), kanaLast: ecKanaLast, kanaFirst: ecKanaFirst }];
+                      nextCareManagers = [...nextCareManagers, { office: cmOfficeName, name: cmFullName, phone: cmOfficePhone, phoneDirect: cmManagerDirect, lastName: cmManagerLast, firstName: cmManagerFirst, kana: `${ecKanaLast} ${ecKanaFirst}`.trim(), kanaLast: ecKanaLast, kanaFirst: ecKanaFirst, _addedAt: Date.now() }];
                     }
                   }
                   const updated = {
@@ -13567,6 +13568,13 @@ function FamilyView() {
                     <div style={{display:'grid',gridTemplateColumns:'1fr',gap:8,marginBottom:8}}>
                       <div>
                         <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>続柄 <span style={{color:'#dc2626'}}>*</span></label>
+                        {/* ★ ケアマネの登録はサイドバー「ケアマネ事業所・担当者」からの招待に一本化(2026-08-31)。
+                            その招待から開いた場合は続柄=ケアマネージャーで自動確定(変更不可)。 通常の家族招待からは選択肢に出さない */}
+                        {_invRel === 'ケアマネージャー' ? (
+                          <div style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,boxSizing:'border-box',background:'#fffbeb',fontWeight:'bold',color:'#92400e'}}>
+                            ケアマネージャー（事業所からの招待により自動設定されています）
+                          </div>
+                        ) : (
                         <select value={signupForm.ecRelation} onChange={e=>setSignupForm(f=>({...f,ecRelation:e.target.value,error:''}))}
                           style={{width:'100%',padding:'10px 12px',border:'1px solid #fcd34d',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',background:'white',fontWeight:'bold'}}>
                           <option value="">— 選択 —</option>
@@ -13580,10 +13588,10 @@ function FamilyView() {
                           <option value="弟">弟</option>
                           <option value="姉">姉</option>
                           <option value="妹">妹</option>
-                          <option value="ケアマネージャー">ケアマネージャー</option>
                           <option value="その他関係者">その他関係者（訪問看護 等）</option>
                           <option value="その他">その他...</option>
                         </select>
+                        )}
                       </div>
                     </div>
                     {signupForm.ecRelation === 'その他' && (
@@ -31920,25 +31928,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                       <InfoRow label="担当者名">{localPatient.cmName}</InfoRow>
                       <InfoRow label="担当者 直通電話">{directPhone}</InfoRow>
                     </div>
-                    {/* ★ 登録されているケアマネ(アカウント)一覧: 複数のケアマネアカウントを表示 */}
-                    {(() => {
-                      const _cmAccs = (appData.familyAccounts||[]).filter(a => a && String(a.patientId)===String(localPatient.id) && (a.kind==='caremanager' || a.relation==='ケアマネージャー'));
-                      if (!_cmAccs.length) return null;
-                      return (
-                        <div className="mt-3">
-                          <div className="text-[12px] font-bold text-slate-500 mb-1.5">登録されているケアマネ（アカウント）{_cmAccs.length>1?`（${_cmAccs.length}名）`:''}</div>
-                          <div className="space-y-1.5">
-                            {_cmAccs.map(a => (
-                              <div key={a.id} className="border border-teal-200 bg-teal-50/40 rounded-lg px-3 py-2 text-sm">
-                                <div className="font-bold text-slate-700">{a.displayName||'—'}<span className="ml-2 text-[10px] font-bold text-teal-700 bg-teal-100 px-1.5 py-0.5 rounded-full">ケアマネ</span></div>
-                                <div className="text-[11px] text-slate-500 break-all">{a.cmOffice||localPatient.cmOffice||''}{a.email?`・${a.email}`:''}{a.username?`・ID: ${a.username}`:''}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-1">※ アカウント発行・削除は「アカウント管理」から。上の担当（事業所・担当者）の変更は「担当を変更」から。</div>
-                        </div>
-                      );
-                    })()}
+                    {/* ★ ケアマネの閲覧アカウント表示・招待はサイドバー「ケアマネ事業所・担当者」へ一本化(2026-08-31 店舗要望)。
+                        ここ(利用者マスタ)からのケアマネアカウント管理は撤去した */}
+                    <div className="text-[10px] text-slate-400 mt-2">※ ケアマネの閲覧登録・招待メールはサイドバー「ケアマネ事業所・担当者」から行えます。担当（事業所・担当者）の変更は「担当を変更」から。</div>
                   </div>);
                 })()}
 
@@ -32946,9 +32938,9 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               const mgrKeys = new Set(mgrs.map(c=>`${(c.office||'').trim()}|${(c.name||'').trim()}`));
               existing.forEach(p => {
                 const on = (p.cmOffice||'').trim();
-                if (on && !officeNames.has(on)) { officeNames.add(on); offices.push({ name:on, phone:p.cmOfficePhone||'', fax:p.cmFax||'' }); }
+                if (on && !officeNames.has(on)) { officeNames.add(on); offices.push({ name:on, phone:p.cmOfficePhone||'', fax:p.cmFax||'', _addedAt:syncNow() }); }
                 const nm = (p.cmName||'').trim();
-                if (on && nm && !mgrKeys.has(`${on}|${nm}`)) { mgrKeys.add(`${on}|${nm}`); mgrs.push({ office:on, name:nm, phone:p.cmPhone||'', phoneDirect:p.cmPhone||'', fax:p.cmFax||'' }); }
+                if (on && nm && !mgrKeys.has(`${on}|${nm}`)) { mgrKeys.add(`${on}|${nm}`); mgrs.push({ office:on, name:nm, phone:p.cmPhone||'', phoneDirect:p.cmPhone||'', fax:p.cmFax||'', _addedAt:syncNow() }); }
               });
               // ★ 取込で追加したケアマネ事業所/担当者が別端末の設定保存で消えないよう、更新時刻を刻む(新しい方優先マージ用)。
               _nextSettings = { ..._nextSettings, cmOffices: offices, careManagers: mgrs, _updatedAt: syncNow() };
@@ -33210,7 +33202,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     // 既存アカウントの重複チェック
                     // メール重複は許容 (夫婦の子・複数利用者担当ケアマネ等のため)
                     // 未使用招待の重複は許容
-                    const relation = window.prompt('続柄を入力してください (例: 本人、配偶者、長男、長女、ケアマネージャー など。空欄可)\n※「本人」にすると緊急連絡先には登録されません（ご本人閲覧用）:') || '';
+                    const relation = window.prompt('続柄を入力してください (例: 本人、配偶者、長男、長女 など。空欄可)\n※「本人」にすると緊急連絡先には登録されません（ご本人閲覧用）\n※ ケアマネの招待はサイドバー「ケアマネ事業所・担当者」から送ってください:') || '';
                     const inv = issueNewInvite({ email: email.trim(), relation: relation.trim() });
                     // URL に招待データを埋め込み (端末越し用)
                     const tk = encodeInviteToken({ c: inv.code, p: inv.patientId, e: inv.email||'', r: inv.relation||'', x: inv.expiresAt||'', fn: (appData.systemSettings?.facilityInfo?.name)||'', fp: (appData.systemSettings?.facilityInfo?.phone)||'' });
@@ -34427,14 +34419,31 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   }, [appData.systemSettings?.cmOffices, appData.systemSettings?.careManagers]);
   // ★ ケアマネ事業所/担当者の追加・削除は保存ボタンを待たず即クラウド保存する(2026-08-17)。
   //   ローカルstateだけの変更は、4秒同期の追従処理との競合で「追加したのにすぐ消える」原因だった。
-  const persistCm = (nextOffices, nextPersons, msg) => {
+  const persistCm = (nextOffices, nextPersons, msg, extraSettings) => {
     if (nextOffices) setCmOffices(nextOffices);
     if (nextPersons) setCmPersons(nextPersons);
     onSave({ ...appData, systemSettings: { ...appData.systemSettings,
+      ...(extraSettings || {}),
       ...(nextOffices ? { cmOffices: nextOffices } : {}),
       ...(nextPersons ? { careManagers: nextPersons } : {}) } }, { manual: true, message: msg });
     _dirtyBaseRef.current = _sigOf({ ...(nextOffices ? { cmOffices: nextOffices } : {}), ...(nextPersons ? { cmPersons: nextPersons } : {}) });
   };
+  // ★ 削除の墓石(2026-08-31): ケアマネ事業所/担当者はunionマージのため、墓石が無いと削除が他端末/クラウドから復活する。
+  //   キーは supabase.js の unionBy と同一形式。 再追加時は _addedAt(墓石より新しい時刻)で復活を許可する。
+  const _cmTombKeyOffice = (name) => `off|${String(name||'').trim()}`;
+  const _cmTombKeyPerson = (office, name) => `cm|${String(office||'').trim()}|${String(name||'').trim()}`;
+  const _cmTombsWith = (...keys) => { const t = { ...(appData.systemSettings?.cmTombstones||{}) }; keys.forEach(k => { t[k] = syncNow(); }); return t; };
+  // ★ ケアマネ担当者の登録状況表示用: この店舗の閲覧アカウント(ケアマネ)をSupabaseから一括取得(2026-08-31)。
+  //   端末ローカルのfamilyAccountsだけでは別端末/家族側で登録されたアカウントが見えず「閲覧登録なし」に誤表示されるため。
+  const [sbCmAccounts, setSbCmAccounts] = useState(null); // null=未取得
+  React.useEffect(() => {
+    if (activeTab !== 'cm' || sbCmAccounts !== null || !isSupabaseEnabled) return;
+    const _sess = (()=>{ try { return JSON.parse(sessionStorage.getItem('tsumugiStaffSession')||'null'); } catch { return null; } })();
+    if (!_sess?.storeId) { setSbCmAccounts([]); return; }
+    supabaseListFamilyAccountsForStore(_sess.storeId)
+      .then(rows => setSbCmAccounts((rows||[]).filter(r => r.kind === 'caremanager' || r.relation === 'ケアマネージャー')))
+      .catch(() => setSbCmAccounts([]));
+  }, [activeTab, sbCmAccounts]);
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
   const [newOffice, setNewOffice] = useState({ name: "", phone: "", fax: "" });
@@ -34447,13 +34456,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     if (kind === 'office') {
       const newName = (form.name||'').trim();
       if (!newName) { alert('事業所名を入力してください'); return; }
-      const newOffices = cmOffices.map(o => o===orig ? { ...o, name:newName, phone:formatJpPhone(form.phone), fax:formatJpPhone(form.fax) } : o);
+      const _renamedOff = newName !== orig.name;
+      // ★ 改名時は _addedAt を刻む(旧名の墓石より新しくし、改名後の項目が誤って消えないように)
+      const newOffices = cmOffices.map(o => o===orig ? { ...o, name:newName, phone:formatJpPhone(form.phone), fax:formatJpPhone(form.fax), ...(_renamedOff?{_addedAt:syncNow()}:{}) } : o);
       // 担当者の所属事業所名・FAXも更新
-      const newPersons = cmPersons.map(c => c.office===orig.name ? { ...c, office:newName, fax:formatJpPhone(form.fax) } : c);
+      const newPersons = cmPersons.map(c => c.office===orig.name ? { ...c, office:newName, fax:formatJpPhone(form.fax), ...(_renamedOff?{_addedAt:syncNow()}:{}) } : c);
       // 各利用者マスタの担当ケアマネ事業所・FAXを更新
       const newPatients = (appData.patients||[]).map(p => p.cmOffice===orig.name ? { ...p, cmOffice:newName, cmFax:formatJpPhone(form.fax) } : p);
       setCmOffices(newOffices); setCmPersons(newPersons);
-      onSave({ ...appData, patients:newPatients, systemSettings:{ ...appData.systemSettings, cmOffices:newOffices, careManagers:newPersons } }, { manual:true, message:'✓ ケアマネ事業所を更新しました' });
+      // ★ 改名時は旧名の墓石を刻む(旧名がunionマージで復活しないように。担当者の旧キーも同様)
+      const _offTombs = _renamedOff ? _cmTombsWith(_cmTombKeyOffice(orig.name), ...cmPersons.filter(c=>c.office===orig.name).map(c=>_cmTombKeyPerson(orig.name, c.name))) : (appData.systemSettings?.cmTombstones||{});
+      onSave({ ...appData, patients:newPatients, systemSettings:{ ...appData.systemSettings, cmTombstones:_offTombs, cmOffices:newOffices, careManagers:newPersons } }, { manual:true, message:'✓ ケアマネ事業所を更新しました' });
     } else {
       const newName = (form.name||'').trim();
       if (!form.office || !newName) { alert('事業所と担当者名を入力してください'); return; }
@@ -34461,11 +34474,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       const offFax = cmOffices.find(o=>o.name===form.office)?.fax || orig.fax || '';
       const offPhone = cmOffices.find(o=>o.name===form.office)?.phone || '';
       const _kl=(form.kanaLast||'').trim(), _kf=(form.kanaFirst||'').trim();
-      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kanaLast:_kl, kanaFirst:_kf, kana:`${_kl} ${_kf}`.trim(), phone:dir, phoneDirect:dir, fax:offFax, email:(form.email||'').trim() } : c);
+      const _renamedCm = (form.office !== orig.office) || (newName !== orig.name);
+      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kanaLast:_kl, kanaFirst:_kf, kana:`${_kl} ${_kf}`.trim(), phone:dir, phoneDirect:dir, fax:offFax, email:(form.email||'').trim(), ...(_renamedCm?{_addedAt:syncNow()}:{}) } : c);
       // 各利用者マスタの担当ケアマネ(旧 office+name 一致)を更新
       const newPatients = (appData.patients||[]).map(p => (p.cmOffice===orig.office && p.cmName===orig.name) ? { ...p, cmOffice:form.office, cmName:newName, cmPhone:offPhone||p.cmPhone, cmFax:offFax } : p);
       setCmPersons(newPersons);
-      onSave({ ...appData, patients:newPatients, systemSettings:{ ...appData.systemSettings, careManagers:newPersons } }, { manual:true, message:'✓ 担当ケアマネを更新しました' });
+      // ★ 事業所/氏名の変更時は旧キーの墓石を刻む(旧項目がunionマージで復活しないように)
+      const _cmTombs = _renamedCm ? _cmTombsWith(_cmTombKeyPerson(orig.office, orig.name)) : (appData.systemSettings?.cmTombstones||{});
+      onSave({ ...appData, patients:newPatients, systemSettings:{ ...appData.systemSettings, cmTombstones:_cmTombs, careManagers:newPersons } }, { manual:true, message:'✓ 担当ケアマネを更新しました' });
     }
     setCmEditModal(null);
   };
@@ -34857,7 +34873,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
 
       {/* コンテンツ */}
       <div className="flex-1 overflow-y-auto p-6 pb-8">
-        <div className="max-w-4xl mx-auto space-y-6 pb-6">
+        {/* ★ ケアマネタブは2カラムのため広めに取る(表示領域の崩れ対策・2026-08-31) */}
+        <div className={`${activeTab === 'cm' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 pb-6`}>
 
           {/* 気分の理由 (カスタマイズ) */}
           {activeTab === 'kibun' && (
@@ -35467,7 +35484,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             // ★ ふりがな(kana)があればそれ優先で五十音順。 無ければ氏名で。
             const sortedPersons = [...officeFilteredPersons].sort((a,b)=>((a.kana||a.name||'').localeCompare(b.kana||b.name||'', 'ja')));
             return (
-              <div className="grid grid-cols-[40%_1fr] gap-4">
+              <div className="grid grid-cols-[40%_minmax(0,1fr)] gap-4 items-start">
                 <SectionCard title="ケアマネ事業所">
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 space-y-2">
                     <input type="text" value={newOffice.name} onChange={e=>setNewOffice({...newOffice,name:e.target.value})} placeholder="事業所名" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
@@ -35475,7 +35492,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       <input type="tel" value={newOffice.phone} onChange={e=>setNewOffice({...newOffice,phone:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                       <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,fax:formatJpPhone(o.fax)}))} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
-                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} persistCm([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax)}], null, '✓ ケアマネ事業所を追加しました'); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
+                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} persistCm([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax),_addedAt:syncNow()}], null, '✓ ケアマネ事業所を追加しました'); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
                     {/* ★ CSVから一括取り込みは 利用者マスタ管理 側に集約したため、ここでは非表示 (ユーザー要望) */}
                     {false && (
                     <label className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center cursor-pointer">
@@ -35533,7 +35550,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     inputProps={{type:'text', placeholder:'事業所名・カナ・法人名で検索', className:'w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-sm font-bold focus:border-blue-400'}}/>
                   <div className="text-xs text-slate-500 mb-2 px-1">{sortedOffices.length}/{cmOffices.length}件・法人ごと {selectedOfficeIdx!==null && <button onClick={()=>setSelectedOfficeIdx(null)} className="ml-2 text-blue-600 hover:underline">× 選択解除</button>}</div>
                   {sortedOffices.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">{cmOffices.length===0?'登録なし':'該当なし'}</div> : (
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">{officeGroups.map(([corp, offices]) => (
+                    <div className="space-y-3 max-h-[62vh] overflow-y-auto pr-1">{officeGroups.map(([corp, offices]) => (
                       <div key={corp}>
                         <div className="text-[11px] font-bold text-slate-400 px-1 pb-1 border-b border-slate-100 mb-1.5 sticky top-0 bg-white">{corp} <span className="text-slate-300">({offices.length})</span></div>
                         <div className="space-y-1.5">{offices.map(o => {
@@ -35545,7 +35562,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                                 <div className="text-[11px] text-slate-500 truncate">{o.phone||'-'} / FAX {o.fax||'-'}</div>
                               </div>
                               <button type="button" onClick={(e)=>{e.stopPropagation(); setCmEditModal({kind:'office', orig:o, form:{name:o.name||'', phone:o.phone||'', fax:o.fax||''}});}} className="text-slate-300 hover:text-blue-500 p-1 ml-1 shrink-0" title="編集"><Edit3 size={14}/></button>
-                              <button type="button" onClick={(e)=>{e.stopPropagation(); if(!window.confirm('この事業所を削除しますか？')) return; persistCm(cmOffices.filter((_,j)=>j!==o.origIdx), null, '削除しました'); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
+                              <button type="button" onClick={(e)=>{e.stopPropagation(); if(!window.confirm('この事業所を削除しますか？')) return; persistCm(cmOffices.filter((_,j)=>j!==o.origIdx), null, '削除しました', { cmTombstones: _cmTombsWith(_cmTombKeyOffice(o.name)) }); if(selectedOfficeIdx===o.origIdx) setSelectedOfficeIdx(null);}} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                             </div>
                           );
                         })}</div>
@@ -35574,7 +35591,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     </div>
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     <input type="email" inputMode="email" value={newPerson.email||''} onChange={e=>setNewPerson({...newPerson,email:e.target.value})} placeholder="メールアドレス（お知らせ・招待メール用）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); persistCm(null, [...cmPersons,{...newPerson,email:(newPerson.email||'').trim(),kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:"",email:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); persistCm(null, [...cmPersons,{...newPerson,email:(newPerson.email||'').trim(),kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||"",_addedAt:syncNow()}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:"",email:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -35582,7 +35599,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                     inputProps={{type:'text', placeholder:'担当者名で検索 (該当者の事業所も左で絞り込み)', className:'w-full px-3 py-2 border border-slate-300 rounded-lg outline-none text-sm font-bold focus:border-blue-400'}}/>
                   <div className="text-xs text-slate-500 mb-2 px-1">{sortedPersons.length}件{selOffice?`（${selOffice.name}）`:'（全事業所）'}・あいうえお順</div>
                   {sortedPersons.length === 0 ? <div className="text-slate-400 text-sm font-bold bg-slate-50 p-4 rounded-xl border text-center">登録なし</div> : (
-                    <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">{sortedPersons.map((p,i)=>{
+                    <div className="space-y-1.5 max-h-[62vh] overflow-y-auto pr-1">{sortedPersons.map((p,i)=>{
                       const origIdx = cmPersons.findIndex(x => x === p);
                       const cards = p.businessCard || [];
                       return (
@@ -35618,13 +35635,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                               }}/>
                             </label>
                             <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kanaLast:p.kanaLast||'', kanaFirst:p.kanaFirst||'', phone:p.phoneDirect||p.phone||'', email:p.email||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
-                            <button type="button" onClick={()=>{ if(!window.confirm('この担当者を削除しますか？')) return; persistCm(null, cmPersons.filter((_,j)=>j!==origIdx), '削除しました'); }} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
+                            <button type="button" onClick={()=>{ if(!window.confirm('この担当者を削除しますか？')) return; persistCm(null, cmPersons.filter((_,j)=>j!==origIdx), '削除しました', { cmTombstones: _cmTombsWith(_cmTombKeyPerson(p.office, p.name)) }); }} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                           </div>
                           {/* ★ 登録状況 + 担当利用者 + 招待メール(2026-08-31 店舗要望): 閲覧アカウントの登録をここから案内する */}
                           {(() => {
                             const _nrm = (s)=>normalizeName(String(s||'')).replace(/[\s　]/g,'');
                             const cmPats = (appData.patients||[]).filter(pt => getPatientDisplayStatus(pt) !== '退所済み' && _nrm(pt.cmOffice)===_nrm(p.office) && _nrm(pt.cmName)===_nrm(p.name));
-                            const accs = (appData.familyAccounts||[]).filter(a => (a.kind==='caremanager'||a.relation==='ケアマネージャー') && ((p.email && a.email && String(a.email).toLowerCase()===String(p.email).toLowerCase()) || (_nrm(a.displayName)===_nrm(p.name) && (!a.cmOffice || _nrm(a.cmOffice)===_nrm(p.office)))));
+                            // ★ 氏名は完全一致に加え包含(2文字以上)も許容(「梅部 ライリー」と「ライリー」等の表記差)。 表示のみで閲覧権限には影響しない
+                            const _nameLoose = (a,b)=>{ const x=_nrm(a), y=_nrm(b); if(!x||!y) return false; if(x===y) return true; return x.length>=2 && y.length>=2 && (x.includes(y)||y.includes(x)); };
+                            const _sbAccs = (sbCmAccounts||[]).map(a => ({ displayName:a.display_name, email:a.email, cmOffice:'', lastLogin:a.last_login, kind:a.kind, relation:a.relation }));
+                            const _allAccs = [...(appData.familyAccounts||[]).filter(a=>a.kind==='caremanager'||a.relation==='ケアマネージャー'), ..._sbAccs];
+                            const accs = _allAccs.filter(a => ((p.email && a.email && String(a.email).toLowerCase()===String(p.email).toLowerCase()) || (_nameLoose(a.displayName, p.name) && (!a.cmOffice || _nrm(a.cmOffice)===_nrm(p.office)))));
                             const invs = (appData.familyInvites||[]).filter(iv => !iv.usedBy && iv.cmName && _nrm(iv.cmOffice)===_nrm(p.office) && _nrm(iv.cmName)===_nrm(p.name) && (!iv.expiresAt || new Date(iv.expiresAt) > new Date()));
                             const st = accs.length ? 'ok' : invs.length ? 'sent' : 'none';
                             const sendCmInviteMail = async () => {
@@ -36375,8 +36396,14 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                 if(usedBy.length) warn += `\n\n⚠ この事業所を担当に設定している利用者が ${usedBy.length}名 います（${usedBy.slice(0,5).join('、')}${usedBy.length>5?' ほか':''}）。利用者側の担当ケアマネ欄はそのまま残ります。`;
                 if(!window.confirm(warn+'\n\n本当に削除しますか？')) return;
                 const nextOffices = offices.filter(o=>!nm.includes((o.name||'').trim()));
+                const _delManagers = (appData.systemSettings?.careManagers||[]).filter(c=>nm.includes((c.office||'').trim()));
                 const nextManagers = (appData.systemSettings?.careManagers||[]).filter(c=>!nm.includes((c.office||'').trim()));
-                onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), cmOffices: nextOffices, careManagers: nextManagers } }, { manual:true, message:`✓ ${nm.length}件のケアマネ事業所を削除しました`, allowEmpty:true });
+                // ★ 墓石を刻む(2026-08-31): unionマージのため、墓石なしでは削除がクラウド/他端末から復活する
+                const _tombs = { ...(appData.systemSettings?.cmTombstones||{}) };
+                const _now = syncNow();
+                nm.forEach(n => { _tombs[`off|${n}`] = _now; });
+                _delManagers.forEach(c => { _tombs[`cm|${String(c.office||'').trim()}|${String(c.name||'').trim()}`] = _now; });
+                onSave({ ...appData, systemSettings:{ ...(appData.systemSettings||{}), cmTombstones: _tombs, cmOffices: nextOffices, careManagers: nextManagers } }, { manual:true, message:`✓ ${nm.length}件のケアマネ事業所を削除しました`, allowEmpty:true });
                 setBulkDelOffices(new Set());
               };
               // ★ 重複利用者の統合: dropIds の全記録を keepId へ付け替え、keep の空欄を drop から補完し、drop を削除。
