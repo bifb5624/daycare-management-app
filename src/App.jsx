@@ -12639,7 +12639,7 @@ function LoginHelpModal({ kind, onClose }) {
         ) : (
           <div>
             <Q q="ログインできません" a={<>ログインIDとパスワードは、事業所からお渡しした紙またはメールをご確認ください。<b>英字・数字は半角</b>で入力してください（大文字・小文字も区別されます）。</>} />
-            <Q q="パスワードを忘れました" a={<>お手数ですが<b>事業所へご連絡ください</b>。事業所で新しいパスワードを発行してお伝えします（旧パスワードは使えなくなります）。</>} />
+            <Q q="パスワードを忘れました" a={<>ログイン画面の<b>「パスワードをお忘れですか？」</b>から、登録メールアドレスに届く確認コードで再設定できます。メールが届かない（メール未登録）場合は事業所へご連絡ください。事業所で新しいパスワードを発行できます。</>} />
             <Q q="画面が真っ白／エラーが出る・表示されない" a={<>まず画面を<b>再読み込み</b>してください。iPhone / iPad で直らない場合は、<b>設定 → Safari → 履歴とWebサイトデータを消去</b>してから開き直すか、Safariの<b>プライベートモード</b>でお試しください。</>} />
             <Q q="QRコードが読み取れません" a={<>カメラアプリでQRにかざすと開けます。読み取れない場合は、事業所からお伝えしたURLをブラウザに直接入力してください。</>} />
             <Q q="それでも解決しないとき" a={<>お手数ですが事業所、またはサポート（support@ones-style.co.jp）までご連絡ください。</>} />
@@ -12790,6 +12790,9 @@ function FamilyView() {
     try { const s = sessionStorage.getItem('familyLinkedAccounts'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [loginForm, setLoginForm] = useState({ username:'', password:'', error:'', showPw:false });
+  // ★ パスワードのメール自己リセット(2026-08-31 店舗要望): {step:1|2, username, code, n1, n2, busy, err, masked, done}
+  //   コードは登録メール宛のみ・有効期限10分・試行5回まで(api/family-reset.js)
+  const [famReset, setFamReset] = useState(null);
   // URL ?invite=XXX&t=BASE64 があれば自動で新規登録モード + 招待コード/データ自動設定
   const _urlInvite = (() => {
     try { return new URLSearchParams(window.location.search).get('invite') || ''; } catch { return ''; }
@@ -13754,6 +13757,10 @@ function FamilyView() {
             <p style={{fontSize:10,color:'#64748b',textAlign:'center',marginTop:16,lineHeight:1.6}}>
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
+            <div style={{textAlign:'center',marginTop:8}}>
+              <button type="button" onClick={()=>setFamReset({step:1, username:(loginForm.username||'').trim(), code:'', n1:'', n2:'', busy:false, err:'', masked:'', done:false})}
+                style={{background:'none',border:'none',color:'#5e8030',fontSize:12,fontWeight:'bold',cursor:'pointer',textDecoration:'underline'}}>パスワードをお忘れですか？（メールで再設定）</button>
+            </div>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
           </form>
           )}
@@ -13767,6 +13774,64 @@ function FamilyView() {
             <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'inherit',textDecoration:'underline'}}>support@ones-style.co.jp</a>
           </div>
         </div>
+        {/* ★ パスワードのメール自己リセット(2026-08-31): 登録メール宛のみ・コード10分有効・5回まで */}
+        {famReset && (
+          <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+            <div style={{background:'white',borderRadius:16,padding:22,width:'100%',maxWidth:360,boxShadow:'0 8px 32px rgba(0,0,0,0.25)'}}>
+              <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:8}}>パスワードの再設定</div>
+              {famReset.done ? (
+                <>
+                  <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:10,padding:'10px 12px',fontSize:13,color:'#166534',fontWeight:'bold',marginBottom:14,lineHeight:1.7}}>✓ パスワードを再設定しました。<br/>新しいパスワードでログインしてください。</div>
+                  <button onClick={()=>{ setLoginForm(f=>({...f, password:'', error:''})); setFamReset(null); }} style={{width:'100%',padding:'12px',background:'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:'pointer'}}>ログイン画面へ</button>
+                </>
+              ) : famReset.step === 1 ? (
+                <>
+                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>ログインIDを入力してください。アカウントに登録されているメールアドレスに、6桁の確認コードをお送りします（メール未登録の場合は届きません。その場合は事業所へご連絡ください）。</div>
+                  {famReset.err && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'8px 10px',marginBottom:10,fontSize:12,color:'#dc2626',fontWeight:'bold'}}>{famReset.err}</div>}
+                  <input value={famReset.username} onChange={e=>setFamReset(f=>({...f,username:toHalfWidth(e.target.value),err:''}))} placeholder="ログインID" autoComplete="username"
+                    style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+                  <button disabled={famReset.busy} onClick={async ()=>{
+                    const u = (famReset.username||'').trim();
+                    if (!u) { setFamReset(f=>({...f,err:'ログインIDを入力してください'})); return; }
+                    setFamReset(f=>({...f,busy:true,err:''}));
+                    try {
+                      const resp = await fetch('/api/family-reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'request', username:u }) });
+                      const j = await resp.json().catch(()=>({}));
+                      if (!resp.ok) { setFamReset(f=>({...f,busy:false,err:j.error||'送信に失敗しました。時間をおいてお試しください。'})); return; }
+                      setFamReset(f=>({...f, step:2, busy:false, err:'', masked:j.masked||''}));
+                    } catch { setFamReset(f=>({...f,busy:false,err:'通信エラーです。電波の良いところでお試しください。'})); }
+                  }} style={{width:'100%',padding:'12px',background:famReset.busy?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:famReset.busy?'not-allowed':'pointer',marginBottom:8}}>{famReset.busy?'⏳ 送信中...':'確認コードを送信'}</button>
+                  <button onClick={()=>setFamReset(null)} style={{width:'100%',padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+                </>
+              ) : (
+                <>
+                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>{famReset.masked ? <>メール（<b>{famReset.masked}</b>）に確認コードを送信しました。</> : <>登録メールがある場合、確認コードが届きます。届かない場合は事業所へお問い合わせください。</>}<br/>6桁のコードと新しいパスワードを入力してください（コードは<b>10分有効・5回まで</b>入力できます）。</div>
+                  {famReset.err && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'8px 10px',marginBottom:10,fontSize:12,color:'#dc2626',fontWeight:'bold'}}>{famReset.err}</div>}
+                  <input value={famReset.code} onChange={e=>setFamReset(f=>({...f,code:toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,6),err:''}))} placeholder="確認コード（6桁）" inputMode="numeric"
+                    style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:16,letterSpacing:4,outline:'none',boxSizing:'border-box',marginBottom:8,textAlign:'center',fontWeight:'bold'}}/>
+                  <input type="password" value={famReset.n1} onChange={e=>setFamReset(f=>({...f,n1:e.target.value,err:''}))} placeholder="新しいパスワード（英字と数字を含む6文字以上）" autoComplete="new-password"
+                    style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:8}}/>
+                  <input type="password" value={famReset.n2} onChange={e=>setFamReset(f=>({...f,n2:e.target.value,err:''}))} placeholder="新しいパスワード（確認のためもう一度）" autoComplete="new-password"
+                    style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
+                  <button disabled={famReset.busy} onClick={async ()=>{
+                    const code = (famReset.code||'').trim(), n1 = (famReset.n1||'').trim(), n2 = (famReset.n2||'').trim();
+                    if (code.length !== 6) { setFamReset(f=>({...f,err:'6桁の確認コードを入力してください'})); return; }
+                    if (n1.length < 6 || !/[a-zA-Z]/.test(n1) || !/[0-9]/.test(n1)) { setFamReset(f=>({...f,err:'新しいパスワードは英字と数字を含む6文字以上にしてください'})); return; }
+                    if (n1 !== n2) { setFamReset(f=>({...f,err:'新しいパスワード（確認）が一致しません'})); return; }
+                    setFamReset(f=>({...f,busy:true,err:''}));
+                    try {
+                      const resp = await fetch('/api/family-reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'reset', username:(famReset.username||'').trim(), code, newPassword:n1 }) });
+                      const j = await resp.json().catch(()=>({}));
+                      if (!resp.ok) { setFamReset(f=>({...f,busy:false,err:j.error||'再設定に失敗しました'})); return; }
+                      setFamReset(f=>({...f,busy:false,err:'',done:true}));
+                    } catch { setFamReset(f=>({...f,busy:false,err:'通信エラーです。電波の良いところでお試しください。'})); }
+                  }} style={{width:'100%',padding:'12px',background:famReset.busy?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:famReset.busy?'not-allowed':'pointer',marginBottom:8}}>{famReset.busy?'⏳ 再設定中...':'パスワードを再設定する'}</button>
+                  <button onClick={()=>setFamReset(null)} style={{width:'100%',padding:'11px',background:'#f1f5f9',color:'#475569',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer'}}>キャンセル</button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         {helpModal && <LoginHelpModal kind={helpModal} onClose={()=>setHelpModal(null)} />}
       </div>
     );
@@ -17939,7 +18004,7 @@ export default function App() {
       const t = new Date();
       const iso = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
       const dw = t.getDay();
-      const closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso));
+      const closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso && (!h.ampm || h.ampm === '1日')));
       if (closed) return 0;
       const bad = ['AM','PM'].some(ap => { const it = diaryPendingItems((appData.diaryLogs||{})[`${iso}_${ap}`]); return it === null || it.length > 0; });
       return bad ? 1 : 0;
@@ -26472,6 +26537,67 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     return patient.scheduleAmPm.map((v,i) => v ? DOW_LABELS[i] : null).filter(Boolean).join('・');
   };
 
+  // ★ 定員ベース稼働率(2026-08-31 店舗要望): 稼働率 = 延べ利用コマ数 ÷ (定員 × 営業コマ数)。
+  //   業界標準「延べ利用者数 ÷ (営業日数 × 定員)」の半日型版: 1営業日 = 午前+午後の2コマ、1日利用は2コマ換算。
+  //   定休日(closedDays)と休業日(各種設定の休業日)は営業コマから除外(=分母に入れない)。
+  //   半日休業(holidays[].ampm が 'AM'/'PM')はそのコマだけ除外。 定員・営業曜日は店舗設定から自動取得。
+  const _capacity = Number(appData.systemSettings?.facilityInfo?.capacity) || 10;
+  const _closedDows = appData.systemSettings?.facilityInfo?.closedDays || [0];
+  const _holidayMap = React.useMemo(() => {
+    const m = new Map();
+    (appData.holidays||[]).forEach(h => { const d = String((h && (h.date||h)) || ''); if (d) m.set(d, (h && h.ampm && h.ampm !== '1日') ? h.ampm : '1日'); });
+    return m;
+  }, [appData.holidays]);
+  // その年月の営業コマ数など。 uptoToday=true なら当月は今日までで数える(未来分を分母に入れない)
+  const calcMonthSlots = React.useCallback((yr, mo, uptoToday) => {
+    const daysInMonth = new Date(yr, mo, 0).getDate();
+    const _now = new Date();
+    const lastD = (uptoToday && yr === _now.getFullYear() && mo === (_now.getMonth()+1)) ? Math.min(daysInMonth, _now.getDate()) : daysInMonth;
+    let slots = 0, bizDays = 0, kyugyoDays = 0, kyugyoSlots = 0;
+    for (let d = 1; d <= lastD; d++) {
+      const dow = new Date(yr, mo-1, d).getDay();
+      if (_closedDows.includes(dow)) continue; // 定休日はそもそも営業日でない
+      const iso = `${yr}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const hol = _holidayMap.get(iso);
+      if (hol === '1日') { kyugyoDays++; kyugyoSlots += 2; continue; }        // 臨時休業(全日): 稼働日数に含めない
+      if (hol === 'AM' || hol === 'PM') { kyugyoSlots += 1; slots += 1; bizDays++; continue; } // 半日休業: 営業は1コマだけ
+      slots += 2; bizDays++;
+    }
+    return { slots, bizDays, kyugyoDays, kyugyoSlots };
+  }, [_closedDows, _holidayMap]);
+  // 記録1件の利用コマ重み(出席/振替のみ・1日利用=2コマ)
+  const _recWeight = React.useCallback((r) => {
+    if (r.status !== '出席' && r.status !== '振替') return 0;
+    if (r.status === '振替' && r.furikaeAmpm) return r.furikaeAmpm === '1日' ? 2 : 1;
+    const p = patMap[r.patientId];
+    const dm = String(r.date||'').match(/(\d+)月(\d+)日/);
+    if (p && dm && r.year) {
+      const d = new Date(Number(r.year), Number(dm[1])-1, Number(dm[2]));
+      if (!isNaN(d.getTime())) { const ap = p.scheduleAmPm?.[d.getDay()] || ''; return ap === '1日' ? 2 : 1; }
+    }
+    return 1;
+  }, [patMap]);
+  // 選択期間全体の定員ベース稼働率
+  const periodCapStats = React.useMemo(() => {
+    let months = targetMonths;
+    if (!months) { // 全期間: 年付き記録から年月を推定
+      const set = new Set();
+      (appData.ticketRecords||[]).forEach(r => { const m = String(r.date||'').match(/(\d+)月/); if (m && r.year) set.add(`${r.year}-${String(m[1]).padStart(2,'0')}`); });
+      months = [...set].sort();
+    }
+    const _now = new Date();
+    let slots = 0, bizDays = 0, kyugyoDays = 0, kyugyoSlots = 0;
+    months.forEach(ym => {
+      const [y, mo] = ym.split('-').map(Number);
+      if (y > _now.getFullYear() || (y === _now.getFullYear() && mo > _now.getMonth()+1)) return; // 未来月は含めない
+      const s = calcMonthSlots(y, mo, true);
+      slots += s.slots; bizDays += s.bizDays; kyugyoDays += s.kyugyoDays; kyugyoSlots += s.kyugyoSlots;
+    });
+    const attendedW = recsAP.reduce((a, r) => a + _recWeight(r), 0);
+    const capSlots = _capacity * slots;
+    return { slots, bizDays, kyugyoDays, kyugyoSlots, capacity: _capacity, capSlots, attendedW, rate: capSlots ? Math.round(attendedW / capSlots * 100) : 0 };
+  }, [targetMonths, recsAP, calcMonthSlots, _recWeight, _capacity, appData.ticketRecords]);
+
   // 月別稼働率（棒グラフ用）
   const monthlyStats = React.useMemo(() => {
     const allRecs = appData.ticketRecords || [];
@@ -26518,55 +26644,46 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     };
   }, [recsAP]);
 
-  // 前期比計算
+  // 前期比計算 (★ 2026-08-31: 定員ベース稼働率で比較・年も考慮)
   const prevPeriodDiff = React.useMemo(() => {
     const allRecs = appData.ticketRecords || [];
-    const calcRateForMonths = (months) => {
-      const mRecs = allRecs.filter(r => {
-        const m = r.date?.match(/(\d+)月/);
-        return m && months.includes(parseInt(m[1]));
+    const _now = new Date();
+    const calcCapRate = (ymList) => { // [{y, mo}]
+      let slots = 0, w = 0, any = false;
+      ymList.forEach(({ y, mo }) => {
+        if (y > _now.getFullYear() || (y === _now.getFullYear() && mo > _now.getMonth()+1)) return;
+        const s = calcMonthSlots(y, mo, true);
+        slots += s.slots;
+        const mRecs = allRecs.filter(r => {
+          const m = String(r.date||'').match(/(\d+)月/);
+          if (!m || parseInt(m[1]) !== mo) return false;
+          if (r.year && Number(r.year) !== y) return false;
+          return true;
+        });
+        if (mRecs.length) any = true;
+        w += mRecs.reduce((a, r) => a + _recWeight(r), 0);
       });
-      const pl = mRecs.filter(r=>isPlannedRec(r));
-      const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
-      return pl.length ? Math.round(at.length/pl.length*100) : null;
+      return (any && slots) ? Math.round(w / (_capacity * slots) * 100) : null;
     };
-    
-    const getMonthsBefore = (baseY, baseM, count) => {
-      const months = [];
-      for (let i = 0; i < count; i++) {
-        let m = baseM - i;
-        if (m <= 0) m += 12;
-        months.push(m);
-      }
-      return months;
-    };
-    
+    const monthsBefore = (baseY, baseM, count) => { const out = []; let y = baseY, m = baseM; for (let i = 0; i < count; i++) { out.push({ y, mo: m }); m--; if (m <= 0) { m = 12; y--; } } return out; };
     if (period === '1') {
-      // 1ヶ月：前月との差
-      const prevM = tM - 1 <= 0 ? tM + 11 : tM - 1;
-      const prevRate = calcRateForMonths([prevM]);
+      let py = tY, pm = tM - 1; if (pm <= 0) { pm = 12; py--; }
+      const prevRate = calcCapRate([{ y: py, mo: pm }]);
       if (prevRate === null) return null;
-      return { diff: monthStats.rate - prevRate, label: '前月比' };
-    } else if (period === '3') {
-      // 3ヶ月：直近3ヶ月 vs その前の3ヶ月
-      const prevMonths = getMonthsBefore(tY, tM - 3 <= 0 ? tM + 9 : tM - 3, 3);
-      const prevRate = calcRateForMonths(prevMonths);
+      return { diff: periodCapStats.rate - prevRate, label: '前月比' };
+    } else if (period === '3' || period === '6') {
+      const n = parseInt(period, 10);
+      let sy = tY, sm = tM - n; while (sm <= 0) { sm += 12; sy--; }
+      const prevRate = calcCapRate(monthsBefore(sy, sm, n));
       if (prevRate === null) return null;
-      return { diff: monthStats.rate - prevRate, label: '前期比' };
-    } else if (period === '6') {
-      // 6ヶ月：直近6ヶ月 vs その前の6ヶ月
-      const prevMonths = getMonthsBefore(tY, tM - 6 <= 0 ? tM + 6 : tM - 6, 6);
-      const prevRate = calcRateForMonths(prevMonths);
-      if (prevRate === null) return null;
-      return { diff: monthStats.rate - prevRate, label: '前期比' };
+      return { diff: periodCapStats.rate - prevRate, label: '前期比' };
     } else if (period === '12') {
-      // 12ヶ月：前年との差
-      const prevRate = calcRateForMonths([1,2,3,4,5,6,7,8,9,10,11,12]); // 同じ月だが前年データがないのでダミー
+      const prevRate = calcCapRate(monthsBefore(tY - 1, tM, 12));
       if (prevRate === null) return null;
-      return { diff: monthStats.rate - prevRate, label: '前年比' };
+      return { diff: periodCapStats.rate - prevRate, label: '前年比' };
     }
     return null;
-  }, [period, tY, tM, monthStats.rate, appData.ticketRecords]);
+  }, [period, tY, tM, periodCapStats.rate, appData.ticketRecords, calcMonthSlots, _recWeight, _capacity]);
 
   // 2. 曜日別稼働率 + AM/PM別利用者ランキング
   const dowStats = React.useMemo(() => {
@@ -26909,10 +27026,18 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
         {/* 1. 月全体稼働率 */}
         <div id="ops-rate" data-sec="ops-rate" style={{scrollMarginTop:170}}/>
         <Card title={period==='1'?`${tY}年${tM}月　稼働率`:period==='custom'?`${customFrom.replace('-','年').replace(/-(0?)(\d+)/,'$2月')}〜${customTo.replace('-','年').replace(/-(0?)(\d+)/,'$2月')}　稼働率`:(()=>{const n=parseInt(period,10);let sM=tM-n+1,sY=tY;while(sM<=0){sM+=12;sY--;}return `${sY}年${sM}月〜${tY}年${tM}月　稼働率`;})()} accent='#f97316'>
+          {/* ★ 2026-08-31 店舗要望: 稼働率は「定員×2コマ×営業日」の枠数ベース(業界標準の半日型版)に刷新。
+              従来の「予定に対する出席」は出席率として併記。 休業日は営業日から除外し、日数も表示 */}
           <div data-print-id="rate-stats" style={{display:'flex',alignItems:'center',gap:24,flexWrap:'wrap'}}>
             <div style={{textAlign:'center',minWidth:80}}>
-              <div style={{fontSize:48,fontWeight:'bold',lineHeight:1,color:RC(monthStats.rate)}}>{monthStats.rate}<span style={{fontSize:20}}>%</span></div>
+              <div style={{fontSize:48,fontWeight:'bold',lineHeight:1,color:RC(periodCapStats.rate)}}>{periodCapStats.rate}<span style={{fontSize:20}}>%</span></div>
               <div style={{fontSize:13,color:'#64748b',marginTop:4}}>稼働率</div>
+              <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>定員ベース</div>
+            </div>
+            <div style={{textAlign:'center',minWidth:70}}>
+              <div style={{fontSize:28,fontWeight:'bold',lineHeight:1,color:RC(monthStats.rate)}}>{monthStats.rate}<span style={{fontSize:14}}>%</span></div>
+              <div style={{fontSize:13,color:'#64748b',marginTop:4}}>出席率</div>
+              <div style={{fontSize:10,color:'#94a3b8',marginTop:2}}>予定比</div>
             </div>
             {prevPeriodDiff && (
               <div style={{textAlign:'center',minWidth:70}}>
@@ -26923,9 +27048,13 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
               </div>
             )}
             <div style={{flex:1,minWidth:180}}>
-              <div data-print-id="rate-bar" style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-                <RateBar rate={monthStats.rate} color='#3b82f6'/>
-                <span style={{fontSize:13,color:'#475569',whiteSpace:'nowrap'}}>{monthStats.attended}/{monthStats.planned}件</span>
+              <div data-print-id="rate-bar" style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                <RateBar rate={periodCapStats.rate} color='#3b82f6'/>
+                <span style={{fontSize:13,color:'#475569',whiteSpace:'nowrap'}}>{periodCapStats.attendedW}/{periodCapStats.capSlots}枠</span>
+              </div>
+              <div style={{fontSize:11,color:'#64748b',marginBottom:8,lineHeight:1.6}}>
+                枠数 = 定員{periodCapStats.capacity}名 × 営業{periodCapStats.slots}コマ（営業日{periodCapStats.bizDays}日 × 午前/午後{periodCapStats.kyugyoSlots?`・半日休業等で${periodCapStats.kyugyoSlots}コマ除外`:''}）
+                {periodCapStats.kyugyoDays > 0 && <span style={{marginLeft:8,color:'#92400e',fontWeight:'bold'}}>休業日 {periodCapStats.kyugyoDays}日（稼働日数に含めていません）</span>}
               </div>
               <div data-print-id="rate-counts" style={{display:'flex',gap:16,flexWrap:'wrap'}}>
                 {[['出席','#3b82f6',monthStats.shukseki],['振替','#22c55e',monthStats.furikae],['欠席','#ef4444',monthStats.absent],['休止','#f97316',monthStats.kyushi],['休業','#94a3b8',monthStats.kyugyo]].map(([l,col,v])=>(
@@ -26990,11 +27119,10 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 if (_isCurMonth) { const d = _dayOf(r); if (d != null && d > _now.getDate()) return false; }
                 return true;
               });
-              const pl = mRecs.filter(r=>isPlannedRec(r));
-              const at = mRecs.filter(r=>r.status==='出席'||r.status==='振替');
-              // ★ データが無い月(未来・記録なし)は 0 ではなく null にして、グラフ・表で非表示にする(0へ急落させない)
-              //   未来月は年なし記録の混入を避けるため一律 null(現段階では稼働率なし)。
-              const rate = _isFutureMonth ? null : (pl.length ? Math.round(at.length/pl.length*100) : null);
+              // ★ 定員ベース稼働率に刷新(2026-08-31): 延べ利用コマ ÷ (定員×営業コマ)。 記録なし月はnull(非表示)
+              const _atW = mRecs.reduce((a,r)=>a+_recWeight(r),0);
+              const _cs = calcMonthSlots(yr, mo, _isCurMonth);
+              const rate = _isFutureMonth ? null : (mRecs.length && _cs.slots ? Math.round(_atW/(_capacity*_cs.slots)*100) : null);
               // 営業日数（その月の平日数）
               const workDays = getWorkingDays(yr, mo);
               // 前年稼働率（前年同月のチケットレコードから計算）
@@ -27011,9 +27139,9 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                   return false;
                 });
                 if (prevMRecs.length === 0) return null;
-                const prevPl = prevMRecs.filter(r=>isPlannedRec(r));
-                const prevAt = prevMRecs.filter(r=>r.status==='出席'||r.status==='振替');
-                return prevPl.length ? Math.round(prevAt.length/prevPl.length*100) : null;
+                const _pW = prevMRecs.reduce((a,r)=>a+_recWeight(r),0);
+                const _pS = calcMonthSlots(yr-1, mo, false);
+                return _pS.slots ? Math.round(_pW/(_capacity*_pS.slots)*100) : null;
               })();
               // 前月キー
               let pmY = yr, pmM = mo - 1;
@@ -27026,9 +27154,9 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 const m2 = r.date?.match(/(\d+)月/);
                 return m2 && parseInt(m2[1]) === pmM;
               });
-              const pmPl = pmRecs.filter(r=>isPlannedRec(r));
-              const pmAt = pmRecs.filter(r=>r.status==='出席'||r.status==='振替');
-              const prevMonthRate = pmPl.length ? Math.round(pmAt.length/pmPl.length*100) : null;
+              const _pmW = pmRecs.reduce((a,r)=>a+_recWeight(r),0);
+              const _pmS = calcMonthSlots(pmY, pmM, false);
+              const prevMonthRate = pmRecs.length && _pmS.slots ? Math.round(_pmW/(_capacity*_pmS.slots)*100) : null;
               return {
                 label: `${mo}月`,
                 month: key,
@@ -34907,9 +35035,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     const s = new Date(start), e = new Date(end);
     if (e < s) { alert('終了日は開始日以降にしてください'); return; }
     let nh = (appData.holidays||[]).filter(h => !origDates.includes(String(h.date||h)));
+    const _hAmpm = holidayEditModal.ampm && holidayEditModal.ampm !== '1日' ? holidayEditModal.ampm : null;
     for (let d = new Date(s); d <= e; d.setDate(d.getDate()+1)) {
       const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-      if (!nh.some(x => String(x.date||x)===ds)) nh.push({ date: ds, name: name||'休業日' });
+      if (!nh.some(x => String(x.date||x)===ds)) nh.push({ date: ds, name: name||'休業日', ...(_hAmpm ? { ampm: _hAmpm } : {}) });
     }
     nh.sort((a,b)=>String(a.date||a).localeCompare(String(b.date||b)));
     onSave({ ...appData, holidays: nh }, { manual: true, message: '✓ 休業を更新しました' });
@@ -35320,7 +35449,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                         <span className="text-xs text-slate-500">{_fmtJ(g.start)}{g.end!==g.start?` 〜 ${_fmtJ(g.end)}`:''}<span className="text-slate-400 ml-1">（{g.dates.length}日）</span></span>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <button type="button" onClick={()=>setHolidayEditModal({origDates:g.dates, name:g.name, start:g.start, end:g.end})} className="text-blue-400 hover:text-blue-600 p-1" title="編集"><Edit3 size={15}/></button>
+                        <button type="button" onClick={()=>setHolidayEditModal({origDates:g.dates, name:g.name, start:g.start, end:g.end, ampm:(()=>{ const h0=(appData.holidays||[]).find(h=>String(h.date||h)===g.dates[0]); return (h0 && h0.ampm) || '1日'; })()})} className="text-blue-400 hover:text-blue-600 p-1" title="編集"><Edit3 size={15}/></button>
                         <button type="button" onClick={()=>{ if(window.confirm(`「${g.name}」（${_fmtJ(g.start)}${g.end!==g.start?`〜${_fmtJ(g.end)}`:''}）を削除しますか？`)) removeHolidayRange(g.dates); }} className="text-slate-300 hover:text-red-500 p-1" title="削除"><Trash2 size={15}/></button>
                       </div>
                     </div>
@@ -35339,6 +35468,16 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       <div><label className="block text-sm font-bold text-slate-600 mb-1">開始日</label><input type="date" value={holidayEditModal.start} onChange={e=>setHolidayEditModal(m=>({...m,start:e.target.value}))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none"/></div>
                       <span className="pb-2 text-slate-400 font-bold">〜</span>
                       <div><label className="block text-sm font-bold text-slate-600 mb-1">終了日</label><input type="date" value={holidayEditModal.end} onChange={e=>setHolidayEditModal(m=>({...m,end:e.target.value}))} className="px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none"/></div>
+                    </div>
+                    {/* ★ 半日休業(2026-08-31): AM/PMだけ休業する場合。 稼働率の枠数と日誌の休業連動に反映される */}
+                    <div><label className="block text-sm font-bold text-slate-600 mb-1">休業する時間帯</label>
+                      <div className="flex gap-2">
+                        {[['1日','1日（全日休業）'],['AM','午前のみ'],['PM','午後のみ']].map(([v,l])=>(
+                          <label key={v} className={`flex items-center gap-1.5 cursor-pointer px-3 py-2 rounded-xl border font-bold text-xs transition-all ${((holidayEditModal.ampm||'1日')===v)?'bg-blue-50 border-blue-400 text-blue-700':'bg-slate-50 border-slate-200 text-slate-600'}`}>
+                            <input type="radio" name="holidayAmpm" value={v} checked={(holidayEditModal.ampm||'1日')===v} onChange={()=>setHolidayEditModal(m=>({...m,ampm:v}))} className="w-3 h-3"/>{l}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2 mt-6">
@@ -37097,7 +37236,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   // ★ 休業日の連動(2026-08-27 店舗要望): 各種設定の休業日・定休日、月間スケジュールの「休業」を日誌にも反映。
   //   これまで日誌は ticketRecords と基本曜日だけで行を作っていたため、休業設定した日(8/12-14等)でも
   //   「出席」で表示され、送迎の自動コピーまで入っていた。
-  const _dayIsKyugyo = (iso, dw) => ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso)) || ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw));
+  const _dayIsKyugyo = (iso, dw) => {
+    // ★ 半日休業(holidays[].ampm='AM'/'PM'・2026-08-31)は、表示中の時間帯が一致する時だけ休業扱い
+    const _h = (appData.holidays||[]).find(h => (h && (h.date||h)) === iso);
+    if (_h) { const ha = _h.ampm; if (!ha || ha === '1日') return true; return ampm === ha || ampm === '1日'; }
+    return (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw);
+  };
   const _shiftKyugyo = (pid, iso) => {
     const _d = new Date(iso); if (isNaN(_d.getTime())) return false;
     const sh = appData.monthlyShifts?.[`${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}`]?.[pid] || {};
