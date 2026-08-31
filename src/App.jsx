@@ -13758,7 +13758,7 @@ function FamilyView() {
               ログイン情報は事業所から<br/>お渡しされた紙またはメールでご確認ください
             </p>
             <div style={{textAlign:'center',marginTop:8}}>
-              <button type="button" onClick={()=>setFamReset({step:1, username:(loginForm.username||'').trim(), code:'', n1:'', n2:'', busy:false, err:'', masked:'', done:false})}
+              <button type="button" onClick={()=>setFamReset({step:1, username:(loginForm.username||'').trim(), email:'', code:'', n1:'', n2:'', busy:false, err:'', masked:'', done:false})}
                 style={{background:'none',border:'none',color:'#5e8030',fontSize:12,fontWeight:'bold',cursor:'pointer',textDecoration:'underline'}}>パスワードをお忘れですか？（メールで再設定）</button>
             </div>
             {/* 新規アカウント作成ボタンは非表示 (登録は招待 URL 経由のみ) */}
@@ -13769,9 +13769,10 @@ function FamilyView() {
             <button type="button" onClick={()=>setHelpModal('home')} style={{background:'rgba(255,255,255,0.95)',color:'#3d5021',border:'none',borderRadius:12,padding:'11px 16px',fontSize:14,fontWeight:'bold',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>📱 ホーム画面に追加する方法</button>
             <button type="button" onClick={()=>setHelpModal('qa')} style={{background:'rgba(255,255,255,0.95)',color:'#3d5021',border:'none',borderRadius:12,padding:'11px 16px',fontSize:14,fontWeight:'bold',cursor:'pointer',boxShadow:'0 2px 8px rgba(0,0,0,0.12)'}}>❓ ログインできない時</button>
           </div>
-          <div style={{textAlign:'center',marginTop:16,fontSize:11,color:'rgba(255,255,255,0.85)'}}>
+          {/* ★ 白文字は薄緑背景で読めなかったため濃色に変更(2026-09-01 店舗要望) */}
+          <div style={{textAlign:'center',marginTop:16,fontSize:11,color:'#64748b',background:'rgba(255,255,255,0.75)',borderRadius:10,padding:'8px 12px',lineHeight:1.7}}>
             お困りの場合はサポートまでお問い合わせください<br/>
-            <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'inherit',textDecoration:'underline'}}>support@ones-style.co.jp</a>
+            <a href="mailto:support@ones-style.co.jp" style={{fontWeight:'bold',color:'#5e8030',textDecoration:'underline'}}>support@ones-style.co.jp</a>
           </div>
         </div>
         {/* ★ パスワードのメール自己リセット(2026-08-31): 登録メール宛のみ・コード10分有効・5回まで */}
@@ -13786,16 +13787,20 @@ function FamilyView() {
                 </>
               ) : famReset.step === 1 ? (
                 <>
-                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>ログインIDを入力してください。アカウントに登録されているメールアドレスに、6桁の確認コードをお送りします（メール未登録の場合は届きません。その場合は事業所へご連絡ください）。</div>
+                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>ログインIDと、アカウントに登録したメールアドレスを入力してください。両方が登録内容と一致した場合のみ、そのメールに6桁の確認コードをお送りします（届かない場合は事業所へご連絡ください）。</div>
                   {famReset.err && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'8px 10px',marginBottom:10,fontSize:12,color:'#dc2626',fontWeight:'bold'}}>{famReset.err}</div>}
                   <input value={famReset.username} onChange={e=>setFamReset(f=>({...f,username:toHalfWidth(e.target.value),err:''}))} placeholder="ログインID" autoComplete="username"
+                    style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:8}}/>
+                  <input value={famReset.email||''} onChange={e=>setFamReset(f=>({...f,email:toHalfWidth(e.target.value),err:''}))} placeholder="登録したメールアドレス" type="email" inputMode="email" autoComplete="email"
                     style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:10}}/>
                   <button disabled={famReset.busy} onClick={async ()=>{
                     const u = (famReset.username||'').trim();
+                    const em = (famReset.email||'').trim();
                     if (!u) { setFamReset(f=>({...f,err:'ログインIDを入力してください'})); return; }
+                    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { setFamReset(f=>({...f,err:'メールアドレスを入力してください'})); return; }
                     setFamReset(f=>({...f,busy:true,err:''}));
                     try {
-                      const resp = await fetch('/api/family-reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'request', username:u }) });
+                      const resp = await fetch('/api/family-reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'request', username:u, email:em }) });
                       const j = await resp.json().catch(()=>({}));
                       if (!resp.ok) { setFamReset(f=>({...f,busy:false,err:j.error||'送信に失敗しました。時間をおいてお試しください。'})); return; }
                       setFamReset(f=>({...f, step:2, busy:false, err:'', masked:j.masked||''}));
@@ -13805,7 +13810,7 @@ function FamilyView() {
                 </>
               ) : (
                 <>
-                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>{famReset.masked ? <>メール（<b>{famReset.masked}</b>）に確認コードを送信しました。</> : <>登録メールがある場合、確認コードが届きます。届かない場合は事業所へお問い合わせください。</>}<br/>6桁のコードと新しいパスワードを入力してください（コードは<b>10分有効・5回まで</b>入力できます）。</div>
+                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>{famReset.masked ? <>メール（<b>{famReset.masked}</b>）に確認コードを送信しました。</> : <>ID・メールアドレスが登録内容と一致した場合、確認コードが届きます。届かない場合は入力内容をご確認いただくか、事業所へお問い合わせください。</>}<br/>6桁のコードと新しいパスワードを入力してください（コードは<b>10分有効・5回まで</b>入力できます）。</div>
                   {famReset.err && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'8px 10px',marginBottom:10,fontSize:12,color:'#dc2626',fontWeight:'bold'}}>{famReset.err}</div>}
                   <input value={famReset.code} onChange={e=>setFamReset(f=>({...f,code:toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,6),err:''}))} placeholder="確認コード（6桁）" inputMode="numeric"
                     style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:16,letterSpacing:4,outline:'none',boxSizing:'border-box',marginBottom:8,textAlign:'center',fontWeight:'bold'}}/>
@@ -27057,11 +27062,12 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
                 {periodCapStats.kyugyoDays > 0 && <span style={{marginLeft:8,color:'#92400e',fontWeight:'bold'}}>休業日 {periodCapStats.kyugyoDays}日（稼働日数に含めていません）</span>}
               </div>
               <div data-print-id="rate-counts" style={{display:'flex',gap:16,flexWrap:'wrap'}}>
-                {[['出席','#3b82f6',monthStats.shukseki],['振替','#22c55e',monthStats.furikae],['欠席','#ef4444',monthStats.absent],['休止','#f97316',monthStats.kyushi],['休業','#94a3b8',monthStats.kyugyo]].map(([l,col,v])=>(
+                {/* ★ 休業は記録件数でなく休業日数(各種設定の休業日・定休日は含まず)を表示(2026-09-01 店舗要望) */}
+                {[['出席','#3b82f6',monthStats.shukseki,'件'],['振替','#22c55e',monthStats.furikae,'件'],['欠席','#ef4444',monthStats.absent,'件'],['休止','#f97316',monthStats.kyushi,'件'],['休業','#94a3b8',periodCapStats.kyugyoDays + (periodCapStats.kyugyoSlots - periodCapStats.kyugyoDays*2) * 0.5,'日']].map(([l,col,v,u])=>(
                   <div key={l} style={{display:'flex',alignItems:'center',gap:4,fontSize:13}}>
                     <span style={{width:8,height:8,borderRadius:'50%',background:col,flexShrink:0}}/>
                     <span style={{color:'#475569',fontWeight:'bold'}}>{l}</span>
-                    <span style={{fontWeight:'bold',color:'#1e293b'}}>{v}件</span>
+                    <span style={{fontWeight:'bold',color:'#1e293b'}}>{v}{u}</span>
                   </div>
                 ))}
               </div>

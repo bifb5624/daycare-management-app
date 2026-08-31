@@ -69,8 +69,12 @@ export default async function handler(req, res) {
   };
 
   if (action === 'request') {
-    // ★ ID不存在・メール未登録・店舗不明でも同じ応答(列挙対策)。 メールがある場合のみ実際に送る
+    // ★ ダブルチェック(2026-09-01 店舗決定): ログインIDに加えメールアドレスも入力させ、登録メールと一致した場合のみ送信。
+    //   ID不存在・メール未登録・メール不一致・店舗不明でも同じ応答(列挙対策・実際には送らない)
+    const inputEmail = String(body.email || '').trim().toLowerCase();
+    if (!inputEmail) return res.status(400).json({ error: 'メールアドレスを入力してください' });
     if (!acc || !acc.email || !acc.store_id) return res.status(200).json({ ok: true });
+    if (inputEmail !== String(acc.email).trim().toLowerCase()) return res.status(200).json({ ok: true });
     let data;
     try { data = await loadStore(acc.store_id); } catch { return res.status(200).json({ ok: true }); }
     if (!data) return res.status(200).json({ ok: true });
