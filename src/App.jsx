@@ -19834,7 +19834,9 @@ export default function App() {
             {/* ★ 連絡帳(print)は高さの flex 配分でレイアウトするため、zoom + height:% だと iPad Safari で
                 高さが解決できず運動テーブル(flex:1 1 0)が潰れて切れる(サイドバーを開くと縮率が下がり顕在化)。
                 ホーム(dashboard)と同様に zoom 縮小の対象外にし、等倍＋スクロールで表示する。 */}
-            <div style={isMobileLayout ? {width:'100%',minWidth:0} : (currentView==='dashboard' || currentView==='print' || currentView==='master') ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : 1, width: contentScale<1 ? `${100/contentScale}%` : '100%', height: contentScale<1 ? `${100/contentScale}%` : '100%'}}>
+            {/* ★ 日誌(diary)もzoom例外(2026-08-31): 日誌はシート側でdiaryViewScaleの拡縮を持ち、全体zoomと二重になると
+                iPad Safariでタップ座標がズレてシート内のチェック/時間セルが反応しなくなるため */}
+            <div style={isMobileLayout ? {width:'100%',minWidth:0} : (currentView==='dashboard' || currentView==='print' || currentView==='master' || currentView==='diary') ? {width:'100%',minWidth:0,height:'100%'} : {minWidth:DESIGN_WIDTH, zoom: contentScale<1 ? contentScale : 1, width: contentScale<1 ? `${100/contentScale}%` : '100%', height: contentScale<1 ? `${100/contentScale}%` : '100%'}}>
             {currentView === 'dashboard' ? <DashboardView appData={appData} navigateTo={navigateTo} activeRecorder={activeRecorder} notices={visibleNotices} devNotes={devUpdateNotes} isNoticeRead={isNoticeRead} markNoticeRead={markNoticeRead} /> :
              currentView === 'record' ? <RecordView appData={appData} activeRecorder={activeRecorder} onSave={handleSaveToCloud} navigateTo={navigateTo} selectedDate={selectedDate} setSelectedDate={setSelectedDate} dirtyRef={recordDirtyRef} saveFnRef={recordSaveFnRef} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} showTip={showTip} hideTip={hideTip} isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} deviceName={deviceName} /> :
              currentView === 'ticket' ? <TicketView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  onSave={handleSaveToCloud} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={ticketDirtyRef} saveFnRef={ticketSaveFnRef} /> :
@@ -30512,8 +30514,12 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   const [patientStatusFilter, setPatientStatusFilter] = useState('利用中');
   const [nameSearchQuery, setNameSearchQuery] = useState('');
   const [activeKanaFilter, setActiveKanaFilter] = useState('all');
-  const [masterSort, setMasterSort] = useState('kana'); // 'kana'|'startDate'|'careLevel'|'cmOffice'|'bday'|'insurance'
+  const [masterSort, setMasterSort] = useState('kana'); // 'kana'|'schedule'|'startDate'|'careLevel'|'cmOffice'|'bday'|'insurance'|'age'
   const [masterSortOrder, setMasterSortOrder] = useState('asc'); // 'asc'|'desc'
+  // ★ 名簿の並び替え/絞り込みポップアップ(2026-08-31 店舗要望: ボタン散在をやめモニタリングと同じポップアップに集約)
+  const [masterSortPop, setMasterSortPop] = useState(false);
+  const [masterFilterPop, setMasterFilterPop] = useState(false);
+  const [masterDowFilter, setMasterDowFilter] = useState([]); // '1_AM'等の「曜日_時間帯」トークン。空=全員
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileRosterOpen, setMobileRosterOpen] = useState(false); // ★ スマホは名簿をスライドオーバー表示
   const isMobileView = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -31259,6 +31265,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const s = getPatientDisplayStatus(p);
     if (patientStatusFilter !== s) return false;
     if (nameSearchQuery && !p.name.includes(nameSearchQuery) && !(p.kana && p.kana.includes(nameSearchQuery))) return false;
+    // ★ 基本利用日(曜日×AM/PM)絞り込み(2026-08-31 店舗要望)。1日利用の方はAM/PMどちらの選択でも該当
+    if (masterDowFilter.length) {
+      const ok = masterDowFilter.some(t => { const [d, slot] = t.split('_'); const v = (p.scheduleAmPm||[])[+d]; return v && (v === slot || v === '1日'); });
+      if (!ok) return false;
+    }
     if (activeKanaFilter !== 'all') return getRowFromKana(p.kana) === activeKanaFilter;
     return true;
   }).sort((a,b) => {
@@ -31643,12 +31654,68 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             options={(appData.patients||[]).map(p=>({key:p.id, label:p.name, sub:p.kana}))}
             onSelect={(o)=>{ const p=(appData.patients||[]).find(x=>String(x.id)===String(o.key)); if(!p) return; setNameSearchQuery(''); if(p.id!==editingPatientId){ const hasUnsaved=!!dirtyRef?.current||!!pendingShifts||!!pendingTickets; if(hasUnsaved){ setSwitchPatientConfirm({targetPatient:p}); return; } } setEditingPatientId(p.id); onPatientChange&&onPatientChange(p.id); setMobileRosterOpen(false); }}
             inputProps={{type:'text', placeholder:'利用者名で検索（候補から選べます）', className:'w-full pl-7 pr-6 py-2 bg-slate-100 border border-slate-200 rounded-lg text-[14px] font-bold outline-none'}} />{nameSearchQuery && <button onClick={() => setNameSearchQuery('')} className="absolute right-1.5 top-1.5 text-slate-400 z-10"><X size={12} /></button>}</div><div className="flex flex-wrap gap-0.5">{kanaGroups.map(g => (<button key={g} onClick={() => setActiveKanaFilter(g)} className={`px-2 py-1 text-[11px] font-bold rounded ${activeKanaFilter === g ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{g === 'all' ? '全て' : g + '行'}</button>))}</div>
-            <div className="flex gap-0.5 flex-wrap items-center">
-              {[['kana','名前順'],['schedule','基本利用日'],['startDate','通所歴'],['careLevel','介護度'],['cmOffice','事業所'],['bday','誕生月'],['insurance','保険更新'],['age','年齢']].map(([k,l])=>(
-                <button key={k} onClick={()=>{ if(masterSort===k){setMasterSortOrder(o=>o==='asc'?'desc':'asc');}else{setMasterSort(k);setMasterSortOrder('asc');} }} className={`px-2 py-1 text-[11px] font-bold rounded flex items-center gap-0.5 ${masterSort===k?'bg-blue-600 text-white':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                  {l}{masterSort===k && <span style={{fontSize:9}}>{masterSortOrder==='asc'?'↑':'↓'}</span>}
-                </button>
-              ))}
+            {/* ★ 並び替え/絞り込みをポップアップに集約(2026-08-31 店舗要望) */}
+            <div className="flex gap-1 flex-wrap items-center">
+              {(() => {
+                const _sortLabels = {kana:'名前順',schedule:'基本利用日',startDate:'通所歴',careLevel:'介護度',cmOffice:'事業所',bday:'誕生月',insurance:'保険更新',age:'年齢'};
+                const _mon = [1,2,3,4,5,6,0]; const _dw = '日月火水木金土';
+                const _filterOn = masterDowFilter.length > 0;
+                return (<>
+                <div style={{position:'relative'}}>
+                  <button type="button" onClick={()=>{ setMasterSortPop(v=>!v); setMasterFilterPop(false); }}
+                    className="px-2 py-1 text-[11px] font-bold rounded bg-blue-600 text-white flex items-center gap-0.5">
+                    並び替え: {_sortLabels[masterSort]||'名前順'}<span style={{fontSize:9}}>{masterSortOrder==='asc'?'↑':'↓'}</span>
+                  </button>
+                  {masterSortPop && (
+                    <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:60,background:'white',border:'1px solid #e2e8f0',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,0.2)',padding:10,width:230}}>
+                      <div style={{fontSize:10,fontWeight:'bold',color:'#64748b',marginBottom:4}}>並び替えの基準</div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:8}}>
+                        {Object.entries(_sortLabels).map(([k,l])=>{ const on = masterSort===k; return (
+                          <button key={k} type="button" onClick={()=>{ setMasterSort(k); }}
+                            style={{padding:'6px 0',borderRadius:8,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#2563eb':'#cbd5e1'}`,background:on?'#2563eb':'white',color:on?'white':'#475569',cursor:'pointer'}}>{l}</button>
+                        ); })}
+                      </div>
+                      <div style={{display:'flex',gap:4}}>
+                        {[['asc','↑ 昇順'],['desc','↓ 降順']].map(([k,l])=>{ const on = masterSortOrder===k; return (
+                          <button key={k} type="button" onClick={()=>setMasterSortOrder(k)}
+                            style={{flex:1,padding:'6px 0',borderRadius:8,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#2563eb':'#cbd5e1'}`,background:on?'#2563eb':'white',color:on?'white':'#475569',cursor:'pointer'}}>{l}</button>
+                        ); })}
+                      </div>
+                      <div style={{textAlign:'right',marginTop:8}}>
+                        <button type="button" onClick={()=>setMasterSortPop(false)} style={{padding:'5px 14px',borderRadius:8,fontSize:11,fontWeight:'bold',border:'none',background:'#2563eb',color:'white',cursor:'pointer'}}>閉じる</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div style={{position:'relative'}}>
+                  <button type="button" onClick={()=>{ setMasterFilterPop(v=>!v); setMasterSortPop(false); }}
+                    className={`px-2 py-1 text-[11px] font-bold rounded flex items-center gap-0.5 ${_filterOn?'bg-sky-600 text-white':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                    絞り込み{_filterOn?`: ${masterDowFilter.map(t=>{const [d,s]=t.split('_');return _dw[+d]+s;}).join('・')}`:' ▾'}
+                  </button>
+                  {masterFilterPop && (
+                    <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:60,background:'white',border:'1px solid #e2e8f0',borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,0.2)',padding:10,width:230}}>
+                      <div style={{fontSize:10,fontWeight:'bold',color:'#64748b',marginBottom:6}}>基本利用日で絞り込み（複数選択可）</div>
+                      {_mon.map(di=>(
+                        <div key={di} style={{display:'flex',alignItems:'center',gap:5,marginBottom:4}}>
+                          <span style={{width:18,fontSize:12,fontWeight:'bold',color:di===0?'#dc2626':di===6?'#2563eb':'#475569'}}>{_dw[di]}</span>
+                          {['AM','PM'].map(slot=>{ const t = `${di}_${slot}`; const on = masterDowFilter.includes(t); return (
+                            <button key={slot} type="button" onClick={()=>setMasterDowFilter(prev=>prev.includes(t)?prev.filter(x=>x!==t):[...prev,t])}
+                              style={{flex:1,padding:'4px 0',borderRadius:8,fontSize:11,fontWeight:'bold',border:`1px solid ${on?'#0284c7':'#cbd5e1'}`,background:on?'#0284c7':'white',color:on?'white':'#475569',cursor:'pointer'}}>{slot}</button>
+                          ); })}
+                        </div>
+                      ))}
+                      <div style={{fontSize:9,color:'#94a3b8',margin:'4px 0 6px'}}>1日利用の方はAM/PMどちらの選択でも表示されます</div>
+                      <div style={{display:'flex',justifyContent:'space-between',gap:6}}>
+                        <button type="button" onClick={()=>setMasterDowFilter([])}
+                          style={{padding:'5px 10px',borderRadius:8,fontSize:11,fontWeight:'bold',border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',cursor:'pointer'}}>すべて解除</button>
+                        <button type="button" onClick={()=>setMasterFilterPop(false)}
+                          style={{padding:'5px 14px',borderRadius:8,fontSize:11,fontWeight:'bold',border:'none',background:'#2563eb',color:'white',cursor:'pointer'}}>閉じる</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                </>);
+              })()}
             </div>
           </div>
           {/* ★ 期限もののまとめ(2026-08-26): 誰が未更新かは名簿の赤い表示で分かる */}
@@ -31664,7 +31731,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               masterSort === 'bday' && p.birthDate ? <span className="text-[10px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1 self-start mt-0.5">誕生 {new Date(p.birthDate).getMonth()+1}/{new Date(p.birthDate).getDate()}</span> :
               masterSort === 'insurance' && p.careLevelTo ? <span className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded px-1 self-start mt-0.5">更新 {p.careLevelTo.replace(/-/g,'/')}</span> :
               masterSort === 'age' && _age !== null ? <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded px-1 self-start mt-0.5">{_age} 歳</span> :
-              masterSort === 'schedule' ? (() => { const _mon=[1,2,3,4,5,6,0]; const _dw='日月火水木金土'; const t=_mon.map(di=>{ const v=(p.scheduleAmPm||[])[di]; return v?_dw[di]+(v==='1日'?'':v):''; }).filter(Boolean).join('・'); return t ? <span className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1 self-start mt-0.5">{t}</span> : <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200 rounded px-1 self-start mt-0.5">利用日未設定</span>; })() :
+              (masterSort === 'schedule' || masterDowFilter.length > 0) ? (() => { const _mon=[1,2,3,4,5,6,0]; const _dw='日月火水木金土'; const t=_mon.map(di=>{ const v=(p.scheduleAmPm||[])[di]; return v?_dw[di]+(v==='1日'?'':v):''; }).filter(Boolean).join('・'); return t ? <span className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1 self-start mt-0.5">{t}</span> : <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200 rounded px-1 self-start mt-0.5">利用日未設定</span>; })() :
               null;
             return (<button key={p.id} onClick={() => {
               // ★ 未保存変更がある場合のみ 3 択ポップアップ (保存/破棄/キャンセル)
@@ -36889,7 +36956,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         {list.filter(s=>s.name).map((s)=>(
           <span key={s.id} style={{display:'inline-flex',flexDirection:'column',alignItems:'flex-start',gap:0}}>
             <span style={{display:'inline-flex',alignItems:'center',gap:2}}>
-              <CB checked={!!(log.staff||{})[s.id]} onChange={()=>{ toggle('staff',s.id); if(!(log.staff||{})[s.id]) setTempModal({staffId:s.id,staffName:s.name,value:(log.staffTemp||{})[s.id]||''}); }} sz={11}/>
+              {CB({checked:!!(log.staff||{})[s.id], onChange:()=>{ toggle('staff',s.id); if(!(log.staff||{})[s.id]) setTempModal({staffId:s.id,staffName:s.name,value:(log.staffTemp||{})[s.id]||''}); }, sz:11})}
               <span style={{fontSize:11}}>{s.name}</span>
             </span>
             {(log.staffTemp||{})[s.id] && (
@@ -36930,7 +36997,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const _nfs = _nl >= 7 ? 7.5 : _nl >= 6 ? 8.5 : _nl >= 5 ? 9.5 : 11;
           return (
           <span key={s.id} style={{display:'inline-flex',alignItems:'center',gap:1,minWidth:0}}>
-            <CB checked={!!(log.driver||{})[prefix+s.id]} onChange={()=>toggle('driver',prefix+s.id)} sz={10}/>
+            {CB({checked:!!(log.driver||{})[prefix+s.id], onChange:()=>toggle('driver',prefix+s.id), sz:10})}
             <span style={{fontSize:_nfs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.name}</span>
           </span>
           );
@@ -37126,13 +37193,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       <div style={{border:'1px solid #555',marginBottom:4,borderRadius:2}}>
         <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 6px'}}>担当職員</div>
         <div style={{display:'flex',gap:3,padding:'3px 5px 0 5px'}}>
-          <StaffBox label="管理者" list={managers} flexWeight="1 1 0"/>
-          <StaffBox label="生活相談員" list={seikatsu} flexWeight="2 1 0"/>
-          <StaffBox label="機能訓練指導員" list={kinou} flexWeight="2 1 0"/>
+          {StaffBox({label:'管理者', list:managers, flexWeight:'1 1 0'})}
+          {StaffBox({label:'生活相談員', list:seikatsu, flexWeight:'2 1 0'})}
+          {StaffBox({label:'機能訓練指導員', list:kinou, flexWeight:'2 1 0'})}
         </div>
         <div style={{display:'flex',gap:3,padding:'3px 5px 3px 5px'}}>
-          <StaffBox label="看護師" list={kangoFu}/>
-          <StaffBox label="介護職員" list={kaigo} flexWeight="3 1 0"/>
+          {StaffBox({label:'看護師', list:kangoFu})}
+          {StaffBox({label:'介護職員', list:kaigo, flexWeight:'3 1 0'})}
         </div>
       </div>
       )}
@@ -37313,12 +37380,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                   onClick={()=>openTimeKeypad(car.id,'arrive',ct.arrive)}>
                   {ct.arrive||'__:__'}
                 </td>
-                <td style={cs(null)}><DriverRow carId={car.id} prefix={'a_'+car.id+'_'}/></td>
+                <td style={cs(null)}>{DriverRow({carId:car.id, prefix:'a_'+car.id+'_'})}</td>
                 <td style={{...cs(44),textAlign:'center',cursor:'pointer',fontSize:11,fontWeight:'bold',color:ct.depart?'#1d4ed8':'#aaa'}}
                   onClick={()=>openTimeKeypad(car.id,'depart',ct.depart)}>
                   {ct.depart||'__:__'}
                 </td>
-                <td style={cs(null)}><DriverRow carId={car.id} prefix={'d_'+car.id+'_'}/></td>
+                <td style={cs(null)}>{DriverRow({carId:car.id, prefix:'d_'+car.id+'_'})}</td>
               </tr>
             );
           })}
@@ -37347,7 +37414,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             })().map((s,si,arr)=>(
               <React.Fragment key={s.id}>
                 <span style={{display:'inline-flex',alignItems:'center',gap:2}}>
-                  <CB checked={!!(_log.recorder||{})[s.id]} onChange={()=>_toggle('recorder',s.id)} sz={11}/>
+                  {CB({checked:!!(_log.recorder||{})[s.id], onChange:()=>_toggle('recorder',s.id), sz:11})}
                   <span style={{fontSize:11,fontWeight:'bold'}}>{s.name}</span>
                 </span>
                 {si < arr.length-1 && <span style={{fontSize:11}}>　</span>}
@@ -37358,7 +37425,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         <div id={!data ? 'diary-sec-manager' : undefined} style={{flex:1,border:'1px solid #555',borderRadius:2,overflow:'hidden'}}>
           <div style={{backgroundColor:'#445',color:'white',fontSize:9,fontWeight:'bold',padding:'2px 8px'}}>管理者確認</div>
           <div style={{padding:'5px 8px',display:'flex',alignItems:'center',gap:4,minHeight:38}}>
-            <CB checked={!!(_log.managerConfirmed)} onChange={()=>_updateLog({managerConfirmed:!_log.managerConfirmed})} sz={12}/>
+            {CB({checked:!!(_log.managerConfirmed), onChange:()=>_updateLog({managerConfirmed:!_log.managerConfirmed}), sz:12})}
             <span style={{fontSize:11,fontWeight:'bold',lineHeight:1.4}}>{managerName}は上記記録を確認しました。</span>
           </div>
         </div>
@@ -37583,11 +37650,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                   transform:`scale(${scale})`,
                   marginBottom: `${(scale-1)*1123}px`
                 }}>
-                  <DiarySheet data={pg.d} pageInfo={{
+                  {DiarySheet({data: pg.d, pageInfo: {
                     pageIndex: pg.pi, totalPages: pg.numPages,
                     rowStart: pg.rowStart, rowEnd: pg.rowEnd,
                     showStaff: pg.showStaff, showPatients: pg.showPatients, showExtras: pg.showExtras
-                  }} />
+                  }})}
                 </div>
               </div>
             ));
@@ -37923,7 +37990,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             return pageList.map((p, i) => (
               <div key={i} style={{ zoom: diaryViewScale }}>
                 <div className="shadow-xl rounded-lg overflow-hidden border border-slate-300">
-                  <DiarySheet pageInfo={{pageIndex:i, totalPages:pageList.length, ...p}} />
+                  {/* ★ 関数呼び出しで描画(2026-08-31): <DiarySheet/>だと親の再描画のたびにシートDOMが
+                      アンマウント→再マウントされ、タップ途中のチェック/時間セルのclickが取りこぼされていた */}
+                  {DiarySheet({pageInfo: {pageIndex:i, totalPages:pageList.length, ...p}})}
                 </div>
               </div>
             ));
@@ -37978,11 +38047,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                 pageBreakAfter: i < total-1 ? 'always' : 'auto',
                 background:'white',display:'flex',alignItems:'center',justifyContent:'center',
                 marginBottom: i < total-1 ? 24 : 0}}>
-              <DiarySheet data={pg.d} pageInfo={{
+              {DiarySheet({data: pg.d, pageInfo: {
                 pageIndex: i, totalPages: total,
                 rowStart: pg.rowStart, rowEnd: pg.rowEnd,
                 showStaff: pg.showStaff, showPatients: pg.showPatients, showExtras: pg.showExtras
-              }} />
+              }})}
             </div>
           ));
         })()}
