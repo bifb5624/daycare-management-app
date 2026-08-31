@@ -1,4 +1,7 @@
 {
+  "crons": [
+    { "path": "/api/brevo-keepalive", "schedule": "0 21 1 */2 *" }
+  ],
   "headers": [
     {
       "source": "/",
