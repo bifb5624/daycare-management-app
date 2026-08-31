@@ -34433,6 +34433,31 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const _cmTombKeyOffice = (name) => `off|${String(name||'').trim()}`;
   const _cmTombKeyPerson = (office, name) => `cm|${String(office||'').trim()}|${String(name||'').trim()}`;
   const _cmTombsWith = (...keys) => { const t = { ...(appData.systemSettings?.cmTombstones||{}) }; keys.forEach(k => { t[k] = syncNow(); }); return t; };
+  // ★ 追加フォームのポップアップ化(2026-08-31 店舗要望)+重複登録防止
+  const [addOfficeModal, setAddOfficeModal] = useState(false);
+  const [addPersonModal, setAddPersonModal] = useState(false);
+  const _cmDupNorm = (s) => normalizeName(String(s||'')).replace(/[\s　]/g,'');
+  const addOfficeFromModal = () => {
+    const nm = (newOffice.name||'').trim();
+    if (!nm) { alert('事業所名を入力してください'); return; }
+    if (cmOffices.some(o => _cmDupNorm(o.name) === _cmDupNorm(nm))) { alert('同名の事業所がすでに登録されています。\n既存の事業所を編集して使うか、名称を変えて登録してください。'); return; }
+    persistCm([...cmOffices, { ...newOffice, name: nm, phone: formatJpPhone(newOffice.phone), fax: formatJpPhone(newOffice.fax), _addedAt: syncNow() }], null, '✓ ケアマネ事業所を追加しました');
+    setNewOffice({ name:"", phone:"", fax:"" });
+    setAddOfficeModal(false);
+  };
+  const addPersonFromModal = () => {
+    const nm = (newPerson.name||'').trim();
+    if (!newPerson.office || !nm) { alert('事業所と担当者名を入力してください'); return; }
+    // ★ 同一事業所内の同姓同名は重複登録とみなしブロック(別事業所の同姓同名は別人として登録可)
+    if (cmPersons.some(c => _cmDupNorm(c.office) === _cmDupNorm(newPerson.office) && _cmDupNorm(c.name) === _cmDupNorm(nm))) {
+      alert('同じ事業所に同姓同名の担当者がすでに登録されています。\n同一人物の場合は既存の担当者を編集してください。\n本当に別人の同姓同名の場合は、区別がつくよう名前に一文字追加して登録してください（例: 鈴木 一郎(2)）。');
+      return;
+    }
+    const _kl = (newPerson.kanaLast||'').trim(), _kf = (newPerson.kanaFirst||'').trim();
+    persistCm(null, [...cmPersons, { ...newPerson, name: nm, email: (newPerson.email||'').trim(), kanaLast: _kl, kanaFirst: _kf, kana: `${_kl} ${_kf}`.trim(), phone: formatJpPhone(newPerson.phone), phoneDirect: formatJpPhone(newPerson.phone), fax: cmOffices.find(o=>o.name===newPerson.office)?.fax||"", _addedAt: syncNow() }], '✓ 担当ケアマネを追加しました');
+    setNewPerson({ office: newPerson.office, name:"", phone:"", kanaLast:"", kanaFirst:"", email:"" });
+    setAddPersonModal(false);
+  };
   // ★ ケアマネ担当者の登録状況表示用: この店舗の閲覧アカウント(ケアマネ)をSupabaseから一括取得(2026-08-31)。
   //   端末ローカルのfamilyAccountsだけでは別端末/家族側で登録されたアカウントが見えず「閲覧登録なし」に誤表示されるため。
   const [sbCmAccounts, setSbCmAccounts] = useState(null); // null=未取得
@@ -34851,6 +34876,66 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             <div className="flex gap-3 mt-5">
               <button onClick={()=>setCmEditModal(null)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
               <button onClick={saveCmEdit} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">更新</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ★ ケアマネ事業所 追加ポップアップ(2026-08-31 店舗要望: 常設フォームをやめてボタン→モーダルに) */}
+      {addOfficeModal && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={()=>setAddOfficeModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
+            <div className="text-base font-bold text-slate-800 mb-4">ケアマネ事業所を追加</div>
+            <div className="space-y-3">
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">事業所名 <span className="text-red-500">*</span></label>
+                <input value={newOffice.name} onChange={e=>setNewOffice({...newOffice,name:e.target.value})} placeholder="例: あおぞら居宅介護支援" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号</label>
+                  <input value={newOffice.phone} onChange={e=>setNewOffice({...newOffice,phone:e.target.value})} onBlur={()=>setNewOffice(o=>({...o,phone:formatJpPhone(o.phone)}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">FAX</label>
+                  <input value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} onBlur={()=>setNewOffice(o=>({...o,fax:formatJpPhone(o.fax)}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={()=>setAddOfficeModal(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
+              <button onClick={addOfficeFromModal} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">追加</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ★ 担当ケアマネ 追加ポップアップ */}
+      {addPersonModal && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" onClick={()=>setAddPersonModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e=>e.stopPropagation()}>
+            <div className="text-base font-bold text-slate-800 mb-4">担当ケアマネを追加</div>
+            <div className="space-y-3">
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">所属事業所 <span className="text-red-500">*</span></label>
+                <select value={newPerson.office} onChange={e=>setNewPerson({...newPerson,office:e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400">
+                  <option value="">所属事業所を選択...</option>
+                  {[...cmOffices].sort((a,b)=>(a.name||'').localeCompare(b.name||'','ja')).map((o,i)=><option key={i} value={o.name}>{o.name}</option>)}
+                </select></div>
+              {(() => {
+                const _sp=(s)=>{const a=(s||'').split(/[\s　]+/).filter(Boolean);return{sn:a[0]||'',gn:a.slice(1).join(' ')||''};};
+                const _jn=(sn,gn)=>{sn=(sn||'').trim();gn=(gn||'').trim();return sn&&gn?`${sn} ${gn}`:(sn||gn||'');};
+                const sp=_sp(newPerson.name);
+                return (<div><label className="block text-xs font-bold text-slate-500 mb-1">担当者名 <span className="text-red-500">*</span></label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input value={sp.sn} onChange={e=>setNewPerson({...newPerson,name:_jn(e.target.value.replace(/[\s　]/g,''),sp.gn)})} placeholder="姓 例: 鈴木" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                    <input value={sp.gn} onChange={e=>setNewPerson({...newPerson,name:_jn(sp.sn,e.target.value.replace(/[\s　]/g,''))})} placeholder="名 例: 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                  </div></div>);
+              })()}
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">ふりがな（姓 / 名）</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <input value={newPerson.kanaLast||''} onChange={e=>setNewPerson({...newPerson,kanaLast:e.target.value})} placeholder="すずき" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                  <input value={newPerson.kanaFirst||''} onChange={e=>setNewPerson({...newPerson,kanaFirst:e.target.value})} placeholder="いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
+                </div></div>
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号（直通）</label>
+                <input value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={()=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+              <div><label className="block text-xs font-bold text-slate-500 mb-1">メールアドレス <span className="font-normal text-slate-400">（お知らせ・招待メール用）</span></label>
+                <input value={newPerson.email||''} onChange={e=>setNewPerson({...newPerson,email:e.target.value})} type="email" inputMode="email" placeholder="例: suzuki@example.com" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button onClick={()=>setAddPersonModal(false)} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm">キャンセル</button>
+              <button onClick={addPersonFromModal} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm shadow">追加</button>
             </div>
           </div>
         </div>
@@ -35486,13 +35571,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
             return (
               <div className="grid grid-cols-[40%_minmax(0,1fr)] gap-4 items-start">
                 <SectionCard title="ケアマネ事業所">
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 space-y-2">
-                    <input type="text" value={newOffice.name} onChange={e=>setNewOffice({...newOffice,name:e.target.value})} placeholder="事業所名" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="tel" value={newOffice.phone} onChange={e=>setNewOffice({...newOffice,phone:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                      <input type="tel" value={newOffice.fax} onChange={e=>setNewOffice({...newOffice,fax:e.target.value})} onBlur={e=>setNewOffice(o=>({...o,fax:formatJpPhone(o.fax)}))} placeholder="FAX" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    </div>
-                    <button type="button" onClick={()=>{if(!newOffice.name){alert("事業所名を入力してください");return;} persistCm([...cmOffices,{...newOffice,phone:formatJpPhone(newOffice.phone),fax:formatJpPhone(newOffice.fax),_addedAt:syncNow()}], null, '✓ ケアマネ事業所を追加しました'); setNewOffice({name:"",phone:"",fax:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
+                  {/* ★ 常設フォームを廃止し、ボタン→ポップアップで登録(2026-08-31 店舗要望) */}
+                  <button type="button" onClick={()=>{setNewOffice({name:"",phone:"",fax:""});setAddOfficeModal(true);}} className="w-full py-2 mb-3 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>事業所を追加</button>
+                  <div className="hidden">
+                    {false && (<button type="button" onClick={()=>{}} className="hidden"/>)}
                     {/* ★ CSVから一括取り込みは 利用者マスタ管理 側に集約したため、ここでは非表示 (ユーザー要望) */}
                     {false && (
                     <label className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center cursor-pointer">
@@ -35571,28 +35653,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   )}
                 </SectionCard>
                 <SectionCard title={selOffice ? `担当ケアマネジャー — ${selOffice.name}` : '担当ケアマネジャー（全事業所）'}>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 space-y-2">
-                    <select value={newPerson.office} onChange={e=>setNewPerson({...newPerson,office:e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm">
-                      <option value="">所属事業所を選択...</option>
-                      {sortedOffices.map(o=><option key={o.origIdx} value={o.name}>{o.name}</option>)}
-                    </select>
-                    {(() => {
-                      const _sp=(s)=>{const a=(s||'').split(/[\s　]+/).filter(Boolean);return{sn:a[0]||'',gn:a.slice(1).join(' ')||''};};
-                      const _jn=(sn,gn)=>{sn=(sn||'').trim();gn=(gn||'').trim();return sn&&gn?`${sn} ${gn}`:(sn||gn||'');};
-                      const sp=_sp(newPerson.name);
-                      return (<div className="grid grid-cols-2 gap-2">
-                        <input type="text" value={sp.sn} onChange={e=>setNewPerson({...newPerson,name:_jn(e.target.value.replace(/[\s　]/g,''),sp.gn)})} placeholder="姓 例: 鈴木" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                        <input type="text" value={sp.gn} onChange={e=>setNewPerson({...newPerson,name:_jn(sp.sn,e.target.value.replace(/[\s　]/g,''))})} placeholder="名 例: 一郎" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                      </div>);
-                    })()}
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="text" value={newPerson.kanaLast||''} onChange={e=>setNewPerson({...newPerson,kanaLast:e.target.value})} placeholder="ふりがな 姓 例: すずき" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                      <input type="text" value={newPerson.kanaFirst||''} onChange={e=>setNewPerson({...newPerson,kanaFirst:e.target.value})} placeholder="ふりがな 名 例: いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    </div>
-                    <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <input type="email" inputMode="email" value={newPerson.email||''} onChange={e=>setNewPerson({...newPerson,email:e.target.value})} placeholder="メールアドレス（お知らせ・招待メール用）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); persistCm(null, [...cmPersons,{...newPerson,email:(newPerson.email||'').trim(),kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||"",_addedAt:syncNow()}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:"",email:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
-                  </div>
+                  {/* ★ 常設フォームを廃止し、ボタン→ポップアップで登録(2026-08-31 店舗要望)。 事業所を選択中ならその事業所を初期値に */}
+                  <button type="button" onClick={()=>{setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:"",email:""});setAddPersonModal(true);}} className="w-full py-2 mb-3 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
                     wrapStyle={{marginBottom:8}}
