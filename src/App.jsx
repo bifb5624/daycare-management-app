@@ -14066,6 +14066,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
   const [famReport, setFamReport] = useState(null); // {desc,sending,sent,err} | null 不具合レポート(家族・関係者)
   const [termsOpen, setTermsOpen] = useState(false); // ログイン後に利用規約・プライバシーポリシーを閲覧
   const [myInfoTab, setMyInfoTab] = useState('patient'); // 'patient' (利用者基本情報) / 'registrant' (登録者基本情報)
+  // ★ パスワード変更(2026-08-31 店舗要望): 登録者基本情報タブから本人が変更できる
+  const [pwChangeForm, setPwChangeForm] = useState({ cur:'', n1:'', n2:'', busy:false, msg:'', err:'' });
   const [myInfoForm, setMyInfoForm] = useState({ name: '', lastName: '', firstName: '', kana: '', kanaLast: '', kanaFirst: '', relation: '', phone: '', phoneMobile: '', email: '', saving: false, savedMsg: '' });
   // ★ 利用者基本情報の編集用 (親のみ編集可能)
   const [patientForm, setPatientForm] = useState({ name:'', kana:'', birthDate:'', gender:'', careLevel:'', hihokenNum:'', phone:'', email:'', doctor:'', medicalInstitution:'', medicalContact:'', address:'', kiou:'', ryui:'', saving:false, savedMsg:'' });
@@ -15054,6 +15056,56 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                 style={{flex:1,padding:'11px',background:myInfoForm.saving?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:myInfoForm.saving?'not-allowed':'pointer'}}>
                 {myInfoForm.saving ? '⏳ 保存中...' : '保存'}
               </button>
+            </div>
+            {/* ★ パスワードの変更(2026-08-31): 事業所発行の仮パスワードからの変更や定期変更に使う。
+                同じメール+同じパスワードで複数利用者を閲覧している場合はリンク全アカウントをまとめて変更(切替が壊れないように) */}
+            <div style={{marginTop:18,paddingTop:14,borderTop:'1px solid #e2e8f0'}}>
+              <div style={{fontSize:13,fontWeight:'bold',color:'#1e293b',marginBottom:4}}>パスワードの変更</div>
+              <div style={{fontSize:10,color:'#64748b',marginBottom:8,lineHeight:1.6}}>事業所から仮パスワードを受け取った場合は、ここでご自身のパスワードに変更してください。複数のご利用者を切り替えて見ている場合は、まとめて変更されます。</div>
+              {pwChangeForm.err && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'7px 10px',marginBottom:8,fontSize:11,color:'#dc2626',fontWeight:'bold'}}>{pwChangeForm.err}</div>}
+              {pwChangeForm.msg && <div style={{background:'#f0fdf4',border:'1px solid #86efac',borderRadius:8,padding:'7px 10px',marginBottom:8,fontSize:11,color:'#166534',fontWeight:'bold'}}>✓ {pwChangeForm.msg}</div>}
+              <div style={{display:'grid',gap:8}}>
+                <input type="password" autoComplete="current-password" placeholder="現在のパスワード" value={pwChangeForm.cur} onChange={e=>setPwChangeForm(f=>({...f,cur:e.target.value,err:'',msg:''}))}
+                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                <input type="password" autoComplete="new-password" placeholder="新しいパスワード（英字と数字を含む6文字以上）" value={pwChangeForm.n1} onChange={e=>setPwChangeForm(f=>({...f,n1:e.target.value,err:'',msg:''}))}
+                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                <input type="password" autoComplete="new-password" placeholder="新しいパスワード（確認のためもう一度）" value={pwChangeForm.n2} onChange={e=>setPwChangeForm(f=>({...f,n2:e.target.value,err:'',msg:''}))}
+                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                <button disabled={pwChangeForm.busy} onClick={async ()=>{
+                  const cur = pwChangeForm.cur, n1 = pwChangeForm.n1.trim(), n2 = pwChangeForm.n2.trim();
+                  const _err = (m)=>setPwChangeForm(f=>({...f,busy:false,err:m,msg:''}));
+                  if (!cur || !n1) { _err('現在のパスワードと新しいパスワードを入力してください'); return; }
+                  if (n1.length < 6 || !/[a-zA-Z]/.test(n1) || !/[0-9]/.test(n1)) { _err('新しいパスワードは英字と数字を含む6文字以上にしてください'); return; }
+                  if (n1 !== n2) { _err('新しいパスワード（確認）が一致しません'); return; }
+                  if (n1 === cur) { _err('現在と同じパスワードには変更できません'); return; }
+                  setPwChangeForm(f=>({...f,busy:true,err:'',msg:''}));
+                  try {
+                    if (isSupabaseEnabled) {
+                      // 現在のパスワードを検証しつつ、同メール+同パスワードのリンクアカウントを取得
+                      let vres = null;
+                      try { vres = await supabaseLoginFamily({ username: (loggedAcc?.username||'').trim(), password: cur }); } catch { vres = null; }
+                      if (!vres) { _err('現在のパスワードが違います'); return; }
+                      const targets = vres.linkedAccounts || [vres];
+                      for (const t of targets) { await supabaseUpdateFamilyAccount(t.id, { password: n1 }); }
+                    } else {
+                      const _a = (data.familyAccounts||[]).find(a=>String(a.id)===String(authAccId));
+                      if (!_a || _a.password !== cur) { _err('現在のパスワードが違います'); return; }
+                    }
+                    // ローカルにも反映(自分+同メール・同旧パスワードのリンクアカウント)
+                    try {
+                      const updated = { ...data, familyAccounts: (data.familyAccounts||[]).map(a => (String(a.id)===String(authAccId) || (a.email && loggedAcc?.email && a.email===loggedAcc.email && a.password===cur)) ? { ...a, password: n1 } : a) };
+                      localStorage.setItem('daycareAppData_v3', JSON.stringify(updated));
+                      setData(updated);
+                    } catch {}
+                    setPwChangeForm({ cur:'', n1:'', n2:'', busy:false, err:'', msg:'パスワードを変更しました。次回から新しいパスワードでログインしてください。' });
+                  } catch (e) {
+                    _err('変更に失敗しました: ' + (e?.message || '通信エラー'));
+                  }
+                }}
+                  style={{width:'100%',padding:'11px',background:pwChangeForm.busy?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:pwChangeForm.busy?'not-allowed':'pointer'}}>
+                  {pwChangeForm.busy ? '⏳ 変更中...' : 'パスワードを変更する'}
+                </button>
+              </div>
             </div>
             </>)}
             {/* ===== 家族一覧 / 関係者一覧 タブ ===== */}
@@ -30522,7 +30574,19 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       if (isSupabaseEnabled) await supabaseUpdateFamilyAccount(acc.id, { password: pw });
       // ローカル(Supabase無効時のフォールバックログイン・ログイン情報シート印刷)にも反映
       onSave({ ...appData, familyAccounts: (appData.familyAccounts||[]).map(a => a.id === acc.id ? { ...a, password: pw } : a) });
-      alert(`パスワードを再設定しました。\n\nログインID: ${acc.username}\n新しいパスワード: ${pw}\n\n「印刷」からログイン情報シートを渡すか、口頭でお伝えください。`);
+      // ★ 登録メールがあれば新しいログイン情報を自動送信できる(2026-08-31 店舗要望)
+      let _mailed = false;
+      if (acc.email && window.confirm(`パスワードを再設定しました。\n\n登録メール(${acc.email})に新しいログイン情報を自動送信しますか？\n（送らない場合はキャンセル→印刷や口頭でお伝えください）`)) {
+        try {
+          const _fi = appData.systemSettings?.facilityInfo || {};
+          const _loginUrl = window.location.origin + window.location.pathname.replace(/\/+$/, '') + '/?family';
+          const resp = await fetch('/api/send-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: acc.email, toName: acc.displayName||'', username: acc.username, password: pw, facilityName: _fi.name||'', facilityPhone: _fi.phone||'', loginUrl: _loginUrl }) });
+          if (resp.ok) { _mailed = true; alert(`✓ 新しいログイン情報を ${acc.email} に送信しました。\nログイン後に「利用者・登録者情報」→「パスワードの変更」でご自身のパスワードに変更いただくようお伝えください。`); }
+          else { const err = await resp.json().catch(()=>({})); alert(`メール送信に失敗しました: ${[err.error, err.brevoMessage].filter(Boolean).join(' / ')}\n\n印刷や口頭でお伝えください。\n\nログインID: ${acc.username}\n新しいパスワード: ${pw}`); }
+        } catch (e2) { alert(`メール送信エラー: ${String(e2).slice(0,120)}\n\n印刷や口頭でお伝えください。\n\nログインID: ${acc.username}\n新しいパスワード: ${pw}`); }
+      }
+      if (!_mailed && !acc.email) alert(`パスワードを再設定しました。\n\nログインID: ${acc.username}\n新しいパスワード: ${pw}\n\n「印刷」からログイン情報シートを渡すか、口頭でお伝えください。`);
+      else if (!_mailed && acc.email) alert(`ログインID: ${acc.username}\n新しいパスワード: ${pw}\n\n「印刷」からログイン情報シートを渡すか、口頭でお伝えください。`);
     } catch (e) {
       alert('パスワードの再設定に失敗しました: ' + (e?.message || '不明'));
     }
