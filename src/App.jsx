@@ -31274,6 +31274,14 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     }
     else if (masterSort === 'insurance') r = (a.careLevelTo||'9999').localeCompare(b.careLevelTo||'9999');
     else if (masterSort === 'age') r = (a.birthDate||'9999').localeCompare(b.birthDate||'9999');
+    else if (masterSort === 'schedule') {
+      // ★ 基本利用日順(2026-08-31 店舗要望): 月曜起点で最初の利用曜日が早い順。同じ曜日は AM→1日→PM。
+      //   基本利用日未設定の方は末尾。同順は名前(かな)順。
+      const _mon = [1,2,3,4,5,6,0];
+      const _sk = (p) => { const s = _mon.map((di,ord)=>{ const v=(p.scheduleAmPm||[])[di]; return v?String(ord)+(v==='AM'?'0':v==='1日'?'1':'2'):''; }).join(''); return s || '9'; };
+      const ka = _sk(a), kb = _sk(b);
+      r = ka < kb ? -1 : ka > kb ? 1 : (a.kana||a.name||'').localeCompare(b.kana||b.name||'', 'ja');
+    }
     return masterSortOrder === 'desc' ? -r : r;
   });
   const bdayPats = dPats.filter(p => isBirthMonth(p));
@@ -31636,7 +31644,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             onSelect={(o)=>{ const p=(appData.patients||[]).find(x=>String(x.id)===String(o.key)); if(!p) return; setNameSearchQuery(''); if(p.id!==editingPatientId){ const hasUnsaved=!!dirtyRef?.current||!!pendingShifts||!!pendingTickets; if(hasUnsaved){ setSwitchPatientConfirm({targetPatient:p}); return; } } setEditingPatientId(p.id); onPatientChange&&onPatientChange(p.id); setMobileRosterOpen(false); }}
             inputProps={{type:'text', placeholder:'利用者名で検索（候補から選べます）', className:'w-full pl-7 pr-6 py-2 bg-slate-100 border border-slate-200 rounded-lg text-[14px] font-bold outline-none'}} />{nameSearchQuery && <button onClick={() => setNameSearchQuery('')} className="absolute right-1.5 top-1.5 text-slate-400 z-10"><X size={12} /></button>}</div><div className="flex flex-wrap gap-0.5">{kanaGroups.map(g => (<button key={g} onClick={() => setActiveKanaFilter(g)} className={`px-2 py-1 text-[11px] font-bold rounded ${activeKanaFilter === g ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>{g === 'all' ? '全て' : g + '行'}</button>))}</div>
             <div className="flex gap-0.5 flex-wrap items-center">
-              {[['kana','名前順'],['startDate','通所歴'],['careLevel','介護度'],['cmOffice','事業所'],['bday','誕生月'],['insurance','保険更新'],['age','年齢']].map(([k,l])=>(
+              {[['kana','名前順'],['schedule','基本利用日'],['startDate','通所歴'],['careLevel','介護度'],['cmOffice','事業所'],['bday','誕生月'],['insurance','保険更新'],['age','年齢']].map(([k,l])=>(
                 <button key={k} onClick={()=>{ if(masterSort===k){setMasterSortOrder(o=>o==='asc'?'desc':'asc');}else{setMasterSort(k);setMasterSortOrder('asc');} }} className={`px-2 py-1 text-[11px] font-bold rounded flex items-center gap-0.5 ${masterSort===k?'bg-blue-600 text-white':'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
                   {l}{masterSort===k && <span style={{fontSize:9}}>{masterSortOrder==='asc'?'↑':'↓'}</span>}
                 </button>
@@ -31656,6 +31664,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
               masterSort === 'bday' && p.birthDate ? <span className="text-[10px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-1 self-start mt-0.5">誕生 {new Date(p.birthDate).getMonth()+1}/{new Date(p.birthDate).getDate()}</span> :
               masterSort === 'insurance' && p.careLevelTo ? <span className="text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded px-1 self-start mt-0.5">更新 {p.careLevelTo.replace(/-/g,'/')}</span> :
               masterSort === 'age' && _age !== null ? <span className="text-[10px] font-bold text-violet-700 bg-violet-50 border border-violet-200 rounded px-1 self-start mt-0.5">{_age} 歳</span> :
+              masterSort === 'schedule' ? (() => { const _mon=[1,2,3,4,5,6,0]; const _dw='日月火水木金土'; const t=_mon.map(di=>{ const v=(p.scheduleAmPm||[])[di]; return v?_dw[di]+(v==='1日'?'':v):''; }).filter(Boolean).join('・'); return t ? <span className="text-[10px] font-bold text-sky-700 bg-sky-50 border border-sky-200 rounded px-1 self-start mt-0.5">{t}</span> : <span className="text-[10px] font-bold text-slate-400 bg-slate-50 border border-slate-200 rounded px-1 self-start mt-0.5">利用日未設定</span>; })() :
               null;
             return (<button key={p.id} onClick={() => {
               // ★ 未保存変更がある場合のみ 3 択ポップアップ (保存/破棄/キャンセル)
@@ -36575,16 +36584,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     const latest = (nextAppData.diaryLogs||{})[logKey] || {};
     lastRemoteSigRef.current = JSON.stringify(latest);
     const loaded = JSON.parse(JSON.stringify(latest));
-    // ★ 新規ログ (担当職員 / 記録者未指定) のときは アクティブ記録者を両方に自動チェック
+    // ★ 新規ログ (記録者未指定) のときは アクティブ記録者を記録者欄にだけ自動チェック
+    //   担当職員への自動チェックは廃止(2026-08-31 店舗要望: 送迎者/記録者の候補が担当職員チェック者に
+    //   絞られるため、自動チェック1人に固定されると他の職員を選べなくなる。出勤者は手動でチェックする)
     //   休業日・定休日は勤務ではないため自動チェックしない(2026-08-28 店舗要望)
     const activeName = _dayIsKyugyo(selectedDate, dow) ? '' : getActiveRecorderName();
     if (activeName) {
       const matched = (appData.diarySettings?.staff || []).find(s => s.name === activeName);
       if (matched) {
-        if (!loaded.staff || Object.keys(loaded.staff).length === 0) {
-          loaded.staff = { ...(loaded.staff||{}), [matched.id]: true };
-        }
-        // 記録者欄にも自動チェック (新規ログのとき)
+        // 記録者欄への自動チェック (新規ログのとき)
         if (!loaded.recorder || Object.keys(loaded.recorder).length === 0) {
           loaded.recorder = { ...(loaded.recorder||{}), [matched.id]: true };
         }
@@ -36664,7 +36672,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   }, [logKey]); // eslint-disable-line
 
   // ★ スタッフ切替時の自動チェック切替: アクティブ記録者が変わったら、
-  //   担当職員 + 記録者 のチェックを 古いスタッフから新しいスタッフに付け替える
+  //   記録者のチェックを 古いスタッフから新しいスタッフに付け替える
+  //   (担当職員への自動チェックは廃止・2026-08-31 店舗要望。手動チェックには触らない)
   const _activeRecForDailyLog = getActiveRecorderName();
   React.useEffect(() => {
     if (!_activeRecForDailyLog) return;
@@ -36673,17 +36682,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if (!matched) return;
     const prevId = prevAutoCheckIdRef.current;
     if (prevId === matched.id) return; // 変化なし
-    // 古いスタッフのチェックを外して新しいスタッフをチェック
+    // 古いスタッフの記録者チェックを外して新しいスタッフをチェック
     setLocalLog(prev => {
-      const newStaff = { ...(prev.staff || {}) };
       const newRec = { ...(prev.recorder || {}) };
-      if (prevId) {
-        delete newStaff[prevId];
-        delete newRec[prevId];
-      }
-      newStaff[matched.id] = true;
+      if (prevId) delete newRec[prevId];
       newRec[matched.id] = true;
-      return { ...prev, staff: newStaff, recorder: newRec };
+      return { ...prev, recorder: newRec };
     });
     prevAutoCheckIdRef.current = matched.id;
     // ★ 記録者の自動チェックも「アプリが自動でやった変更」= ユーザー編集ではないので未保存扱いにしない。
@@ -36856,6 +36860,21 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if(s.length>=3) setTimeInput(s.slice(0,2)+':'+s.slice(2));
     else setTimeInput(s);
   };
+  // ★ 到着/出発の時間はPCの物理キーボード/テンキーでも入力できる(2026-08-31 店舗要望)。
+  //   数字=入力・Backspace=1文字削除・Enter=決定・Esc=キャンセル。
+  //   依存配列なし=毎render付け替えで、常に最新の timeInput/log を見るハンドラになる
+  //   (固定化すると古い timeInput を参照して2文字目以降が表示されない)。リスナー1本のみで負荷なし。
+  React.useEffect(() => {
+    if (!timeKeypad) return;
+    const h = (e) => {
+      if (e.key >= '0' && e.key <= '9') { e.preventDefault(); kpInput(e.key); }
+      else if (e.key === 'Backspace' || e.key === 'Delete') { e.preventDefault(); kpInput('DEL'); }
+      else if (e.key === 'Enter') { e.preventDefault(); closeTimeKeypad(); }
+      else if (e.key === 'Escape') { e.preventDefault(); setTimeKeypad(null); setTimeInput(''); }
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  });
 
   const CB = ({checked, onChange, sz=12}) => (
     <div onClick={onChange} style={{width:sz,height:sz,border:'1.5px solid #444',borderRadius:2,display:'inline-flex',alignItems:'center',justifyContent:'center',cursor:'pointer',flexShrink:0,backgroundColor:checked?'#2563eb':'white',verticalAlign:'middle'}}>
@@ -37465,9 +37484,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           <div style={{textAlign:'center',fontWeight:'bold',fontSize:13,marginBottom:8,color:'#333'}}>
             {car?.name}　{fieldLabel}時間
           </div>
-          <div style={{fontSize:32,fontWeight:'bold',textAlign:'center',letterSpacing:4,marginBottom:12,padding:'8px 0',border:'2px solid #1d4ed8',borderRadius:8,color:'#1d4ed8',minHeight:52}}>
+          <div style={{fontSize:32,fontWeight:'bold',textAlign:'center',letterSpacing:4,marginBottom:4,padding:'8px 0',border:'2px solid #1d4ed8',borderRadius:8,color:'#1d4ed8',minHeight:52}}>
             {timeInput||'__:__'}
           </div>
+          <div style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginBottom:8}}>PCのキーボード/テンキーでも入力できます（Enter=決定）</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:8}}>
             {[7,8,9,4,5,6,1,2,3].map(n=>(
               <button key={n} onClick={()=>kpInput(String(n))}
@@ -37816,10 +37836,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               <span className="text-lg">⚠</span>
               <span>要確認:</span>
               {items.map(it=>{
-                const _aid = ({'迎え':'diary-sec-patients','送り':'diary-sec-patients','送迎時間':'diary-sec-cars','記録者':'diary-sec-recorder','管理者確認':'diary-sec-manager'})[it.label];
+                const _aid = ({'送迎時間':'diary-sec-cars','記録者':'diary-sec-recorder','管理者確認':'diary-sec-manager'})[it.label];
+                // ★ 迎え/送りはスクロールではなく送迎車割り当てモーダルを直接開く(2026-08-31 店舗要望)
+                const _carPrefix = ({'迎え':'pick','送り':'drop'})[it.label];
                 return (
-                <button key={it.label} type="button" title="クリックで該当箇所へ移動"
-                  onClick={()=>{ const el=_aid&&document.getElementById(_aid); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); const _o=el.style.outline; el.style.outline='3px solid #f59e0b'; el.style.outlineOffset='3px'; setTimeout(()=>{ el.style.outline=_o||''; el.style.outlineOffset=''; },1800); }}
+                <button key={it.label} type="button" title={_carPrefix?'クリックで送迎車割り当てを開く':'クリックで該当箇所へ移動'}
+                  onClick={()=>{ if(_carPrefix){ setCarAssignModal({prefix:_carPrefix}); setCarAssignSelections({}); return; } const el=_aid&&document.getElementById(_aid); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); const _o=el.style.outline; el.style.outline='3px solid #f59e0b'; el.style.outlineOffset='3px'; setTimeout(()=>{ el.style.outline=_o||''; el.style.outlineOffset=''; },1800); }}
                   className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold cursor-pointer hover:bg-amber-50">{it.label}<span className="ml-1 text-[10px] font-normal text-amber-600">（{it.hint}）</span></button>
                 );
               })}
