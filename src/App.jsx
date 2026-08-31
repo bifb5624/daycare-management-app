@@ -12639,7 +12639,7 @@ function LoginHelpModal({ kind, onClose }) {
         ) : (
           <div>
             <Q q="ログインできません" a={<>ログインIDとパスワードは、事業所からお渡しした紙またはメールをご確認ください。<b>英字・数字は半角</b>で入力してください（大文字・小文字も区別されます）。</>} />
-            <Q q="パスワードを忘れました" a={<>ログイン画面の<b>「パスワードを忘れた」</b>から再設定できます。うまくいかない場合は事業所へご連絡ください。</>} />
+            <Q q="パスワードを忘れました" a={<>お手数ですが<b>事業所へご連絡ください</b>。事業所で新しいパスワードを発行してお伝えします（旧パスワードは使えなくなります）。</>} />
             <Q q="画面が真っ白／エラーが出る・表示されない" a={<>まず画面を<b>再読み込み</b>してください。iPhone / iPad で直らない場合は、<b>設定 → Safari → 履歴とWebサイトデータを消去</b>してから開き直すか、Safariの<b>プライベートモード</b>でお試しください。</>} />
             <Q q="QRコードが読み取れません" a={<>カメラアプリでQRにかざすと開けます。読み取れない場合は、事業所からお伝えしたURLをブラウザに直接入力してください。</>} />
             <Q q="それでも解決しないとき" a={<>お手数ですが事業所、またはサポート（support@ones-style.co.jp）までご連絡ください。</>} />
@@ -14293,14 +14293,16 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   ];
                   return (
                     <span style={{position:'relative',display:'inline-block'}}>
-                      <button onClick={()=>setPeriodMenuOpen(o=>!o)}
+                      {/* ★ スマホでボタンが画面左寄りにあると right:0 基準のパネルが左へはみ出して半分切れるため、
+                          開いた時のボタン位置から fixed で画面内に収まる位置を計算する(2026-08-31 店舗要望) */}
+                      <button onClick={(e)=>{ const r=e.currentTarget.getBoundingClientRect(); setPeriodMenuOpen(o=> o ? false : { top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - 198)) }); }}
                         style={{padding:'3px 8px',border:'1px solid #c4dba0',borderRadius:6,fontSize:11,fontWeight:'bold',color:'#3d5021',background:'#f4f8ed',outline:'none',cursor:'pointer',whiteSpace:'nowrap'}}>
                         {_isDaily?'日別':'月平均'}・{_plabel[familyPeriod]||familyPeriod} ▾
                       </button>
                       {periodMenuOpen && (
                         <>
                           <div onClick={()=>setPeriodMenuOpen(false)} style={{position:'fixed',inset:0,zIndex:59}} />
-                          <div style={{position:'absolute',top:'115%',right:0,zIndex:60,background:'white',border:'1px solid #c4dba0',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.18)',padding:6,minWidth:170,maxHeight:'70vh',overflowY:'auto'}}>
+                          <div style={{position:'fixed',top:periodMenuOpen.top||60,left:periodMenuOpen.left||8,zIndex:60,background:'white',border:'1px solid #c4dba0',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,0.18)',padding:6,width:190,maxHeight:'70vh',overflowY:'auto'}}>
                             {_groups.map(([gl, opts]) => (
                               <div key={gl}>
                                 <div style={{fontSize:11,fontWeight:'bold',color:'white',background:'#7ba23f',borderRadius:6,padding:'4px 9px',margin:'4px 0'}}>{gl}</div>
@@ -30507,6 +30509,24 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       setAccountEditSaving(false);
     }
   };
+  // ★ パスワード再設定(2026-08-31 店舗要望): 家族/ご本人/ケアマネがパスワードを忘れてログインできない時に、
+  //   事業所側で新しいパスワードを発行する(自己リセットのメール送信は未実装のためこれが正規手順)。
+  const resetAccountPassword = async (acc) => {
+    const _gen = () => { const c='abcdefghjkmnpqrstuvwxyz23456789'; let s=''; for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)]; return s + String(Math.floor(1000+Math.random()*9000)); };
+    const inp = window.prompt(`${acc.displayName||acc.username} さんの新しいパスワードを設定します（英字と数字を含む6文字以上）。\n自動生成のままでもOKです:`, _gen());
+    if (inp === null) return;
+    const pw = inp.trim();
+    if (pw.length < 6 || !/[a-zA-Z]/.test(pw) || !/[0-9]/.test(pw)) { alert('パスワードは英字と数字を含む6文字以上にしてください'); return; }
+    if (!window.confirm(`パスワードを再設定します。よろしいですか？\n\nログインID: ${acc.username}\n新しいパスワード: ${pw}\n\n※ 旧パスワードは使えなくなります。ご本人に新しいパスワードをお伝えください`)) return;
+    try {
+      if (isSupabaseEnabled) await supabaseUpdateFamilyAccount(acc.id, { password: pw });
+      // ローカル(Supabase無効時のフォールバックログイン・ログイン情報シート印刷)にも反映
+      onSave({ ...appData, familyAccounts: (appData.familyAccounts||[]).map(a => a.id === acc.id ? { ...a, password: pw } : a) });
+      alert(`パスワードを再設定しました。\n\nログインID: ${acc.username}\n新しいパスワード: ${pw}\n\n「印刷」からログイン情報シートを渡すか、口頭でお伝えください。`);
+    } catch (e) {
+      alert('パスワードの再設定に失敗しました: ' + (e?.message || '不明'));
+    }
+  };
   const [newPatientName, setNewPatientName] = useState('');
   // ★ 姓/名/ふりがな 分割入力
   const [newPatientLast, setNewPatientLast] = useState('');
@@ -33430,7 +33450,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                   </div>
                                   <div className="sm:col-span-2">
                                     <div className="text-[10px] font-bold text-slate-400">パスワード <span className="text-slate-300 font-normal">(本人のみ)</span></div>
-                                    <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-100 text-slate-400" title="ご家族本人がログイン画面の「パスワードを忘れた」から再設定できます">
+                                    <div className="px-2 py-1 border rounded text-xs font-mono bg-slate-50 border-slate-100 text-slate-400" title="忘れた場合は右の「PW再設定」で新しいパスワードを発行できます">
                                       {acc.password ? '••••••••' : '—'}
                                     </div>
                                   </div>
@@ -33440,6 +33460,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                                     ) : (
                                       <button onClick={()=>{setAccountEditId(acc.id); setAccountEditOrig({username: acc.username});}} className="px-2.5 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap" title="ログインID を編集">ID編集</button>
                                     )}
+                                    <button onClick={()=>resetAccountPassword(acc)} className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded text-[11px] font-bold whitespace-nowrap" title="パスワードを忘れた時に新しいパスワードを発行">PW再設定</button>
                                     <button onClick={()=>printSheet(acc)} className={`px-2.5 py-1 ${printBg} rounded text-[11px] font-bold whitespace-nowrap`} title="ログイン情報シート印刷">印刷</button>
                                     <button onClick={()=>removeAccount(acc.id)} className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-600 rounded text-[11px] font-bold whitespace-nowrap" title="削除">削除</button>
                                   </div>
@@ -34440,7 +34461,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   const addOfficeFromModal = () => {
     const nm = (newOffice.name||'').trim();
     if (!nm) { alert('事業所名を入力してください'); return; }
-    if (cmOffices.some(o => _cmDupNorm(o.name) === _cmDupNorm(nm))) { alert('同名の事業所がすでに登録されています。\n既存の事業所を編集して使うか、名称を変えて登録してください。'); return; }
+    const _existOff = cmOffices.find(o => _cmDupNorm(o.name) === _cmDupNorm(nm));
+    if (_existOff) {
+      // ★ 重複時は行き止まりにせず、その事業所への担当者追加へスムーズに誘導(2026-08-31 店舗要望)
+      if (window.confirm(`「${_existOff.name}」はすでに登録されています。\nこの事業所で担当者を追加しますか？`)) {
+        setAddOfficeModal(false);
+        setNewOffice({ name:"", phone:"", fax:"" });
+        setNewPerson({ office: _existOff.name, name:"", phone:"", kanaLast:"", kanaFirst:"", email:"" });
+        setAddPersonModal(true);
+      }
+      return;
+    }
     persistCm([...cmOffices, { ...newOffice, name: nm, phone: formatJpPhone(newOffice.phone), fax: formatJpPhone(newOffice.fax), _addedAt: syncNow() }], null, '✓ ケアマネ事業所を追加しました');
     setNewOffice({ name:"", phone:"", fax:"" });
     setAddOfficeModal(false);
