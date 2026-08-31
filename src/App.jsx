@@ -5,7 +5,7 @@ import {
   Printer, CheckCircle2, CloudUpload, Loader2, Plus, Trash2, X, FileText, BarChart3, TrendingUp,
   ArrowLeft, ArrowRight, Menu, BookOpen, Lock, Unlock, QrCode, MoveUp, MoveDown,
   ChevronLeft, ChevronRight, Save, UserPlus, Clock, CalendarOff, CalendarRange, PenTool, History,
-  ChevronDown, ChevronUp, Thermometer, Heart, Copy, Edit3, Edit2, MessageSquare
+  ChevronDown, ChevronUp, Thermometer, Heart, Copy, Edit3, Edit2, MessageSquare, Briefcase
 } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { encodeInviteToken, decodeInviteToken, normalizeInviteCode } from './lib/logic';
@@ -18811,6 +18811,7 @@ export default function App() {
     const isDirty = (currentView === 'record' && recordDirtyRef.current) ||
                    (currentView === 'master' && masterDirtyRef.current) ||
                    (currentView === 'settings' && settingsDirtyRef.current) ||
+                   (currentView === 'cmmaster' && settingsDirtyRef.current) ||
                    (currentView === 'print' && printDirtyRef.current) ||
                    (currentView === 'fitness' && fitnessDirtyRef.current) ||
                    (currentView === 'diary' && diaryDirtyRef.current) ||
@@ -19709,6 +19710,7 @@ export default function App() {
               </SidebarGroup>
               <div className="pt-4 mt-4 border-t border-slate-800 space-y-1">
                 <SidebarItem icon={<Users size={18} />} label="利用者マスタ管理" active={currentView === 'master'} onClick={() => navigateTo('master')} />
+                <SidebarItem icon={<Briefcase size={18} />} label="ケアマネ事業所・担当者" active={currentView === 'cmmaster'} onClick={() => navigateTo('cmmaster')} />
                 <SidebarGroup icon={<BarChart3 size={18} />} label="分析" activeChild={['dash_personal','dash_operation'].includes(currentView)}>
                   <SidebarItem icon={<BarChart3 size={16} />} label="個人（バイタル・記録）" active={currentView === 'dash_personal'} onClick={() => navigateTo('dash_personal')} />
                   <SidebarItem icon={<TrendingUp size={16} />} label="稼働（実績・月次）" active={currentView === 'dash_operation'} onClick={() => navigateTo('dash_operation')} />
@@ -19758,6 +19760,7 @@ export default function App() {
                  currentView === 'dash_personal' ? '分析（個人）' :
                  currentView === 'dash_operation' ? '分析（稼働）' :
                  currentView === 'family_admin' ? '家族関係者閲覧 管理' :
+                 currentView === 'cmmaster' ? 'ケアマネ事業所・担当者' :
                  currentView === 'settings' ? '各種設定' : 'システム画面'}
               </h1>
             </div>
@@ -19844,6 +19847,7 @@ export default function App() {
              currentView === 'master' ? <MasterView appData={appData} onSave={handleSaveToCloud} targetPatientId={targetPatientId} navigateTo={navigateTo} onPatientChange={setTargetPatientId} dirtyRef={masterDirtyRef} saveFnRef={masterSaveFnRef} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} exPendingRef={masterExPendingRef} navAfterExRef={masterNavAfterExRef} /> :
              currentView === 'dash_personal' ? <PersonalDashboardView appData={appData} targetPatientId={targetPatientId} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}}  navigateTo={navigateTo} onPatientChange={setTargetPatientId} isSidebarOpen={isSidebarOpen} /> :
              currentView === 'settings' ? <SettingsView appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} deviceName={deviceName} updateDeviceName={updateDeviceName} lastSync={appData._lastSync} /> :
+             currentView === 'cmmaster' ? <SettingsView cmOnly appData={appData} onSave={handleSaveToCloud} dirtyRef={settingsDirtyRef} saveFnRef={settingsSaveFnRef} isSuperAdmin={staffSession?.role === 'super_admin'} isAdmin={staffSession?.role === 'super_admin' || staffSession?.role === 'manager'} navFocus={navFocus} onFocusHandled={()=>setNavFocus(null)} deviceName={deviceName} updateDeviceName={updateDeviceName} lastSync={appData._lastSync} /> :
              currentView === 'family_admin' ? <FamilyAdminView appData={appData} onSave={handleSaveToCloud} /> :
              currentView === 'jisseki' ? <JissekiView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} /> :
              currentView === 'diary' ? <DailyLogView appData={appData} onSave={handleSaveToCloud} onShowPrintPreview={(title,pageSize,eid)=>{const el=eid?document.getElementById(eid):null;let html=el?el.outerHTML:null;if(html){html=html.replace(/display:\s*none[^;"']*/g,'display:block');html=html.replace(/visibility:\s*hidden/g,'visibility:visible');}setPrintPreviewContent({title,pageSize,elementId:eid,html});}} selectedDate={selectedDate} setSelectedDate={setSelectedDate} sharedAmpm={sharedAmpm} setSharedAmpm={setSharedAmpm} dirtyRef={diaryDirtyRef} saveFnRef={diarySaveFnRef} /> :
@@ -31948,7 +31952,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                     <div className="mt-4">
                       <div className="flex items-center gap-2 mb-2">
                         <label className="block text-sm font-bold text-slate-600">名刺</label>
-                        <span className="text-[10px] text-slate-400">（各種設定 → ケアマネ事業所・担当者 で編集）</span>
+                        <span className="text-[10px] text-slate-400">（サイドバー「ケアマネ事業所・担当者」で編集）</span>
                       </div>
                       <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap gap-2">
                         {cards.map((img,ii)=>(
@@ -34292,9 +34296,11 @@ function AdminSettingsSection({ appData, onSave }) {
   );
 }
 
-function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin, navFocus, onFocusHandled, deviceName, updateDeviceName, lastSync }) {
+function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAdmin, navFocus, onFocusHandled, deviceName, updateDeviceName, lastSync, cmOnly }) {
+  // ★ cmOnly=true: サイドバー「ケアマネ事業所・担当者」画面の専用モード(2026-08-31 店舗要望で各種設定から完全移設)。
+  //   「消える問題」対策の同期追従・即保存(persistCm)ロジックを共有するため、タブ抽出はせず同一コンポーネントをモード分けで再利用。
   const markDirty = React.useCallback(()=>{ if(dirtyRef) dirtyRef.current=true; },[dirtyRef]);
-  const [activeTab, setActiveTab] = useState('facility');
+  const [activeTab, setActiveTab] = useState(cmOnly ? 'cm' : 'facility');
   // ★ この端末の名前(端末ごと・localStorage)。 下書き→保存で updateDeviceName を呼ぶ。
   const [deviceNameDraft, setDeviceNameDraft] = useState(deviceName || '');
   const [deviceNameSaved, setDeviceNameSaved] = useState(false);
@@ -34455,7 +34461,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
       const offFax = cmOffices.find(o=>o.name===form.office)?.fax || orig.fax || '';
       const offPhone = cmOffices.find(o=>o.name===form.office)?.phone || '';
       const _kl=(form.kanaLast||'').trim(), _kf=(form.kanaFirst||'').trim();
-      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kanaLast:_kl, kanaFirst:_kf, kana:`${_kl} ${_kf}`.trim(), phone:dir, phoneDirect:dir, fax:offFax } : c);
+      const newPersons = cmPersons.map(c => c===orig ? { ...c, office:form.office, name:newName, kanaLast:_kl, kanaFirst:_kf, kana:`${_kl} ${_kf}`.trim(), phone:dir, phoneDirect:dir, fax:offFax, email:(form.email||'').trim() } : c);
       // 各利用者マスタの担当ケアマネ(旧 office+name 一致)を更新
       const newPatients = (appData.patients||[]).map(p => (p.cmOffice===orig.office && p.cmName===orig.name) ? { ...p, cmOffice:form.office, cmName:newName, cmPhone:offPhone||p.cmPhone, cmFax:offFax } : p);
       setCmPersons(newPersons);
@@ -34774,11 +34780,13 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
     setHolidayEditModal(null);
   };
 
-  const tabs = [
+  // ★ ケアマネ事業所・担当者はサイドバーの独立画面へ完全移設(2026-08-31)。 各種設定のタブには出さない
+  const tabs = cmOnly ? [
+    { id: 'cm', label: 'ケアマネ事業所・担当者' },
+  ] : [
     { id: 'facility', label: '事業所情報' },
     { id: 'record', label: 'サービス提供内容' },
     { id: 'diary', label: '日誌' },
-    { id: 'cm', label: 'ケアマネ事業所・担当者' },
     { id: 'fitness', label: '体力測定' },
     { id: 'kibun', label: '気分の理由' },
     { id: 'addon', label: 'アドオン' },
@@ -34820,6 +34828,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                   </div></div>
                 <div><label className="block text-xs font-bold text-slate-500 mb-1">電話番号（直通）</label>
                   <input value={cmEditModal.form.phone} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,phone:e.target.value}}))} onBlur={()=>setCmEditModal(m=>({...m,form:{...m.form,phone:formatJpPhone(m.form.phone)}}))} inputMode="tel" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
+                <div><label className="block text-xs font-bold text-slate-500 mb-1">メールアドレス <span className="font-normal text-slate-400">（お知らせ・招待メールの送信先）</span></label>
+                  <input value={cmEditModal.form.email||''} onChange={e=>setCmEditModal(m=>({...m,form:{...m.form,email:e.target.value}}))} type="email" inputMode="email" placeholder="例: suzuki@example.com" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/></div>
               </div>
             )}
             <div className="flex gap-3 mt-5">
@@ -35563,7 +35573,8 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                       <input type="text" value={newPerson.kanaFirst||''} onChange={e=>setNewPerson({...newPerson,kanaFirst:e.target.value})} placeholder="ふりがな 名 例: いちろう" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
                     </div>
                     <input type="tel" value={newPerson.phone} onChange={e=>setNewPerson({...newPerson,phone:e.target.value})} onBlur={e=>setNewPerson(o=>({...o,phone:formatJpPhone(o.phone)}))} placeholder="電話番号（直通）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
-                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); persistCm(null, [...cmPersons,{...newPerson,kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
+                    <input type="email" inputMode="email" value={newPerson.email||''} onChange={e=>setNewPerson({...newPerson,email:e.target.value})} placeholder="メールアドレス（お知らせ・招待メール用）" className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-bold text-sm"/>
+                    <button type="button" onClick={()=>{if(!newPerson.office||!newPerson.name){alert("事業所と担当者名を入力してください");return;} const _kl=(newPerson.kanaLast||'').trim(),_kf=(newPerson.kanaFirst||'').trim(); persistCm(null, [...cmPersons,{...newPerson,email:(newPerson.email||'').trim(),kanaLast:_kl,kanaFirst:_kf,kana:`${_kl} ${_kf}`.trim(),phone:formatJpPhone(newPerson.phone),phoneDirect:formatJpPhone(newPerson.phone),fax:cmOffices.find(o=>o.name===newPerson.office)?.fax||""}], '✓ 担当ケアマネを追加しました'); setNewPerson({office:selOffice?.name||"",name:"",phone:"",kanaLast:"",kanaFirst:"",email:""});}} className="w-full py-2 bg-slate-800 text-white rounded-lg font-bold text-sm active:scale-95 flex items-center justify-center"><Plus size={14} className="mr-1"/>担当者を追加</button>
                   </div>
                   <SuggestInput value={managerSearch} onChangeText={setManagerSearch}
                     options={cmPersons.map((c,i)=>({key:'m'+i, label:c.name, sub:c.office||''}))}
@@ -35606,9 +35617,64 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                                 e.target.value='';
                               }}/>
                             </label>
-                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kanaLast:p.kanaLast||'', kanaFirst:p.kanaFirst||'', phone:p.phoneDirect||p.phone||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
+                            <button type="button" onClick={()=>setCmEditModal({kind:'person', orig:p, form:{office:p.office||'', name:p.name||'', kanaLast:p.kanaLast||'', kanaFirst:p.kanaFirst||'', phone:p.phoneDirect||p.phone||'', email:p.email||''}})} className="text-slate-300 hover:text-blue-500 p-1 shrink-0" title="編集"><Edit3 size={14}/></button>
                             <button type="button" onClick={()=>{ if(!window.confirm('この担当者を削除しますか？')) return; persistCm(null, cmPersons.filter((_,j)=>j!==origIdx), '削除しました'); }} className="text-slate-300 hover:text-red-500 p-1 ml-1 shrink-0" title="削除"><Trash2 size={14}/></button>
                           </div>
+                          {/* ★ 登録状況 + 担当利用者 + 招待メール(2026-08-31 店舗要望): 閲覧アカウントの登録をここから案内する */}
+                          {(() => {
+                            const _nrm = (s)=>normalizeName(String(s||'')).replace(/[\s　]/g,'');
+                            const cmPats = (appData.patients||[]).filter(pt => getPatientDisplayStatus(pt) !== '退所済み' && _nrm(pt.cmOffice)===_nrm(p.office) && _nrm(pt.cmName)===_nrm(p.name));
+                            const accs = (appData.familyAccounts||[]).filter(a => (a.kind==='caremanager'||a.relation==='ケアマネージャー') && ((p.email && a.email && String(a.email).toLowerCase()===String(p.email).toLowerCase()) || (_nrm(a.displayName)===_nrm(p.name) && (!a.cmOffice || _nrm(a.cmOffice)===_nrm(p.office)))));
+                            const invs = (appData.familyInvites||[]).filter(iv => !iv.usedBy && iv.cmName && _nrm(iv.cmOffice)===_nrm(p.office) && _nrm(iv.cmName)===_nrm(p.name) && (!iv.expiresAt || new Date(iv.expiresAt) > new Date()));
+                            const st = accs.length ? 'ok' : invs.length ? 'sent' : 'none';
+                            const sendCmInviteMail = async () => {
+                              let email = (p.email||'').trim();
+                              if (!email) {
+                                const inp = window.prompt(`${p.name} さんの招待メール送信先アドレスを入力してください（担当者情報にも保存されます）:`);
+                                if (!inp) return;
+                                email = inp.trim();
+                                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('メールアドレスの形式が正しくありません'); return; }
+                                persistCm(null, cmPersons.map((c,j)=>j===origIdx?{...c,email}:c), '✓ メールアドレスを保存しました');
+                              }
+                              if (cmPats.length === 0) { alert(`${p.name} さんが担当ケアマネに設定されている利用者がまだいません。\n先に利用者マスタ管理の「担当を変更」でこの担当者を設定してください。`); return; }
+                              const target = cmPats[0];
+                              const existingCodes = new Set((appData.familyInvites||[]).map(iv=>iv.code));
+                              let code = generateOneTimeInviteCode(); let retry=0;
+                              while (existingCodes.has(code) && retry<10) { code = generateOneTimeInviteCode(); retry++; }
+                              const _staffSess = (()=>{ try { return JSON.parse(sessionStorage.getItem('tsumugiStaffSession')||'null'); } catch { return null; } })();
+                              const newInvite = { id:`inv_${Date.now()}`, code, patientId: target.id, createdAt:new Date().toISOString(), usedBy:null, usedAt:null, email, relation:'ケアマネージャー', note:`担当者招待: ${p.office}/${p.name}`, cmOffice:p.office, cmName:p.name, expiresAt:new Date(Date.now()+14*24*60*60*1000).toISOString() };
+                              onSave({ ...appData, familyInvites: [...(appData.familyInvites||[]), newInvite] });
+                              if (isSupabaseEnabled) {
+                                supabaseCreateInvite({ patientId: target.id, storeId: _staffSess?.storeId || null, code, email, relation:'ケアマネージャー', facilityName: appData.systemSettings?.facilityInfo?.name || '', patientName: target.name || '', facilityPhone: appData.systemSettings?.facilityInfo?.phone || '', expiresAt: newInvite.expiresAt }).catch(err => console.warn('[supabase] cm invite push failed', err));
+                              }
+                              const _fi = appData.systemSettings?.facilityInfo || {};
+                              const _base = window.location.origin + window.location.pathname.replace(/\/+$/, '');
+                              const tk = encodeInviteToken({ c: code, p: target.id, s: _staffSess?.storeId || '', e: email, r: 'ケアマネージャー', x: newInvite.expiresAt, fn: _fi.name||'', fp: _fi.phone||'' });
+                              const inviteUrl = `${_base}/?family&invite=${encodeURIComponent(code)}&t=${tk}`;
+                              try {
+                                const resp = await fetch('/api/send-invite', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: email, toName: p.name, inviteUrl, facilityName: _fi.name||'', patientName: '', facilityPhone: _fi.phone||'', expiresAtJp: '14日後', relation: 'ケアマネージャー' }) });
+                                if (resp.ok) { alert(`✓ 招待メールを ${email} に送信しました\n（${p.name} さんが登録すると、担当利用者の閲覧ができるようになります）`); return; }
+                                const err = await resp.json().catch(()=>({}));
+                                const detail = [err.error, err.brevoMessage, err.hint].filter(Boolean).join('\n');
+                                if (!window.confirm(`自動送信に失敗しました\n\n${detail}\n\n代わりにメールクライアントを開いて手動送信しますか？`)) return;
+                              } catch (e) {
+                                if (!window.confirm(`自動送信エラー: ${String(e).slice(0,120)}\n\n代わりにメールクライアントを開いて手動送信しますか？`)) return;
+                              }
+                              const subject = `【${_fi.name||'デイサービス'}】ご関係者専用ページのご招待`;
+                              const body = `${p.name} 様\n\n下記URLからご関係者専用ページにご登録ください (有効期限 14日)\n\n${inviteUrl}\n\n${_fi.name||''}${_fi.phone?` / TEL ${_fi.phone}`:''}`;
+                              window.location.href = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                            };
+                            return (
+                              <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+                                {st==='ok' && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">登録済み{accs[0]?.lastLogin?`（最終ログイン ${String(accs[0].lastLogin).slice(0,10)}）`:''}</span>}
+                                {st==='sent' && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-full px-2 py-0.5">招待済み・登録待ち（{String(invs[0].createdAt||'').slice(0,10)} 送信）</span>}
+                                {st==='none' && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">閲覧登録なし</span>}
+                                <span className="text-[10px] text-slate-500">担当利用者 {cmPats.length}名{cmPats.length?`（${cmPats.slice(0,3).map(x=>x.name).join('・')}${cmPats.length>3?` 他${cmPats.length-3}名`:''}）`:''}</span>
+                                {p.email && <span className="text-[10px] text-slate-400 break-all">{p.email}</span>}
+                                {st!=='ok' && <button type="button" onClick={sendCmInviteMail} className="ml-auto px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold shadow active:scale-95 shrink-0">{st==='sent'?'招待メールを再送':'招待メール'}</button>}
+                              </div>
+                            );
+                          })()}
                           {cards.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1.5 pl-1">
                               {cards.map((img,ii)=>(
