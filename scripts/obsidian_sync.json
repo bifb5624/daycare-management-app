@@ -4,6 +4,7 @@
   "files": {
     "ledger": "つむぎ変更管理台帳.md",
     "guardrails": "つむぎ 開発ガードレール.md",
-    "future": "つむぎ 未来の修正点.md"
+    "future": "つむぎ 未来の修正点.md",
+    "tests": "つむぎ テスト項目一覧.md"
   }
 }
