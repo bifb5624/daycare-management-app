@@ -18219,6 +18219,10 @@ export default function App() {
   // ★ 新バージョン検知 → 通知バナー＋安全時の自動リロード。 デプロイ後に各端末を手動リロードしなくても更新される。
   //   仕組み: index.html(no-cache)を定期取得し、参照する /assets/*.js が起動時と変わっていたら「更新あり」。
   const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  // ★ 更新バナーの表示範囲(2026-09-01 店舗要望・V1/V2運用): update-notes.json の "prompt" で制御。
+  //   'all'(既定)=全店に表示 / 'silent'=どこにも表示しない(背景化時の自動更新のみで静かに配信) /
+  //   ["storeId",...]=指定店舗のみ表示(扇橋だけのV2先行デプロイで他店にバナーを出さない)
+  const [updatePromptScope, setUpdatePromptScope] = React.useState('all');
   const [devUpdateNotes, setDevUpdateNotes] = React.useState([]); // ★ 更新内容(つむぎ運営からのお知らせ)をJSONからライブ取得
   const _initialNoteIdsRef = React.useRef(null); // ★ 起動時点で存在した更新内容のid集合。 更新バナーのモーダルは「起動後に増えた=今回の更新分」だけ出す
   const [showUpdateNotes, setShowUpdateNotes] = React.useState(false); // 更新内容モーダルの開閉
@@ -18272,7 +18276,7 @@ export default function App() {
         const _valid = notes.filter(n => n && n.id && (n.title || n.body));
         // ★ 起動時点の更新内容idを1回だけ記録(以降に増えた分＝今回の再読み込みで更新される分)
         if (_initialNoteIdsRef.current === null) _initialNoteIdsRef.current = new Set(_valid.map(n => n.id));
-        if (!stopped) setDevUpdateNotes(_valid);
+        if (!stopped) { setDevUpdateNotes(_valid); setUpdatePromptScope(j.prompt || 'all'); }
       } catch {}
     };
     load();
@@ -19521,8 +19525,9 @@ export default function App() {
         </div>, document.body)}
       {/* ★ 同期の診断パネル。 URL に ?syncdebug=1 を付けた時だけ表示 (原因調査用)。 */}
       <SyncDebugPanel />
-      {/* ★ 新バージョン通知バナー (安全時は自動更新するが、すぐ更新したい場合の手動ボタンも出す) */}
-      {updateAvailable && ReactDOM.createPortal(
+      {/* ★ 新バージョン通知バナー (安全時は自動更新するが、すぐ更新したい場合の手動ボタンも出す)。
+          update-notes.json の "prompt" が silent または他店限定のときは出さない(背景化時の自動更新のみ) */}
+      {updateAvailable && (() => { const sc = updatePromptScope; if (sc === 'silent') return false; if (Array.isArray(sc)) return sc.map(String).includes(String(staffSession?.storeId||'')); return true; })() && ReactDOM.createPortal(
         <div style={{position:'fixed',left:'50%',bottom:20,transform:'translateX(-50%)',zIndex:2000000,background:'#0f172a',color:'white',padding:'10px 14px',borderRadius:12,boxShadow:'0 8px 30px rgba(0,0,0,0.35)',display:'flex',alignItems:'center',gap:12,maxWidth:'92vw'}}>
           <span style={{fontSize:13,fontWeight:'bold'}}>⚠ 新しいバージョンがあります。<span style={{color:'#fca5a5'}}>必ず再読み込みしてください</span>（古いままだと同期や表示に不具合が出ることがあります）</span>
           {/* ★ 何が変わったか分からず更新してよいか迷う、を解消。 押すと今回の更新内容(update-notes.json)を表示 */}
