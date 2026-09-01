@@ -1,0 +1,35 @@
+# つむぎ 自動テスト(2026-09-01): push のたびに単体テスト(vitest)と画面操作テスト(Playwright)を実行する。
+# アプリは Supabase 環境変数なしでビルドする = ローカルモード(実データゼロ・ログイン不要)なので、
+# 本番データに一切触れない。 失敗すると GitHub から通知メールが届く。
+name: e2e
+on:
+  push:
+    branches: [stable-rebuild]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: 依存関係のインストール
+        run: npm install
+      - name: 単体テスト(vitest)
+        run: npm test
+      - name: ビルド(ローカルモード・Supabase未接続)
+        run: npm run build
+      - name: Playwright ブラウザ取得
+        run: npx playwright install --with-deps chromium
+      - name: E2Eスモークテスト
+        run: npx playwright test
+      - name: 失敗時レポートを保存
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

@@ -7,3 +7,6 @@ dist
 
 .vercel
 restore/
+
+playwright-report/
+test-results/
