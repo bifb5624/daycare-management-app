@@ -13,6 +13,9 @@ import {
   isSupabaseEnabled,
   supabaseCreateInvite,
   supabaseListFamilyAccountsForStore,
+  supabaseListCmAccountsAll,
+  supabaseInsertCmAccount,
+  supabaseSetFamilyAccountDeleted,
   supabaseSignupFamily,
   supabaseLoginFamily,
   supabaseFamilyUsernameExists, // ★ import 漏れ: ログインIDの重複チェックが常に失敗(catchで握り潰し)していた
@@ -18263,6 +18266,85 @@ export default function App() {
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [updateAvailable, _isEditingNow]);
+  // ★ ケアマネ閲覧の自動化エンジン(2026-09-01・V1): 利用者マスタの担当割当に合わせて、
+  //   登録済みケアマネの利用者別閲覧アカウントを自動で付与/停止する。
+  //   - ケアマネの登録は1回(基点アカウント)。以後は同じメール+同じパスワードハッシュの複製を
+  //     担当利用者ぶん自動作成し、ログイン時のリンクアカウント機構が自動で束ねる。
+  //   - 担当を外れた利用者のアカウントは停止(deleted_at)。再担当なら復活(ハッシュ保持のため再登録不要)。
+  //   - 退所済みの利用者は閲覧不可(自動停止)・休止中は閲覧可(2026-08-31店舗決定)。
+  //   - 安全装置: 担当者マスタに「メール一致 or 氏名一致が1人だけ」で特定できたアカウントだけを対象にする。
+  //     特定できないアカウントには一切触らない(誤停止・誤付与の防止)。kind=caremanager以外(家族)は対象外。
+  const _cmReconRunningRef = React.useRef(false);
+  const _cmReconLastSigRef = React.useRef('');
+  useEffect(() => {
+    if (!isSupabaseEnabled) return;
+    const storeId = staffSession?.storeId;
+    if (!storeId || !appData._sbStoreId) return;
+    const _nrm = (s) => normalizeName(String(s||'')).replace(/[\s　]/g,'');
+    const sig = JSON.stringify([
+      (appData.patients||[]).map(p => [p.id, _nrm(p.cmOffice), _nrm(p.cmName), getPatientDisplayStatus(p) === '退所済み' ? 1 : 0]),
+      (appData.systemSettings?.careManagers||[]).map(c => [_nrm(c.office), _nrm(c.name), String(c.email||'').toLowerCase()]),
+    ]);
+    if (sig === _cmReconLastSigRef.current) return;
+    const t = setTimeout(async () => {
+      if (_cmReconRunningRef.current) return;
+      _cmReconRunningRef.current = true;
+      try {
+        const rows = await supabaseListCmAccountsAll(storeId);
+        const cmRows = rows.filter(r => r && (r.kind === 'caremanager' || r.relation === 'ケアマネージャー') && r.email && r.password_hash);
+        if (cmRows.length) {
+          // ログイン単位(メール+パスワードハッシュ)でグループ化 = 1ケアマネの持つ全アカウント
+          const groups = new Map();
+          cmRows.forEach(r => { const k = `${String(r.email).toLowerCase()}|${r.password_hash}`; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); });
+          const persons = appData.systemSettings?.careManagers || [];
+          const pats = appData.patients || [];
+          const nameLoose = (a,b) => { const x=_nrm(a), y=_nrm(b); if(!x||!y) return false; if(x===y) return true; return x.length>=2 && y.length>=2 && (x.includes(y)||y.includes(x)); };
+          for (const grp of groups.values()) {
+            const em = String(grp[0].email||'').toLowerCase();
+            let person = persons.find(c => c.email && String(c.email).toLowerCase() === em) || null;
+            if (!person) {
+              const matches = persons.filter(c => grp.some(r => nameLoose(r.display_name, c.name)));
+              if (matches.length === 1) person = matches[0];
+            }
+            if (!person) continue; // 特定できないアカウントは触らない(安全側)
+            const desired = pats.filter(p => getPatientDisplayStatus(p) !== '退所済み' && _nrm(p.cmOffice) === _nrm(person.office) && _nrm(p.cmName) === _nrm(person.name));
+            const desiredIds = new Set(desired.map(p => String(p.id)));
+            const live = grp.filter(r => !r.deleted_at);
+            const liveIds = new Set(live.map(r => String(r.patient_id)));
+            // 1) 担当から外れた利用者ぶんを停止
+            for (const r of live) {
+              if (!desiredIds.has(String(r.patient_id))) { await supabaseSetFamilyAccountDeleted(r.id, true); }
+            }
+            // 2) 新しく担当になった利用者ぶんを付与(停止中の復活を優先・無ければ基点から複製)
+            const tmpl = live[0] || grp[0];
+            for (const p of desired) {
+              const pid = String(p.id);
+              if (liveIds.has(pid)) continue;
+              const dead = grp.find(r => String(r.patient_id) === pid && r.deleted_at);
+              if (dead) { await supabaseSetFamilyAccountDeleted(dead.id, false); continue; }
+              // 複製のユーザー名は基点ID+利用者id(ログインには使われずリンク機構が束ねる)。重複時は乱数付与
+              let uname = `${tmpl.username}-p${pid}`.slice(0, 60);
+              if (rows.some(r => r.username === uname)) uname = `${tmpl.username}-p${pid}-${Math.random().toString(36).slice(2,6)}`.slice(0, 64);
+              await supabaseInsertCmAccount({
+                patient_id: pid, store_id: storeId, username: uname,
+                password_hash: tmpl.password_hash, kind: 'caremanager', relation: 'ケアマネージャー',
+                display_name: tmpl.display_name || person.name, email: tmpl.email,
+                facility_name: tmpl.facility_name || appData.systemSettings?.facilityInfo?.name || '',
+                patient_name: p.name || '', role: 'caremanager',
+              });
+            }
+          }
+        }
+        _cmReconLastSigRef.current = sig; // 成功時のみ確定(失敗時は次の変化検知で再試行)
+      } catch (e) {
+        console.warn('[cm-auto] reconcile failed', e);
+      } finally {
+        _cmReconRunningRef.current = false;
+      }
+    }, 5000); // ★ 保存直後の連続変更をまとめるため5秒待ってから同期
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appData.patients, appData.systemSettings?.careManagers, staffSession?.storeId, appData._sbStoreId]);
   // ★ 更新内容(つむぎ運営からのお知らせ)を静的JSON(/update-notes.json)からライブ取得。
   //   バンドルに焼き込む DEV_ANNOUNCEMENTS と違い、再読み込みしなくてもホーム/更新バナーに反映される。
   useEffect(() => {
@@ -35998,6 +36080,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                                 {st==='sent' && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-full px-2 py-0.5">招待済み・登録待ち（{String(invs[0].createdAt||'').slice(0,10)} 送信）</span>}
                                 {st==='none' && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">閲覧登録なし</span>}
                                 <span className="text-[10px] text-slate-500">担当利用者 {cmPats.length}名{cmPats.length?`（${cmPats.slice(0,3).map(x=>x.name).join('・')}${cmPats.length>3?` 他${cmPats.length-3}名`:''}）`:''}</span>
+                                {st==='ok' && <span className="text-[10px] font-bold text-emerald-600">閲覧は担当割当に自動同期</span>}
                                 {p.email && <span className="text-[10px] text-slate-400 break-all">{p.email}</span>}
                                 {st!=='ok' && <button type="button" onClick={sendCmInviteMail} className="ml-auto px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold shadow active:scale-95 shrink-0">{st==='sent'?'招待メールを再送':'招待メール'}</button>}
                               </div>

@@ -319,6 +319,43 @@ export async function supabaseListInvitesAndAccountsForPatient(patientId, storeI
 // =========================================================
 // 患者IDから家族アカウント一覧 (親が他家族追加時の重複防止)
 // =========================================================
+// =========================================================
+// ★ ケアマネ閲覧の自動化(2026-09-01・V1): 担当者単位の閲覧を実現するための低レベルAPI。
+//   仕組み: ケアマネは1回登録(基点アカウント)。スタッフアプリの同期エンジンが利用者マスタの
+//   担当割当に合わせて、同じメール+同じパスワードハッシュの利用者別アカウントを自動で
+//   付与(復活/複製)・停止(deleted_at)する。ログインは基点IDのままで、リンクアカウント機構
+//   (同メール+同ハッシュ)が自動で束ねるため、ケアマネ側の操作は変わらない。
+// =========================================================
+// 店舗の家族/関係者アカウントを削除済み(deleted_at付き)も含めて全取得(復活・複製元に使うため)
+export async function supabaseListCmAccountsAll(storeId) {
+  if (!supabase || !storeId) return [];
+  try {
+    const { data, error } = await supabase.from('family_accounts').select('*').eq('store_id', storeId);
+    if (error) { console.warn('[supabase] listCmAccountsAll error', error); return []; }
+    return data || [];
+  } catch (e) { console.warn('[supabase] listCmAccountsAll exception', e); return []; }
+}
+// ケアマネ閲覧アカウントの複製作成(password_hashをそのまま引き継ぐ)
+export async function supabaseInsertCmAccount(row) {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase.from('family_accounts').insert(row).select().single();
+    if (error) { console.warn('[supabase] insertCmAccount error', error); return null; }
+    return data;
+  } catch (e) { console.warn('[supabase] insertCmAccount exception', e); return null; }
+}
+// アカウントの停止/復活(soft delete)。 復活できるようパスワードハッシュを保持したまま無効化する
+export async function supabaseSetFamilyAccountDeleted(accountId, deleted) {
+  if (!supabase || !accountId) return false;
+  try {
+    const { error } = await supabase.from('family_accounts')
+      .update({ deleted_at: deleted ? new Date().toISOString() : null })
+      .eq('id', accountId);
+    if (error) { console.warn('[supabase] setFamilyAccountDeleted error', error); return false; }
+    return true;
+  } catch (e) { console.warn('[supabase] setFamilyAccountDeleted exception', e); return false; }
+}
+
 // ★ 店舗の家族/関係者アカウント一覧(2026-08-31): ケアマネ担当者の登録状況表示用。
 //   利用者ごとのループを避けて store_id で一括取得する(最小限のフィールドのみ)。
 export async function supabaseListFamilyAccountsForStore(storeId) {
