@@ -46,6 +46,7 @@ import {
   queueRecordDiff,
   diffRecordRows,
   upsertTicketRows,
+  restorePendingTicketRows,
   deleteTicketRecords,
   TABLE_ENABLED,
   fetchTicketRecords,
@@ -17295,6 +17296,11 @@ export default function App() {
     if (!TABLE_ENABLED || !isSupabaseEnabled || !staffSession?.storeId) return;
     const storeId = staffSession.storeId;
     let stopped = false, unsubscribe = null;
+    // ★ 未送信の保留行を復元して再送(2026-09-01): 送信失敗中に再読み込み/タブ終了しても入力を失わない
+    try {
+      const _restored = restorePendingTicketRows();
+      if (_restored > 0) { syncLog('pending-rows-restored', { n: _restored }); upsertTicketRows(storeId, []); }
+    } catch {}
 
     // ★ 項目単位・時刻つきマージ: 受信した行(incoming=テーブル)と手元(base)を項目ごとに比較する。
     //   ・_fieldTs(項目の更新時刻)が新しい方を採用 → 「意図的に空にした(明示クリア)」も他端末へ伝わる。
