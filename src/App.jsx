@@ -50,6 +50,7 @@ import {
   deleteTicketRecords,
   TABLE_ENABLED,
   fetchTicketRecords,
+  fetchTicketRecordsRecent,
   fetchTicketRecordsSince,
   subscribeTicketRecords,
   flushOps,
@@ -17409,6 +17410,21 @@ export default function App() {
 
     const boot = async () => {
       try {
+        // ★ 2段階取得(2026-09-01・起動高速化): まず「直近75日分」だけを取得して画面を即表示し、
+        //   全量(過去分)は続けて裏で取得・統合する。 記録が何年分に増えても初期表示の待ちは一定
+        //   (直近分の件数)にとどまる。 容量超過で端末内キャッシュが薄い店舗(扇橋)の
+        //   「再読み込み直後の空欄時間」の恒久対策。
+        try {
+          const _cut = new Date(Date.now() - 75 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const _recent = await fetchTicketRecordsRecent(storeId, _cut);
+          if (stopped) return;
+          if (_recent.length) {
+            syncLog('boot-recent', { n: _recent.length });
+            applyRows(_recent.map(rec => ({ rec, deleted: false, updated_at: rec._savedAt ? new Date(rec._savedAt).toISOString() : null })));
+            opsReadyRef.current = true;   // 直近分が入った時点で操作可(オーバーレイ解除)
+            setOpsLoading(false);
+          }
+        } catch (e) { /* 直近先行取得の失敗は致命的でない(下の全量取得で回復) */ }
         // ★ 初回読込を「差分取得と同じクエリ」に一本化。 実測ログで、全件クエリ(fetchTicketRecords)だけが
         //   新しく書いた行を返さず(常に694行)、差分クエリ(fetchTicketRecordsSince)は正しく返し続ける事象を確認。
         //   実証済みの経路だけを使う。 論理削除(deleted)はここで除外する。
