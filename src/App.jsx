@@ -17346,7 +17346,9 @@ export default function App() {
     // テーブルの行を appData.ticketRecords へ反映する。 手元の入力は空で消さない(非空優先マージ)。
     const applyRows = (items) => {
       if (stopped || !items || !items.length) return;
-      syncLog('rows-apply', { n: items.length });   // ★診断: テーブルから受信して手元へ反映開始
+      // ★診断強化(2026-09-01): 同一行の受信が連発する事象の特定用に、先頭行のid末尾とサーバー更新時刻も記録
+      try { const _i0 = items[0]; syncLog('rows-apply', { n: items.length, id: _i0 && _i0.rec ? String(_i0.rec.id).slice(-14) : '?', t: String(_i0 && _i0.updated_at || '').slice(11, 19) }); }
+      catch { syncLog('rows-apply', { n: items.length }); }
       setAppData(prev => {
         const map = new Map((Array.isArray(prev.ticketRecords) ? prev.ticketRecords : []).map(r => [String(r.id), r]));
         const _tombRec = (prev.deletedIds && prev.deletedIds.ticketRecords) || {};
