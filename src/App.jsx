@@ -17160,6 +17160,23 @@ export default function App() {
   //   従来は保存のたびに フル→写真分離→軽量 と巨大JSONの変換を3回行ってから失敗しており、
   //   CPUの無駄と persist-fail ログの洪水になっていた(動作自体は軽量版成功で問題なし)。
   const persistQuotaUntilRef = React.useRef(0);
+  // ★ 軽量保存でも「直近45日の提供記録」は残す(2026-09-01 扇橋の再読み込み空欄対策)。
+  //   従来はticketRecordsを丸ごと除外していたため、容量超過店舗では boot-merge prev:0 =
+  //   再読み込みのたびに全欄が空→テーブル全量(997行)到着まで数秒〜十数秒の空白が生じ、
+  //   その間の入力・誤解(消えた!)の温床になっていた。直近分だけ残せば当月画面は即表示される。
+  const _slimTickets = (arr) => {
+    try {
+      const rs = Array.isArray(arr) ? arr : [];
+      const cut = Date.now() - 45 * 24 * 60 * 60 * 1000;
+      const out = rs.filter(r => {
+        const dm = String((r && r.date) || '').match(/(\d+)月(\d+)日/);
+        if (!dm || !r.year) return false;
+        const t = new Date(Number(r.year), Number(dm[1]) - 1, Number(dm[2])).getTime();
+        return t >= cut;
+      });
+      return out.length > 1200 ? out.slice(-1200) : out;
+    } catch { return []; }
+  };
   useEffect(()=>{
     const isRemote = applyingRemoteRef.current;
     applyingRemoteRef.current = false;
@@ -17167,7 +17184,8 @@ export default function App() {
     if (!isRemote) lastLocalEditRef.current = Date.now();
     // 容量超過モード中: 軽量版へ直行(10分ごとにフル保存を再挑戦)
     if (TABLE_ENABLED && Date.now() < persistQuotaUntilRef.current) {
-      try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); } catch {}
+      try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); }
+      catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); } catch {} }
     } else
     try {
       localStorage.setItem('daycareAppData_v3', JSON.stringify(appData));
@@ -17190,7 +17208,9 @@ export default function App() {
         try {
           syncLog('persist-fail', { err: String((e2 && e2.name) || e2).slice(0, 40) });
           if (TABLE_ENABLED) {
-            localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] }));
+            // ★ 直近45日の記録は残した軽量版を優先し、それでも入らなければ記録なし版へ(2026-09-01)
+            try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); }
+            catch { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); }
             syncLog('persist-slim', {});
             persistQuotaUntilRef.current = Date.now() + 10 * 60 * 1000; // ★ 以後10分は軽量版へ直行
           }
@@ -18002,7 +18022,10 @@ export default function App() {
   // ★ 再読み込み直後、操作ログの反映が終わるまでは「読込中」を出す。
   //   これが無いと、古いスナップショットが数秒表示され「入力が消えた?」と誤解させてしまう。
   const [opsLoading, setOpsLoading] = useState(TABLE_ENABLED);   // 巨大JSON方式では読込中オーバーレイを出さない
-  useEffect(() => { const t = setTimeout(() => setOpsLoading(false), 8000); return () => clearTimeout(t); }, []);
+  // ★ 保険の自動解除は20秒に延長(2026-09-01): 記録件数の多い店舗や遅い回線では全量取得に8秒以上かかり、
+  //   オーバーレイが先に消えて「全欄が空の画面」で操作できてしまっていた(誤入力・消えた!誤解の温床)。
+  //   正常時はテーブル取得完了(table-initial)で即時消えるため、20秒は異常時の保険でしかない。
+  useEffect(() => { const t = setTimeout(() => setOpsLoading(false), 20000); return () => clearTimeout(t); }, []);
   // ★ サイドバー用: 作成予定(期限内リード+超過)の件数をファミリー別に集計(2026-08-19)
   const _dueCounts = React.useMemo(() => {
     try {
