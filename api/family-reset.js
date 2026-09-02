@@ -73,8 +73,8 @@ export default async function handler(req, res) {
     //   ID不存在・メール未登録・メール不一致・店舗不明でも同じ応答(列挙対策・実際には送らない)
     const inputEmail = String(body.email || '').trim().toLowerCase();
     if (!inputEmail) return res.status(400).json({ error: 'メールアドレスを入力してください' });
-    if (!acc || !acc.email || !acc.store_id) return res.status(200).json({ ok: true });
-    if (inputEmail !== String(acc.email).trim().toLowerCase()) return res.status(200).json({ ok: true });
+    if (!acc || !acc.email || !acc.store_id) return res.status(200).json({ ok: true, sent: false });
+    if (inputEmail !== String(acc.email).trim().toLowerCase()) return res.status(200).json({ ok: true, sent: false });
     let data;
     try { data = await loadStore(acc.store_id); } catch { return res.status(200).json({ ok: true }); }
     if (!data) return res.status(200).json({ ok: true });
@@ -82,7 +82,7 @@ export default async function handler(req, res) {
     const resets = { ...((data.systemSettings || {}).familyPwResets || {}) };
     // 期限切れの残骸を掃除
     Object.keys(resets).forEach(k => { if (!resets[k] || Date.now() > Number(resets[k].exp)) delete resets[k]; });
-    resets[String(acc.id)] = { h: sha256(code), exp: Date.now() + 10 * 60 * 1000, tries: 0 };
+    resets[String(acc.id)] = { h: sha256(code), exp: Date.now() + 10 * 60 * 1000, tries: 0 };  // 試行は3回まで(2026-09-02 店舗決定)
     try { await saveResets(acc.store_id, data, resets); } catch (e) {
       return res.status(500).json({ error: 'リセット情報の保存に失敗しました', detail: String(e.message || e) });
     }
@@ -103,7 +103,7 @@ export default async function handler(req, res) {
     <div style="text-align:center;margin:22px 0;">
       <div style="display:inline-block;font-size:32px;font-weight:bold;letter-spacing:10px;background:#f1f5f9;border:2px solid #94c456;border-radius:12px;padding:14px 26px;color:#1e293b;">${code}</div>
     </div>
-    <p style="font-size:12px;color:#64748b;line-height:1.7;">・このコードの有効期限は<b>10分</b>です。入力を5回間違えると無効になります。<br/>・心当たりがない場合は、このメールを破棄してください（パスワードは変更されません）。</p>
+    <p style="font-size:12px;color:#64748b;line-height:1.7;">・このコードの有効期限は<b>10分</b>です。入力を3回間違えると無効になります。<br/>・心当たりがない場合は、このメールを破棄してください（パスワードは変更されません）。</p>
   </div>
 </body></html>`.trim();
       try {
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         });
       } catch (e) { /* コードは保存済み。 メール失敗は致命的にしない */ }
     }
-    return res.status(200).json({ ok: true, masked: maskEmail(acc.email) });
+    return res.status(200).json({ ok: true, sent: true, masked: maskEmail(acc.email) });
   }
 
   if (action === 'reset') {
@@ -131,11 +131,11 @@ export default async function handler(req, res) {
     const st = resets[String(acc.id)];
     if (!st) return res.status(400).json({ error: 'リセットがリクエストされていません。最初からやり直してください。' });
     if (Date.now() > Number(st.exp)) { delete resets[String(acc.id)]; try { await saveResets(acc.store_id, data, resets); } catch {} return res.status(400).json({ error: 'コードの有効期限(10分)が切れています。最初からやり直してください。' }); }
-    if (Number(st.tries || 0) >= 5) { delete resets[String(acc.id)]; try { await saveResets(acc.store_id, data, resets); } catch {} return res.status(400).json({ error: '試行回数の上限(5回)を超えました。最初からやり直してください。' }); }
+    if (Number(st.tries || 0) >= 3) { delete resets[String(acc.id)]; try { await saveResets(acc.store_id, data, resets); } catch {} return res.status(400).json({ error: '試行回数の上限(3回)を超えました。最初からやり直してください。' }); }
     if (sha256(code) !== st.h) {
       resets[String(acc.id)] = { ...st, tries: Number(st.tries || 0) + 1 };
       try { await saveResets(acc.store_id, data, resets); } catch {}
-      const left = 5 - Number(resets[String(acc.id)].tries);
+      const left = 3 - Number(resets[String(acc.id)].tries);
       return res.status(400).json({ error: `確認コードが違います。${left > 0 ? `(あと${left}回入力できます)` : '試行回数の上限を超えました。最初からやり直してください。'}` });
     }
     // 照合OK → パスワード更新。 同メール+同旧ハッシュのリンクアカウントもまとめて更新(複数利用者切替を維持)

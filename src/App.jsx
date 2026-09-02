@@ -16,6 +16,7 @@ import {
   supabaseListCmAccountsAll,
   supabaseInsertCmAccount,
   supabaseSetFamilyAccountDeleted,
+  supabaseSelfProvisionCm,
   supabaseSignupFamily,
   supabaseLoginFamily,
   supabaseFamilyUsernameExists, // ★ import 漏れ: ログインIDの重複チェックが常に失敗(catchで握り潰し)していた
@@ -13036,10 +13037,20 @@ function FamilyView() {
       // ★ Phase 1: Supabase が有効なら端末越しログインを試みる
       if (isSupabaseEnabled) {
         try {
-          const sbAcc = await supabaseLoginFamily({
+          let sbAcc = await supabaseLoginFamily({
             username: loginForm.username.trim(),
             password: loginForm.password,
           });
+          // ★ ケアマネの自己付与(2026-09-02): 店舗端末が開いていなくても、ログイン時に担当利用者ぶんの
+          //   リンクアカウントを自動作成/復活し、その場で利用者切替に反映する(登録直後から複数担当が見える)
+          try {
+            if (sbAcc.kind === 'caremanager' || sbAcc.relation === 'ケアマネージャー') {
+              const _prov = await supabaseSelfProvisionCm(sbAcc, loginForm.password);
+              if (_prov && _prov.added > 0) {
+                sbAcc = await supabaseLoginFamily({ username: loginForm.username.trim(), password: loginForm.password });
+              }
+            }
+          } catch (e) { console.warn('[cm-self-provision] failed', e); }
           // ★ リンクアカウント (同じメール + 同じパスワード) があれば patient picker を表示
           const linked = sbAcc.linkedAccounts || [sbAcc];
           // ★ ログイン時: 古い patient 等のキャッシュを完全に捨てて新規アカウント情報だけにする
@@ -13088,7 +13099,28 @@ function FamilyView() {
           setAuthAccId(String(sbAcc.id));
           return;
         } catch (sbErr) {
-          console.warn('[supabase] login fallback', sbErr?.message);
+          const _m = String(sbErr?.message || '');
+          // ★ 2026-09-02修正: 認証エラー(ID/PW不一致)なのに端末内の古いアカウント(旧パスワード)で
+          //   ログインできてしまう穴を閉じる。PW変更後も旧PWでMacから入れて「データ取得中」で固まる原因だった。
+          //   端末内フォールバックは通信エラー(オフライン等)のときだけに限定する。
+          if (/IDまたはパスワード/.test(_m)) {
+            // 管理者(本部)ID/PWでのプレビューの可能性だけ先に確認
+            try {
+              const staff = await supabaseStaffLogin({ username: loginForm.username.trim(), password: loginForm.password });
+              if (staff && staff.role === 'super_admin') {
+                const demo = buildDemoPreviewData();
+                localStorage.setItem('daycareAppData_v3', JSON.stringify(demo));
+                setData(demo);
+                sessionStorage.removeItem('familyAuthStoreId');
+                setAdminPreview({ adminName: staff.display_name || staff.username || '' });
+                setLoginForm(f=>({...f, error:'', password:''}));
+                return;
+              }
+            } catch {}
+            setLoginForm(f=>({...f, error:'IDまたはパスワードが違います'}));
+            return;
+          }
+          console.warn('[supabase] login fallback (network)', _m);
         }
       }
       // フォールバック: localStorage 内でログイン (同一端末で登録済みの場合)
@@ -13658,7 +13690,14 @@ function FamilyView() {
                       <div style={{background:'#e0f2fe',border:'1px solid #38bdf8',borderRadius:12,padding:14,marginBottom:12}}>
                         <div style={{fontSize:12,fontWeight:'bold',color:'#075985',marginBottom:6}}>ケアマネージャー事業所</div>
                         <div style={{fontSize:10,color:'#0369a1',marginBottom:8,lineHeight:1.5}}>担当者はご登録者情報のお名前・電話がそのまま使われます。</div>
-                        {/* 事業所 */}
+                        {/* 事業所 — 招待に事業所情報が入っている場合はデイサービス側の登録内容で固定(2026-09-02 店舗決定: 誤りは事業所側で修正→再招待) */}
+                        {(_inviteInfo.cmOffice || '').trim() ? (
+                          <div style={{marginBottom:10}}>
+                            <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>事業所</label>
+                            <div style={{width:'100%',padding:'10px 12px',border:'1px solid #bae6fd',borderRadius:10,fontSize:13,boxSizing:'border-box',background:'#f0f9ff',fontWeight:'bold',color:'#0c4a6e'}}>{_inviteInfo.cmOffice}</div>
+                            <div style={{fontSize:10,color:'#0369a1',marginTop:4,lineHeight:1.5}}>※ デイサービス側で登録された事業所のため変更できません。内容に誤りがある場合はデイサービスへご連絡ください（修正のうえ再度招待メールをお送りします）。</div>
+                          </div>
+                        ) : (
                         <div style={{marginBottom:10}}>
                           <label style={{display:'block',fontSize:11,fontWeight:'bold',color:'#475569',marginBottom:4}}>事業所 <span style={{color:'#dc2626'}}>*</span></label>
                           <select value={signupForm.cmOfficeMode === 'new' ? '__new__' : signupForm.cmOfficeId}
@@ -13672,6 +13711,7 @@ function FamilyView() {
                             <option value="__new__">＋ 新規作成（リストにない場合）</option>
                           </select>
                         </div>
+                        )}
                         {signupForm.cmOfficeMode === 'new' && (
                           <div style={{background:'white',borderRadius:8,padding:10,marginBottom:10,border:'1px dashed #7dd3fc'}}>
                             <div style={{fontSize:10,fontWeight:'bold',color:'#0369a1',marginBottom:6}}>新規事業所の登録</div>
@@ -13817,6 +13857,8 @@ function FamilyView() {
                       const resp = await fetch('/api/family-reset', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'request', username:u, email:em }) });
                       const j = await resp.json().catch(()=>({}));
                       if (!resp.ok) { setFamReset(f=>({...f,busy:false,err:j.error||'送信に失敗しました。時間をおいてお試しください。'})); return; }
+                      // ★ 2026-09-02: 不一致は次の画面に進めず、その場で明示する(店舗要望)
+                      if (!j.sent) { setFamReset(f=>({...f,busy:false,err:'ログインIDとメールアドレスの組み合わせが登録内容と一致しません。どちらかが間違っています。'})); return; }
                       setFamReset(f=>({...f, step:2, busy:false, err:'', masked:j.masked||''}));
                     } catch { setFamReset(f=>({...f,busy:false,err:'通信エラーです。電波の良いところでお試しください。'})); }
                   }} style={{width:'100%',padding:'12px',background:famReset.busy?'#94a3b8':'#7daa3d',color:'white',border:'none',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:famReset.busy?'not-allowed':'pointer',marginBottom:8}}>{famReset.busy?'⏳ 送信中...':'確認コードを送信'}</button>
@@ -13824,7 +13866,7 @@ function FamilyView() {
                 </>
               ) : (
                 <>
-                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>{famReset.masked ? <>メール（<b>{famReset.masked}</b>）に確認コードを送信しました。</> : <>ID・メールアドレスが登録内容と一致した場合、確認コードが届きます。届かない場合は入力内容をご確認いただくか、事業所へお問い合わせください。</>}<br/>6桁のコードと新しいパスワードを入力してください（コードは<b>10分有効・5回まで</b>入力できます）。</div>
+                  <div style={{fontSize:12,color:'#64748b',lineHeight:1.7,marginBottom:12}}>{famReset.masked ? <>メール（<b>{famReset.masked}</b>）に確認コードを送信しました。</> : <>ID・メールアドレスが登録内容と一致した場合、確認コードが届きます。届かない場合は入力内容をご確認いただくか、事業所へお問い合わせください。</>}<br/>6桁のコードと新しいパスワードを入力してください（コードは<b>10分有効・3回まで</b>入力できます）。</div>
                   {famReset.err && <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:8,padding:'8px 10px',marginBottom:10,fontSize:12,color:'#dc2626',fontWeight:'bold'}}>{famReset.err}</div>}
                   <input value={famReset.code} onChange={e=>setFamReset(f=>({...f,code:toHalfWidth(e.target.value).replace(/[^0-9]/g,'').slice(0,6),err:''}))} placeholder="確認コード（6桁）" inputMode="numeric"
                     style={{width:'100%',padding:'11px 12px',border:'1px solid #cbd5e1',borderRadius:10,fontSize:16,letterSpacing:4,outline:'none',boxSizing:'border-box',marginBottom:8,textAlign:'center',fontWeight:'bold'}}/>
@@ -15151,9 +15193,13 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               <div style={{display:'grid',gap:8}}>
                 <input type="password" autoComplete="current-password" placeholder="現在のパスワード" value={pwChangeForm.cur} onChange={e=>setPwChangeForm(f=>({...f,cur:e.target.value,err:'',msg:''}))}
                   style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                <input type="password" autoComplete="new-password" placeholder="新しいパスワード（英字と数字を含む6文字以上）" value={pwChangeForm.n1} onChange={e=>setPwChangeForm(f=>({...f,n1:e.target.value,err:'',msg:''}))}
-                  style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
-                <input type="password" autoComplete="new-password" placeholder="新しいパスワード（確認のためもう一度）" value={pwChangeForm.n2} onChange={e=>setPwChangeForm(f=>({...f,n2:e.target.value,err:'',msg:''}))}
+                <div style={{position:'relative'}}>
+                  <input type={pwChangeForm.show?'text':'password'} autoComplete="new-password" placeholder="新しいパスワード（英字と数字を含む6文字以上）" value={pwChangeForm.n1} onChange={e=>setPwChangeForm(f=>({...f,n1:e.target.value,err:'',msg:''}))}
+                    style={{width:'100%',padding:'10px 74px 10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                  <button type="button" onClick={()=>setPwChangeForm(f=>({...f,show:!f.show}))}
+                    style={{position:'absolute',right:6,top:6,padding:'4px 10px',fontSize:11,fontWeight:'bold',color:'#475569',background:'#f1f5f9',border:'1px solid #e2e8f0',borderRadius:8,cursor:'pointer'}}>{pwChangeForm.show?'非表示':'表示'}</button>
+                </div>
+                <input type={pwChangeForm.show?'text':'password'} autoComplete="new-password" placeholder="新しいパスワード（確認のためもう一度）" value={pwChangeForm.n2} onChange={e=>setPwChangeForm(f=>({...f,n2:e.target.value,err:'',msg:''}))}
                   style={{width:'100%',padding:'10px 12px',border:'1px solid #e2e8f0',borderRadius:10,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
                 <button disabled={pwChangeForm.busy} onClick={async ()=>{
                   const cur = pwChangeForm.cur, n1 = pwChangeForm.n1.trim(), n2 = pwChangeForm.n2.trim();
@@ -33893,7 +33939,8 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
           // ★ B1: 新規追加は保存ボタン不要で即時クラウド保存(自動保存)。 debounce待ちで消えるのを防ぐ。
           onSave({...appData, patients:[...(appData.patients||[]), newPat], patientIdSeq: newId, ..._extra}, { manual:true, message: dest==='none' ? '✓ 利用者を追加しました' : '✓ 利用者を追加しました（続けて詳細を入力してください）' });
           setPatientStatusFilter('利用中');
-          if (dest === 'service') { setEditingPatientId(newId); }
+          // ★ 2026-09-02修正: タブを「サービス提供内容」へ切り替えていなかったため基本情報のまま遷移しないように見えた
+          if (dest === 'service') { setEditingPatientId(newId); setActiveDetailTab('service'); }
           else if (dest === 'facesheet') { setEditingPatientId(newId); setPersonalFileModal({ patient: newPat, initialTab: 'cat_1', focus: 'facesheet' }); }
           // dest==='none' は一覧のまま
           setNewPatientModal(false);

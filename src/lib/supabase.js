@@ -356,6 +356,55 @@ export async function supabaseSetFamilyAccountDeleted(accountId, deleted) {
   } catch (e) { console.warn('[supabase] setFamilyAccountDeleted exception', e); return false; }
 }
 
+// ★ ケアマネの自己付与(2026-09-02): 店舗のスタッフ端末が開いていなくても、ケアマネ本人のログイン時に
+//   自分の担当利用者ぶんのリンクアカウントを自動作成/復活する(スタッフアプリ側の同期エンジンの補完)。
+//   店舗のapp_stateから patients/careManagers の必要部分だけを取得し、本人(メール一致優先・氏名一致1名のみ)の
+//   担当利用者(退所済み除外)に対して、同メール+同パスワードハッシュのアカウントを揃える。
+export async function supabaseSelfProvisionCm(acc, password) {
+  if (!supabase || !acc || !acc.store_id || !acc.email || !password) return { added: 0 };
+  try {
+    const { data: st, error } = await supabase.from('app_state')
+      .select('pats:data->patients, cms:data->systemSettings->careManagers')
+      .eq('key', String(acc.store_id)).maybeSingle();
+    if (error || !st) return { added: 0 };
+    const pats = Array.isArray(st.pats) ? st.pats : [];
+    const cms = Array.isArray(st.cms) ? st.cms : [];
+    const nrm = (s) => String(s || '').normalize('NFKC').replace(/[\s　]/g, '');
+    const em = String(acc.email).toLowerCase();
+    let person = cms.find(c => c && c.email && String(c.email).toLowerCase() === em) || null;
+    if (!person) {
+      const m = cms.filter(c => { const x = nrm(c && c.name), y = nrm(acc.display_name); return x && y && (x === y || (x.length >= 2 && y.length >= 2 && (x.includes(y) || y.includes(x)))); });
+      if (m.length === 1) person = m[0];
+    }
+    if (!person) return { added: 0 };
+    const desired = pats.filter(p => p && (p.status || '利用中') !== '退所済み' && nrm(p.cmOffice) === nrm(person.office) && nrm(p.cmName) === nrm(person.name));
+    if (!desired.length) return { added: 0 };
+    const passwordHash = await hashPassword(password);
+    const { data: rows } = await supabase.from('family_accounts').select('*').eq('store_id', acc.store_id).eq('email', acc.email);
+    const mine = (rows || []).filter(r => r.password_hash === passwordHash);
+    let added = 0;
+    for (const p of desired) {
+      const pid = String(p.id);
+      if (mine.some(r => String(r.patient_id) === pid && !r.deleted_at)) continue;
+      const dead = mine.find(r => String(r.patient_id) === pid && r.deleted_at);
+      if (dead) {
+        const { error: e2 } = await supabase.from('family_accounts').update({ deleted_at: null }).eq('id', dead.id);
+        if (!e2) added++;
+        continue;
+      }
+      let uname = `${acc.username}-p${pid}`.slice(0, 64);
+      if ((rows || []).some(r => r.username === uname)) uname = `${acc.username}-p${pid}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 64);
+      const { error: insErr } = await supabase.from('family_accounts').insert({
+        patient_id: pid, store_id: acc.store_id, username: uname, password_hash: passwordHash,
+        kind: 'caremanager', relation: 'ケアマネージャー', display_name: acc.display_name || person.name || '', email: acc.email,
+        facility_name: acc.facility_name || '', patient_name: p.name || '', role: 'caremanager',
+      });
+      if (!insErr) added++;
+    }
+    return { added };
+  } catch (e) { console.warn('[supabase] selfProvisionCm exception', e); return { added: 0 }; }
+}
+
 // ★ 店舗の家族/関係者アカウント一覧(2026-08-31): ケアマネ担当者の登録状況表示用。
 //   利用者ごとのループを避けて store_id で一括取得する(最小限のフィールドのみ)。
 export async function supabaseListFamilyAccountsForStore(storeId) {
