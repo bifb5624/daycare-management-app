@@ -12810,7 +12810,13 @@ function FamilyView() {
     if (!_urlInvite) return {};
     const local = (data.familyInvites||[]).find(i => i.code === _urlInvite);
     const _tokF = (()=>{ const t=decodeInviteToken(_urlToken); return (t&&t.c===_urlInvite)?t:null; })();
-    if (local) return { email: local.email || '', relation: local.relation || '', facilityName: (_tokF?.fn)||'', facilityPhone: (_tokF?.fp)||'' };
+    if (local) {
+      // ★ ケアマネ担当者招待: 氏名・ふりがな・事業所をフォーム自動入力用に引き継ぐ(2026-09-02)
+      const _lnm = String(local.cmName||'').split(/[\s　]+/);
+      return { email: local.email || '', relation: local.relation || '', facilityName: (_tokF?.fn)||'', facilityPhone: (_tokF?.fp)||'',
+        cmLast: (_tokF?.cl) || _lnm[0] || '', cmFirst: (_tokF?.cf) || _lnm.slice(1).join(' ') || '',
+        cmKanaLast: (_tokF?.kl)||'', cmKanaFirst: (_tokF?.kf)||'', cmOffice: local.cmOffice || (_tokF?.co) || '' };
+    }
     // URL token から復元 (端末越し対応)
     const tok = decodeInviteToken(_urlToken);
     if (tok && tok.c === _urlInvite) {
@@ -12832,7 +12838,8 @@ function FamilyView() {
           localStorage.setItem('daycareAppData_v3', JSON.stringify(saved));
         }
       } catch {}
-      return { email: tok.e || '', relation: tok.r || '', facilityName: tok.fn || '', facilityPhone: tok.fp || '' };
+      return { email: tok.e || '', relation: tok.r || '', facilityName: tok.fn || '', facilityPhone: tok.fp || '',
+        cmLast: tok.cl || '', cmFirst: tok.cf || '', cmKanaLast: tok.kl || '', cmKanaFirst: tok.kf || '', cmOffice: tok.co || '' };
     }
     return {};
   })();
@@ -12885,14 +12892,16 @@ function FamilyView() {
     inviteCode: _urlInvite || '', username:'', password:'', password2:'',
     email: _inviteInfo.email || '',  // 招待時に登録したメアドを自動補完
     // 緊急連絡先 (利用者マスタの emergencyContacts に自動反映)
-    ecName:'', ecKanaLast:'', ecKanaFirst:'',
-    ecLastName:'', ecFirstName:'',
+    // ★ ケアマネ担当者招待では氏名・ふりがな・事業所を自動入力(2026-09-02 店舗要望・招待トークン/招待レコードから)
+    ecName: `${_inviteInfo.cmLast||''} ${_inviteInfo.cmFirst||''}`.trim(),
+    ecKanaLast: _inviteInfo.cmKanaLast||'', ecKanaFirst: _inviteInfo.cmKanaFirst||'',
+    ecLastName: _inviteInfo.cmLast||'', ecFirstName: _inviteInfo.cmFirst||'',
     ecRelation: _isCustomRel ? 'その他' : _invRel,
     ecRelationCustom: _isCustomRel ? _invRel : '',  // その他選択時の入力欄
     ecPhone:'', ecMobile:'',
     // ケアマネ専用フィールド (続柄=ケアマネージャー の場合のみ)
     cmOfficeMode:'select',   // 'select' | 'new'
-    cmOfficeId:'',           // 既存事業所選択時
+    cmOfficeId: _inviteInfo.cmOffice||'',           // 既存事業所選択時(担当者招待は自動選択)
     cmNewOffice:{name:'', phone:'', fax:''},
     cmManagerMode:'select',  // 'select' | 'new'
     cmManagerId:'',          // 既存担当者選択時
@@ -18322,12 +18331,17 @@ export default function App() {
   //     特定できないアカウントには一切触らない(誤停止・誤付与の防止)。kind=caremanager以外(家族)は対象外。
   const _cmReconRunningRef = React.useRef(false);
   const _cmReconLastSigRef = React.useRef('');
+  // ★ 定期tick(2026-09-02): ケアマネの新規登録はSupabase側の変化でこの端末の担当データは変わらないため、
+  //   署名検知だけでは登録直後にエンジンが動かず「複数担当なのに切替に出ない」となっていた。5分ごとに強制再評価する。
+  const [cmReconTick, setCmReconTick] = React.useState(0);
+  useEffect(() => { const t = setInterval(() => setCmReconTick(x => x + 1), 5 * 60 * 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
     if (!isSupabaseEnabled) return;
     const storeId = staffSession?.storeId;
     if (!storeId || !appData._sbStoreId) return;
     const _nrm = (s) => normalizeName(String(s||'')).replace(/[\s　]/g,'');
     const sig = JSON.stringify([
+      cmReconTick,
       (appData.patients||[]).map(p => [p.id, _nrm(p.cmOffice), _nrm(p.cmName), getPatientDisplayStatus(p) === '退所済み' ? 1 : 0]),
       (appData.systemSettings?.careManagers||[]).map(c => [_nrm(c.office), _nrm(c.name), String(c.email||'').toLowerCase()]),
     ]);
@@ -18390,7 +18404,7 @@ export default function App() {
     }, 5000); // ★ 保存直後の連続変更をまとめるため5秒待ってから同期
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appData.patients, appData.systemSettings?.careManagers, staffSession?.storeId, appData._sbStoreId]);
+  }, [appData.patients, appData.systemSettings?.careManagers, staffSession?.storeId, appData._sbStoreId, cmReconTick]);
   // ★ 更新内容(つむぎ運営からのお知らせ)を静的JSON(/update-notes.json)からライブ取得。
   //   バンドルに焼き込む DEV_ANNOUNCEMENTS と違い、再読み込みしなくてもホーム/更新バナーに反映される。
   useEffect(() => {
@@ -30804,14 +30818,29 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
             _fromSupabase: true,
           }));
         // ★ 「今の画面内容」と比較して同じならスキップ(揺れ・無駄な保存の防止)。
-        //   前回応答との比較ではなく現在値との比較にすることで、別経路で一覧が消えた場合も
-        //   次の更新で確実に復元される(2026-08-11)。
-        const _curInv = JSON.stringify((_cur0.familyInvites||[]).filter(i => i.patientId === pat.id));
-        const _curAcc = JSON.stringify((_cur0.familyAccounts||[]).filter(a => a.patientId === pat.id));
-        if (_curInv === JSON.stringify(mappedInv) && _curAcc === JSON.stringify(mappedAcc)) return;
+        //   ★ 2026-09-02修正(チカチカの根因): 従来はJSON丸ごと比較だったため、(1)取得順が毎回変わる
+        //   (2)ローカル側だけが持つ追加項目(招待のcmOffice/cmName・実パスワード等)がある、の2点で
+        //   毎回「不一致」と判定され、10秒ごとに全体保存→全画面再描画→他端末/家族ポータルまで
+        //   チカチカするループになっていた。 共有項目だけをid順に射影して比較し、保存時もローカルの
+        //   追加項目を保持したままサーバー値を重ねる(cm招待の追跡情報や実パスワードを消さない)。
+        const _byId = (arr) => [...arr].sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+        const _projInv = (i) => ({ id:String(i.id), code:i.code||'', email:i.email||'', relation:i.relation||'', usedBy:i.usedBy||null });
+        const _projAcc = (a) => ({ id:String(a.id), username:a.username||'', kind:a.kind||'family', relation:a.relation||'', displayName:a.displayName||'', email:a.email||'', role:a.role||'member', lastLogin:a.lastLogin||null });
+        const _curInvSlice = (_cur0.familyInvites||[]).filter(i => i.patientId === pat.id);
+        const _curAccSlice = (_cur0.familyAccounts||[]).filter(a => a.patientId === pat.id);
+        const _same = JSON.stringify(_byId(_curInvSlice).map(_projInv)) === JSON.stringify(_byId(mappedInv).map(_projInv))
+                   && JSON.stringify(_byId(_curAccSlice).map(_projAcc)) === JSON.stringify(_byId(mappedAcc).map(_projAcc));
+        if (_same) return;
+        const _mergeKeep = (locals, mapped, keepRealPw) => _byId(mapped).map(m => {
+          const ex = locals.find(l => String(l.id) === String(m.id));
+          if (!ex) return m;
+          const out = { ...ex, ...m };
+          if (keepRealPw && ex.password && ex.password !== '****') out.password = ex.password; // 実パスワードを****で潰さない
+          return out;
+        });
         onSave({ ..._cur0,
-          familyInvites: [...localInv, ...mappedInv],
-          familyAccounts: [...localAcc, ...mappedAcc],
+          familyInvites: [...localInv, ..._mergeKeep(_curInvSlice, mappedInv, false)],
+          familyAccounts: [...localAcc, ..._mergeKeep(_curAccSlice, mappedAcc, true)],
         });
       } catch (e) { console.warn('[supabase] refresh invites failed', e); }
     };
@@ -36124,7 +36153,9 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                               }
                               const _fi = appData.systemSettings?.facilityInfo || {};
                               const _base = window.location.origin + window.location.pathname.replace(/\/+$/, '');
-                              const tk = encodeInviteToken({ c: code, p: target.id, s: _staffSess?.storeId || '', e: email, r: 'ケアマネージャー', x: newInvite.expiresAt, fn: _fi.name||'', fp: _fi.phone||'' });
+                              // ★ 担当者マスタの氏名・ふりがな・事業所もトークンに同梱し、登録フォームへ自動入力する(2026-09-02 店舗要望)
+                              const _nmp = String(p.name||'').split(/[\s　]+/);
+                              const tk = encodeInviteToken({ c: code, p: target.id, s: _staffSess?.storeId || '', e: email, r: 'ケアマネージャー', x: newInvite.expiresAt, fn: _fi.name||'', fp: _fi.phone||'', cl: _nmp[0]||'', cf: _nmp.slice(1).join(' ')||'', kl: p.kanaLast||'', kf: p.kanaFirst||'', co: p.office||'' });
                               const inviteUrl = `${_base}/?family&invite=${encodeURIComponent(code)}&t=${tk}`;
                               try {
                                 const resp = await fetch('/api/send-invite', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ to: email, toName: p.name, inviteUrl, facilityName: _fi.name||'', patientName: '', facilityPhone: _fi.phone||'', expiresAtJp: '14日後', relation: 'ケアマネージャー' }) });
