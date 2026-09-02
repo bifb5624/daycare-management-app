@@ -20,10 +20,12 @@ jobs:
         run: npm install
       - name: 単体テスト(vitest)
         run: npm test
-      - name: ビルド(ローカルモード・Supabase未接続)
+      - name: ビルド(ローカルモード・Supabase未接続・E2Eデモフラグ)
         run: npm run build
+        env:
+          VITE_E2E_DEMO: '1'
       - name: Playwright ブラウザ取得
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
       - name: E2Eスモークテスト
         run: npx playwright test
       - name: 失敗時レポートを保存

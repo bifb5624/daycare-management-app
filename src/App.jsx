@@ -17125,19 +17125,8 @@ export default function App() {
     });
     try { localStorage.removeItem('tsumugiNoticeReads'); } catch {}
   }, [appData?._sbStoreId]);
-  // ★ #3 サイドバー「ホーム」の新着バッジ数 = 本日のスケジュール(未読) + 家族・ケアマネ更新(未読) + 運営お知らせ(未読)。
-  //   事業所からのお知らせは既読管理しない(投稿したら表示のみ)ためカウントに含めない。
-  const _homeUnreadCount = React.useMemo(() => {
-    const d = new Date(); const _ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const schedUnread = (appData.scheduleEvents||[]).filter(e=>e.date===_ymd && !isNoticeRead(e.id)).length;
-    // ★ 2026-08-21: ホームの「全て既読」はnoticeRead側に記録されるため、バッジも同じ基準で数える(readOfficeだけ見ると1が残り続けた)
-    const famUnread = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[])).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice && !isNoticeRead(u.id) && !isNoticeRead(u.id)).length;
-    const nowT = Date.now();
-    const hqIds = (visibleNotices||[]).filter(n=>!(n.ends_at && new Date(n.ends_at).getTime()<nowT)).map(n=>n.id);
-    const devIds = (typeof DEV_ANNOUNCEMENTS!=='undefined'?DEV_ANNOUNCEMENTS:[]).map(a=>a.id);
-    const noticeUnread = [...hqIds, ...devIds].filter(id=>!isNoticeRead(id)).length;
-    return schedUnread + famUnread + noticeUnread;
-  }, [appData.scheduleEvents, appData.patients, visibleNotices, isNoticeRead]);
+  // ★ _homeUnreadCount はお知らせのライブ取得(devUpdateNotes)より後で定義する(2026-09-02移動・下方参照)
+
   // ★ 店舗切替中フラグ (切替中の push を完全に無効化)
   //   true の間は appData が空でもクリアでも Supabase へ push しない
   const storeTransitionRef = React.useRef(false);
@@ -18414,6 +18403,23 @@ export default function App() {
     window.addEventListener('focus', onFocus);
     return () => { stopped = true; clearInterval(t); window.removeEventListener('focus', onFocus); };
   }, []);
+  // ★ #3 サイドバー「ホーム」の新着バッジ数 = 本日のスケジュール(未読) + 家族・ケアマネ更新(未読) + 運営お知らせ(未読)。
+  //   ★ 2026-09-02修正(江古田で常時1): 運営お知らせの母集合をホームのお知らせ一覧と完全に同一
+  //   (本部+ライブ更新+組み込みを重複排除→日付降順→上位50件)にする。 従来は一覧と別集合(ライブ抜き・50件制限なし)で、
+  //   お知らせが50件を超えると一覧から溢れた古い未読が「読む手段がないのに数え続けられる」ズレが起きていた。
+  const _homeUnreadCount = React.useMemo(() => {
+    const d = new Date(); const _ymd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const schedUnread = (appData.scheduleEvents||[]).filter(e=>e.date===_ymd && !isNoticeRead(e.id)).length;
+    const famUnread = (appData.patients||[]).flatMap(p => (Array.isArray(p.docUpdates)?p.docUpdates:[])).filter(u => (u.by==='family'||u.by==='caremanager') && !u.readOffice && !isNoticeRead(u.id)).length;
+    const nowT = Date.now();
+    const _hq = (visibleNotices||[]).filter(n=>!(n.ends_at && new Date(n.ends_at).getTime()<nowT)).map(n=>({ id:n.id, date:(n.created_at?String(n.created_at).slice(0,10):'') }));
+    const _lv = (devUpdateNotes||[]).map(a=>({ id:a.id, date:a.date }));
+    const _bi = (typeof DEV_ANNOUNCEMENTS!=='undefined'?DEV_ANNOUNCEMENTS:[]).map(a=>({ id:a.id, date:a.date }));
+    const _seenN = new Set();
+    const _allN = [..._hq, ..._lv, ..._bi].filter(x=>{ if(!x.id||_seenN.has(x.id)) return false; _seenN.add(x.id); return true; }).sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0,50);
+    const noticeUnread = _allN.filter(x=>!isNoticeRead(x.id)).length;
+    return schedUnread + famUnread + noticeUnread;
+  }, [appData.scheduleEvents, appData.patients, visibleNotices, devUpdateNotes, isNoticeRead]);
   // ★ 管理者名の自動連携: スタッフ切替/日誌で登録した「管理者」を事業所情報(管理者名)へ常に反映する。
   //   初回に管理者を登録しただけで事業所情報の管理者名が埋まり、サービス提供責任者も未設定なら管理者を既定にする。
   //   (管理者名は各種設定では表示のみ。変更はスタッフ切替/日誌の管理者を変える)
@@ -19236,7 +19242,9 @@ export default function App() {
   // ★ 事業所の同意ゲートは廃止 (ユーザー要望)。 事業所重要事項/プライバシーの改定は、入場時のブロック表示ではなく
   //   ホームの「運営からのお知らせ」(管理局 system_notices / ポリシー編集の「お知らせに掲載」) で周知する。
   // Supabase 未接続時: 環境変数設定を促す画面
-  if (!isSupabaseEnabled && !session) {
+  // ★ VITE_E2E_DEMO=1 (CIの自動テストビルド専用・本番Vercelには未設定) のときだけこの壁を外し、
+  //   旧来のローカルモード(端末内データのみ・ログイン不要)で起動して画面操作テストを可能にする(2026-09-02)
+  if (!isSupabaseEnabled && !session && String(import.meta.env.VITE_E2E_DEMO || '') !== '1') {
     return (
       <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:24,background:'#f4f8ed'}}>
         <div style={{maxWidth:500,background:'white',borderRadius:16,padding:32,boxShadow:'0 4px 16px rgba(0,0,0,0.08)'}}>

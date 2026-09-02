@@ -38,8 +38,11 @@ export const resolveIndividualExerciseValue = (slotVal, individualExercises, mod
   const val = String(slotVal.value == null ? '' : slotVal.value).trim();
   const NONE = ['', '×', '✕', 'x', 'ー', '-'];
   if (mode === 'circle') {
+    // ★ 明示的な「×(実施しなかった)」は割当(itemId)の有無に関わらず非表示(2026-09-02 CI単体テストが検出した実バグ修正)。
+    //   従来は割当があると×でも○を返し、連絡帳に「実施した」と誤表示されていた。
+    if (['×', '✕', 'x'].includes(val)) return null;
     if (NONE.includes(val) && !slotVal.itemId) return null;
-    if (NONE.includes(val)) return slotVal.itemId ? '○' : null;
+    if (NONE.includes(val)) return slotVal.itemId ? '○' : null; // 空/ー は割当あり=規定値で実施の扱い
     return '○'; // 実施 → ○
   }
   if (val === '○' || val === '◯') {
