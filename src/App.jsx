@@ -17167,11 +17167,20 @@ export default function App() {
       return out.length > 1200 ? out.slice(-1200) : out;
     } catch { return []; }
   };
+  // ★ メモリ/CPU対策(2026-09-02・コード5クラッシュ再発対応): pull由来のappData更新のたびに
+  //   写真込みの巨大JSONを全量stringifyして端末保存すると、数秒おきの直列化でGC負荷が積み上がり
+  //   長時間開きっぱなしの端末でメモリクラッシュを誘発する。 ローカル編集は従来どおり即保存し、
+  //   pull由来の保存だけ10秒に1回へ間引く(クラウドが正のため端末控えの鮮度低下は無害)。
+  const _persistLastRef = React.useRef(0);
   useEffect(()=>{
     const isRemote = applyingRemoteRef.current;
     applyingRemoteRef.current = false;
     // ローカル編集の時だけ「最終編集時刻」を更新 (pull は編集ではない)
     if (!isRemote) lastLocalEditRef.current = Date.now();
+    if (isRemote && Date.now() - _persistLastRef.current < 10000) {
+      // pull由来かつ直近10秒以内に保存済み → 端末保存をスキップ(クラウド同期部分は下で継続)
+    } else {
+    _persistLastRef.current = Date.now();
     // 容量超過モード中: 軽量版へ直行(10分ごとにフル保存を再挑戦)
     if (TABLE_ENABLED && Date.now() < persistQuotaUntilRef.current) {
       try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); }
@@ -17207,6 +17216,7 @@ export default function App() {
         } catch {}
       }
     }
+    } // ← 端末保存の間引きブロック終端(pull由来10秒間引き)
     // ★ Supabase 同期 (debounce 1.5秒 - 店舗ごとに保存)
     // 以下の条件すべてを満たす時のみ push:
     // 1. Supabase 接続可
