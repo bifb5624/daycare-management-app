@@ -12782,15 +12782,30 @@ function FamilyView() {
     if (!isSupabaseEnabled || !authPid || !authAccId || adminPreview || data._isDemoPreview) return;
     const kind = (() => { try { return sessionStorage.getItem('familyAuthKind'); } catch { return null; } })();
     if (kind !== 'caremanager') return;
+    // ★ 認証情報はログイン時に保存したセッション値を優先(15秒pullでfamilyAccountsが店舗側リスト=****に
+    //   置き換わっても起動時付与が動くように)。無ければ端末保存のアカウント情報から復元。
     const acc = (data.familyAccounts || []).find(a => String(a.id) === String(authAccId));
-    if (!acc || !acc._fromSupabase || !acc.password || acc.password === '****' || !acc.email) return;
+    const _ssUser = (() => { try { return sessionStorage.getItem('familyAuthUser') || ''; } catch { return ''; } })();
+    const _ssPw = (() => { try { return sessionStorage.getItem('familyAuthPw') || ''; } catch { return ''; } })();
+    const _user = _ssUser || (acc && acc.username) || '';
+    const _pw = _ssPw || (acc && acc.password && acc.password !== '****' ? acc.password : '');
+    if (!_user || !_pw) return;
     _cmBootProvRef.current = true;
     (async () => {
       try {
-        const base = { store_id: acc.storeId || acc.store_id || familyStoreId, email: acc.email, username: acc.username, display_name: acc.displayName || '', kind: 'caremanager' };
-        const prov = await supabaseSelfProvisionCm(base, acc.password);
+        let prov = null;
+        try {
+          const _r = await fetch('/api/cm-provision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: _user, password: _pw }) });
+          const _j = await _r.json().catch(() => null);
+          if (_j && _j.ok === true) { prov = { added: (Number(_j.added) || 0) + (Number(_j.revived) || 0) }; if (Array.isArray(_j.errors) && _j.errors.length) console.warn('[cm-provision:boot] server errors', _j.errors); }
+          else console.warn('[cm-provision:boot] server response', _r.status, _j);
+        } catch (e2) { console.warn('[cm-provision:boot] api unreachable', e2); }
+        if (!prov && acc && acc.email) {
+          const base = { store_id: (acc && (acc.storeId || acc.store_id)) || familyStoreId, email: acc.email, username: _user, display_name: (acc && acc.displayName) || '', kind: 'caremanager' };
+          prov = await supabaseSelfProvisionCm(base, _pw);
+        }
         if (prov && prov.added > 0) {
-          const sb = await supabaseLoginFamily({ username: acc.username, password: acc.password });
+          const sb = await supabaseLoginFamily({ username: _user, password: _pw });
           const linked = sb.linkedAccounts || [sb];
           if (linked.length > 1) {
             const descriptors = linked.map(la => ({ id: la.id, patientId: la.patient_id, storeId: la.store_id || null, patientName: la.patient_name || '', facilityName: la.facility_name || '', relation: la.relation || '', kind: la.kind || 'caremanager' }));
@@ -13101,16 +13116,27 @@ function FamilyView() {
             username: loginForm.username.trim(),
             password: loginForm.password,
           });
-          // ★ ケアマネの自己付与(2026-09-02): 店舗端末が開いていなくても、ログイン時に担当利用者ぶんの
-          //   リンクアカウントを自動作成/復活し、その場で利用者切替に反映する(登録直後から複数担当が見える)
+          // ★ ケアマネの自己付与(2026-09-02/03改良): 店舗端末が開いていなくても、ログイン時に担当利用者ぶんの
+          //   リンクアカウントを自動作成/復活し、その場で利用者切替に反映する(登録直後から複数担当が見える)。
+          //   2026-09-03: クライアント(anonキー)のinsertがDB制約/RLSで失敗しうると判明→サービスキーで動く
+          //   サーバーAPI(/api/cm-provision)を優先し、届かない場合のみクライアント処理にフォールバック。
           try {
             if (sbAcc.kind === 'caremanager' || sbAcc.relation === 'ケアマネージャー') {
-              const _prov = await supabaseSelfProvisionCm(sbAcc, loginForm.password);
+              let _prov = null;
+              try {
+                const _r = await fetch('/api/cm-provision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: loginForm.username.trim(), password: loginForm.password }) });
+                const _j = await _r.json().catch(() => null);
+                if (_j && _j.ok === true) { _prov = { added: (Number(_j.added) || 0) + (Number(_j.revived) || 0) }; if (Array.isArray(_j.errors) && _j.errors.length) console.warn('[cm-provision] server errors', _j.errors); }
+                else console.warn('[cm-provision] server response', _r.status, _j);
+              } catch (e2) { console.warn('[cm-provision] api unreachable', e2); }
+              if (!_prov) _prov = await supabaseSelfProvisionCm(sbAcc, loginForm.password);
               if (_prov && _prov.added > 0) {
                 sbAcc = await supabaseLoginFamily({ username: loginForm.username.trim(), password: loginForm.password });
               }
             }
           } catch (e) { console.warn('[cm-self-provision] failed', e); }
+          // ★ 起動時自己付与や再取得で使うため、このタブに限り認証情報を保持(ログアウトで消去)
+          try { sessionStorage.setItem('familyAuthUser', loginForm.username.trim()); sessionStorage.setItem('familyAuthPw', loginForm.password); } catch {}
           // ★ リンクアカウント (同じメール + 同じパスワード) があれば patient picker を表示
           const linked = sbAcc.linkedAccounts || [sbAcc];
           // ★ ログイン時: 古い patient 等のキャッシュを完全に捨てて新規アカウント情報だけにする
@@ -13953,6 +13979,8 @@ function FamilyView() {
             </div>
           </div>
         )}
+        {/* ★ 版番号(2026-09-03): 古いタブ問題の切り分け用 */}
+        <div style={{position:'fixed',bottom:6,left:0,right:0,textAlign:'center',fontSize:9,color:'#94a3b8',pointerEvents:'none'}}>アプリ版: {String((__builtUpdateNotes && __builtUpdateNotes.version) || '-')}</div>
         {helpModal && <LoginHelpModal kind={helpModal} onClose={()=>setHelpModal(null)} />}
       </div>
     );
@@ -13963,6 +13991,8 @@ function FamilyView() {
     sessionStorage.removeItem('familyAuthStoreId'); // ★ store_id も削除
     sessionStorage.removeItem('familyAuthPatientName'); // ★ 氏名ガードもクリア
     sessionStorage.removeItem('familyLinkedAccounts'); // ★ 2026-09-03: 残すとログアウト後に利用者選択画面が出てしまう
+    sessionStorage.removeItem('familyAuthUser'); // ★ 保持していた認証情報も消去
+    sessionStorage.removeItem('familyAuthPw');
     setLinkedFamilyAccounts(null);
     setAuthPid(null);
     setAuthAccId(null);
@@ -14765,7 +14795,9 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       ); })()}
       <div style={{textAlign:'center',padding:'14px 16px 32px',fontSize:10,color:'#64748b'}}>
         {facility.name||''} {facility.phone?`／${facility.phone}`:''}<br/>
-        このページは {patient.name} 様のご家族専用です
+        このページは {patient.name} 様のご家族専用です<br/>
+        {/* ★ 版番号(2026-09-03): 古いタブ問題の切り分け用。スクショで実行中の版が分かる */}
+        <span style={{color:'#94a3b8'}}>アプリ版: {String((__builtUpdateNotes && __builtUpdateNotes.version) || '-')}</span>
       </div>
       {/* ★ 不具合レポートモーダル (家族・関係者) */}
       {famReport && (
@@ -18498,7 +18530,8 @@ export default function App() {
                 password_hash: tmpl.password_hash, kind: 'caremanager', relation: 'ケアマネージャー',
                 display_name: tmpl.display_name || person.name, email: tmpl.email,
                 facility_name: tmpl.facility_name || appData.systemSettings?.facilityInfo?.name || '',
-                patient_name: p.name || '', role: 'caremanager',
+                patient_name: p.name || '', role: 'member', // ★ 2026-09-03: DBのrole許容値制約で'caremanager'はinsert不可(複製が全滅していた根因)。種別はkind/relationで判定
+
               });
             }
           }

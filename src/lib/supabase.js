@@ -336,13 +336,25 @@ export async function supabaseListCmAccountsAll(storeId) {
   } catch (e) { console.warn('[supabase] listCmAccountsAll exception', e); return []; }
 }
 // ケアマネ閲覧アカウントの複製作成(password_hashをそのまま引き継ぐ)
+// ★ 2026-09-03: 複製insertが一度も成功していなかった(登録経由のinsertは成功)ため、DB側の
+//   制約(roleの許容値/usernameの形式等)の可能性を全て潰す多段再試行にする。失敗内容はconsoleに残す。
 export async function supabaseInsertCmAccount(row) {
   if (!supabase) return null;
-  try {
-    const { data, error } = await supabase.from('family_accounts').insert(row).select().single();
-    if (error) { console.warn('[supabase] insertCmAccount error', error); return null; }
-    return data;
-  } catch (e) { console.warn('[supabase] insertCmAccount exception', e); return null; }
+  const _alnum = String(row.username || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 64);
+  const _noRole = { ...row, role: 'member' }; delete _noRole.role;
+  const variants = [
+    { ...row, role: 'member' },                                   // 既存全行と同じrole(許容値制約対策)
+    ...(_alnum && _alnum !== row.username ? [{ ...row, role: 'member', username: _alnum }] : []), // 記号なしID(形式制約対策)
+    _noRole,                                                      // role列をDBのdefaultに任せる
+  ];
+  for (const v of variants) {
+    try {
+      const { data, error } = await supabase.from('family_accounts').insert(v).select().single();
+      if (!error && data) return data;
+      console.warn('[supabase] insertCmAccount failed', v.username, error?.message || error);
+    } catch (e) { console.warn('[supabase] insertCmAccount exception', e); }
+  }
+  return null;
 }
 // アカウントの停止/復活(soft delete)。 復活できるようパスワードハッシュを保持したまま無効化する
 export async function supabaseSetFamilyAccountDeleted(accountId, deleted) {
@@ -394,12 +406,13 @@ export async function supabaseSelfProvisionCm(acc, password) {
       }
       let uname = `${acc.username}-p${pid}`.slice(0, 64);
       if ((rows || []).some(r => r.username === uname)) uname = `${acc.username}-p${pid}-${Math.random().toString(36).slice(2, 6)}`.slice(0, 64);
-      const { error: insErr } = await supabase.from('family_accounts').insert({
+      // ★ 2026-09-03: 多段再試行つきの共通insert(role許容値/username形式などDB制約の違いを吸収)
+      const ins = await supabaseInsertCmAccount({
         patient_id: pid, store_id: acc.store_id, username: uname, password_hash: passwordHash,
         kind: 'caremanager', relation: 'ケアマネージャー', display_name: acc.display_name || person.name || '', email: acc.email,
-        facility_name: acc.facility_name || '', patient_name: p.name || '', role: 'caremanager',
+        facility_name: acc.facility_name || '', patient_name: p.name || '', role: 'member',
       });
-      if (insErr) console.warn('[supabase] selfProvisionCm insert error', insErr); else added++;
+      if (ins) added++;
     }
     return { added };
   } catch (e) { console.warn('[supabase] selfProvisionCm exception', e); return { added: 0 }; }
