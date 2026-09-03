@@ -15991,7 +15991,7 @@ function AdminAuthModal({ mode, adminName, existingHash, onSuccess, onCancel, on
   );
 }
 
-function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdmin, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth }) {
+function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdmin, onSelect, onAddMember, onRemoveMember, onTransferAdmin, onLogout, onBackToStores, adminAuth, onSetAdminAuth, loading }) {
   const [pendingAdmin, setPendingAdmin] = React.useState(null); // 管理者選択 → 認証待ち
   // 管理者メンバーを選んだ時はパスワード認証を挟む。 ★ つむぎ管理局(super_admin)は本部認証済みなので店舗のPINを省略して入れる
   const selectMember = (m) => {
@@ -16027,7 +16027,15 @@ function RecorderPickerGate({ storeName, storeId, members, canManage, isSuperAdm
           <div style={{fontSize:12,color:'#5e8030',marginTop:6}}>記録に名前を残すため、入る前に教えてください</div>
         </div>
         <div style={{background:'white',borderRadius:20,padding:24,boxShadow:'0 8px 28px rgba(0,0,0,0.08)'}}>
-          {(members || []).length === 0 ? (
+          {loading && (members || []).length === 0 ? (
+            /* ★ 2026-09-03: 店舗データ読込前に「メンバーなし」画面が出て、数秒後に突然スタッフが
+               現れるのを防ぐ。読込が終わるまでは読み込み中表示にする。 */
+            <div style={{textAlign:'center',padding:40}}>
+              <div style={{width:38,height:38,margin:'0 auto 14px',border:'4px solid #d7e3c4',borderTopColor:'#7daa3d',borderRadius:'50%',animation:'tsumugiSpin 0.9s linear infinite'}}/>
+              <div style={{fontSize:13,color:'#475569',fontWeight:'bold'}}>スタッフ情報を読み込んでいます…</div>
+              <style>{`@keyframes tsumugiSpin{to{transform:rotate(360deg)}}`}</style>
+            </div>
+          ) : (members || []).length === 0 ? (
             <div style={{textAlign:'center',padding:32}}>
               <div style={{fontSize:14,color:'#475569',marginBottom:8,fontWeight:'bold'}}>まだメンバーが登録されていません</div>
               <div style={{fontSize:11,color:'#64748b',marginBottom:18}}>下のボタンから店舗のスタッフ名を登録してください</div>
@@ -18749,7 +18757,8 @@ export default function App() {
     // ★ つむぎ管理局(確認用ログイン=hq_viewer)はメンバーに出さない
     const _isHq = (o) => o && (o.id==='hq_viewer' || o.id==='ds_sync_hq_viewer' || o._syncedFromMemberId==='hq_viewer' || (o.name==='管理局' && (o.roleLabel==='管理者'||o.role==='管理者')));
     (appData.storeMembers||[]).forEach(m => { if(!m||!m.name||!m.name.trim()||_isHq(m)) return; const k=mk(m.name,m.roleLabel); if(seen.has(k))return; seen.add(k); out.push({ id:m.id, name:m.name, lastName:m.lastName, firstName:m.firstName, roleLabel:m.roleLabel||'', isAdmin: m.isAdmin||m.roleLabel==='管理者' }); });
-    (appData.diarySettings?.staff||[]).forEach(s => { if(!s||!s.name||!s.name.trim()||_isHq(s)) return; const k=mk(s.name,s.role); if(seen.has(k))return; seen.add(k); out.push({ id:s.id, name:s.name, roleLabel:s.role||'', isAdmin: s.role==='管理者' }); });
+    // ★ 1日ヘルプ(日誌で追加)はスタッフ切替に出さない(2026-09-03)
+    (appData.diarySettings?.staff||[]).forEach(s => { if(!s||!s.name||!s.name.trim()||_isHq(s)||s._tempHelp) return; const k=mk(s.name,s.role); if(seen.has(k))return; seen.add(k); out.push({ id:s.id, name:s.name, roleLabel:s.role||'', isAdmin: s.role==='管理者' }); });
     return out;
   }, [appData.storeMembers, appData.diarySettings?.staff]);
   // ★ 起動/更新時に「今の時刻」とサービス提供時間(各種設定)から AM/PM を自動選択。
@@ -19401,6 +19410,7 @@ export default function App() {
     return <RecorderPickerGate
       storeName={staffSession.storeName || staffSession.storeShortName}
       storeId={staffSession.storeId}
+      loading={isSupabaseEnabled && (!appData._sbStoreId || appData._sbStoreId !== staffSession.storeId)}
       members={mergedStaffMembers}
       canManage={staffSession.role === 'manager' || staffSession.role === 'super_admin'}
       isSuperAdmin={staffSession.role === 'super_admin'}
@@ -19458,13 +19468,18 @@ export default function App() {
         }));
       }}
       onRemoveMember={(memberId) => {
-        // ★ 日誌の担当職員からも同時削除 (_syncedFromMemberId で対応エントリ特定)
+        // ★ 日誌の担当職員からも同時削除。 2026-09-03修正: 日誌側で登録されたスタッフ(idが日誌側のもの)は
+        //   _syncedFromMemberId が無く×で消えなかったため、id直一致・同名同役職の連動行も確実に消す。
+        const _tgt = mergedStaffMembers.find(m => String(m.id) === String(memberId));
+        const _tn = _tgt ? normalizeName(_tgt.name).trim() : null;
         setAppData(prev => ({
           ...prev,
           storeMembers: (prev.storeMembers || []).filter(m => m.id !== memberId),
           diarySettings: {
             ...(prev.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
-            staff: (prev.diarySettings?.staff || []).filter(s => s._syncedFromMemberId !== memberId),
+            staff: (prev.diarySettings?.staff || []).filter(s =>
+              !(s._syncedFromMemberId === memberId || s.id === memberId || s.id === `ds_sync_${memberId}` ||
+                (_tn && normalizeName(s.name||'').trim() === _tn && (s.role||'') === (_tgt.roleLabel||'')))),
           },
         }));
       }}
@@ -19896,7 +19911,9 @@ export default function App() {
           テーブル/操作ログの反映が終わるまで表示する(最大8秒で自動的に消える)。
           ※ 従来 OPLOG_ENABLED のみでゲートしていたため、テーブル方式では一度も表示されず
             「再読み込み後の数秒間、データが無いように見える」原因になっていた。 */}
-      {opsLoading && (TABLE_ENABLED || OPLOG_ENABLED) && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
+      {/* ★ 2026-09-03追加: 手元データが別店舗のもの(_sbStoreId不一致)の間も必ずゲートする。
+          店舗ログイン/切替直後に前店舗の利用者名が一瞬見える(個人情報)のを防ぐ。 */}
+      {((opsLoading && (TABLE_ENABLED || OPLOG_ENABLED)) || (appData._sbStoreId && staffSession?.storeId && appData._sbStoreId !== staffSession.storeId)) && isSupabaseEnabled && staffSession?.storeId && ReactDOM.createPortal(
         <div style={{position:'fixed',inset:0,zIndex:2000003,background:'rgba(255,255,255,0.92)',
           display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14}}>
           <div style={{width:46,height:46,border:'5px solid #d7e3c4',borderTopColor:'#7daa3d',borderRadius:'50%',animation:'tsumugiSpin 0.9s linear infinite'}}/>
@@ -20424,6 +20441,28 @@ export default function App() {
             <div className="flex gap-2 mt-5">
               <button onClick={()=>setStaffAddModal(false)}
                 className="flex-1 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-sm">キャンセル</button>
+              {staffAddForm.editId && (
+                <button onClick={()=>{
+                  // ★ 2026-09-03: スタッフ切替の編集からも削除できるように(要望)。日誌の担当職員も連動削除。
+                  const eid = staffAddForm.editId;
+                  const _nm = `${staffAddForm.prevName||''}`;
+                  if (activeRecorder && String(activeRecorder.id)===String(eid)) { alert('現在選択中のスタッフは削除できません。先に別のスタッフへ切り替えてください。'); return; }
+                  if (!window.confirm(`「${_nm}」を削除しますか？\n(スタッフ切替と日誌の担当職員の両方から削除されます)`)) return;
+                  const _pn = normalizeName(_nm).trim();
+                  handleSaveToCloud({
+                    ...appData,
+                    storeMembers: (appData.storeMembers||[]).filter(m => m.id !== eid),
+                    diarySettings: {
+                      ...(appData.diarySettings || {staff:[],cars:[],scheduleAM:[],schedulePM:[]}),
+                      staff: (appData.diarySettings?.staff||[]).filter(x =>
+                        !(x._syncedFromMemberId === eid || x.id === eid || x.id === `ds_sync_${eid}` ||
+                          (normalizeName(x.name||'').trim() === _pn && (x.role||'') === (staffAddForm.prevRole||'')))),
+                    },
+                  }, { manual: true, message: '✓ スタッフを削除しました' });
+                  setStaffAddModal(false);
+                }}
+                  className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl font-bold text-sm">削除</button>
+              )}
               <button onClick={()=>{
                 const last = staffAddForm.lastName.trim();
                 const first = staffAddForm.firstName.trim();
@@ -37286,6 +37325,7 @@ function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
           {(() => {
             const seen = new Set();
             return ds.staff.filter((s, _i) => {
+              if (s._tempHelp) return false; // ★ 1日ヘルプ(日誌で追加)は日付限定のためここには出さない(2026-09-03)
               const key = `${(s.role||'')}__${normalizeName(s.name||'').trim()}`;
               if (seen.has(key)) return false;
               seen.add(key);
@@ -37423,6 +37463,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
   const dateObj = new Date(selectedDate);
   const dateStr = `${dateObj.getMonth()+1}月${dateObj.getDate()}日`;
+  const _diaryIsoDate = `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`; // ★ 1日ヘルプの日付キー(2026-09-03)
   const dow = dateObj.getDay();
   const yw = `${dateObj.getFullYear()} 年 ${dateObj.getMonth()+1} 月 ${dateObj.getDate()} 日（${'日月火水木金土'[dow]}）`;
 
@@ -37704,6 +37745,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   // Staff grouped - manager first
   // 担当職員フィルタ: ampm フィールドが当日の AM/PM に合致 or 'both' or 未定義 のものを表示
   const _staffOk = (s) => {
+    if (s._tempHelp && s._helpDate && s._helpDate !== _diaryIsoDate) return false; // ★ 1日ヘルプは当日の日誌のみ(2026-09-03)
     if (!s.ampm || s.ampm === 'both') return true;
     if (ampm === '1日') return true;
     return s.ampm === ampm;
@@ -37723,7 +37765,22 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
 
   // Time keypad helpers
   const openTimeKeypad = (carId, field, curVal) => { setTimeKeypad({carId,field}); setTimeInput(curVal||''); };
-  const closeTimeKeypad = () => { if(timeKeypad) { setCarTime(timeKeypad.carId, timeKeypad.field, timeInput); } setTimeKeypad(null); setTimeInput(''); };
+  // ★ 2026-09-03: 決定時に24時間表記(00:00〜23:59)へ検証・整形する。時間として成立しない数字は保存しない。
+  const closeTimeKeypad = () => {
+    if (timeKeypad) {
+      const raw = timeInput.replace(':','');
+      if (raw === '') { setCarTime(timeKeypad.carId, timeKeypad.field, ''); }
+      else {
+        const hh = raw.length <= 2 ? parseInt(raw,10) : parseInt(raw.slice(0, raw.length-2),10);
+        const mm = raw.length <= 2 ? 0 : parseInt(raw.slice(-2),10);
+        if (isNaN(hh) || isNaN(mm) || hh > 23 || mm > 59) { alert('時刻は 00:00〜23:59 の範囲で入力してください'); return; }
+        setCarTime(timeKeypad.carId, timeKeypad.field, `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`);
+      }
+      setTimeKeypad(null); setTimeInput('');
+      return;
+    }
+    setTimeKeypad(null); setTimeInput('');
+  };
   const kpInput = (v) => {
     let s = timeInput.replace(':','');
     if(v==='DEL') s=s.slice(0,-1);
@@ -37832,8 +37889,13 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const addStaffMember = () => {
     const nameVal = (nameInputRef.current?.value || newStaff.name).trim();
     if (!nameVal) return;
-    const staffEntry = { id: `s${Date.now()}`, name: nameVal, role: newStaff.role, ampm: newStaff.ampm || 'both' };
-    setPendingStaff([...ds.staff, staffEntry]);
+    // ★ 2026-09-03: 既定は「この日だけ(ヘルプ)」。日誌のその日にだけ表示され、スタッフ切替や
+    //   各種設定の担当職員には出ない(ヘルプ勤務が恒久リストに残る問題の対策)。
+    const staffEntry = { id: `s${Date.now()}`, name: nameVal, role: newStaff.role, ampm: newStaff.ampm || 'both',
+      ...(newStaff.oneDay !== false ? { _tempHelp: true, _helpDate: _diaryIsoDate } : {}) };
+    const _cut = new Date(Date.now() - 35*86400000);
+    const _cutIso = `${_cut.getFullYear()}-${String(_cut.getMonth()+1).padStart(2,'0')}-${String(_cut.getDate()).padStart(2,'0')}`;
+    setPendingStaff([...ds.staff.filter(x=>!(x._tempHelp && x._helpDate && x._helpDate < _cutIso)), staffEntry]);
     markDirty();
     setAddStaffModal(false);
     setNewStaff({ role: '介護職員', name: '', ampm: 'both' });
@@ -38333,6 +38395,19 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               );
             })}
           </div>
+          {/* ★ 2026-09-03: 全リセット(1週間前コピー後の作り直し用)。押した時点では画面上の選択が全て「未設定」
+              になるだけで、「適用」を押して初めて保存される(誤操作でも適用前ならキャンセル可) */}
+          <button onClick={()=>{
+            const all = {};
+            Array.from({length:totalRows}).forEach((_,i)=>{
+              const pt = patients[i]; const sr = (log.patientRows||[])[i]||{};
+              const name = pt?.name || sr.name || '';
+              if(!name) return;
+              if(pt && (pt.status==='欠席'||pt.status==='休業'||pt.status==='休止')) return;
+              all[String(i)] = '';
+            });
+            setCarAssignSelections(all);
+          }} className="w-full mb-2 py-2 rounded-xl border border-amber-300 bg-amber-50 text-amber-700 font-bold text-sm hover:bg-amber-100">全員を未設定にする（リセット）</button>
           <div className="flex gap-3">
             <button onClick={()=>{setCarAssignModal(null);setCarAssignSelections({});}} className="flex-1 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-sm">キャンセル</button>
             <button onClick={applyCarAssign} className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700">適用</button>
@@ -38507,20 +38582,26 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                 ))}
               </div>
             </div>
-            <div style={{marginBottom:20}}>
+            <div style={{marginBottom:12}}>
               <div style={{fontSize:12,fontWeight:'bold',color:'#000',marginBottom:4}}>名前</div>
               <input type="text" ref={nameInputRef} defaultValue="" placeholder="名前を入力"
                 style={{width:'100%',padding:'8px 12px',border:'1px solid #ddd',borderRadius:8,fontSize:14,fontWeight:'bold',outline:'none',boxSizing:'border-box'}}/>
             </div>
-            {ds.staff.filter(s=>s.name&&!s.id.startsWith('ds')).length > 0 && (
+            {/* ★ 2026-09-03: ヘルプ勤務は既定で「この日だけ」。恒常スタッフはチェックを外すと従来どおり全体に登録される */}
+            <label style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:20,cursor:'pointer',background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:8,padding:'8px 10px'}}>
+              <input type="checkbox" checked={newStaff.oneDay !== false} onChange={e=>setNewStaff({...newStaff, oneDay: e.target.checked})} style={{marginTop:2}}/>
+              <span style={{fontSize:11,color:'#0c4a6e',lineHeight:1.5}}><b>この日だけの担当（ヘルプなど）</b><br/>この日の日誌にだけ表示され、スタッフ切替や各種設定の担当職員には追加されません。店舗のスタッフとして今後も使う場合はチェックを外してください。</span>
+            </label>
+            {ds.staff.filter(s=>s.name&&!s.id.startsWith('ds')&&(!s._tempHelp||s._helpDate===_diaryIsoDate)).length > 0 && (
               <div style={{marginBottom:16,maxHeight:140,overflowY:'auto',border:'1px solid #eee',borderRadius:8,padding:'4px 0'}}>
                 <div style={{fontSize:11,fontWeight:'bold',color:'#888',padding:'4px 10px 2px'}}>追加済み（削除可）</div>
-                {ds.staff.filter(s=>s.name&&!s.id.startsWith('ds')).map(s=>{
+                {ds.staff.filter(s=>s.name&&!s.id.startsWith('ds')&&(!s._tempHelp||s._helpDate===_diaryIsoDate)).map(s=>{
                   const apLbl = (!s.ampm || s.ampm==='both') ? '両方' : s.ampm;
                   return (
                     <div key={s.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'4px 10px',fontSize:12,gap:4}}>
                       <span style={{fontWeight:'bold',color:'#000'}}>{s.role}</span>
                       <span style={{flex:1,fontWeight:'bold'}}>{s.name}</span>
+                      {s._tempHelp && <span style={{fontSize:10,fontWeight:'bold',background:'#fef3c7',color:'#92400e',padding:'1px 6px',borderRadius:4}}>この日だけ</span>}
                       <span style={{fontSize:10,fontWeight:'bold',background:'#e0f2fe',color:'#0369a1',padding:'1px 6px',borderRadius:4}}>{apLbl}</span>
                       <button onClick={()=>deleteStaffMember(s.id)} style={{padding:'2px 8px',borderRadius:6,border:'1px solid #fca5a5',background:'#fef2f2',color:'#dc2626',fontSize:11,fontWeight:'bold',cursor:'pointer'}}>削除</button>
                     </div>
@@ -43891,7 +43972,8 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const absencesByDate = {};
   const _collectAbs = (y2, m2) => {
     tickets.forEach(r => {
-      if (r.status !== '欠席') return;
+      // ★ 2026-09-03: 「振替」も休み連絡の対象に含める(別日に振り替えたお休みの連絡が出なかった)
+      if (r.status !== '欠席' && r.status !== '振替') return;
       const m = r.date?.match(/(\d+)月(\d+)日/);
       if (!m) return;
       const rm = parseInt(m[1]), rd = parseInt(m[2]);
@@ -43900,7 +43982,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       const dateStr = `${y2}-${String(m2).padStart(2,'0')}-${String(rd).padStart(2,'0')}`;
       if (!absencesByDate[dateStr]) absencesByDate[dateStr] = [];
       const pat = patients.find(p => p.id === r.patientId);
-      if (pat && !absencesByDate[dateStr].some(a => a.patient.id === pat.id)) absencesByDate[dateStr].push({ patient: pat, tokki: r.tokki || '' });
+      if (pat && !absencesByDate[dateStr].some(a => a.patient.id === pat.id)) absencesByDate[dateStr].push({ patient: pat, tokki: r.tokki || '', furikae: r.status === '振替' || /振替/.test(r.tokki || '') });
     });
     const mk = `${y2}-${String(m2).padStart(2,'0')}`;
     const ms = appData.monthlyShifts?.[mk] || {};
@@ -43988,7 +44070,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
     const rawTokki = (() => {
       if (tokki) return tokki;
-      const rec = tickets.find(r => r.patientId === patient.id && r.date === `${parseInt(date.split('-')[1])}月${parseInt(date.split('-')[2])}日` && r.status === '欠席');
+      const rec = tickets.find(r => r.patientId === patient.id && r.date === `${parseInt(date.split('-')[1])}月${parseInt(date.split('-')[2])}日` && (r.status === '欠席' || r.status === '振替')); // ★ 2026-09-03: 振替の連絡文面にも振替日を載せる
       return rec?.tokki || '';
     })();
     const parsed = parseFurikaeTokki(rawTokki);
@@ -44016,6 +44098,12 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       return lines.join('\n');
     })();
     const defaultMemo = fax.memo !== undefined ? fax.memo : _defaultMemoTemplate;
+    // ★ 2026-09-03: 連絡事項は枠を溢れたらスクロールでなく文字を自動縮小(印刷と同じ見た目で入力できる)
+    const _memoFs = (() => {
+      const t = String(fax.memo ?? defaultMemo ?? '');
+      const lines = t.split('\n').reduce((a,l)=>a+Math.max(1,Math.ceil((l.length||1)/38)),0);
+      if (lines <= 8) return 16; if (lines <= 11) return 14; if (lines <= 14) return 12.5; if (lines <= 18) return 11; return 10;
+    })();
 
     return (
       <div style={{height:'100%',display:'flex',flexDirection:'column',background:'#f0f4f9'}}>
@@ -44231,7 +44319,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   <span>連絡事項</span>
                 </div>
                 {isPrint ? (
-                  <div style={{flex:1,border:'none',borderRadius:0,padding:'4px 0',fontSize:16,whiteSpace:'pre-wrap',lineHeight:1.8}}>
+                  <div style={{flex:1,border:'none',borderRadius:0,padding:'4px 0',fontSize:_memoFs,whiteSpace:'pre-wrap',lineHeight:1.7}}>
                     {fax.memo ?? defaultMemo}
                   </div>
                 ) : (
@@ -44239,7 +44327,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                     value={fax.memo ?? defaultMemo}
                     onChange={e=>updateFax(key,{memo:e.target.value})}
                     placeholder="連絡事項を自由に入力してください"
-                    style={{width:'100%',flex:1,border:'1.5px dashed #94a3b8',borderRadius:8,padding:'10px 12px',fontSize:16,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.8,boxSizing:'border-box',background:'#fafafa'}}
+                    style={{width:'100%',flex:1,border:'1.5px dashed #94a3b8',borderRadius:8,padding:'10px 12px',fontSize:_memoFs,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.7,boxSizing:'border-box',background:'#fafafa'}}
                   />
                 )}
               </div>
@@ -44338,7 +44426,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                       {isToday&&!isClosed&&<span style={{fontSize:9,background:'#f59e0b',color:'white',borderRadius:4,padding:'1px 4px',fontWeight:'bold'}}>今日</span>}
                       {isClosed&&<span style={{fontSize:9,color:'#64748b'}}>定休</span>}
                     </div>
-                    {absences.map(({patient:pat, tokki},ai)=>{
+                    {absences.map(({patient:pat, tokki, furikae},ai)=>{
                       const k = getKey(dateStr, pat.id);
                       const fd = faxData[k];
                       // 印刷/PDF状態が無くても編集されていれば「編集済」を表示
@@ -44354,6 +44442,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                             textAlign:'left',display:'flex',alignItems:'center',gap:2
                           }}>
                           <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{maskedN}</span>
+                          {furikae&&<span style={{fontSize:9,flexShrink:0,color:'#7c2d12',background:'#fed7aa',padding:'1px 4px',borderRadius:3,fontWeight:'bold'}}>振替あり</span>}
                           {st!=='none'&&<span style={{fontSize:9,flexShrink:0,color:'#475569',background:'rgba(255,255,255,0.7)',padding:'1px 4px',borderRadius:3}}>{statusLabels[st]}</span>}
                         </button>
                       );
@@ -44801,7 +44890,14 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             <textarea value={memo} onChange={e=>setMemo(e.target.value)}
                       placeholder="ここに連絡事項を直接入力してください"
                       className="fax-inline-input"
-                      style={{flex:1,fontSize:(memoStyle.size==='xl'?24:memoStyle.size==='lg'?20:16),lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%',textDecoration:(memoStyle.underline?'underline':'none')}}/>
+                      style={{flex:1,fontSize:(()=>{
+                        // ★ 2026-09-03: 選択した文字サイズを上限に、文量が多いときは自動で縮小(スクロールさせず印刷と同じ見た目)
+                        const base = memoStyle.size==='xl'?24:memoStyle.size==='lg'?20:16;
+                        const lines = String(memo||'').split('\n').reduce((a,l)=>a+Math.max(1,Math.ceil((l.length||1)/Math.max(18, Math.round(640/base)))),0);
+                        const capacity = Math.max(6, Math.floor(430/(base*1.9)));
+                        if (lines <= capacity) return base;
+                        return Math.max(10, Math.floor(base * capacity / lines));
+                      })(),lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%',textDecoration:(memoStyle.underline?'underline':'none')}}/>
             <div style={{fontSize:16,marginTop:8}}>今後ともよろしくお願いいたします。</div>
           </div>
         </div>
