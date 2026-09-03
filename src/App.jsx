@@ -8,6 +8,9 @@ import {
   ChevronDown, ChevronUp, Thermometer, Heart, Copy, Edit3, Edit2, MessageSquare, Briefcase
 } from 'lucide-react';
 import { ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+// ★ ビルド時の update-notes.json を焼き込む(2026-09-03): 家族/ケアマネポータルの「古いタブ」検知用。
+//   本番の /update-notes.json の version とこの値が違えば、ログイン画面で一度だけ自動再読み込みする。
+import __builtUpdateNotes from '../public/update-notes.json';
 import { encodeInviteToken, decodeInviteToken, normalizeInviteCode } from './lib/logic';
 import {
   isSupabaseEnabled,
@@ -12743,6 +12746,63 @@ function FamilyView() {
     return () => { cancelled = true; };
   }, [familyStoreId, authPid]);
 
+  // ★ 古いタブの自動更新(2026-09-03): ポータルにはスタッフ画面の「今すぐ更新」バナーが無く、
+  //   開きっぱなしのタブはログアウト/ログインを繰り返しても古いJSのまま動き続ける
+  //   (試作店の実地テストで、修正配信後もログイン時の自動付与が動かなかった原因)。
+  //   ログイン画面表示中に限り、本番の update-notes.json の version がこのバンドルの焼き込み値と
+  //   違ったら一度だけ自動で再読み込みする(入力中データが無い画面なので安全)。
+  useEffect(() => {
+    if (authPid || adminPreview) return;
+    let stopped = false;
+    const check = async () => {
+      try {
+        const res = await fetch('/update-notes.json?_v=' + Date.now(), { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        const remote = String(j.version || ''), local = String((__builtUpdateNotes && __builtUpdateNotes.version) || '');
+        if (!remote || !local || remote === local) return;
+        const guard = 'tsumugiFamReloadedFor';
+        try { if (sessionStorage.getItem(guard) === remote) return; sessionStorage.setItem(guard, remote); } catch { return; }
+        if (!stopped) window.location.reload();
+      } catch {}
+    };
+    check();
+    const onFocus = () => { if (document.visibilityState !== 'hidden') check(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { stopped = true; window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+  }, [authPid, adminPreview]);
+
+  // ★ ケアマネの起動時自己付与(2026-09-03): ログイン時だけだと「古いJSでログイン→その後に再読み込み」の
+  //   順では自己付与が走らず、担当利用者が1名のまま利用者切替が出ない。ログイン済みのケアマネでも
+  //   起動時に一度だけ担当ぶんの付与を確認し、増えたらリンク一覧(利用者切替)をその場で更新する。
+  const _cmBootProvRef = useRef(false);
+  useEffect(() => {
+    if (_cmBootProvRef.current) return;
+    if (!isSupabaseEnabled || !authPid || !authAccId || adminPreview || data._isDemoPreview) return;
+    const kind = (() => { try { return sessionStorage.getItem('familyAuthKind'); } catch { return null; } })();
+    if (kind !== 'caremanager') return;
+    const acc = (data.familyAccounts || []).find(a => String(a.id) === String(authAccId));
+    if (!acc || !acc._fromSupabase || !acc.password || acc.password === '****' || !acc.email) return;
+    _cmBootProvRef.current = true;
+    (async () => {
+      try {
+        const base = { store_id: acc.storeId || acc.store_id || familyStoreId, email: acc.email, username: acc.username, display_name: acc.displayName || '', kind: 'caremanager' };
+        const prov = await supabaseSelfProvisionCm(base, acc.password);
+        if (prov && prov.added > 0) {
+          const sb = await supabaseLoginFamily({ username: acc.username, password: acc.password });
+          const linked = sb.linkedAccounts || [sb];
+          if (linked.length > 1) {
+            const descriptors = linked.map(la => ({ id: la.id, patientId: la.patient_id, storeId: la.store_id || null, patientName: la.patient_name || '', facilityName: la.facility_name || '', relation: la.relation || '', kind: la.kind || 'caremanager' }));
+            try { sessionStorage.setItem('familyLinkedAccounts', JSON.stringify(descriptors)); } catch {}
+            setLinkedFamilyAccounts(descriptors);
+          }
+        }
+      } catch (e) { console.warn('[cm-self-provision:boot] failed', e); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authPid, authAccId, data.familyAccounts]);
+
   // ★ Supabase 同期 (家族画面): 起動時 + 15秒ごとに最新 state を pull (店舗 ID 指定)
   useEffect(() => {
     if (!isSupabaseEnabled || !familyStoreId) return;
@@ -12996,10 +13056,10 @@ function FamilyView() {
       if (_sid) sessionStorage.setItem('familyAuthStoreId', String(_sid));
       // ★ 期待利用者名 (フォールバック走査時の氏名一致ガード用)
       if (la.patientName || la.patient_name) { try { sessionStorage.setItem('familyAuthPatientName', String(la.patientName || la.patient_name)); } catch {} }
-      sessionStorage.removeItem('familyLinkedAccounts');
+      // ★ 2026-09-03修正: 以前はここでリンク一覧を消していたため、一度切り替えると
+      //   「利用者切替」ボタン自体が消えて2回目以降の切替ができなかった。一覧は保持する。
       setAuthPid(String(la.patientId || la.patient_id));
       setAuthAccId(String(la.id));
-      setLinkedFamilyAccounts(null);
     };
     return (
       <div style={{minHeight:'100vh',background:'linear-gradient(135deg,#d4e7a5 0%,#f0f7e0 100%)',padding:24,boxSizing:'border-box',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -13902,6 +13962,8 @@ function FamilyView() {
     sessionStorage.removeItem('familyAuthAccId');
     sessionStorage.removeItem('familyAuthStoreId'); // ★ store_id も削除
     sessionStorage.removeItem('familyAuthPatientName'); // ★ 氏名ガードもクリア
+    sessionStorage.removeItem('familyLinkedAccounts'); // ★ 2026-09-03: 残すとログアウト後に利用者選択画面が出てしまう
+    setLinkedFamilyAccounts(null);
     setAuthPid(null);
     setAuthAccId(null);
     setLoginForm({ username:'', password:'', error:'', showPw:false });
@@ -18725,7 +18787,7 @@ export default function App() {
         let changed = false;
         // ★ フィールド単位保護対象(基本利用日/送迎/緊急連絡先/介護度等)は、変更された項目だけ _fieldTs に刻む。
         //   これで別項目を編集して _savedAt 全体が更新されても、触っていない項目は古い端末で巻き戻らない。
-        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','serviceCodes','contactBookRenraku','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
+        const _PT_FL = ['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','serviceCodes','contactBookRenraku','cmOffice','cmName','cmPhone','cmFax','cmHistory','familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail'];
         const stamped = newData.patients.map(p => {
           if (!p || p.id == null) return p;
           const old = prevMap.get(String(p.id));

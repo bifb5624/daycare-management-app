@@ -389,7 +389,7 @@ export async function supabaseSelfProvisionCm(acc, password) {
       const dead = mine.find(r => String(r.patient_id) === pid && r.deleted_at);
       if (dead) {
         const { error: e2 } = await supabase.from('family_accounts').update({ deleted_at: null }).eq('id', dead.id);
-        if (!e2) added++;
+        if (e2) console.warn('[supabase] selfProvisionCm revive error', e2); else added++;
         continue;
       }
       let uname = `${acc.username}-p${pid}`.slice(0, 64);
@@ -399,7 +399,7 @@ export async function supabaseSelfProvisionCm(acc, password) {
         kind: 'caremanager', relation: 'ケアマネージャー', display_name: acc.display_name || person.name || '', email: acc.email,
         facility_name: acc.facility_name || '', patient_name: p.name || '', role: 'caremanager',
       });
-      if (!insErr) added++;
+      if (insErr) console.warn('[supabase] selfProvisionCm insert error', insErr); else added++;
     }
     return { added };
   } catch (e) { console.warn('[supabase] selfProvisionCm exception', e); return { added: 0 }; }
@@ -801,7 +801,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   const FAMILY_CONTACT_FIELDS = new Set(['familyName','familyLastName','familyFirstName','familyKana','familyKanaLast','familyKanaFirst','familyRelation','familyPhone','familyPhoneMobile','familyEmail']);
   // ★ 利用者の「フィールド単位で時刻(_fieldTs)保護」する項目。 利用者を1項目編集して _savedAt 全体が
   //   更新されても、これらの項目は触っていなければ古い端末の保存で巻き戻らない(基本利用日/送迎/緊急連絡先)。
-  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','serviceCodes','contactBookRenraku', ...FAMILY_CONTACT_FIELDS]);
+  // ★ cm系(担当ケアマネ)を追加(2026-09-03): 「担当を変更」が刻印なし=非保護で、別端末の古いスナップショット
+  //   保存で担当情報が巻き戻り消えていた(試作店で担当欄がクラウドから消失した実例)。
+  const PATIENT_FIELDLEVEL = new Set(['scheduleAmPm','pickupType','pickupTimes','massageNeed','onyokuDenryo','plannedExercises','careLevel','careLevelFrom','careLevelTo','costBurden','costBurdenFrom','costBurdenTo','insuranceNo','startDate','endDate','serviceCode','serviceCodes','contactBookRenraku','cmOffice','cmName','cmPhone','cmFax','cmHistory', ...FAMILY_CONTACT_FIELDS]);
   // ★ 削除済み書類の墓石を両端末ぶん合算する。 _delDocs = { "<書類id>": 削除時刻(ms) }
   //   和集合(union)マージは「追加を失わない」代わりに削除を必ず復活させるため、墓石で除外する。
   const _mergeDocTombs = (...srcs) => {
@@ -1528,7 +1530,12 @@ export async function supabaseMergePatientFromFamily(storeId, patientId, patient
         if (FAMILY_PRIMARY.includes(k) && isDifferentPerson) return;
         filteredPatch[k] = v;
       });
-      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated, docUpdates: mergedDocUpdates, personalFile: mergedPersonalFile, ...(_pfTs ? { _fieldTs: _pfTs } : {}) };
+      // ★ 担当ケアマネ系(cm*)の更新は項目時刻を刻む(2026-09-03): 刻印なしだと項目別マージ側で
+      //   スタッフ端末の古い刻印に負け、ケアマネ本人の更新が巻き戻るため。
+      let _cmTs = _pfTs;
+      { const _cmKeys = ['cmName','cmOffice','cmPhone','cmFax'].filter(k => filteredPatch[k] !== undefined);
+        if (_cmKeys.length) { _cmTs = { ...(p._fieldTs || {}), ...(_cmTs || {}) }; const _tnow = Date.now(); _cmKeys.forEach(k => { _cmTs[k] = _tnow; }); } }
+      return { ...p, ...filteredPatch, emergencyContacts: mergedContacts2, relatedParties: mergedRelated, docUpdates: mergedDocUpdates, personalFile: mergedPersonalFile, ...(_cmTs ? { _fieldTs: _cmTs } : {}) };
     });
     // ★ ケアマネ事業所/担当者マスタ (systemSettings) も、家族(関係者)登録で増えた分を統合 (重複は追加しない)
     let nextSettings = currentData.systemSettings || {};
