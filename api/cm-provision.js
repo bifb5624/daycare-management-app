@@ -57,15 +57,41 @@ export default async function handler(req, res) {
     if (!person) return res.status(200).json({ ok: true, added: 0, revived: 0, desired: 0, note: '担当者マスタで本人を特定できませんでした' });
     const desired = pats.filter(p => p && (p.status || '利用中') !== '退所済み' && nrm(p.cmOffice) === nrm(person.office) && nrm(p.cmName) === nrm(person.name));
 
-    // 3. 既存アカウント(同店舗+同メール)と突き合わせて不足分を復活/複製
+    // 3. 完全整合(2026-09-03): 付与だけでなく「担当から外れた分の失効」「基点行の付け替え」まで行い、
+    //    ログイン時点で切替リストが現在の担当割当と正確に一致するようにする。
     const lr = await supa.from('family_accounts').select('*').eq('store_id', acc.store_id).eq('email', acc.email);
     if (lr.error) throw lr.error;
     const rows = lr.data || [];
     const mine = rows.filter(x => x.password_hash === acc.password_hash);
-    let added = 0, revived = 0;
+    const desiredIds = new Set(desired.map(p => String(p.id)));
+    // 複製行の判定: 同メール内の別行のユーザー名+利用者idから機械生成された形か
+    const isClone = (r) => rows.some(b => b.username && b.username !== r.username && (
+      r.username === `${b.username}-p${r.patient_id}` || r.username === `${b.username}p${r.patient_id}` ||
+      String(r.username).startsWith(`${b.username}-p${r.patient_id}-`)));
+    let added = 0, revived = 0, stopped = 0, repointed = 0;
+    const stop = async (id) => { const u = await supa.from('family_accounts').update({ deleted_at: new Date().toISOString() }).eq('id', id); if (u.error) errors.push(`停止失敗: ${u.error.message}`); else stopped++; };
+    // 3a. 担当から外れた分の失効(複製行)と基点行の付け替え
+    let liveMine = mine.filter(x => !x.deleted_at);
+    for (const r of liveMine) {
+      if (desiredIds.has(String(r.patient_id))) continue;
+      if (String(r.id) === String(acc.id) || r.username === acc.username) {
+        // ログインに使う基点行: 停止するとID自体が死ぬので、現担当の利用者へ付け替える(担当0なら停止)
+        if (!desired.length) { await stop(r.id); continue; }
+        const uncovered = desired.find(p => !liveMine.some(x => String(x.patient_id) === String(p.id) && String(x.id) !== String(r.id)));
+        const tgt = uncovered || desired[0];
+        const u = await supa.from('family_accounts').update({ patient_id: String(tgt.id), patient_name: tgt.name || '' }).eq('id', r.id);
+        if (u.error) errors.push(`付け替え失敗: ${u.error.message}`);
+        else { repointed++; r.patient_id = String(tgt.id);
+          if (!uncovered) { const dup = liveMine.find(x => String(x.patient_id) === String(tgt.id) && String(x.id) !== String(r.id)); if (dup) { await stop(dup.id); dup.deleted_at = 'x'; } } }
+      } else {
+        await stop(r.id); r.deleted_at = 'x';
+      }
+    }
+    liveMine = mine.filter(x => !x.deleted_at);
+    // 3b. 不足分の付与(停止中の復活を優先・無ければ複製)
     for (const p of desired) {
       const pid = String(p.id);
-      if (mine.some(x => String(x.patient_id) === pid && !x.deleted_at)) continue;
+      if (liveMine.some(x => String(x.patient_id) === pid)) continue;
       const dead = mine.find(x => String(x.patient_id) === pid && x.deleted_at);
       if (dead) {
         const u = await supa.from('family_accounts').update({ deleted_at: null }).eq('id', dead.id);
@@ -90,7 +116,18 @@ export default async function handler(req, res) {
       }
       if (done) added++; else errors.push(`作成失敗(${pid}): ${lastErr}`);
     }
-    return res.status(200).json({ ok: true, added, revived, desired: desired.length, errors });
+    // 3c. 失効グループの掃除: 同メールで別パスワードのグループに「生きた基点行」が無ければ、その複製は
+    //     旧認証情報の残骸(例: 削除済みテストアカウント由来の誤生成)なので停止する。
+    const byHash = new Map();
+    rows.filter(x => x.password_hash !== acc.password_hash && (x.kind === 'caremanager' || x.relation === 'ケアマネージャー')).forEach(x => {
+      const k = String(x.password_hash || ''); if (!byHash.has(k)) byHash.set(k, []); byHash.get(k).push(x);
+    });
+    for (const grp of byHash.values()) {
+      const liveG = grp.filter(x => !x.deleted_at);
+      if (!liveG.length) continue;
+      if (!liveG.some(x => !isClone(x))) { for (const x of liveG) await stop(x.id); }
+    }
+    return res.status(200).json({ ok: true, added, revived, stopped, repointed, desired: desired.length, errors });
   } catch (e) {
     return res.status(500).json({ error: '付与処理に失敗しました', detail: String(e.message || e), errors });
   }

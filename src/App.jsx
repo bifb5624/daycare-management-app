@@ -19,6 +19,7 @@ import {
   supabaseListCmAccountsAll,
   supabaseInsertCmAccount,
   supabaseSetFamilyAccountDeleted,
+  supabaseRepointCmAccount,
   supabaseSelfProvisionCm,
   supabaseSignupFamily,
   supabaseLoginFamily,
@@ -12797,7 +12798,7 @@ function FamilyView() {
         try {
           const _r = await fetch('/api/cm-provision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: _user, password: _pw }) });
           const _j = await _r.json().catch(() => null);
-          if (_j && _j.ok === true) { prov = { added: (Number(_j.added) || 0) + (Number(_j.revived) || 0) }; if (Array.isArray(_j.errors) && _j.errors.length) console.warn('[cm-provision:boot] server errors', _j.errors); }
+          if (_j && _j.ok === true) { prov = { added: (Number(_j.added) || 0) + (Number(_j.revived) || 0) + (Number(_j.stopped) || 0) + (Number(_j.repointed) || 0) }; if (Array.isArray(_j.errors) && _j.errors.length) console.warn('[cm-provision:boot] server errors', _j.errors); }
           else console.warn('[cm-provision:boot] server response', _r.status, _j);
         } catch (e2) { console.warn('[cm-provision:boot] api unreachable', e2); }
         if (!prov && acc && acc.email) {
@@ -12811,6 +12812,20 @@ function FamilyView() {
             const descriptors = linked.map(la => ({ id: la.id, patientId: la.patient_id, storeId: la.store_id || null, patientName: la.patient_name || '', facilityName: la.facility_name || '', relation: la.relation || '', kind: la.kind || 'caremanager' }));
             try { sessionStorage.setItem('familyLinkedAccounts', JSON.stringify(descriptors)); } catch {}
             setLinkedFamilyAccounts(descriptors);
+          } else {
+            // 担当整理の結果1名になった場合は切替リストを畳む
+            try { sessionStorage.removeItem('familyLinkedAccounts'); } catch {}
+            setLinkedFamilyAccounts(null);
+          }
+          // ★ 今見ている利用者が担当から外れていた(該当行が失効/付け替え)場合はログイン行の利用者へ移動
+          if (!linked.some(la => String(la.id) === String(authAccId))) {
+            try {
+              sessionStorage.setItem('familyAuthPid', String(sb.patient_id));
+              sessionStorage.setItem('familyAuthAccId', String(sb.id));
+              if (sb.patient_name) sessionStorage.setItem('familyAuthPatientName', String(sb.patient_name));
+            } catch {}
+            setAuthPid(String(sb.patient_id));
+            setAuthAccId(String(sb.id));
           }
         }
       } catch (e) { console.warn('[cm-self-provision:boot] failed', e); }
@@ -13126,7 +13141,7 @@ function FamilyView() {
               try {
                 const _r = await fetch('/api/cm-provision', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: loginForm.username.trim(), password: loginForm.password }) });
                 const _j = await _r.json().catch(() => null);
-                if (_j && _j.ok === true) { _prov = { added: (Number(_j.added) || 0) + (Number(_j.revived) || 0) }; if (Array.isArray(_j.errors) && _j.errors.length) console.warn('[cm-provision] server errors', _j.errors); }
+                if (_j && _j.ok === true) { _prov = { added: (Number(_j.added) || 0) + (Number(_j.revived) || 0) + (Number(_j.stopped) || 0) + (Number(_j.repointed) || 0) }; if (Array.isArray(_j.errors) && _j.errors.length) console.warn('[cm-provision] server errors', _j.errors); }
                 else console.warn('[cm-provision] server response', _r.status, _j);
               } catch (e2) { console.warn('[cm-provision] api unreachable', e2); }
               if (!_prov) _prov = await supabaseSelfProvisionCm(sbAcc, loginForm.password);
@@ -18510,13 +18525,28 @@ export default function App() {
             const desired = pats.filter(p => getPatientDisplayStatus(p) !== '退所済み' && _nrm(p.cmOffice) === _nrm(person.office) && _nrm(p.cmName) === _nrm(person.name));
             const desiredIds = new Set(desired.map(p => String(p.id)));
             const live = grp.filter(r => !r.deleted_at);
-            const liveIds = new Set(live.map(r => String(r.patient_id)));
-            // 1) 担当から外れた利用者ぶんを停止
+            // ★ 複製行の判定(2026-09-03): 同グループの別行のユーザー名+利用者idから機械生成された形か
+            const _isClone = (r) => grp.some(b => b !== r && b.username && (r.username === `${b.username}-p${r.patient_id}` || r.username === `${b.username}p${r.patient_id}` || String(r.username).startsWith(`${b.username}-p${r.patient_id}-`)));
+            // ★ 失効グループの掃除(2026-09-03): 生きた基点行(ログインIDの行)が無いグループは旧認証情報の残骸。
+            //   複製を作らず、残っている複製も停止する(削除済みテストアカウント由来の誤生成が実際に起きた)。
+            const _liveBase = live.filter(r => !_isClone(r));
+            if (!_liveBase.length) { for (const r of live) { await supabaseSetFamilyAccountDeleted(r.id, true); } continue; }
+            // 1) 担当から外れた利用者ぶんを停止(複製行のみ)。基点行は停止するとログインID自体が死ぬため、
+            //    現担当の利用者へ付け替える(担当0なら停止=閲覧の全面失効)
             for (const r of live) {
-              if (!desiredIds.has(String(r.patient_id))) { await supabaseSetFamilyAccountDeleted(r.id, true); }
+              if (desiredIds.has(String(r.patient_id))) continue;
+              if (_isClone(r)) { await supabaseSetFamilyAccountDeleted(r.id, true); continue; }
+              if (!desired.length) { await supabaseSetFamilyAccountDeleted(r.id, true); continue; }
+              const _uncov = desired.find(p => !live.some(x => x !== r && String(x.patient_id) === String(p.id)));
+              const _tgt = _uncov || desired[0];
+              if (await supabaseRepointCmAccount(r.id, _tgt.id, _tgt.name || '')) {
+                r.patient_id = String(_tgt.id);
+                if (!_uncov) { const _dup = live.find(x => x !== r && _isClone(x) && String(x.patient_id) === String(_tgt.id)); if (_dup) { await supabaseSetFamilyAccountDeleted(_dup.id, true); _dup.deleted_at = 'x'; } }
+              }
             }
+            const liveIds = new Set(live.filter(r => !r.deleted_at).map(r => String(r.patient_id)));
             // 2) 新しく担当になった利用者ぶんを付与(停止中の復活を優先・無ければ基点から複製)
-            const tmpl = live[0] || grp[0];
+            const tmpl = _liveBase[0] || live[0] || grp[0];
             for (const p of desired) {
               const pid = String(p.id);
               if (liveIds.has(pid)) continue;

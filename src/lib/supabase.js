@@ -265,7 +265,16 @@ export async function supabaseLoginFamily({ username, password }) {
       .eq('email', data.email)
       .eq('password_hash', password_hash)
       .is('deleted_at', null);
-    if (others && others.length > 0) linkedAccounts = others;
+    if (others && others.length > 0) {
+      // ★ 同一利用者の重複行は1つに(2026-09-03): 基点の付け替え等で同じ利用者を指す行が併存しても
+      //   切替リストに同じ人が2回出ないようにする。ログインに使った行を最優先。
+      const seen = new Set(); const uniq = [];
+      [data, ...others.filter(o => String(o.id) !== String(data.id))].forEach(o => {
+        const k = String(o.patient_id);
+        if (!seen.has(k)) { seen.add(k); uniq.push(o); }
+      });
+      linkedAccounts = uniq;
+    }
   }
   return { ...data, linkedAccounts };
 }
@@ -355,6 +364,18 @@ export async function supabaseInsertCmAccount(row) {
     } catch (e) { console.warn('[supabase] insertCmAccount exception', e); }
   }
   return null;
+}
+// ★ 基点アカウントの付け替え(2026-09-03): 担当から外れた基点行(=ログインIDの行)を停止するとログイン自体が
+//   死ぬため、停止せず現担当の利用者へ patient_id を付け替える。
+export async function supabaseRepointCmAccount(accountId, patientId, patientName) {
+  if (!supabase || !accountId) return false;
+  try {
+    const { error } = await supabase.from('family_accounts')
+      .update({ patient_id: String(patientId), patient_name: patientName || '' })
+      .eq('id', accountId);
+    if (error) { console.warn('[supabase] repointCmAccount error', error); return false; }
+    return true;
+  } catch (e) { console.warn('[supabase] repointCmAccount exception', e); return false; }
 }
 // アカウントの停止/復活(soft delete)。 復活できるようパスワードハッシュを保持したまま無効化する
 export async function supabaseSetFamilyAccountDeleted(accountId, deleted) {
