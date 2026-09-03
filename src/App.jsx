@@ -13018,7 +13018,12 @@ function FamilyView() {
       if (raw === _famRawRef.current) return; // 変化なし→何もしない
       _famRawRef.current = raw;
       const merged = loadDataMerged();
-      if (merged) setData(merged);
+      // ★ 2026-09-03: 空データでの上書き禁止。別タブのログイン初期化(patients空)を取り込むと
+      //   表示中の画面が「データを取得中」に落ちるため、利用者が入っている状態は空で潰さない。
+      if (merged) setData(prev => {
+        if ((prev.patients || []).length > 0 && (merged.patients || []).length === 0) return prev;
+        return merged;
+      });
     };
     window.addEventListener('storage', reload);
     const t = setInterval(reload, 1500); // 1.5秒ごとにポーリング (お知らせ等の即時反映)
@@ -13080,7 +13085,11 @@ function FamilyView() {
   if (!authPid && linkedFamilyAccounts && linkedFamilyAccounts.length > 1) {
     const selectAccount = (la) => {
       // ★ 別利用者を選んだ際に前の利用者データが混ざらないように patients 等をクリア
-      setData(prev => ({
+      //   ★ 2026-09-03: ただし同じ店舗内の切替ではクリアしない。クリアすると次の定期取得(最大15秒)まで
+      //   「データを取得中」になり、切替のたびに待たされていた。同一店舗ならデータは共通で混在しない。
+      const _curStore = (() => { try { return sessionStorage.getItem('familyAuthStoreId') || ''; } catch { return ''; } })();
+      const _sameStore = _curStore && String(la.storeId || la.store_id || '') === String(_curStore);
+      if (!_sameStore) setData(prev => ({
         ...prev,
         patients: [], ticketRecords: [], familyAnnouncements: [],
         familyPersonalAnnouncements: [], familyPhotos: [],
@@ -14428,6 +14437,31 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unreadCount, popupShown]);
+  // ★ 「データを取得中」の自動リカバリ(2026-09-03): 15秒の定期取得を待たず、対象利用者が見つからない間は
+  //   3秒ごとにクラウドから直接取り直す。手動の「再読み込み」ボタンを押す必要をなくす。
+  const _autoPullBusyRef = React.useRef(false);
+  useEffect(() => {
+    if (patient || !isSupabaseEnabled || !familyStoreId) return;
+    let stopped = false;
+    const pullOnce = async () => {
+      if (_autoPullBusyRef.current) return;
+      _autoPullBusyRef.current = true;
+      try {
+        const st = await supabaseLoadStateForStore(familyStoreId);
+        if (!stopped && st && Array.isArray(st.patients) && st.patients.length) {
+          setData(prev => ({
+            ...prev, ...st,
+            ...(Array.isArray(prev.ticketRecords) && prev.ticketRecords.length ? { ticketRecords: prev.ticketRecords } : {}),
+          }));
+        }
+      } catch {}
+      _autoPullBusyRef.current = false;
+    };
+    pullOnce();
+    const t = setInterval(pullOnce, 3000);
+    return () => { stopped = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient ? 'ok' : 'missing', familyStoreId]);
   if (!patient) {
     // データ同期中の可能性が高いので、読込中表示 + 案内
     return (
@@ -14436,8 +14470,8 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           <div style={{fontSize:48,marginBottom:16}}>⏳</div>
           <h1 style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>データを取得中...</h1>
           <p style={{fontSize:13,color:'#64748b',lineHeight:1.8,marginBottom:18}}>
-            事業所からデータを取得しています。<br/>
-            <strong style={{color:'#5e8030'}}>10〜20 秒</strong>ほどお待ちください。
+            事業所からデータを自動で取得しています。<br/>
+            <strong style={{color:'#5e8030'}}>数秒</strong>お待ちください（操作は不要です）。
           </p>
           <div style={{fontSize:11,color:'#64748b',lineHeight:1.7,marginBottom:16,padding:14,background:'#f8fafc',borderRadius:10,textAlign:'left'}}>
             <div style={{fontWeight:'bold',color:'#475569',marginBottom:6}}>表示されない場合:</div>
