@@ -12661,11 +12661,16 @@ function LoginHelpModal({ kind, onClose }) {
   );
 }
 // === 家族用閲覧 - ログイン → 利用者ごとの画面 ===
+// ★ 家族/ケアマネポータル専用の端末保存キー(2026-09-03): スタッフ画面と同じブラウザで併用すると、
+//   同一キー(daycareAppData_v3)を1.5秒ポーリングで互いに取り込み合い、ポータルが別店舗のスタッフデータで
+//   上書きされて「データ取得中」ループ・一瞬だけ表示・チカつき・動作が重い、が起きていた(Windows/Macで実害)。
+//   ポータルは専用キーに完全分離する(初回はクラウドから取り直すため移行処理は不要)。
+const FAM_LS_KEY = 'tsumugiFamilyAppData_v1';
 function FamilyView() {
   // データを localStorage から読み出し (写真は別キーに分離保存される場合があるのでマージ)
   const loadDataMerged = () => {
     try {
-      const saved = JSON.parse(localStorage.getItem('daycareAppData_v3')||localStorage.getItem('daycareAppData_v2')||'null');
+      const saved = JSON.parse(localStorage.getItem(FAM_LS_KEY)||'null');
       if (!saved) return { patients: [], systemSettings: {}, familyAccounts: [] };
       // 写真が空または存在しない場合は別キーから読み込み
       if (!saved.familyPhotos || saved.familyPhotos.length === 0) {
@@ -12851,7 +12856,7 @@ function FamilyView() {
         // ★ 提供記録はテーブル(ticket_records)が正(2026-08-10): 巨大JSON側はカットオーバー以降
         //   凍結スナップショットのため、15秒ごとの受信で手元(テーブル由来)の記録を古いJSONで上書きしない。
         if (TABLE_ENABLED && Array.isArray(prev.ticketRecords) && prev.ticketRecords.length) merged.ticketRecords = prev.ticketRecords;
-        try { localStorage.setItem('daycareAppData_v3', JSON.stringify(merged)); } catch {}
+        try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(merged)); } catch {}
         return merged;
       });
     }, 15000, familyStoreId);
@@ -12913,7 +12918,7 @@ function FamilyView() {
     if (tok && tok.c === _urlInvite) {
       // localStorage に保存して以降の処理で見つけられるようにする
       try {
-        const saved = JSON.parse(localStorage.getItem('daycareAppData_v3')||'null') || {};
+        const saved = JSON.parse(localStorage.getItem(FAM_LS_KEY)||'null') || {};
         const existing = (saved.familyInvites||[]).find(i => i.code === tok.c);
         if (!existing) {
           saved.familyInvites = [...(saved.familyInvites||[]), {
@@ -12926,7 +12931,7 @@ function FamilyView() {
             expiresAt: tok.x || '',
             _fromUrl: true,  // URL から復元したマーカー
           }];
-          localStorage.setItem('daycareAppData_v3', JSON.stringify(saved));
+          localStorage.setItem(FAM_LS_KEY, JSON.stringify(saved));
         }
       } catch {}
       return { email: tok.e || '', relation: tok.r || '', facilityName: tok.fn || '', facilityPhone: tok.fp || '',
@@ -13001,12 +13006,17 @@ function FamilyView() {
   });
   // ★ 編集フォーム(フェイスシート/利用者情報)を開いている間はポーリング反映を止める(入力中に再描画でフォーカスが外れるのを防ぐ)
   const editingRef = React.useRef(false);
-  // データ更新を購読 (事業所側で更新されたら反映)
+  // データ更新を購読 (同一ブラウザの別ポータルタブが更新したら反映)
+  // ★ 2026-09-03軽量化: 中身が変わった時だけJSON解析する(毎回の全量parseがブラウザを重くしていた)
+  const _famRawRef = React.useRef(null);
   useEffect(()=>{
     const reload = () => {
       // ★ 管理者プレビュー(架空データ)中は実データで上書きしない
       try { if (String(sessionStorage.getItem('familyAuthAccId')||'').startsWith('preview_')) return; } catch {}
       if (editingRef.current) return; // 編集中はスキップ
+      let raw = null; try { raw = localStorage.getItem(FAM_LS_KEY); } catch {}
+      if (raw === _famRawRef.current) return; // 変化なし→何もしない
+      _famRawRef.current = raw;
       const merged = loadDataMerged();
       if (merged) setData(merged);
     };
@@ -13172,7 +13182,7 @@ function FamilyView() {
                 _fromSupabase: true,
               })),
             };
-            localStorage.setItem('daycareAppData_v3', JSON.stringify(fresh));
+            localStorage.setItem(FAM_LS_KEY, JSON.stringify(fresh));
             setData(fresh);
           } catch {}
           // ★ 重要: ログインしたユーザー名のアカウントが紐づく利用者へ「必ず直接」入る。
@@ -13210,7 +13220,7 @@ function FamilyView() {
               const staff = await supabaseStaffLogin({ username: loginForm.username.trim(), password: loginForm.password });
               if (staff && staff.role === 'super_admin') {
                 const demo = buildDemoPreviewData();
-                localStorage.setItem('daycareAppData_v3', JSON.stringify(demo));
+                localStorage.setItem(FAM_LS_KEY, JSON.stringify(demo));
                 setData(demo);
                 sessionStorage.removeItem('familyAuthStoreId');
                 setAdminPreview({ adminName: staff.display_name || staff.username || '' });
@@ -13227,7 +13237,7 @@ function FamilyView() {
       // フォールバック: localStorage 内でログイン (同一端末で登録済みの場合)
       let latestAccounts = data.familyAccounts || [];
       try {
-        const saved = JSON.parse(localStorage.getItem('daycareAppData_v3')||'null');
+        const saved = JSON.parse(localStorage.getItem(FAM_LS_KEY)||'null');
         if (saved && Array.isArray(saved.familyAccounts)) {
           latestAccounts = saved.familyAccounts;
           if (saved !== data) setData(saved);
@@ -13246,7 +13256,7 @@ function FamilyView() {
             // ★ プレビューは「本部(super_admin)」のみ許可。 各事業所スタッフでは不可。
             if (staff && staff.role === 'super_admin') {
               const demo = buildDemoPreviewData();
-              localStorage.setItem('daycareAppData_v3', JSON.stringify(demo));
+              localStorage.setItem(FAM_LS_KEY, JSON.stringify(demo));
               setData(demo);
               sessionStorage.removeItem('familyAuthStoreId');
               setAdminPreview({ adminName: staff.display_name || staff.username || '' });
@@ -13262,13 +13272,13 @@ function FamilyView() {
       }
       const nowIso = new Date().toISOString();
       try {
-        const saved = JSON.parse(localStorage.getItem('daycareAppData_v3')||'null');
+        const saved = JSON.parse(localStorage.getItem(FAM_LS_KEY)||'null');
         if (saved && Array.isArray(saved.familyAccounts)) {
           const updated = {
             ...saved,
             familyAccounts: saved.familyAccounts.map(a => a.id === acc.id ? {...a, lastLogin: nowIso} : a)
           };
-          localStorage.setItem('daycareAppData_v3', JSON.stringify(updated));
+          localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated));
           setData(updated);
         }
       } catch {}
@@ -13376,7 +13386,7 @@ function FamilyView() {
                   if (isCaremanager) {
                     // 最新の localStorage を読んで既存マスタを取得
                     let _lt;
-                    try { _lt = JSON.parse(localStorage.getItem('daycareAppData_v3')||'null'); } catch { _lt = null; }
+                    try { _lt = JSON.parse(localStorage.getItem(FAM_LS_KEY)||'null'); } catch { _lt = null; }
                     if (!_lt) _lt = data;
                     const cmOffices = _lt.systemSettings?.cmOffices || [];
                     const careManagers = _lt.systemSettings?.careManagers || [];
@@ -13397,7 +13407,7 @@ function FamilyView() {
                   }
                   // 2. 最新の localStorage を取得して招待コードを検証
                   let latest;
-                  try { latest = JSON.parse(localStorage.getItem('daycareAppData_v3')||'null'); } catch { latest = null; }
+                  try { latest = JSON.parse(localStorage.getItem(FAM_LS_KEY)||'null'); } catch { latest = null; }
                   if (!latest) latest = data;
                   const invite = (latest.familyInvites||[]).find(i => i.code === code);
                   if (!invite) { setSignupForm(f=>({...f, error:'招待コードが見つかりません。事業所までお問い合わせください'})); return; }
@@ -13545,7 +13555,7 @@ function FamilyView() {
                       return {...p, emergencyContacts: updatedContacts, ...primaryFields, ...cmFields, ...relatedFields, docUpdates: appendDocUpdate(p, (isCmKind?'caremanager':'family'), (ecName || `${ecLastName} ${ecFirstName}`.trim()), [`新規アカウント登録（${ecRelation||(isCmKind?'ケアマネ':'ご家族')}）`])};
                     }),
                   };
-                  try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                  try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
                   setData(updated);
                   // ★ Supabase 同期 (端末越しログインを可能にする)。 送信中表示。
                   setSignupForm(f=>({...f, submitting:true, error:''}));
@@ -14050,7 +14060,7 @@ function FamilyView() {
         const _v = _effFamPol.version;
         const _consents = { version:_v, termsVersion:_v, privacyVersion:_v, acceptedAt:new Date().toISOString() };
         const upd = { ...data, familyAccounts: (data.familyAccounts||[]).map(a => String(a.id)===String(authAccId) ? { ...a, consents:_consents } : a) };
-        try { localStorage.setItem('daycareAppData_v3', JSON.stringify(upd)); } catch {}
+        try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(upd)); } catch {}
         // ★ 端末ローカルにも同意版を記録(DBにconsents列が無くても毎回聞かないように)
         try { const _m = JSON.parse(localStorage.getItem('tsumugiFamilyConsent')||'{}'); _m[String(authAccId)] = _v; localStorage.setItem('tsumugiFamilyConsent', JSON.stringify(_m)); localStorage.setItem('tsumugiFamilyConsentV', String(_v)); } catch {}
         setData(upd);
@@ -14440,6 +14450,10 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             sessionStorage.removeItem('familyAuthPid');
             sessionStorage.removeItem('familyAuthAccId');
             sessionStorage.removeItem('familyAuthStoreId');
+            sessionStorage.removeItem('familyAuthPatientName');
+            sessionStorage.removeItem('familyLinkedAccounts'); // ★ 2026-09-03: 残すと利用者選択画面に化ける
+            sessionStorage.removeItem('familyAuthUser');
+            sessionStorage.removeItem('familyAuthPw');
             try {
               const url = new URL(window.location.href);
               url.searchParams.delete('invite');
@@ -14600,7 +14614,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           if (!officeUpds.length) return null;
           const markRead = async () => {
             const updated = { ...data, patients:(data.patients||[]).map(p => p.id===patient.id ? { ...p, docUpdates:(p.docUpdates||[]).map(u => u.by==='office'?{...u,readCm:true}:u) } : p) };
-            try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+            try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
             setData(updated);
             const _sid = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
             if (isSupabaseEnabled && _sid) { try { await supabaseMarkDocUpdatesRead(_sid, patient.id, 'cm'); } catch(e){} }
@@ -14889,7 +14903,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
               doctor:(fsData.chronicDiseases ?? patient.doctor), medicalInstitution:(fsData.medicalInstitution ?? patient.medicalInstitution), medicalContact:(fsData.medicalContact ?? patient.medicalContact),
               docUpdates: appendDocUpdate(patient, 'caremanager', _by, (()=>{ const d = diffFaceSheetFields(pf.faceSheet || {}, newFs); return d.length ? [`フェイスシートの編集（${d.join('・')}）`] : ['フェイスシートの編集']; })()), personalFile: { ...pf, faceSheet: newFs, faceSheetHistory: hist } };
             const updated = { ...data, patients: (data.patients||[]).map(p => p.id === patient.id ? newPatient : p) };
-            try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+            try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
             setData(updated);
             if (isSupabaseEnabled) {
               const _storeId = loggedAcc?.storeId || loggedAcc?.store_id || familyStoreId || null;
@@ -14909,7 +14923,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
           byName={loggedAcc?.displayName || loggedAcc?.username || patient?.cmName || 'ケアマネ'}
           onSaved={(np)=>{
             const updated = { ...data, patients:(data.patients||[]).map(p => p.id===patient.id ? np : p) };
-            try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+            try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
             setData(updated);
           }}
           onClose={()=>setCmDocsOpen(false)}
@@ -15042,7 +15056,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                         ...data,
                         patients: (data.patients||[]).map(p => p.id === patient.id ? updatedPatient : p),
                       };
-                      try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                      try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
                       setData(updated);
                       // Supabase 反映
                       if (isSupabaseEnabled) {
@@ -15250,7 +15264,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   ...data,
                   patients: (data.patients||[]).map(p => p.id === patient.id ? updatedPatient : p),
                 };
-                try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
                 setData(updated);
                 // Supabase 反映 (staff 側にも反映されるように)。 ★ ネットワーク停滞でも「保存中」で固まらないよう最大10秒で打ち切り
                 let _synced = false;
@@ -15333,7 +15347,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     // ローカルにも反映(自分+同メール・同旧パスワードのリンクアカウント)
                     try {
                       const updated = { ...data, familyAccounts: (data.familyAccounts||[]).map(a => (String(a.id)===String(authAccId) || (a.email && loggedAcc?.email && a.email===loggedAcc.email && a.password===cur)) ? { ...a, password: n1 } : a) };
-                      localStorage.setItem('daycareAppData_v3', JSON.stringify(updated));
+                      localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated));
                       setData(updated);
                     } catch {}
                     setPwChangeForm({ cur:'', n1:'', n2:'', busy:false, err:'', msg:'パスワードを変更しました。次回から新しいパスワードでログインしてください。' });
@@ -15361,7 +15375,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                   return a;
                 });
                 const updated = { ...data, familyAccounts: updatedAccs };
-                try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
                 setData(updated);
                 if (isSupabaseEnabled) {
                   try {
@@ -15498,7 +15512,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             ...data,
             familyAccounts: (data.familyAccounts || []).filter(a => a.id !== accId),
           };
-          try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+          try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
           setData(updated);
         };
         const handleDeleteInvite = async (inviteId) => {
@@ -15515,7 +15529,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
             ...data,
             familyInvites: (data.familyInvites || []).filter(i => i.id !== inviteId),
           };
-          try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+          try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
           setData(updated);
         };
         // ★ 続柄に応じて「家族」/「関係者」を切替 (ケアマネ等は関係者として表現)
@@ -15709,7 +15723,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
                     const _invDu = { id: `du_${Date.now()}_${Math.round(Math.random()*1e6)}`, at: new Date().toISOString(), by: (loggedAcc?.kind==='caremanager'?'caremanager':'family'), byName: (loggedAcc?.displayName||''), items: [`家族・関係者を招待（${inviteFamForm.relation||'続柄未設定'}）`], readOffice:false, readCm:true };
                     const _invPatients = (data.patients||[]).map(p => p.id === patient.id ? { ...p, docUpdates: [...(Array.isArray(p.docUpdates)?p.docUpdates:[]), _invDu].slice(-50) } : p);
                     const updated = { ...data, familyInvites: [...(data.familyInvites||[]), newInvite], patients: _invPatients };
-                    try { localStorage.setItem('daycareAppData_v3', JSON.stringify(updated)); } catch {}
+                    try { localStorage.setItem(FAM_LS_KEY, JSON.stringify(updated)); } catch {}
                     setData(updated);
                     if (isSupabaseEnabled) {
                       const _storeId = _inviteStoreId;
