@@ -44498,8 +44498,12 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [memo, setMemo] = React.useState(draft.memo || '');
   // ★ 連絡事項の書式(FAX向け: 文字サイズ/下線)。 定型文からも設定でき、下書きに保存される。
   const [memoStyle, setMemoStyle] = React.useState(draft.memoStyle || { size: 'std', underline: false });
+  const [justSavedFax, setJustSavedFax] = React.useState(false);   // 保存ボタンの完了表示
+  const [pageCount, setPageCount] = React.useState(draft.pageCount || 1);
+  const [checks, setChecks] = React.useState(draft.checks || { kyuukyuu: false, kakunin: false, orikaesu: false });
   // ★ 2026-09-04: 連絡事項は「実測」で枠に収まるまで自動縮小(スクロールを出さず印刷と同じ見た目に)。
   //   文字数からの推定では枠の実寸とズレてスクロールが残っていたため、scrollHeightで測る。
+  //   ※ 必ず memo/pageCount 等の宣言より後に置くこと(前に置くと初期化前参照でクラッシュ・2026-09-04実例)
   const _memoRef = React.useRef(null);
   const [memoFitFs, setMemoFitFs] = React.useState(null);
   const _memoBaseFs = memoStyle.size==='xl'?24:memoStyle.size==='lg'?20:16;
@@ -44511,9 +44515,6 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     while (el.scrollHeight > el.clientHeight + 2 && fs > 9 && guard < 40) { fs -= 0.5; el.style.fontSize = fs + 'px'; guard++; }
     setMemoFitFs(fs >= _memoBaseFs ? null : fs);
   }, [memo, _memoBaseFs, selectedPatientId, pageCount]);
-  const [justSavedFax, setJustSavedFax] = React.useState(false);   // 保存ボタンの完了表示
-  const [pageCount, setPageCount] = React.useState(draft.pageCount || 1);
-  const [checks, setChecks] = React.useState(draft.checks || { kyuukyuu: false, kakunin: false, orikaesu: false });
   const [showFaxHist, setShowFaxHist] = React.useState(false);
   const [recipientOffice, setRecipientOffice] = React.useState(draft.recipientOffice || '');
   const [recipientName, setRecipientName] = React.useState(draft.recipientName || '');

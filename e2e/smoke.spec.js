@@ -32,6 +32,22 @@ const VIEWS = [
   '各種設定',
 ];
 
+// ★ 連絡(FAX)系はサイドバーの折りたたみグループ内(2026-09-04追加: 各種連絡がフック順序バグで
+//   本番クラッシュした事故を受けて遷移テストに追加。グループを開いてから遷移する)
+const FAX_VIEWS = ['休み連絡', '各種連絡'];
+for (const label of FAX_VIEWS) {
+  test(`画面遷移: ${label} がクラッシュせず表示される`, async ({ page }) => {
+    const errors = collectErrors(page);
+    await boot(page);
+    const grp = page.getByText('連絡（FAX）', { exact: true }).first();
+    if (await grp.isVisible().catch(() => false)) await grp.click();
+    await page.getByText(label, { exact: true }).first().click();
+    await expect(page.getByText('利用者マスタ管理', { exact: true }).first()).toBeVisible();
+    await page.waitForTimeout(1200);
+    expect(errors, `未捕捉エラー: ${errors.join(' / ')}`).toEqual([]);
+  });
+}
+
 for (const label of VIEWS) {
   test(`画面遷移: ${label} がクラッシュせず表示される`, async ({ page }) => {
     const errors = collectErrors(page);
