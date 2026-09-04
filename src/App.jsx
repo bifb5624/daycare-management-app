@@ -11037,9 +11037,21 @@ const _REC_GATED = (k) => k==='status'||k==='tokki'||k==='massage'||k==='onyoku'
 
 // ★ 日誌の未確認項目を判定(2026-08-28): ホームの「日誌が未入力です」表示と日誌の要確認バッジで共用。
 //   戻り値: null=日誌自体が未入力 / 配列=未確認の項目名(空配列=すべてOK)
-const diaryPendingItems = (log) => {
+// ★ 2026-08-27以前は手動保存しても「コピー未確認」フラグが消えない仕様だったため、それ以前の日付では
+//   _sougeiPending を無視する(8/3・8/6等の入力済みの日にカレンダーの印が永久に付かない残骸対策)。
+const DIARY_SP_LEGACY_CUTOFF = '2026-08-28';
+// ★ 2026-07-14 のコミットで送迎キーが行番号→利用者IDに変わった。この日以降の日誌は行番号フォールバック禁止
+//   (利用者IDは連番の小さい整数のため、行番号と衝突して他人の車/徒歩を誤読する)。
+const DIARY_PIDKEY_CUTOFF = '2026-07-15';
+// ★ 休業判定(スロット別・2026-09-04): 休業日/定休日/半日休業のスロットは日誌の入力対象外として扱う。
+const diarySlotKyugyo = (appData, iso, dw, ap) => {
+  const _h = (appData.holidays||[]).find(h => (h && (h.date||h)) === iso);
+  if (_h) { const ha = _h.ampm; if (!ha || ha === '1日') return true; return ha === ap; }
+  return (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw);
+};
+const diaryPendingItems = (log, iso) => {
   if (!log || Object.keys(log).length === 0) return null;
-  const sp = log._sougeiPending || {};
+  const sp = (iso && iso < DIARY_SP_LEGACY_CUTOFF) ? {} : (log._sougeiPending || {});
   const items = [];
   const _hasAny = (o) => !!o && Object.values(o).some(v => Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : String(v ?? '').trim() !== ''));
   if (sp['迎え'] || (!_hasAny(log.pick) && !_hasAny(log.pick_walk))) items.push('迎え');
@@ -11186,9 +11198,9 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               const _t = new Date();
               const _iso = `${_t.getFullYear()}-${String(_t.getMonth()+1).padStart(2,'0')}-${String(_t.getDate()).padStart(2,'0')}`;
               const _dw = _t.getDay();
-              const _closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(_dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === _iso));
-              if (_closed) return null;
-              const _seg = (ap) => { const l = (appData.diaryLogs||{})[`${_iso}_${ap}`]; const it = diaryPendingItems(l); return { ap: ap==='AM'?'午前':'午後', missing: it === null, items: it || [] }; };
+              // ★ 半日休業(ampm指定)の日は休業スロットだけを対象外にする(2026-09-04)
+              if (diarySlotKyugyo(appData, _iso, _dw, 'AM') && diarySlotKyugyo(appData, _iso, _dw, 'PM')) return null;
+              const _seg = (ap) => { if (diarySlotKyugyo(appData, _iso, _dw, ap)) return { ap: ap==='AM'?'午前':'午後', missing: false, items: [] }; const l = (appData.diaryLogs||{})[`${_iso}_${ap}`]; const it = diaryPendingItems(l, _iso); return { ap: ap==='AM'?'午前':'午後', missing: it === null, items: it || [] }; };
               const _segs = [_seg('AM'), _seg('PM')].filter(s => s.missing || s.items.length);
               if (!_segs.length) return null;
               // ★ スケジュールの邪魔にならないよう1行のスリム表示(2026-08-28)
@@ -18281,7 +18293,8 @@ export default function App() {
       const dw = t.getDay();
       const closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso && (!h.ampm || h.ampm === '1日')));
       if (closed) return 0;
-      const bad = ['AM','PM'].some(ap => { const it = diaryPendingItems((appData.diaryLogs||{})[`${iso}_${ap}`]); return it === null || it.length > 0; });
+      // ★ 半日休業のスロットは対象外(2026-09-04)
+      const bad = ['AM','PM'].filter(ap => !diarySlotKyugyo(appData, iso, dw, ap)).some(ap => { const it = diaryPendingItems((appData.diaryLogs||{})[`${iso}_${ap}`], iso); return it === null || it.length > 0; });
       return bad ? 1 : 0;
     } catch { return 0; }
   }, [appData.diaryLogs, appData.holidays, appData.systemSettings?.facilityInfo?.closedDays]);
@@ -37544,7 +37557,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const _resolvePrevPid = (numKey) => {
             const s = String(numKey);
             if (_prevPidSet.has(s)) return s;            // 既に利用者IDキー
-            const pid = prevPids[+numKey];                // 行番号→利用者ID
+            // ★ 2026-09-04: ID化(7/14)以降の日誌はキー=利用者ID。出席者リストの再構成に漏れがあっても
+            //   行番号として解釈しない(prevPids[n]で別人のIDに化け、コピー先で他人に車が付いていた)。
+            //   IDのまま返し、この後の「今週の在籍・欠席」判定に委ねる。
+            if (prevKey.slice(0,10) >= DIARY_PIDKEY_CUTOFF) return s;
+            const pid = prevPids[+numKey];                // 行番号→利用者ID(旧データのみ)
             return pid != null ? String(pid) : null;
           };
           const remapRow = (obj)=>{
@@ -37663,6 +37680,24 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   };
   if (saveFnRef) saveFnRef.current = saveLog;
   React.useEffect(() => () => { if (saveFnRef) saveFnRef.current = null; }, []);
+  // ★ 全自動保存(2026-09-04 店舗要望): 編集が1.5秒止まったら自動保存する。AM/PM切替・日付移動時の
+  //   個別保存だけでは保存前の切替タイミング次第で入力が戻る事故が残っていたため。
+  //   自動保存は _sougeiPending(コピー未確認)を消さない=「内容を確認した」の意味は持たせない
+  //   (確認扱いになるのは保存ボタン、または迎え/送り欄の編集のみ。従来どおり)。
+  React.useEffect(() => {
+    if (!dirtyRef?.current) return;
+    const t = setTimeout(() => {
+      if (!dirtyRef?.current) return;
+      if (logKeyRef.current !== logKey) return; // 切替直後は読込effect側が保存を担当
+      const _logToSave = { ...localLog, _savedAt: syncNow() };
+      const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: _logToSave } };
+      if (pendingStaff) next.diarySettings = { ..._baseDs, staff: pendingStaff };
+      onSave(next);
+      lastRemoteSigRef.current = JSON.stringify(_logToSave); // 自分の保存をリモート更新と誤認して再読込しない
+      markClean();
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [localLog]); // eslint-disable-line
   const toggle = (field, key) => updateLog({ [field]: { ...(log[field]||{}), [key]: !(log[field]||{})[key] } });
   const setPatRow = (i,f,v) => { const rows=[...(log.patientRows||[])]; while(rows.length<=i) rows.push({}); rows[i]={...rows[i],[f]:v}; updateLog({patientRows:rows}); };
   const setCarTime = (carId,tf,v) => updateLog({ carTimes: { ...(log.carTimes||{}), [carId]: {...((log.carTimes||{})[carId]||{}),[tf]:v} }});
@@ -37793,9 +37828,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     let s = timeInput.replace(':','');
     if(v==='DEL') s=s.slice(0,-1);
     else if(s.length<4) s+=v;
-    if(s.length>=3) setTimeInput(s.slice(0,2)+':'+s.slice(2));
-    else setTimeInput(s);
+    setTimeInput(s);
   };
+  // ★ 入力途中も確定後と同じ解釈で表示する(2026-09-04 店舗要望): 「859」→「08:59」(旧表示は「85:9」)。
+  //   決定時の整形(closeTimeKeypad: 下2桁=分・残り=時)と同じ切り方。2桁までは時を入力中なのでそのまま。
+  const _kpDisplay = (s) => { const r=(s||'').replace(':',''); if(!r) return '__:__'; if(r.length<=2) return r; return r.slice(0, r.length-2).padStart(2,'0')+':'+r.slice(-2); };
   // ★ 到着/出発の時間はPCの物理キーボード/テンキーでも入力できる(2026-08-31 店舗要望)。
   //   数字=入力・Backspace=1文字削除・Enter=決定・Esc=キャンセル。
   //   依存配列なし=毎render付け替えで、常に最新の timeInput/log を見るハンドラになる
@@ -38123,11 +38160,15 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             //   c.name = '1号車' (登録順、号車番号)、c.type = 'シエンタ' (車種名)
             const getSelectedCar = (prefix) => {
               // ★ 患者IDキーがあればID優先、無ければ旧index方式にフォールバック(振替で並びが変わってもズレない)
+              // ★ 2026-09-04: ID化(7/14)以降の日誌では行番号フォールバック禁止。利用者IDは連番の小さい整数のため、
+              //   キーの無い利用者を行番号で読むと別の利用者のIDキーに化けて他人の車/徒歩が表示されていた
+              //   (丸山様が徒歩・吉岡様に車が付く扇橋の不一致の原因)。行番号はマスタ未登録の手書き行と旧データのみ。
               const _pid = _diaryPtKey(pt);
               const _wm = _log[prefix+'_walk']||{}, _sm = _log[prefix]||{};
               const _idHas = _pid != null && (_wm[String(_pid)] !== undefined || ds.cars.some(c=>_sm[_pid+'_'+c.id] !== undefined));
-              const _wKey = _idHas ? String(_pid) : String(i);
-              const _cPre = _idHas ? _pid : i;
+              const _useId = _idHas || (_pid != null && selectedDate >= DIARY_PIDKEY_CUTOFF);
+              const _wKey = _useId ? String(_pid) : String(i);
+              const _cPre = _useId ? _pid : i;
               if(_wm[_wKey]) return [{label:'徒歩', name:''}];
               const checked = ds.cars.filter(c=>_sm[_cPre+'_'+c.id]);
               return checked.map(c => ({label: c.name || '', name: c.type || ''}));
@@ -38383,8 +38424,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                 const _pid = _diaryPtKey(pt);
                 const _wm = log[carAssignModal.prefix+'_walk']||{}, _sm = log[carAssignModal.prefix]||{};
                 const _idHas = _pid != null && (_wm[String(_pid)] !== undefined || ds.cars.some(c=>_sm[_pid+'_'+c.id] !== undefined));
-                const _wKey = _idHas ? String(_pid) : String(i);
-                const _cPre = _idHas ? _pid : i;
+                // ★ 2026-09-04: ID化以降は行番号フォールバック禁止(帳票側 getSelectedCar と同じ理由)
+                const _useId = _idHas || (_pid != null && selectedDate >= DIARY_PIDKEY_CUTOFF);
+                const _wKey = _useId ? String(_pid) : String(i);
+                const _cPre = _useId ? _pid : i;
                 if(_wm[_wKey]) return 'walk';
                 const found = ds.cars.find(c=>_sm[_cPre+'_'+c.id]);
                 return found ? found.id : '';
@@ -38439,7 +38482,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             {car?.name}　{fieldLabel}時間
           </div>
           <div style={{fontSize:32,fontWeight:'bold',textAlign:'center',letterSpacing:4,marginBottom:4,padding:'8px 0',border:'2px solid #1d4ed8',borderRadius:8,color:'#1d4ed8',minHeight:52}}>
-            {timeInput||'__:__'}
+            {_kpDisplay(timeInput)}
           </div>
           <div style={{fontSize:10,color:'#94a3b8',textAlign:'center',marginBottom:8}}>PCのキーボード/テンキーでも入力できます（Enter=決定）</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6,marginBottom:8}}>
@@ -38684,15 +38727,21 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const getStatus = (d2) => {
             if (!d2) return null;
             const ds = `${y}-${pad(m+1)}-${pad(d2)}`;
+            const dw2 = new Date(y, m, d2).getDay();
             const amLog = (appData.diaryLogs||{})[`${ds}_AM`];
             const pmLog = (appData.diaryLogs||{})[`${ds}_PM`];
-            // ★ 自動コピーの未確認が残っている間は「入力済み」に数えない(2026-08-21)
-            const _ok = (l) => l && Object.keys(l).length > 0 && !(l._sougeiPending && Object.keys(l._sougeiPending).length);
-            const amHasData = _ok(amLog);
-            const pmHasData = _ok(pmLog);
-            if (amHasData && pmHasData) return 'both';
-            if (amHasData) return 'am';
-            if (pmHasData) return 'pm';
+            // ★ 2026-09-04 店舗要望: 印は「要確認バッジが全て解消した状態」でだけ付ける。
+            //   (以前は何かキーがあれば付いたため、入力して消しただけの空ログでもAM印が残っていた)
+            //   休業のスロットは入力対象外扱い: 終日休業=印なし、半日休業=残りの営業スロット完了で●。
+            const _kyu = (ap) => diarySlotKyugyo(appData, ds, dw2, ap);
+            const _done = (l) => { const it = diaryPendingItems(l, ds); return !!it && it.length === 0; };
+            const amKyu = _kyu('AM'), pmKyu = _kyu('PM');
+            if (amKyu && pmKyu) return null;
+            const amDone = !amKyu && _done(amLog);
+            const pmDone = !pmKyu && _done(pmLog);
+            if ((amKyu || amDone) && (pmKyu || pmDone)) return 'both';
+            if (amDone) return 'am';
+            if (pmDone) return 'pm';
             return null;
           };
           const DOW_LABELS = ['日','月','火','水','木','金','土'];
@@ -38747,9 +38796,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                     })}
                   </div>
                   <div style={{marginTop:4,paddingTop:4,borderTop:'1px solid #f1f5f9',display:'flex',gap:8,fontSize:8,fontWeight:'bold',color:'#64748b'}}>
-                    <span><span style={{color:'#16a34a'}}>●</span> AM+PM</span>
-                    <span><span style={{color:'#d97706'}}>AM</span> AMのみ</span>
-                    <span><span style={{color:'#2563eb'}}>PM</span> PMのみ</span>
+                    <span><span style={{color:'#16a34a'}}>●</span> AM+PM完了</span>
+                    <span><span style={{color:'#d97706'}}>AM</span> AMのみ完了</span>
+                    <span><span style={{color:'#2563eb'}}>PM</span> PMのみ完了</span>
                   </div>
                 </div>
               </details>
@@ -38776,7 +38825,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         {/* ★ 要確認バッジ: 迎え/送り=1週間前コピー未編集、 送迎時間=空欄、 記録者=未入力、 管理者確認=未確認。
             入力/確認すると消える。 (黄色い枠は廃止しこのバッジに一本化) */}
         {(() => {
-          const sp = log._sougeiPending || {};
+          // ★ 休業のスロットは担当職員も送迎も無いため要確認を出さない(2026-09-04 店舗要望)
+          if (_dayIsKyugyo(selectedDate, dow)) return null;
+          // ★ 2026-08-27以前の保存分はコピー未確認フラグの残骸があるため無視(diaryPendingItemsと同じ基準)
+          const sp = selectedDate < DIARY_SP_LEGACY_CUTOFF ? {} : (log._sougeiPending || {});
           const items = [];
           if (sp['迎え']) items.push({ label:'迎え', hint:'コピー未確認' });
           if (sp['送り']) items.push({ label:'送り', hint:'コピー未確認' });
