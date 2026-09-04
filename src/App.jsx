@@ -16,6 +16,7 @@ import {
   isSupabaseEnabled,
   supabaseCreateInvite,
   supabaseListFamilyAccountsForStore,
+  supabaseListCmInvitesForStore,
   supabaseListCmAccountsAll,
   supabaseInsertCmAccount,
   supabaseSetFamilyAccountDeleted,
@@ -35130,13 +35131,17 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
   // ★ ケアマネ担当者の登録状況表示用: この店舗の閲覧アカウント(ケアマネ)をSupabaseから一括取得(2026-08-31)。
   //   端末ローカルのfamilyAccountsだけでは別端末/家族側で登録されたアカウントが見えず「閲覧登録なし」に誤表示されるため。
   const [sbCmAccounts, setSbCmAccounts] = useState(null); // null=未取得
+  const [sbCmInvites, setSbCmInvites] = useState(null); // ★ クラウドの招待(送信済み表示用・2026-09-04)
   React.useEffect(() => {
     if (activeTab !== 'cm' || sbCmAccounts !== null || !isSupabaseEnabled) return;
     const _sess = (()=>{ try { return JSON.parse(sessionStorage.getItem('tsumugiStaffSession')||'null'); } catch { return null; } })();
-    if (!_sess?.storeId) { setSbCmAccounts([]); return; }
+    if (!_sess?.storeId) { setSbCmAccounts([]); setSbCmInvites([]); return; }
     supabaseListFamilyAccountsForStore(_sess.storeId)
       .then(rows => setSbCmAccounts((rows||[]).filter(r => r.kind === 'caremanager' || r.relation === 'ケアマネージャー')))
       .catch(() => setSbCmAccounts([]));
+    supabaseListCmInvitesForStore(_sess.storeId)
+      .then(rows => setSbCmInvites(rows || []))
+      .catch(() => setSbCmInvites([]));
   }, [activeTab, sbCmAccounts]);
   // ケアマネ事業所タブ: 選択中の事業所インデックス (左サイド一覧で選択 → 右の担当者をフィルタ)
   const [selectedOfficeIdx, setSelectedOfficeIdx] = useState(null);
@@ -36389,7 +36394,10 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                             const _allAccs = [...(appData.familyAccounts||[]).filter(a=>a.kind==='caremanager'||a.relation==='ケアマネージャー'), ..._sbAccs];
                             const accs = _allAccs.filter(a => ((p.email && a.email && String(a.email).toLowerCase()===String(p.email).toLowerCase()) || (_nameLoose(a.displayName, p.name) && (!a.cmOffice || _nrm(a.cmOffice)===_nrm(p.office)))));
                             const invs = (appData.familyInvites||[]).filter(iv => !iv.usedBy && iv.cmName && _nrm(iv.cmOffice)===_nrm(p.office) && _nrm(iv.cmName)===_nrm(p.name) && (!iv.expiresAt || new Date(iv.expiresAt) > new Date()));
-                            const st = accs.length ? 'ok' : invs.length ? 'sent' : 'none';
+                            // ★ 2026-09-04: クラウドの招待も参照(送信した端末以外でも「招待メール済み」が見えるように)。メール一致で特定
+                            const sbInvs = (sbCmInvites||[]).filter(iv => !iv.used_by && p.email && iv.email && String(iv.email).toLowerCase()===String(p.email).toLowerCase() && (!iv.expires_at || new Date(iv.expires_at) > new Date()));
+                            const _sentAt = invs[0]?.createdAt || sbInvs[0]?.created_at || '';
+                            const st = accs.length ? 'ok' : (invs.length || sbInvs.length) ? 'sent' : 'none';
                             const sendCmInviteMail = async () => {
                               let email = (p.email||'').trim();
                               if (!email) {
@@ -36432,7 +36440,7 @@ function SettingsView({ appData, onSave, dirtyRef, saveFnRef, isSuperAdmin, isAd
                             return (
                               <div className="mt-1.5 pt-1.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
                                 {st==='ok' && <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">登録済み{accs[0]?.lastLogin?`（最終ログイン ${String(accs[0].lastLogin).slice(0,10)}）`:''}</span>}
-                                {st==='sent' && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-full px-2 py-0.5">招待済み・登録待ち（{String(invs[0].createdAt||'').slice(0,10)} 送信）</span>}
+                                {st==='sent' && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-300 rounded-full px-2 py-0.5">招待メール済み・登録待ち{_sentAt?`（${String(_sentAt).slice(0,10)} 送信）`:''}</span>}
                                 {st==='none' && <span className="text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">閲覧登録なし</span>}
                                 <span className="text-[10px] text-slate-500">担当利用者 {cmPats.length}名{cmPats.length?`（${cmPats.slice(0,3).map(x=>x.name).join('・')}${cmPats.length>3?` 他${cmPats.length-3}名`:''}）`:''}</span>
                                 {st==='ok' && <span className="text-[10px] font-bold text-emerald-600">閲覧は担当割当に自動同期</span>}
@@ -43911,6 +43919,19 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // 保存済みの faxDataStore を初期値として読み込む（再表示時に編集状態が消えないように）
   const [faxData, setFaxData] = React.useState(() => appData.faxDataStore || {});
   const [isPrint, setIsPrint] = React.useState(false);
+  // ★ 2026-09-04: 連絡事項の実測自動縮小(スクロールを出さない)。文字数推定ではズレるためscrollHeightで測る
+  const _absMemoRef = React.useRef(null);
+  const [absMemoFit, setAbsMemoFit] = React.useState(null);
+  React.useLayoutEffect(() => {
+    const el = _absMemoRef.current; if (!el) { if (absMemoFit !== null) setAbsMemoFit(null); return; }
+    const base = 16;
+    let fs = base;
+    el.style.fontSize = fs + 'px';
+    let guard = 0;
+    while (el.scrollHeight > el.clientHeight + 2 && fs > 9 && guard < 40) { fs -= 0.5; el.style.fontSize = fs + 'px'; guard++; }
+    const v = fs >= base ? null : fs;
+    if (v !== absMemoFit) setAbsMemoFit(v);
+  });
   const [showFaxHist, setShowFaxHist] = React.useState(false);
   const absHistory = (appData.faxHistory||[]).filter(h => h.type === 'absence');
   const deleteAbsHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
@@ -43972,8 +43993,10 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const absencesByDate = {};
   const _collectAbs = (y2, m2) => {
     tickets.forEach(r => {
-      // ★ 2026-09-03: 「振替」も休み連絡の対象に含める(別日に振り替えたお休みの連絡が出なかった)
-      if (r.status !== '欠席' && r.status !== '振替') return;
+      // ★ 2026-09-04修正: 休み連絡は「基本利用日で休みになった側(欠席)」のみ表示する。
+      //   振替先(status=振替=振替で出席する日)まで出すと、出席日にも休み連絡が付いてしまう(前日の変更を是正)。
+      //   振替の有無は欠席記録のtokki(「○月○日へ振替」)から判定して「振替あり」バッジを付ける。
+      if (r.status !== '欠席') return;
       const m = r.date?.match(/(\d+)月(\d+)日/);
       if (!m) return;
       const rm = parseInt(m[1]), rd = parseInt(m[2]);
@@ -43982,7 +44005,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       const dateStr = `${y2}-${String(m2).padStart(2,'0')}-${String(rd).padStart(2,'0')}`;
       if (!absencesByDate[dateStr]) absencesByDate[dateStr] = [];
       const pat = patients.find(p => p.id === r.patientId);
-      if (pat && !absencesByDate[dateStr].some(a => a.patient.id === pat.id)) absencesByDate[dateStr].push({ patient: pat, tokki: r.tokki || '', furikae: r.status === '振替' || /振替/.test(r.tokki || '') });
+      if (pat && !absencesByDate[dateStr].some(a => a.patient.id === pat.id)) absencesByDate[dateStr].push({ patient: pat, tokki: r.tokki || '', furikae: /振替/.test(r.tokki || '') });
     });
     const mk = `${y2}-${String(m2).padStart(2,'0')}`;
     const ms = appData.monthlyShifts?.[mk] || {};
@@ -44070,12 +44093,14 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
     const rawTokki = (() => {
       if (tokki) return tokki;
-      const rec = tickets.find(r => r.patientId === patient.id && r.date === `${parseInt(date.split('-')[1])}月${parseInt(date.split('-')[2])}日` && (r.status === '欠席' || r.status === '振替')); // ★ 2026-09-03: 振替の連絡文面にも振替日を載せる
+      const rec = tickets.find(r => r.patientId === patient.id && r.date === `${parseInt(date.split('-')[1])}月${parseInt(date.split('-')[2])}日` && r.status === '欠席');
       return rec?.tokki || '';
     })();
     const parsed = parseFurikaeTokki(rawTokki);
 
-    const defaultReason = fax.reason !== undefined ? fax.reason : parsed.reason || rawTokki;
+    // ★ 2026-09-04: 振替のときの理由欄は「9月4日へ振替」等ではなく休み理由(通院/体調不良など)を出す。
+    //   振替の案内は下の連絡事項に自動で入るため、理由が未記入なら空欄(記入してもらう)。
+    const defaultReason = fax.reason !== undefined ? fax.reason : (parsed.isFurikae ? (parsed.reason || '') : (parsed.reason || rawTokki));
     // ★ 連絡事項のデフォルト文面: 欠席日の通所開始(既定 午前9時)を過ぎていれば過去形、前なら未来形。 振替がある場合は下段に振替日を未来/過去形で追記。 いずれも編集可能(編集後は fax.memo が優先)。
     const _defaultMemoTemplate = (() => {
       const now = new Date();
@@ -44098,8 +44123,9 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       return lines.join('\n');
     })();
     const defaultMemo = fax.memo !== undefined ? fax.memo : _defaultMemoTemplate;
-    // ★ 2026-09-03: 連絡事項は枠を溢れたらスクロールでなく文字を自動縮小(印刷と同じ見た目で入力できる)
-    const _memoFs = (() => {
+    // ★ 2026-09-03/04: 連絡事項は枠を溢れたらスクロールでなく文字を自動縮小(印刷と同じ見た目で入力できる)。
+    //   実測(_absMemoFit)を優先し、未計測時のみ文字数からの推定を使う
+    const _memoFs = absMemoFit ?? (() => {
       const t = String(fax.memo ?? defaultMemo ?? '');
       const lines = t.split('\n').reduce((a,l)=>a+Math.max(1,Math.ceil((l.length||1)/38)),0);
       if (lines <= 8) return 16; if (lines <= 11) return 14; if (lines <= 14) return 12.5; if (lines <= 18) return 11; return 10;
@@ -44324,10 +44350,11 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   </div>
                 ) : (
                   <textarea
+                    ref={_absMemoRef}
                     value={fax.memo ?? defaultMemo}
                     onChange={e=>updateFax(key,{memo:e.target.value})}
                     placeholder="連絡事項を自由に入力してください"
-                    style={{width:'100%',flex:1,border:'1.5px dashed #94a3b8',borderRadius:8,padding:'10px 12px',fontSize:_memoFs,outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.7,boxSizing:'border-box',background:'#fafafa'}}
+                    style={{width:'100%',flex:1,border:'1.5px dashed #94a3b8',borderRadius:8,padding:'10px 12px',fontSize:_memoFs,overflow:'hidden',outline:'none',resize:'none',fontFamily:'serif',lineHeight:1.7,boxSizing:'border-box',background:'#fafafa'}}
                   />
                 )}
               </div>
@@ -44471,6 +44498,19 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const [memo, setMemo] = React.useState(draft.memo || '');
   // ★ 連絡事項の書式(FAX向け: 文字サイズ/下線)。 定型文からも設定でき、下書きに保存される。
   const [memoStyle, setMemoStyle] = React.useState(draft.memoStyle || { size: 'std', underline: false });
+  // ★ 2026-09-04: 連絡事項は「実測」で枠に収まるまで自動縮小(スクロールを出さず印刷と同じ見た目に)。
+  //   文字数からの推定では枠の実寸とズレてスクロールが残っていたため、scrollHeightで測る。
+  const _memoRef = React.useRef(null);
+  const [memoFitFs, setMemoFitFs] = React.useState(null);
+  const _memoBaseFs = memoStyle.size==='xl'?24:memoStyle.size==='lg'?20:16;
+  React.useLayoutEffect(() => {
+    const el = _memoRef.current; if (!el) return;
+    let fs = _memoBaseFs;
+    el.style.fontSize = fs + 'px';
+    let guard = 0;
+    while (el.scrollHeight > el.clientHeight + 2 && fs > 9 && guard < 40) { fs -= 0.5; el.style.fontSize = fs + 'px'; guard++; }
+    setMemoFitFs(fs >= _memoBaseFs ? null : fs);
+  }, [memo, _memoBaseFs, selectedPatientId, pageCount]);
   const [justSavedFax, setJustSavedFax] = React.useState(false);   // 保存ボタンの完了表示
   const [pageCount, setPageCount] = React.useState(draft.pageCount || 1);
   const [checks, setChecks] = React.useState(draft.checks || { kyuukyuu: false, kakunin: false, orikaesu: false });
@@ -44890,14 +44930,8 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
             <textarea value={memo} onChange={e=>setMemo(e.target.value)}
                       placeholder="ここに連絡事項を直接入力してください"
                       className="fax-inline-input"
-                      style={{flex:1,fontSize:(()=>{
-                        // ★ 2026-09-03: 選択した文字サイズを上限に、文量が多いときは自動で縮小(スクロールさせず印刷と同じ見た目)
-                        const base = memoStyle.size==='xl'?24:memoStyle.size==='lg'?20:16;
-                        const lines = String(memo||'').split('\n').reduce((a,l)=>a+Math.max(1,Math.ceil((l.length||1)/Math.max(18, Math.round(640/base)))),0);
-                        const capacity = Math.max(6, Math.floor(430/(base*1.9)));
-                        if (lines <= capacity) return base;
-                        return Math.max(10, Math.floor(base * capacity / lines));
-                      })(),lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%',textDecoration:(memoStyle.underline?'underline':'none')}}/>
+                      ref={_memoRef}
+                      style={{flex:1,fontSize:(memoFitFs ?? _memoBaseFs),overflow:'hidden',lineHeight:1.9,padding:'4px 0',border:'none',outline:'none',background:'transparent',resize:'none',fontFamily:'inherit',width:'100%',textDecoration:(memoStyle.underline?'underline':'none')}}/>
             <div style={{fontSize:16,marginTop:8}}>今後ともよろしくお願いいたします。</div>
           </div>
         </div>

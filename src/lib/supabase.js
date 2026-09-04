@@ -441,6 +441,20 @@ export async function supabaseSelfProvisionCm(acc, password) {
 
 // ★ 店舗の家族/関係者アカウント一覧(2026-08-31): ケアマネ担当者の登録状況表示用。
 //   利用者ごとのループを避けて store_id で一括取得する(最小限のフィールドのみ)。
+// ★ ケアマネ招待の送信済み表示用(2026-09-04): 店舗の未使用ケアマネ招待をSupabaseから取得。
+//   招待レコードは送信端末のローカルにしか無く、別端末では「閲覧登録なし」に見えていたため。
+export async function supabaseListCmInvitesForStore(storeId) {
+  if (!supabase || !storeId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('family_invites')
+      .select('id, email, relation, created_at, expires_at, used_by')
+      .eq('store_id', storeId)
+      .eq('relation', 'ケアマネージャー');
+    if (error) { console.warn('[supabase] listCmInvitesForStore error', error); return []; }
+    return data || [];
+  } catch (e) { console.warn('[supabase] listCmInvitesForStore exception', e); return []; }
+}
 export async function supabaseListFamilyAccountsForStore(storeId) {
   if (!supabase || !storeId) return [];
   try {
