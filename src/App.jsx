@@ -37495,6 +37495,10 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   const [localLog, setLocalLog] = useState({});
   // ★ 直近にリモート(appData)から読み込んだ日誌の内容シグネチャ。 他端末の保存が pull で届いたかの判定に使う。
   const lastRemoteSigRef = React.useRef(null);
+  // ★ 常に最新のappDataを参照するref(2026-09-06): 自動保存や再保存がsetTimeout/effect内で
+  //   古いクロージャのappDataを土台にすると、直前のpullで届いたデータを古い状態で保存してしまうため。
+  const appDataRef = React.useRef(appData);
+  appDataRef.current = appData;
   // ★ アクティブ記録者の id を記憶 (スタッフ切替で前のチェックを外すため)
   const prevAutoCheckIdRef = React.useRef(null);
 
@@ -37641,7 +37645,25 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     if (_remoteLogSig === lastRemoteSigRef.current) return; // リモートに変化なし(自分のローカル変更のみ)
     lastRemoteSigRef.current = _remoteLogSig; // リモートが更新された
     if (dirtyRef?.current) return; // 編集中は表示を保持(保存で上書きされないように)
-    setLocalLog(JSON.parse(JSON.stringify((appData.diaryLogs||{})[logKey] || {})));
+    // ★ 2026-09-06 データ消失報告の修正: 自動保存の導入で「未保存」状態がほぼ無くなったため、
+    //   このdirtyガードだけでは守れなくなった(保存の1.5秒後に古いクラウドスナップショットのpullが
+    //   届くと、入力済みの画面ごと古い内容に巻き戻っていた)。リモートの_savedAtがローカルの
+    //   _savedAtより古い場合は適用しない(こちらのpushがクラウドに追いつけば自然に一致する)。
+    const _rl = (appData.diaryLogs||{})[logKey] || {};
+    const _lt = Number(localLog && localLog._savedAt) || 0;
+    const _rt = Number(_rl._savedAt) || 0;
+    if (_lt && ((_rt && _rt < _lt) || (!_rt && Object.keys(_rl).length === 0))) {
+      // ★ クラウド側がこちらの保存より古い/空 = こちらのpushが競合で落ちた形跡。
+      //   画面は保持したまま、最新の内容を再保存してクラウドに追いつかせる(自己修復)。
+      const _ts2 = syncNow();
+      const _heal = { ...localLog, _savedAt: _ts2 };
+      const base = appDataRef.current;
+      onSave({ ...base, diaryLogs: { ...(base.diaryLogs||{}), [logKey]: _heal } });
+      lastRemoteSigRef.current = JSON.stringify(_heal);
+      setLocalLog(prev => ({ ...prev, _savedAt: _ts2 }));
+      return;
+    }
+    setLocalLog(JSON.parse(JSON.stringify(_rl)));
   }, [_remoteLogSig]); // eslint-disable-line
 
   const log = localLog;
@@ -37684,16 +37706,23 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
   //   個別保存だけでは保存前の切替タイミング次第で入力が戻る事故が残っていたため。
   //   自動保存は _sougeiPending(コピー未確認)を消さない=「内容を確認した」の意味は持たせない
   //   (確認扱いになるのは保存ボタン、または迎え/送り欄の編集のみ。従来どおり)。
+  // ★ 2026-09-06 データ消失報告の修正: タイマー発火時のappDataは最大1.5秒古く、その間に15秒同期が
+  //   届いていると「同期で届いたばかりの他データを古い状態で保存」し得た。appDataRef(常に最新)を土台にする。
   React.useEffect(() => {
     if (!dirtyRef?.current) return;
     const t = setTimeout(() => {
       if (!dirtyRef?.current) return;
       if (logKeyRef.current !== logKey) return; // 切替直後は読込effect側が保存を担当
-      const _logToSave = { ...localLog, _savedAt: syncNow() };
-      const next = { ...appData, diaryLogs: { ...(appData.diaryLogs||{}), [logKey]: _logToSave } };
-      if (pendingStaff) next.diarySettings = { ..._baseDs, staff: pendingStaff };
+      const _ts = syncNow();
+      const _logToSave = { ...localLog, _savedAt: _ts };
+      const base = appDataRef.current; // ★ 必ず最新のappData(closureのappDataは古い可能性がある)
+      const next = { ...base, diaryLogs: { ...(base.diaryLogs||{}), [logKey]: _logToSave } };
+      if (pendingStaff) next.diarySettings = { ...(base.diarySettings || _baseDs), staff: pendingStaff };
       onSave(next);
       lastRemoteSigRef.current = JSON.stringify(_logToSave); // 自分の保存をリモート更新と誤認して再読込しない
+      // ★ localLogにも_savedAtを反映(古いクラウドスナップショットの適用ガードで比較に使う)。
+      //   関数型更新で、発火直前の打鍵を消さないようにフィールド追加のみ行う。
+      setLocalLog(prev => ({ ...prev, _savedAt: _ts }));
       markClean();
     }, 1500);
     return () => clearTimeout(t);
@@ -37814,8 +37843,12 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       const raw = timeInput.replace(':','');
       if (raw === '') { setCarTime(timeKeypad.carId, timeKeypad.field, ''); }
       else {
-        const hh = raw.length <= 2 ? parseInt(raw,10) : parseInt(raw.slice(0, raw.length-2),10);
-        const mm = raw.length <= 2 ? 0 : parseInt(raw.slice(-2),10);
+        // ★ 3桁は「先頭2桁が時として成立(<=23)すれば時優先」(2026-09-06 店舗要望):
+        //   「132」=13時2分(1324の入力途中で確定した形)、「859」=8時59分(85時は無いので時1桁+分2桁)。
+        let hh, mm;
+        if (raw.length <= 2) { hh = parseInt(raw,10); mm = 0; }
+        else if (raw.length === 3 && parseInt(raw.slice(0,2),10) <= 23) { hh = parseInt(raw.slice(0,2),10); mm = parseInt(raw.slice(2),10); }
+        else { hh = parseInt(raw.slice(0, raw.length-2),10); mm = parseInt(raw.slice(-2),10); }
         if (isNaN(hh) || isNaN(mm) || hh > 23 || mm > 59) { alert('時刻は 00:00〜23:59 の範囲で入力してください'); return; }
         setCarTime(timeKeypad.carId, timeKeypad.field, `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`);
       }
@@ -37830,9 +37863,16 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
     else if(s.length<4) s+=v;
     setTimeInput(s);
   };
-  // ★ 入力途中も確定後と同じ解釈で表示する(2026-09-04 店舗要望): 「859」→「08:59」(旧表示は「85:9」)。
-  //   決定時の整形(closeTimeKeypad: 下2桁=分・残り=時)と同じ切り方。2桁までは時を入力中なのでそのまま。
-  const _kpDisplay = (s) => { const r=(s||'').replace(':',''); if(!r) return '__:__'; if(r.length<=2) return r; return r.slice(0, r.length-2).padStart(2,'0')+':'+r.slice(-2); };
+  // ★ 入力途中も確定後と同じ解釈で表示する(2026-09-04/06 店舗要望):
+  //   3桁は先頭2桁が時として成立(<=23)すれば時優先=「132」→「13:2」(1324の入力途中)。
+  //   成立しなければ時1桁+分2桁=「859」→「08:59」。決定時(closeTimeKeypad)と同じ判定。
+  const _kpDisplay = (s) => {
+    const r=(s||'').replace(':','');
+    if(!r) return '__:__';
+    if(r.length<=2) return r;
+    if(r.length===3) { return parseInt(r.slice(0,2),10) <= 23 ? r.slice(0,2)+':'+r.slice(2) : '0'+r[0]+':'+r.slice(1); }
+    return r.slice(0,2)+':'+r.slice(2);
+  };
   // ★ 到着/出発の時間はPCの物理キーボード/テンキーでも入力できる(2026-08-31 店舗要望)。
   //   数字=入力・Backspace=1文字削除・Enter=決定・Esc=キャンセル。
   //   依存配列なし=毎render付け替えで、常に最新の timeInput/log を見るハンドラになる
