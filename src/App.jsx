@@ -11063,6 +11063,32 @@ const diaryPendingItems = (log, iso) => {
   return items;
 };
 
+// ★ 欠席理由の大分類(2026-09-07 店舗要望): 入力は「大分類を選択→詳細を自由記入」の2段構え。
+//   特記には「大分類（詳細）」形式(例: 体調不良（咳がひどい）)で記録され、分析の欠席理由ランキングは
+//   大分類で集計・詳細は内訳表示になる(従来は「発熱、咳がひどいから」等の自由文が1つずつ別枠になっていた)。
+const ABS_REASON_CATS = ['体調不良','通院・受診','入院','本人・家族の都合','冠婚葬祭','天候','その他'];
+const composeAbsReason = (cat, detail) => { const d = String(detail || '').trim(); if (!cat) return d; return d ? `${cat}（${d}）` : cat; };
+// 「大分類（詳細）」を分解。大分類形式でなければ cat='' で全文を detail に返す(旧データ互換)
+const parseAbsReason = (t) => {
+  const s = String(t || '').trim();
+  for (const c of ABS_REASON_CATS) {
+    if (s === c) return { cat: c, detail: '' };
+    if ((s.startsWith(c + '（') && s.endsWith('）')) || (s.startsWith(c + '(') && s.endsWith(')'))) {
+      return { cat: c, detail: s.slice(c.length + 1, -1).trim() };
+    }
+  }
+  return { cat: '', detail: s };
+};
+// 旧データ(自由文)を大分類へ寄せるキーワード表(欠席理由ランキングの集計用)
+const ABS_CAT_KEYWORDS = {
+  '体調不良': ['体調不良','発熱','微熱','咳','風邪','腰痛','ぎっくり腰','転倒','めまい','自宅療養','体調調整','疲労','高血圧','寝不足','嘔吐','下痢','インフル','コロナ','骨折','痛み','体調','熱'],
+  '通院・受診': ['通院','受診','診察','検査','病院','外来'],
+  '入院': ['入院'],
+  '本人・家族の都合': ['家族の都合','家の都合','家庭の事情','家族の事情','私用','不在','用事','所用','都合'],
+  '冠婚葬祭': ['法事','葬儀','冠婚葬祭','葬式','告別式','通夜','結婚式'],
+  '天候': ['台風','大雪','積雪','悪天候','荒天','天候'],
+};
+
 // === ホーム / ダッシュボード ===
 // ★ Card/Tile は必ずモジュールレベルで定義する(2026-08-12)。 DashboardView 内で定義すると
 //   4秒ごとの同期のたびにコンポーネントの同一性が変わり、React がホームのDOM全体を
@@ -19161,15 +19187,18 @@ export default function App() {
       if (newData.generalFaxDraft && newData.generalFaxDraft !== prev.generalFaxDraft) {
         newData = { ...newData, generalFaxDraft: { ...newData.generalFaxDraft, _updatedAt: _now2 } };
       }
-      // ★ 実データを保存する時だけ「最終更新した端末・時刻」を記録する(全端末で共有・表示用)。
-      if (options.manual || options.silent) {
+      // ★ 実データを保存する時は「最終更新した端末・時刻」を記録する(全端末で共有・表示用)。
+      {
         newData = { ...newData, _lastSync: { device: (deviceName || '名称未設定の端末'), at: syncNow() } };
       }
     } catch (e) { /* 失敗しても保存自体は続行 */ }
     setAppData(newData);
-    // ★ 手動保存ボタン (options.manual) / 自動保存 (options.silent) は即時クラウド保存する。
-    //   silent は成功トーストを出さない (自動保存の連続表示を避ける)。 失敗時のみ通知する。
-    if (options.manual || options.silent) {
+    // ★★ 恒久対策(2026-09-07): 全ての保存を即時クラウド送信する。従来は options.manual/silent 指定時のみ
+    //   送信で、無指定の呼び出し(77箇所: 削除・設定変更・記録操作等)は端末内のみ保存となり、次の
+    //   manual/silent保存に相乗りするまでクラウドに届かなかった(日誌データ消失 5a52c5e と同型の穴)。
+    //   旧debounce送信経路は撤去済みで存在しないため、ここで送らなければどこからも送られない。
+    //   成功トーストは manual のみ(silent/無指定は静かに送信)。失敗時は全保存で通知する。
+    {
       // ★ 手動保存は debounce(1.5秒)を待たず即時クラウド保存する。
       //   保存直後に別画面へ移動 → pull で古いクラウドデータに上書きされて
       //   入力が消える、というレースを防ぐ (保存と同時にクラウドを最新化)。
@@ -19230,20 +19259,20 @@ export default function App() {
             setShowToast(true); setTimeout(()=>setShowToast(false),6000);
           }
         });
-        if (!options.silent) {
+        if (options.manual) {
           setToastMsg(options.message || '保存されました');
           setShowToast(true);
           setTimeout(() => setShowToast(false), 3000);
         }
       } else if (isSupabaseEnabled && staffSession?.storeId && !options.allowEmpty && !_hasRealData) {
         // 利用者0件(未ロード等)で push 抑止 → 端末ローカルのみ。 誤解を避ける表示
-        if (!options.silent) {
-          setToastMsg('端末に保存しました（クラウド同期は数秒後に自動実行）');
+        if (options.manual) {
+          setToastMsg('端末に保存しました（クラウド同期は次回の保存時に自動実行）');
           setShowToast(true);
           setTimeout(() => setShowToast(false), 3000);
         }
       } else {
-        if (!options.silent) {
+        if (options.manual) {
           setToastMsg(options.message || '保存されました');
           setShowToast(true);
           setTimeout(() => setShowToast(false), 3000);
@@ -21150,7 +21179,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
     if (dirtyRef) dirtyRef.current = true;
   };
 
-  const [statusModal, setStatusModal] = useState({ isOpen: false, id: null, status: '', reason: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: '', pauseToDate: '' });
+  const [statusModal, setStatusModal] = useState({ isOpen: false, id: null, status: '', reason: '', reasonCat: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: '', pauseToDate: '' });
   // 振替の取り消し（保留）: 保存ボタン押下時にまとめて反映するために情報を貯めておく
   const [pendingCancellations, setPendingCancellations] = useState([]);
   // 振替の新規設定（保留）: monthlyShifts への反映を保存ボタン押下まで遅延
@@ -21295,11 +21324,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         const _d=new Date(selectedDate);
         if(!window.confirm(`⚠ ${_d.getMonth()+1}月${_d.getDate()}日は過去の日付です。\n\nこの日を「${newStatus}」に変更してよろしいですか？\n\n入力済みの記録(血圧・脈・気分・運動など)は保持され、「出席」に戻せば元に戻りますが、誤って変更しないようご注意ください。`)) return;
       }
-      setStatusModal({ isOpen: true, id, status: newStatus, reason: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: '', pauseToDate: '' });
+      setStatusModal({ isOpen: true, id, status: newStatus, reason: '', reasonCat: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: '', pauseToDate: '' });
       return;
     }
     if (newStatus === '休止') {
-      setStatusModal({ isOpen: true, id, status: '休止', reason: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: selectedDate, pauseToDate: '' });
+      setStatusModal({ isOpen: true, id, status: '休止', reason: '', reasonCat: '', furikaeDate: '', substituteReason: '', furikaeAmpm: 'AM', pauseFromDate: selectedDate, pauseToDate: '' });
       return;
     }
     applyStatusChange(id, newStatus, '', '', '', 'AM');
@@ -22998,13 +23027,32 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 })()}
               </div>
             ) : (
+              statusModal.status==='欠席' ? (
+              /* ★ 欠席理由は2段構え(2026-09-07 店舗要望): 大分類を選択→詳細を自由記入。
+                 特記には「体調不良（咳がひどい）」形式で入り、分析の欠席理由ランキングは大分類で集計される */
               <div>
-                <label className="block text-sm font-bold text-slate-600 mb-1.5">{statusModal.status==='欠席'?'欠席理由':'休業理由'}</label>
+                <label className="block text-sm font-bold text-slate-600 mb-1.5">欠席理由（大分類）</label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  {(statusModal.status==='欠席'
-                    ? ['体調不良','発熱','通院','家族の都合','私用','不在']
-                    : ['夏季休業','年末年始','積雪','人員不足']
-                  ).map(r => (
+                  {ABS_REASON_CATS.map(r => (
+                    <button key={r} onClick={() => setStatusModal(s => ({...s, reasonCat: s.reasonCat===r ? '' : r}))}
+                      className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${statusModal.reasonCat===r ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">詳細（任意）</label>
+                <textarea value={statusModal.reason} onChange={e => setStatusModal(s => ({...s, reason: e.target.value}))}
+                  placeholder="例: 発熱38度 / 咳がひどい / 脳外科受診 など" rows={2}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                {(statusModal.reasonCat || statusModal.reason.trim()) && (
+                  <div className="text-[11px] text-slate-500 mt-1.5">記録される理由: <b className="text-slate-700">{composeAbsReason(statusModal.reasonCat, statusModal.reason)}</b></div>
+                )}
+              </div>
+              ) : (
+              <div>
+                <label className="block text-sm font-bold text-slate-600 mb-1.5">休業理由</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {['夏季休業','年末年始','積雪','人員不足'].map(r => (
                     <button key={r} onClick={() => setStatusModal(s => ({...s, reason: r}))}
                       className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${statusModal.reason===r ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400'}`}>
                       {r}
@@ -23015,10 +23063,11 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   placeholder="自由記述..." rows={2}
                   className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
               </div>
+              )
             )}
             <div className="flex gap-3 mt-5">
               <button onClick={() => setStatusModal(s => ({...s, isOpen: false}))} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">キャンセル</button>
-              <button onClick={() => { applyStatusChange(statusModal.id, statusModal.status, statusModal.reason, statusModal.furikaeDate, statusModal.substituteReason, statusModal.furikaeAmpm||'AM', statusModal.pauseFromDate, statusModal.pauseToDate); setStatusModal(s => ({...s, isOpen: false})); }}
+              <button onClick={() => { const _rsn = statusModal.status==='欠席' ? composeAbsReason(statusModal.reasonCat, statusModal.reason) : statusModal.reason; applyStatusChange(statusModal.id, statusModal.status, _rsn, statusModal.furikaeDate, statusModal.substituteReason, statusModal.furikaeAmpm||'AM', statusModal.pauseFromDate, statusModal.pauseToDate); setStatusModal(s => ({...s, isOpen: false})); }}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${statusModal.status==='休止'?'bg-orange-600 hover:bg-orange-700':'bg-blue-600 hover:bg-blue-700'}`}>確定</button>
             </div>
           </div>
@@ -27335,20 +27384,20 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
   //   ① 振替の欠席レコードは tokki が「○月○日PMへ振替（私用）」形式 → 括弧内の実際の理由だけを取り出す
   //      (取り出せない=理由未記入の振替は「振替」に丸める。 日付そのものが理由として並ばないようにする)
   //   ② 「体調不良で休み」「体調不良のため中止」等の語尾ゆらぎを、代表的な欠席理由に寄せてまとめる
-  const _REASON_CANON = ['体調不良','発熱','通院','家族の都合','私用','不在','入院','腰痛','ぎっくり腰','転倒','めまい','自宅療養','体調調整','疲労','高血圧','寝不足'];
+  // ★ 大分類集計(2026-09-07 店舗要望): 新形式「大分類（詳細）」は大分類へ、旧データ(自由文)は
+  //   ABS_CAT_KEYWORDSで大分類へ寄せる。複数の大分類にまたがる文は原文維持(取りこぼし防止)。
   const normalizeAbsenceReason = React.useCallback((tokki) => {
     let t = String(tokki || '').trim();
     if (!t) return '';
     // ① 振替表記なら括弧内の理由を採用 (無ければ「振替」)
     const fm = t.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:（(.+)）|\((.+)\))?$/);
     if (fm) { t = (fm[1] || fm[2] || '').trim(); if (!t) return '振替'; }
-    // ② 付帯語(で休み/のため中止 等)を除いて代表理由に寄せる。 最長一致を優先。
-    const hit = _REASON_CANON.filter(c => t.includes(c)).sort((a,b)=>b.length-a.length)[0];
-    if (hit) {
-      // 「体調不良」を含むが「体調不良と転倒」のように別理由も併記されている場合は原文維持(取りこぼし防止)
-      const others = _REASON_CANON.filter(c => c !== hit && t.includes(c));
-      if (!others.length) return hit;
-    }
+    // ② 新形式「大分類（詳細）」→ 大分類
+    const p = parseAbsReason(t);
+    if (p.cat) return p.cat;
+    // ③ 旧データ: キーワードで大分類へ。2分類以上にまたがる場合は原文のまま
+    const hits = Object.keys(ABS_CAT_KEYWORDS).filter(c => ABS_CAT_KEYWORDS[c].some(k => t.includes(k)));
+    if (hits.length === 1) return hits[0];
     return t;
   }, []);
   // 括弧内の理由だけを取り出す(振替側 tokki「○月○日PM分振替（私用）」から (私用) を得る等)
@@ -27365,17 +27414,26 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
     });
     const m = {};
     recsAP.filter(r=>r.status==='欠席'&&r.tokki?.trim()).forEach(r=>{
+      // 元文(振替表記なら括弧内)を詳細内訳用に保持
+      let raw = String(r.tokki||'').trim();
+      const fm0 = raw.match(/^\d+月\d+日(?:AM|PM|1日)?へ振替(?:（(.+)）|\((.+)\))?$/);
+      if (fm0) raw = (fm0[1] || fm0[2] || '').trim();
       let key = normalizeAbsenceReason(r.tokki);
       // 欠席側の理由が「振替」に丸められた(=理由未記入の振替)なら、対の振替側レコードの理由を使う
       if (key === '振替') {
         const dm = String(r.tokki||'').match(/^(\d+月\d+日)(?:AM|PM|1日)?へ振替/);
         const rsn = dm ? furiReasonByKey[`${r.patientId}|${dm[1]}`] : '';
-        if (rsn) key = normalizeAbsenceReason(rsn);
+        if (rsn) { key = normalizeAbsenceReason(rsn); raw = rsn; }
       }
       if (!key) return;
-      m[key]=(m[key]||0)+1;
+      // ★ 詳細内訳(2026-09-07): 新形式は括弧内の詳細、旧データで大分類に丸めた場合は原文を詳細として数える
+      const pp = parseAbsReason(raw);
+      const detail = pp.cat ? pp.detail : (key !== raw ? raw : '');
+      if (!m[key]) m[key] = { count: 0, details: {} };
+      m[key].count++;
+      if (detail) m[key].details[detail] = (m[key].details[detail]||0)+1;
     });
-    return Object.entries(m).map(([r,cnt])=>({reason:r,count:cnt})).sort((a,b)=>b.count-a.count);
+    return Object.entries(m).map(([r,v])=>({reason:r,count:v.count,details:Object.entries(v.details).sort((a,b)=>b[1]-a[1])})).sort((a,b)=>b.count-a.count);
   }, [recsAP, normalizeAbsenceReason]);
   const Card = OpsCard; // グローバルCardコンポーネントを使用
 
@@ -28084,11 +28142,20 @@ function OperationDashboardView({ appData, setAppData, onShowPrintPreview }) {
             return (
               <React.Fragment>
                 <div style={{display:'grid',gridTemplateColumns:`repeat(${N_COLS},minmax(0,1fr))`,columnGap:24}}>
-                  {list.map(({reason,count}, idx) => (
-                    <div key={reason} style={{display:'flex',alignItems:'baseline',padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
-                      <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
-                      <span style={{fontSize:12,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{reason}</span>
-                      <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',flexShrink:0,marginLeft:4}}>{count}件</span>
+                  {list.map(({reason,count,details}, idx) => (
+                    <div key={reason} style={{padding:'2px 0',borderBottom:'1px solid #f8fafc',minWidth:0}}>
+                      <div style={{display:'flex',alignItems:'baseline'}}>
+                        <span style={{fontSize:11,fontWeight:'bold',color:'#64748b',width:24,textAlign:'right',flexShrink:0,marginRight:6}}>{`${idx+1}.`}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#334155',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,minWidth:0}}>{reason}</span>
+                        <span style={{fontSize:12,fontWeight:'bold',color:'#1e293b',flexShrink:0,marginLeft:4}}>{count}件</span>
+                      </div>
+                      {/* ★ 詳細内訳(2026-09-07): 「大分類（詳細）」入力の括弧内・旧自由文を件数付きで表示(上位3件・ホバーで全件) */}
+                      {details && details.length > 0 && (
+                        <div title={details.map(([d,c])=>`${d}×${c}`).join(' / ')}
+                          style={{fontSize:10,color:'#94a3b8',paddingLeft:30,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                          {details.slice(0,3).map(([d,c])=>c>1?`${d}×${c}`:d).join('・')}{details.length>3?' …':''}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -31281,7 +31348,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
   // 月間スケジュールセルクリック時の状態選択ポップアップ
   const [shiftStatusModal, setShiftStatusModal] = useState({ isOpen: false, day: null, ap: null, currentStatus: '', isBase: false });
   // 欠席/休業 選択時の理由入力モーダル
-  const [absenceReasonModal, setAbsenceReasonModal] = useState({ isOpen: false, status: '', day: null, ap: null, isBase: false, reason: '' });
+  const [absenceReasonModal, setAbsenceReasonModal] = useState({ isOpen: false, status: '', day: null, ap: null, isBase: false, reason: '', reasonCat: '' });
   // 振替取り消し: 元 (欠席) の状態をどうするか選択するモーダル
   const [furikaeCancelModal, setFurikaeCancelModal] = useState({ isOpen: false, day: null, ap: null, srcDay: null, srcAmpm: null });
   // セル状態 > 休止 選択時の休止期間入力モーダル
@@ -32246,9 +32313,11 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
 
   // 欠席/休業 理由入力モーダルからの確定
   const applyAbsenceWithReason = () => {
-    const { status, day, ap, isBase, reason } = absenceReasonModal;
-    if (!localPatient) { setAbsenceReasonModal({ isOpen: false, status: '', day: null, ap: null, isBase: false, reason: '' }); return; }
-    setAbsenceReasonModal({ isOpen: false, status: '', day: null, ap: null, isBase: false, reason: '' });
+    const { status, day, ap, isBase } = absenceReasonModal;
+    // ★ 欠席は「大分類（詳細）」形式に合成(2026-09-07)。休業は従来どおり自由文
+    const reason = status === '欠席' ? composeAbsReason(absenceReasonModal.reasonCat, absenceReasonModal.reason) : absenceReasonModal.reason;
+    if (!localPatient) { setAbsenceReasonModal({ isOpen: false, status: '', day: null, ap: null, isBase: false, reason: '', reasonCat: '' }); return; }
+    setAbsenceReasonModal({ isOpen: false, status: '', day: null, ap: null, isBase: false, reason: '', reasonCat: '' });
     // shifts に状態を保存
     const ns2 = saveSh(localPatient.id, day, ap, status, isBase, null);
     setPendingShifts(ns2);
@@ -34737,12 +34806,26 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                 {currentMonth.getMonth()+1}月{absenceReasonModal.day}日（{absenceReasonModal.ap}）
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1.5">理由</label>
+                {/* ★ 欠席は大分類→詳細の2段構え(2026-09-07 店舗要望)。特記には「体調不良（咳がひどい）」形式で入る */}
+                {absenceReasonModal.status === '欠席' && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {ABS_REASON_CATS.map(r => (
+                      <button key={r} onClick={() => setAbsenceReasonModal(prev => ({...prev, reasonCat: prev.reasonCat===r ? '' : r}))}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${absenceReasonModal.reasonCat===r ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">{absenceReasonModal.status === '欠席' ? '詳細（任意）' : '理由'}</label>
                 <textarea value={absenceReasonModal.reason} autoFocus
                   onChange={e=>setAbsenceReasonModal(prev=>({...prev, reason: e.target.value}))}
-                  placeholder={absenceReasonModal.status === '欠席' ? '例: 風邪のため / 通院 / 家族の事情 など' : '例: 法事 / 旅行 など'}
+                  placeholder={absenceReasonModal.status === '欠席' ? '例: 発熱38度 / 咳がひどい / 脳外科受診 など' : '例: 法事 / 旅行 など'}
                   rows={3}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm outline-none resize-none focus:border-blue-400"/>
+                {absenceReasonModal.status === '欠席' && (absenceReasonModal.reasonCat || absenceReasonModal.reason.trim()) && (
+                  <div className="text-[11px] text-slate-500 mt-1.5">記録される理由: <b className="text-slate-700">{composeAbsReason(absenceReasonModal.reasonCat, absenceReasonModal.reason)}</b></div>
+                )}
               </div>
               <div className="text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
                 保存ボタンを押すまで反映されません。
