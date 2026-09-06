@@ -40,6 +40,7 @@ import {
   markOplogWritable,
   getSyncLog,
   clearSyncLog,
+  supabaseUploadSyncDiag,
   supabaseLoadDiseaseMaster,
   supabaseSaveDiseaseMaster,
 } from './lib/supabase';
@@ -18153,6 +18154,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId]);
 
+  // ★ 同期診断のクラウド送信(2026-09-06): 「保存したのに届かない」端末を遠隔調査できるよう、
+  //   syncLogの末尾を60秒ごと(初回は起動10秒後)に app_state の diag_<店舗> 行へ送る。
+  //   本体データとは別行・ベストエフォート(失敗無害)。端末タグ=端末名|稼働中アプリ版。
+  useEffect(() => {
+    if (!isSupabaseEnabled || !staffSession?.storeId) return;
+    const _tag = () => `${deviceName || '名称未設定の端末'}|${__builtUpdateNotes?.version || '-'}`;
+    const send = () => { try { supabaseUploadSyncDiag(staffSession.storeId, _tag()); } catch {} };
+    const t0 = setTimeout(send, 10000);
+    const t = setInterval(send, 60000);
+    return () => { clearTimeout(t0); clearInterval(t); };
+  }, [staffSession?.storeId]); // eslint-disable-line
+
   // ★ 月初の自動スナップショット: 起動時に前月分のサービス提供記録を全利用者に対して作成
   useEffect(() => {
     const today = new Date();
@@ -19173,7 +19186,9 @@ export default function App() {
         && dataLoadedForStoreRef.current === staffSession.storeId
         && _storeMatch
         && (_hasRealData || options.allowEmpty);
-      syncLog('save', { manual: !!options.manual, silent: !!options.silent, canPush: !!_canPush, recs: (newData.ticketRecords||[]).length });
+      syncLog('save', { manual: !!options.manual, silent: !!options.silent, canPush: !!_canPush, recs: (newData.ticketRecords||[]).length,
+        // ★ push不許可の理由を必ず残す(2026-09-06 扇橋「保存が届かない」調査): st=店舗切替中 dl=読込済み店舗一致 sm=店舗ID一致 hd=実データあり
+        ...( _canPush ? {} : { why: { st: !!storeTransitionRef.current, dl: dataLoadedForStoreRef.current === staffSession?.storeId, sm: !!_storeMatch, hd: !!_hasRealData } }) });
       // ★ テーブル方式のときだけ ticket_records へ書き込む。 巨大JSON方式(TABLE_ENABLED=false)では
       //   下の mergeAndSyncStateForStore が提供記録も含めて保存するので、ここは何もしない。
       if (TABLE_ENABLED && _canPush) {
@@ -19912,6 +19927,13 @@ export default function App() {
       {globalTip && (
         <div style={{position:'fixed',top:globalTip.y,left:globalTip.x,transform:'translate(-50%,-100%)',background:'#1e293b',color:'white',padding:'4px 10px',borderRadius:6,fontSize:12,fontWeight:'bold',whiteSpace:'nowrap',zIndex:999999,pointerEvents:'none',marginTop:-4,boxShadow:'0 4px 12px rgba(0,0,0,0.4)'}}>
           {globalTip.text}
+        </div>
+      )}
+      {/* ★ 稼働中バンドルの版数表示(2026-09-06): 「今すぐ更新が効いているか」をスクショで確認できるようにする。
+          ビルド時に焼き込んだ update-notes.json の version(=この端末で実際に動いているコードの版)を表示 */}
+      {staffSession && (
+        <div style={{position:'fixed',bottom:2,left:6,zIndex:40,fontSize:9,color:'#94a3b8',pointerEvents:'none',fontFamily:'monospace'}}>
+          アプリ版: {__builtUpdateNotes?.version || '-'}
         </div>
       )}
       {/* ★ トーストを Portal で body 直下にレンダリング → 全画面表示時も確実に見える */}

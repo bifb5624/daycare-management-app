@@ -39,6 +39,23 @@ export function syncLog(ev, detail) {
 }
 export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
 export function clearSyncLog() { try { localStorage.removeItem(_SYNCLOG_KEY); } catch {} }
+// ★ 同期診断のクラウド送信(2026-09-06 扇橋「保存が届かない」調査用): syncLog の末尾を
+//   app_state の別行(diag_<店舗ID>)へベストエフォートで送る。本体データとは完全に別行のため、
+//   失敗しても通常の保存・同期には一切影響しない。deviceTag は「端末名|アプリ版」。
+export async function supabaseUploadSyncDiag(storeId, deviceTag) {
+  if (!supabase || !storeId) return false;
+  try {
+    const logs = getSyncLog().slice(-60);
+    if (!logs.length) return false;
+    const tag = String(deviceTag || 'unknown').slice(0, 80);
+    const r = await supabaseCasUpdate(`diag_${storeId}`, (cur) => {
+      const d = (cur && typeof cur === 'object') ? { ...cur } : {};
+      d[tag] = { at: Date.now(), logs };
+      return d;
+    }, { maxRetries: 1 });
+    return !!(r && r.ok);
+  } catch { return false; }
+}
 // ★ 操作ログ方式へ移行済みのキー。 巨大JSON側では読み取り専用(スナップショット)として扱う。
 export const OPLOG_FROZEN_KEYS = new Set(['ticketRecords']);  // ★プレビュー検証(preview-table2): 提供記録はテーブルが正・巨大JSON側は凍結(テーブルが読めた端末のみ)
 // ★★ 自己検証つき切替【重要な安全装置】
