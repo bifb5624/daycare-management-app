@@ -17986,6 +17986,42 @@ export default function App() {
               });
             } catch (e) { console.warn('[pull preserve] settings failed', e); }
           }
+          // ★★ 日誌(diaryLogs)も pull で保持する(2026-09-06 扇橋データ消失の根本対策)。
+          //   pull は丸ごと置換のため、自動保存の push が完了する前に受信が走ると、端末内の新しい日誌が
+          //   古いクラウド値で消えていた(提供記録・利用者・設定・月間シフトには保持処理があるのに
+          //   日誌=diaryLogsオブジェクトだけ漏れていた)。8/28の送迎車設定消失の直接原因。
+          //   push側(supabase.js mergeStates)と同じ「キー単位_savedAt+項目単位_fieldTsの新しい方」を採用し、
+          //   保持が発生したら _mergedForPush で再pushしてクラウドにも追いつかせる。
+          if (prev && prev._sbStoreId === newStoreId && prev.diaryLogs && typeof prev.diaryLogs === 'object') {
+            try {
+              const lo = prev.diaryLogs, co = (merged.diaryLogs && typeof merged.diaryLogs === 'object') ? merged.diaryLogs : {};
+              const outLogs = { ...co }; let _dlKept = 0;
+              Object.keys(lo).forEach(k => {
+                const lv = lo[k], cv = co[k];
+                if (!lv || typeof lv !== 'object') return;
+                if (!cv) { outLogs[k] = lv; _dlKept++; return; } // クラウドに無い=push未達 → 保持
+                const lt = Number(lv._savedAt) || 0, ct = Number(cv._savedAt) || 0;
+                if (!lt && !ct) return; // 時刻なしの旧データは従来どおりクラウド優先
+                const lFts = (lv._fieldTs && typeof lv._fieldTs === 'object') ? lv._fieldTs : {};
+                const cFts = (cv._fieldTs && typeof cv._fieldTs === 'object') ? cv._fieldTs : {};
+                const base = (lt >= ct) ? lv : cv;
+                const o = { ...base };
+                new Set([...Object.keys(lv), ...Object.keys(cv)]).forEach(fk => {
+                  if (fk === '_savedAt' || fk === '_fieldTs') return;
+                  const lf = Number(lFts[fk]) || 0, cf = Number(cFts[fk]) || 0;
+                  if (lf || cf) o[fk] = (lf >= cf) ? lv[fk] : cv[fk];
+                  else if (!(fk in base)) o[fk] = (fk in lv) ? lv[fk] : cv[fk];
+                });
+                const mf = {};
+                new Set([...Object.keys(lFts), ...Object.keys(cFts)]).forEach(fk => { const t = Math.max(Number(lFts[fk]) || 0, Number(cFts[fk]) || 0); if (t) mf[fk] = t; });
+                if (Object.keys(mf).length) o._fieldTs = mf;
+                o._savedAt = Math.max(lt, ct);
+                let differs; try { differs = JSON.stringify(o) !== JSON.stringify(cv); } catch { differs = true; }
+                if (differs) { outLogs[k] = o; _dlKept++; }
+              });
+              if (_dlKept > 0) { merged.diaryLogs = outLogs; _mergedForPush = merged; syncLog('pull-preserve', { key: 'diaryLogs', kept: _dlKept }); }
+            } catch (e) { console.warn('[pull preserve] diaryLogs failed', e); }
+          }
           // ★ お知らせの既読(noticeReads)は pull で巻き戻さない。 pull は丸ごと置換なので、
           //   既読にした直後(push完了前)に受信すると未読へ戻ってしまう
           //   (「既読を押してすぐ閉じると既読にならない」症状の原因)。 両者の和集合を採る。
