@@ -37569,7 +37569,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       // 移動前データを自動保存
       const updatedLogs = { ...(appData.diaryLogs||{}), [oldKey]: localLog };
       nextAppData = { ...appData, diaryLogs: updatedLogs };
-      onSave(nextAppData);
+      onSave(nextAppData, { silent: true }); // ★ silent=クラウド送信(無指定は端末内のみ・2026-09-06真因修正)
     }
     const latest = (nextAppData.diaryLogs||{})[logKey] || {};
     lastRemoteSigRef.current = JSON.stringify(latest);
@@ -37716,7 +37716,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       const _ts2 = syncNow();
       const _heal = { ...localLog, _savedAt: _ts2 };
       const base = appDataRef.current;
-      onSave({ ...base, diaryLogs: { ...(base.diaryLogs||{}), [logKey]: _heal } });
+      onSave({ ...base, diaryLogs: { ...(base.diaryLogs||{}), [logKey]: _heal } }, { silent: true }); // ★ silent=クラウド送信(必須)
       lastRemoteSigRef.current = JSON.stringify(_heal);
       setLocalLog(prev => ({ ...prev, _savedAt: _ts2 }));
       return;
@@ -37776,7 +37776,9 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
       const base = appDataRef.current; // ★ 必ず最新のappData(closureのappDataは古い可能性がある)
       const next = { ...base, diaryLogs: { ...(base.diaryLogs||{}), [logKey]: _logToSave } };
       if (pendingStaff) next.diarySettings = { ...(base.diarySettings || _baseDs), staff: pendingStaff };
-      onSave(next);
+      // ★ silent必須(2026-09-06 真因): handleSaveToCloudはmanual/silent指定の時だけクラウド送信する。
+      //   無指定だと端末内のみで、再読み込みで消える(扇橋「保存が届かない」の真因)。
+      onSave(next, { silent: true });
       lastRemoteSigRef.current = JSON.stringify(_logToSave); // 自分の保存をリモート更新と誤認して再読込しない
       // ★ localLogにも_savedAtを反映(古いクラウドスナップショットの適用ガードで比較に使う)。
       //   関数型更新で、発火直前の打鍵を消さないようにフィールド追加のみ行う。
@@ -38476,7 +38478,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         if (val === 'walk') logUpdates[targetKey][prefix+'_walk'][_key] = true;
         else if (val) logUpdates[targetKey][prefix][_cPre+'_'+val] = true;
       });
-      onSave({ ...appData, diaryLogs: { ...(appData.diaryLogs||{}), ...logUpdates }});
+      onSave({ ...appData, diaryLogs: { ...(appData.diaryLogs||{}), ...logUpdates }}, { silent: true }); // ★ silent=クラウド送信(2026-09-06真因修正)
     } else {
       // ★ 変更した項目(prefix=迎え or 送り)のキーだけを patch する。 log 全体を渡すと、
       //   バッジ解除ロジックが「送り/運転者/時間も編集した」と誤判定して全バッジが消えるため。
@@ -38912,7 +38914,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
                 const updatedLogs = { ...(appData.diaryLogs||{}), [logKey]: localLog };
                 const next = { ...appData, diaryLogs: updatedLogs };
                 if (pendingStaff) next.diarySettings = { ..._baseDs, staff: pendingStaff };
-                onSave(next);
+                onSave(next, { silent: true }); // ★ silent=クラウド送信(無指定は端末内のみ・2026-09-06真因修正)
                 markClean();
               }
               setAmpm(v);
