@@ -42591,12 +42591,16 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   });
 
   const [tY, tM] = targetMonth.split('-').map(Number);
-  // ★ AIコスト管理: 当月分は毎月15日以降のみ 作成・AI下書き・記入 を可能にする (過去月はいつでも可)
+  // ★ 2026-09-07 店舗要望: 「毎月15日以降のみ」の制限を撤廃。月内いつでも作成・AI下書き・記入できる。
+  //   (ゲート箇所は残してfalse固定=将来ポリシーを戻したくなった時のため)
   const _mNow = new Date();
-  const _isCurrentMonth = tY === _mNow.getFullYear() && tM === (_mNow.getMonth()+1);
-  const _monthLocked = _isCurrentMonth && _mNow.getDate() < 15;
-  // ★ AI利用回数の上限: 1事業所あたり「利用中の利用者数 × 2回」まで(実際のカレンダー月で集計)。
-  const _aiMonthKey = `${_mNow.getFullYear()}-${String(_mNow.getMonth()+1).padStart(2,'0')}`;
+  const _monthLocked = false;
+  // ★ AI利用回数の上限: 1事業所あたり「利用中の利用者数 × 2回」まで。
+  //   ★ 2026-09-07 店舗要望: 集計キーを「現在の月」→「表示中の対象月」に変更。従来は月が変わると
+  //   カウンタがリセットされ、過去月(8月・7月)のモニタリングを開くとまたAIが使えてしまっていた。
+  //   対象月ごとに使用回数を記録するので、月を越しても「その月の上限の残り」は変わらない
+  //   (上限に達していない月は、いつ開いてもAIを使える)。
+  const _aiMonthKey = `${tY}-${String(tM).padStart(2,'0')}`;
   const _aiActiveCount = (appData.patients||[]).filter(p => p.status === '利用中').length;
   const _aiLimit = _aiActiveCount * 2;
   const _aiUsed = (appData.systemSettings?.aiUsage?.[_aiMonthKey]) || 0;
@@ -42836,7 +42840,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     if (noKey && attCount > 0) {
       if (!window.confirm(`APIキーが未設定のため、通所がある ${attCount}名 はスキップし、通所が無い方のみ「実施できなかった」で作成します。\n（通所がある方もAIで作成するには 各種設定→モニタリング でAPIキーを設定してください）\n続行しますか？`)) return;
     } else {
-      const _aiNote = attCount > _aiRemaining ? `\n※ 今月のAI下書きは残り${_aiRemaining}回です。通所がある${attCount}名のうち、先着${_aiRemaining}名のみAIで下書きし、超過分は既定値で作成します（手直しで仕上げてください）。` : `\n（今月のAI下書き残り${_aiRemaining}回）`;
+      const _aiNote = attCount > _aiRemaining ? `\n※ ${tM}月分のAI下書きは残り${_aiRemaining}回です。通所がある${attCount}名のうち、先着${_aiRemaining}名のみAIで下書きし、超過分は既定値で作成します（手直しで仕上げてください）。` : `\n（${tM}月分のAI下書き残り${_aiRemaining}回）`;
       if (!window.confirm(`${targets.length}名のモニタリング表を作成し、個人ファイルに保存します。\n（通所がある方はAI下書き／一度も来ていない方は「実施できなかった」。既に作成済みの月は上書き）${_aiNote}\nよろしいですか？`)) return;
     }
     cancelRef.current = false;
@@ -42945,7 +42949,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const aiDraftRow = async (patient) => {
     if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
     if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('各種設定→モニタリングでAPIキーを設定してください'); return; }
-    if (_aiRemaining <= 0) { alert(`今月のAI下書きの上限（利用者${_aiActiveCount}名×2回＝${_aiLimit}回）に達しました。\n翌月まで手入力でご対応ください。`); return; }
+    if (_aiRemaining <= 0) { alert(`${tM}月分のAI下書きの上限（利用者${_aiActiveCount}名×2回＝${_aiLimit}回）に達しました。\nこの月の分は手入力でご対応ください。`); return; }
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
       const out = await aiDraftSheet(patient);
@@ -43596,9 +43600,10 @@ ${optionsDesc}
                         {MON_ITEMS.map((it,ii) => { const c=_monCell(sh[it.key]); const cellId=`${patient.id}:${it.key}`; const editing2 = editTextCell===cellId; const copyId=`${patient.id}:${it.key}`; const _exp = monExpanded.has(patient.id) || editing2; return (
                           <div key={it.key} style={_exp ? {marginBottom:6,paddingBottom:6,borderBottom: ii<MON_ITEMS.length-1?'1px dashed #d7e3ec':'none'} : {marginBottom:3}}>
                             <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:_exp?'wrap':'nowrap',marginBottom:_exp?2:0,minWidth:0}}>
-                              <span style={{fontWeight:'bold',color:'#0c4a6e',background:'#e0f2fe',borderRadius:5,padding:'1px 7px',fontSize:11,flexShrink:0,whiteSpace:'nowrap'}}>{it.no}{it.title}</span>
+                              {/* ★ ラベルを固定幅にして、選択・本文の開始位置を①〜⑤で揃える(2026-09-07 店舗要望: 凹凸解消) */}
+                              <span title={`${it.no}${it.title}`} style={{fontWeight:'bold',color:'#0c4a6e',background:'#e0f2fe',borderRadius:5,padding:'1px 7px',fontSize:11,flexShrink:0,whiteSpace:'nowrap',width:212,boxSizing:'border-box',overflow:'hidden',textOverflow:'ellipsis'}}>{it.no}{it.title}</span>
                               <select value={c.sel} disabled={confirmed} onChange={e=>updateSheetInline(patient, it.key, 'sel', e.target.value)}
-                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:confirmed?'#f1f5f9':'white',color:'#0369a1',flexShrink:0}}>
+                                style={{fontSize:11,fontWeight:'bold',border:'1px solid #7dd3fc',borderRadius:6,padding:'2px 4px',background:confirmed?'#f1f5f9':'white',color:'#0369a1',flexShrink:0,width:150,boxSizing:'border-box'}}>
                                 <option value="">— 選択 —</option>
                                 {it.options.map(o=> <option key={o} value={o}>{o}</option>)}
                               </select>
