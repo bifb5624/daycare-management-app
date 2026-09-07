@@ -42810,7 +42810,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
   const generateAll = async () => {
     const targets = attendedPats.filter(p => checkedIds.has(p.id));
-    if (targets.length === 0) { alert('チェックした利用者がいません'); return; }
+    if (targets.length === 0) { monAlert('チェックした利用者がいません'); return; }
     cancelRef.current = false;
     setIsGeneratingAll(true);
     for (const p of targets) {
@@ -42829,19 +42829,25 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
   // ★ モニタリング表(正式シート)をAIで一括下書き → まとめて個人ファイルに保存
   const [sheetBatchProg, setSheetBatchProg] = React.useState(null); // {done,total} | null
+  // ★ アプリ内ダイアログ(2026-09-07): window.confirm/alert はブラウザ環境によってダイアログ本体が
+  //   ウィンドウの裏に隠れ、「画面が薄暗くなったまま操作不能」に見える事象が報告されたため(Surface/Edge)、
+  //   モニタリング内の確認・通知は全てアプリ内モーダルに置換した。
+  const [monDialog, setMonDialog] = React.useState(null); // {msg, confirm, ok, ng}
+  const monAlert = (msg) => new Promise(res => setMonDialog({ msg: String(msg), confirm: false, ok: () => { setMonDialog(null); res(true); } }));
+  const monConfirm = (msg) => new Promise(res => setMonDialog({ msg: String(msg), confirm: true, ok: () => { setMonDialog(null); res(true); }, ng: () => { setMonDialog(null); res(false); } }));
   const generateAllSheets = async () => {
-    if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
+    if (_monthLocked) { monAlert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
     // ★ 通所がある人はAI下書き、 通所が無い人(一度も来ていない人)はAI不要で「実施できなかった」既定で作成。
     const noKey = !(appData.systemSettings?.anthropicApiKey||'').trim();
     // ★ 利用者を選択していない場合は全員生成せず、選択を促す
     const targets = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
-    if (!targets.length) { alert('利用者を選択してください（チェックを付けた方のみ下書きします）'); return; }
+    if (!targets.length) { monAlert('利用者を選択してください（チェックを付けた方のみ下書きします）'); return; }
     const attCount = targets.filter(p => hasAttendance(p)).length;
     if (noKey && attCount > 0) {
-      if (!window.confirm(`APIキーが未設定のため、通所がある ${attCount}名 はスキップし、通所が無い方のみ「実施できなかった」で作成します。\n（通所がある方もAIで作成するには 各種設定→モニタリング でAPIキーを設定してください）\n続行しますか？`)) return;
+      if (!await monConfirm(`APIキーが未設定のため、通所がある ${attCount}名 はスキップし、通所が無い方のみ「実施できなかった」で作成します。\n（通所がある方もAIで作成するには 各種設定→モニタリング でAPIキーを設定してください）\n続行しますか？`)) return;
     } else {
       const _aiNote = attCount > _aiRemaining ? `\n※ ${tM}月分のAI下書きは残り${_aiRemaining}回です。通所がある${attCount}名のうち、先着${_aiRemaining}名のみAIで下書きし、超過分は既定値で作成します（手直しで仕上げてください）。` : `\n（${tM}月分のAI下書き残り${_aiRemaining}回）`;
-      if (!window.confirm(`${targets.length}名のモニタリング表を作成し、個人ファイルに保存します。\n（通所がある方はAI下書き／一度も来ていない方は「実施できなかった」。既に作成済みの月は上書き）${_aiNote}\nよろしいですか？`)) return;
+      if (!await monConfirm(`${targets.length}名のモニタリング表を作成し、個人ファイルに保存します。\n（通所がある方はAI下書き／一度も来ていない方は「実施できなかった」。既に作成済みの月は上書き）${_aiNote}\nよろしいですか？`)) return;
     }
     cancelRef.current = false;
     setSheetBatchProg({ done:0, total:targets.length });
@@ -42932,7 +42938,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     if (dirtyRef) dirtyRef.current = false;
   };
   const updateSheetInline = (patient, key, field, value) => {
-    if (_monthLocked) { alert('当月分のモニタリングは毎月15日以降に記入できます。'); return; }
+    if (_monthLocked) { monAlert('当月分のモニタリングは毎月15日以降に記入できます。'); return; }
     const rec = getSheetRecord(patient.id);
     if (rec && rec.confirmed) return; // ★ 確定済みは編集不可
     const base = getOrInitSheetFor(patient);
@@ -42947,9 +42953,9 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   };
   // ★ 一覧の1行をAIで下書き (手入力済みの内容は残してAIは空欄のみ補完)。 確定はしない。
   const aiDraftRow = async (patient) => {
-    if (_monthLocked) { alert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
-    if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { alert('各種設定→モニタリングでAPIキーを設定してください'); return; }
-    if (_aiRemaining <= 0) { alert(`${tM}月分のAI下書きの上限（利用者${_aiActiveCount}名×2回＝${_aiLimit}回）に達しました。\nこの月の分は手入力でご対応ください。`); return; }
+    if (_monthLocked) { monAlert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
+    if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { monAlert('各種設定→モニタリングでAPIキーを設定してください'); return; }
+    if (_aiRemaining <= 0) { monAlert(`${tM}月分のAI下書きの上限（利用者${_aiActiveCount}名×2回＝${_aiLimit}回）に達しました。\nこの月の分は手入力でご対応ください。`); return; }
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
       const out = await aiDraftSheet(patient);
@@ -42962,12 +42968,12 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     }
   };
   // ★ 一括作成(既定): 全員にモニタリング表を作成(通所ありは下書き文/通所なしは実施できなかった)。 AI不要・即保存
-  const createAllDefault = () => {
-    if (_monthLocked) { alert('当月分の作成・保存は毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
+  const createAllDefault = async () => {
+    if (_monthLocked) { monAlert('当月分の作成・保存は毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
     // ★ 未選択なら全員作成せず選択を促す
     const targets = [...attendedPats, ...absentPats].filter(p=>checkedIds.has(p.id));
-    if (!targets.length) { alert('利用者を選択してください（チェックを付けた方のみ作成します）'); return; }
-    if (!window.confirm(`${targets.length}名にモニタリング表を作成し、個人ファイルへ保存します。\n（既存の手入力は残します。確定はしません）よろしいですか？`)) return;
+    if (!targets.length) { monAlert('利用者を選択してください（チェックを付けた方のみ作成します）'); return; }
+    if (!await monConfirm(`${targets.length}名にモニタリング表を作成し、個人ファイルへ保存します。\n（既存の手入力は残します。確定はしません）よろしいですか？`)) return;
     let existing = [...(appData.monitoringRecords||[])];
     const newResults = {};
     for (const p of targets) {
@@ -42990,15 +42996,15 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     memo: (getSheetRecord(p.id)?.summary)||'', timestamp: new Date().toISOString(),
   });
   // ★ 担当ケアマネへFAX(一括): 作成済みのモニタリング表を、利用者ごとの担当ケアマネ(cmOffice/cmName)宛てで出力＋送付履歴に記録
-  const faxToCareManagers = () => {
+  const faxToCareManagers = async () => {
     const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
     const targets = (checked.length ? checked : [...attendedPats, ...absentPats]).filter(p => getSheetRecord(p.id));
-    if (!targets.length) { alert('作成済みのモニタリング表がありません。先に「AIで下書き」または「個人ファイルに保存」で作成してください。'); return; }
+    if (!targets.length) { monAlert('作成済みのモニタリング表がありません。先に「AIで下書き」または「個人ファイルに保存」で作成してください。'); return; }
     const noCm = targets.filter(p => !((p.cmOffice||'').trim()));
     if (noCm.length) {
-      if (!window.confirm(`担当ケアマネ事業所が未設定の方が ${noCm.length}名 います（${noCm.slice(0,3).map(p=>p.name).join('、')}${noCm.length>3?' ほか':''}）。\n宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）`)) return;
+      if (!await monConfirm(`担当ケアマネ事業所が未設定の方が ${noCm.length}名 います（${noCm.slice(0,3).map(p=>p.name).join('、')}${noCm.length>3?' ほか':''}）。\n宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）`)) return;
     }
-    if (!window.confirm(`${targets.length}名のモニタリング表を、それぞれの担当ケアマネ宛て（宛先自動）で出力します。\n送付履歴にも記録します。よろしいですか？`)) return;
+    if (!await monConfirm(`${targets.length}名のモニタリング表を、それぞれの担当ケアマネ宛て（宛先自動）で出力します。\n送付履歴にも記録します。よろしいですか？`)) return;
     const pages = targets.map(p => buildSheetHtml(p, getSheetRecord(p.id).sheet, true, true)).join('');
     const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${pages}</div>`;
     const title = `モニタリング表_ケアマネ送付_${monthLabelStr}_${targets.length}名`;
@@ -43014,14 +43020,14 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     if (autoFax?.running) return;
     const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
     const targets = (checked.length ? checked : [...attendedPats, ...absentPats]).filter(p => getSheetRecord(p.id));
-    if (!targets.length) { alert('作成済みのモニタリング表がありません。先に作成してください。'); return; }
+    if (!targets.length) { monAlert('作成済みのモニタリング表がありません。先に作成してください。'); return; }
     const withFax = targets.filter(p => (p.cmFax||'').trim());
     const noFax = targets.filter(p => !(p.cmFax||'').trim());
-    if (!withFax.length) { alert('担当ケアマネのFAX番号が登録されている利用者がいません。\n利用者マスタの「担当ケアマネ FAX」を設定してください。'); return; }
+    if (!withFax.length) { monAlert('担当ケアマネのFAX番号が登録されている利用者がいません。\n利用者マスタの「担当ケアマネ FAX」を設定してください。'); return; }
     let msg = `${withFax.length}名分のモニタリング表を、各担当ケアマネのFAX番号へ【自動送信】します。`;
     if (noFax.length) msg += `\n※ FAX番号 未登録の ${noFax.length}名（${noFax.slice(0,3).map(p=>p.name).join('、')}${noFax.length>3?' ほか':''}）は送信されません。`;
     msg += `\n\n送信は外部FAXサービス（従量課金）の対象です。よろしいですか？`;
-    if (!window.confirm(msg)) return;
+    if (!await monConfirm(msg)) return;
     setAutoFax({ running:true, total:withFax.length, done:0, results:[] });
     const results = [];
     for (const p of withFax) {
@@ -43046,10 +43052,10 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     setAutoFax(prev => ({ ...prev, running:false, results, noFaxCount: noFax.length }));
   };
   // ★ 担当ケアマネへFAX(1名): この利用者のモニタリング表を担当ケアマネ宛てで出力＋送付履歴に記録
-  const faxRowToCareManager = (patient) => {
+  const faxRowToCareManager = async (patient) => {
     const rec = getSheetRecord(patient.id);
     const sheet = (rec&&rec.sheet) ? rec.sheet : getOrInitSheetFor(patient);
-    if (!((patient.cmOffice||'').trim())) { if(!window.confirm('この利用者は担当ケアマネ事業所が未設定です。宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）')) return; }
+    if (!((patient.cmOffice||'').trim())) { if(!await monConfirm('この利用者は担当ケアマネ事業所が未設定です。宛先を空欄のまま出力しますか？\n（利用者マスタで「居宅介護支援事業所」を設定すると宛先が自動で入ります）')) return; }
     const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${buildSheetHtml(patient, sheet, true, false)}</div>`;
     const title = `モニタリング表_${patient.name}_${monthLabelStr}`;
     onSave({...appData, faxHistory:[_monFaxEntry(patient), ...(appData.faxHistory||[])]}, {manual:true, message:`✓ ${patient.name}様のモニタリング表を担当ケアマネ宛てで出力しました`});
@@ -43062,7 +43068,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const previewSheets = () => {
     const checked = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
     const targets = checked.length ? checked : [...attendedPats, ...absentPats];
-    if (!targets.length) { alert('対象の利用者がいません'); return; }
+    if (!targets.length) { monAlert('対象の利用者がいません'); return; }
     const pages = targets.map(p => { const rec=getSheetRecord(p.id); const sheet = (rec&&rec.sheet) ? rec.sheet : getOrInitSheetFor(p); return buildSheetHtml(p, sheet, true, true); }).join('');
     const html = `<div style="font-family:'Hiragino Sans','Meiryo','Yu Gothic Medium','MS PGothic',sans-serif;">${pages}</div>`;
     const title = `通所介護モニタリング表_${monthLabelStr}_${targets.length}名`;
@@ -43085,7 +43091,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       setCopiedId(id);
       setTimeout(()=>setCopiedId(null), 2000);
     } catch(e) {
-      alert('コピーに失敗しました');
+      monAlert('コピーに失敗しました');
     }
   };
 
@@ -43720,6 +43726,16 @@ ${optionsDesc}
           />
         );
       })()}
+      {monDialog && ReactDOM.createPortal(
+        <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:1000000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
+          <div style={{background:'white',borderRadius:16,padding:'20px 22px',width:420,maxWidth:'100%',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+            <div style={{fontSize:13,color:'#1e293b',whiteSpace:'pre-wrap',lineHeight:1.7,marginBottom:16}}>{monDialog.msg}</div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              {monDialog.confirm && <button onClick={monDialog.ng} style={{padding:'8px 18px',borderRadius:10,border:'1px solid #cbd5e1',background:'#f1f5f9',color:'#334155',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>}
+              <button autoFocus onClick={monDialog.ok} style={{padding:'8px 18px',borderRadius:10,border:'none',background:'#2563eb',color:'white',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>OK</button>
+            </div>
+          </div>
+        </div>, document.body)}
     </div>
   );
 }

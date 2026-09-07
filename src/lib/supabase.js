@@ -34,7 +34,13 @@ export function syncLog(ev, detail) {
     const d = new Date();
     const hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0'), ss = String(d.getSeconds()).padStart(2,'0');
     arr.push({ t: `${hh}:${mm}:${ss}`, n: (arr.length ? (Number(arr[arr.length-1].n)||0) + 1 : 1), ev, d: detail || null });
-    localStorage.setItem(_SYNCLOG_KEY, JSON.stringify(arr.slice(-120)));
+    try {
+      localStorage.setItem(_SYNCLOG_KEY, JSON.stringify(arr.slice(-120)));
+    } catch {
+      // ★ 容量超過(QuotaExceeded)でもログを止めない(2026-09-07): 20件へ切り詰めて再試行。
+      //   これが無いと容量超過の端末はログが凍結し、遠隔診断(diag行)が古いままになる。
+      try { localStorage.setItem(_SYNCLOG_KEY, JSON.stringify(arr.slice(-20))); } catch {}
+    }
   } catch {}
 }
 export function getSyncLog() { try { return JSON.parse(localStorage.getItem(_SYNCLOG_KEY) || '[]'); } catch { return []; } }
