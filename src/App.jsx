@@ -23061,9 +23061,21 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-600 mb-1.5">振替理由 <span className="text-[10px] font-normal text-slate-400">（今日の「欠席」記録の理由として記載されます）</span></label>
+                  {/* ★ 振替理由も大分類→詳細の2段構え(2026-09-07 店舗要望) */}
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {ABS_REASON_CATS.map(r => (
+                      <button key={r} type="button" onClick={() => setStatusModal(s => ({...s, reasonCat: s.reasonCat===r ? '' : r}))}
+                        className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${statusModal.reasonCat===r ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
                   <textarea value={statusModal.substituteReason} onChange={e => setStatusModal(s => ({...s, substituteReason: e.target.value}))}
-                    placeholder="例：通院のため..." rows={2}
+                    placeholder="詳細（例: 発熱38度 / 脳外科受診 など）" rows={2}
                     className="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm outline-none resize-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100" />
+                  {(statusModal.reasonCat || (statusModal.substituteReason||'').trim()) && (
+                    <div className="text-[11px] text-slate-500 mt-1.5">記録される理由: <b className="text-slate-700">{composeAbsReason(statusModal.reasonCat, statusModal.substituteReason)}</b></div>
+                  )}
                 </div>
                 {statusModal.furikaeDate && (()=>{
                   const d = new Date(statusModal.furikaeDate);
@@ -23116,7 +23128,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             )}
             <div className="flex gap-3 mt-5">
               <button onClick={() => setStatusModal(s => ({...s, isOpen: false}))} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">キャンセル</button>
-              <button onClick={() => { const _rsn = statusModal.status==='欠席' ? composeAbsReason(statusModal.reasonCat, statusModal.reason) : statusModal.reason; applyStatusChange(statusModal.id, statusModal.status, _rsn, statusModal.furikaeDate, statusModal.substituteReason, statusModal.furikaeAmpm||'AM', statusModal.pauseFromDate, statusModal.pauseToDate); setStatusModal(s => ({...s, isOpen: false})); }}
+              <button onClick={() => { const _rsn = statusModal.status==='欠席' ? composeAbsReason(statusModal.reasonCat, statusModal.reason) : statusModal.reason; const _sub = statusModal.status==='振替' ? composeAbsReason(statusModal.reasonCat, statusModal.substituteReason) : statusModal.substituteReason; applyStatusChange(statusModal.id, statusModal.status, _rsn, statusModal.furikaeDate, _sub, statusModal.furikaeAmpm||'AM', statusModal.pauseFromDate, statusModal.pauseToDate); setStatusModal(s => ({...s, isOpen: false})); }}
                 className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${statusModal.status==='休止'?'bg-orange-600 hover:bg-orange-700':'bg-blue-600 hover:bg-blue-700'}`}>確定</button>
             </div>
           </div>
@@ -32339,7 +32351,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
       return;
     }
     if (newStatus === '振替') {
-      setFurikaeModal({ isOpen: true, day, ampm: ap, fromDate: "", reason: "", mode: isBase ? 'forward' : 'backward' });
+      setFurikaeModal({ isOpen: true, day, ampm: ap, fromDate: "", reason: "", reasonCat: "", mode: isBase ? 'forward' : 'backward' });
       return;
     }
     if (newStatus === '休止') {
@@ -32409,7 +32421,7 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
     const _mode = furikaeModal.mode || 'forward';
     const _clickedDay = furikaeModal.day;
     const _clickedAmpm = furikaeModal.ampm;
-    const _reason = furikaeModal.reason;
+    const _reason = composeAbsReason(furikaeModal.reasonCat, furikaeModal.reason); // ★ 大分類（詳細）形式(2026-09-07)
     // 最初にモーダルを閉じる (確定ボタンで確実に閉じるため)
     setFurikaeModal({ isOpen: false, day: null, ampm: "", fromDate: "", reason: "", mode: 'forward' });
     if (!_fromDate) return;
@@ -35017,7 +35029,23 @@ function MasterView({ appData, onSave, targetPatientId, navigateTo, onPatientCha
                   )}
                 </div>
               )}
-              <div><label className="text-xs font-bold text-slate-500 block mb-1">欠席理由（任意）</label><input type="text" value={furikaeModal.reason} onChange={e => setFurikaeModal({ ...furikaeModal, reason: e.target.value })} placeholder="例: 通院のため振替" className="w-full p-3 bg-white border border-slate-300 rounded-xl font-bold outline-none" /></div>
+              {/* ★ 欠席理由も大分類→詳細の2段構え(2026-09-07 店舗要望) */}
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">欠席理由（大分類・任意）</label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {ABS_REASON_CATS.map(r => (
+                    <button key={r} type="button" onClick={() => setFurikaeModal(prev => ({...prev, reasonCat: prev.reasonCat===r ? '' : r}))}
+                      className={`px-3 py-1 rounded-full text-xs font-bold border transition-all ${furikaeModal.reasonCat===r ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-100 text-slate-600 border-slate-200 hover:border-slate-400'}`}>
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">詳細（任意）</label>
+                <input type="text" value={furikaeModal.reason} onChange={e => setFurikaeModal({ ...furikaeModal, reason: e.target.value })} placeholder="例: 発熱38度 / 脳外科受診 など" className="w-full p-3 bg-white border border-slate-300 rounded-xl font-bold outline-none" />
+                {(furikaeModal.reasonCat || (furikaeModal.reason||'').trim()) && (
+                  <div className="text-[11px] text-slate-500 mt-1.5">記録される理由: <b className="text-slate-700">{composeAbsReason(furikaeModal.reasonCat, furikaeModal.reason)}</b></div>
+                )}
+              </div>
               {furikaeModal.fromDate && (()=>{const d=new Date(furikaeModal.fromDate);const dn=['日','月','火','水','木','金','土'];return <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3 text-sm"><div className="font-bold text-emerald-700">{otherLabel}：{d.getMonth()+1}月{d.getDate()}日（{dn[d.getDay()]}）{(furikaeModal.furikaeAmpm||'AM')==='AM'?'午前':'午後'}</div></div>;})()}
             </div>
             <div className="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3"><button onClick={() => setFurikaeModal({ isOpen: false, day: null, ampm: "", fromDate: "", reason: "", mode: 'forward' })} className="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-200 text-sm">キャンセル</button><button disabled={!furikaeModal.fromDate} onClick={subFuri} className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-lg active:scale-95 text-sm disabled:opacity-40">確定</button></div>
@@ -38379,7 +38407,8 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             const sr=(_log.patientRows||[])[i]||{};
             const isAbsent = pt ? (pt.status==='欠席'||pt.status==='休業') : false;
             const statusLabel = pt ? pt.status : '';
-            const statusColor = statusLabel==='出席'?'#1d4ed8':statusLabel==='欠席'?'#dc2626':statusLabel==='予定'?'#999':'#555';
+            // ★ 月間スケジュールの状態色に統一(2026-09-07 店舗要望): 出席=青/欠席=赤/振替=緑/休止=オレンジ/休業=グレー
+            const statusColor = statusLabel==='出席'?'#2563eb':statusLabel==='欠席'?'#dc2626':statusLabel==='振替'?'#059669':statusLabel==='休止'?'#f97316':statusLabel==='休業'?'#64748b':statusLabel==='予定'?'#999':'#555';
             // 介護度を略称変換
             const abbrCare = (cl) => {
               if(!cl) return '';
