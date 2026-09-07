@@ -44806,6 +44806,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // ★ 定型文（連絡事項に挿入できる登録・編集・削除可能なテンプレート）
   const [showTemplates, setShowTemplates] = React.useState(false);
   const [tplEdit, setTplEdit] = React.useState(null); // {id?, title, body} を編集中
+  const [tplOpenId, setTplOpenId] = React.useState(null); // ★ 展開中の定型文id(2026-09-07 店舗要望: 一覧はタイトルのみ・タップで本文展開)
   const faxTemplates = appData.generalFaxTemplates || [];
   const _saveTemplates = (list) => onSave && onSave({ ...appData, generalFaxTemplates: list });
   const _upsertTemplate = () => {
@@ -45240,17 +45241,26 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                 {faxTemplates.length === 0 && (
                   <div style={{fontSize:13,color:'#64748b',padding:'16px 0',textAlign:'center'}}>定型文がありません。「＋ 新規追加」から登録してください。</div>
                 )}
-                {faxTemplates.map(t => (
-                  <div key={t.id} style={{border:'1px solid #e2e8f0',borderRadius:10,padding:12,marginBottom:10}}>
-                    <div style={{fontWeight:'bold',marginBottom:4,color:'#1e293b'}}>{t.title || '（無題）'}</div>
-                    <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginBottom:10,maxHeight:96,overflow:'hidden'}}>{t.body}</div>
-                    <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-                      <button onClick={()=>_insertTemplate(t)} style={{background:'#0f766e',border:'none',color:'white',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>連絡事項に挿入</button>
-                      <button onClick={()=>setTplEdit({...t})} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>編集</button>
-                      <button onClick={()=>{ if(window.confirm('この定型文を削除しますか？')) _deleteTemplate(t.id); }} style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
-                    </div>
+                {/* ★ 一覧はタイトルのみ表示・タップで本文と操作ボタンを展開(2026-09-07 店舗要望: 画面領域を節約して多くの定型文を見渡せるように) */}
+                {faxTemplates.map(t => { const _open = tplOpenId === t.id; return (
+                  <div key={t.id} style={{border:'1px solid #e2e8f0',borderRadius:10,marginBottom:8,overflow:'hidden'}}>
+                    <button onClick={()=>setTplOpenId(_open ? null : t.id)}
+                      style={{width:'100%',display:'flex',alignItems:'center',gap:8,background:_open?'#f8fafc':'white',border:'none',padding:'10px 12px',cursor:'pointer',textAlign:'left'}}>
+                      <span style={{color:'#94a3b8',fontSize:11,flexShrink:0}}>{_open?'▼':'▶'}</span>
+                      <span style={{fontWeight:'bold',color:'#1e293b',fontSize:13,flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.title || '（無題）'}</span>
+                    </button>
+                    {_open && (
+                      <div style={{padding:'0 12px 12px'}}>
+                        <div style={{fontSize:12,color:'#475569',whiteSpace:'pre-wrap',marginBottom:10,maxHeight:180,overflow:'auto',borderTop:'1px solid #f1f5f9',paddingTop:8}}>{t.body}</div>
+                        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                          <button onClick={()=>_insertTemplate(t)} style={{background:'#0f766e',border:'none',color:'white',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>連絡事項に挿入</button>
+                          <button onClick={()=>setTplEdit({...t})} style={{background:'#e2e8f0',border:'none',color:'#334155',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>編集</button>
+                          <button onClick={()=>{ if(window.confirm('この定型文を削除しますか？')) _deleteTemplate(t.id); }} style={{background:'#fee2e2',border:'none',color:'#b91c1c',borderRadius:6,padding:'5px 12px',fontWeight:'bold',fontSize:12,cursor:'pointer'}}>削除</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
+                ); })}
                 <button onClick={()=>setTplEdit({title:'',body:''})} style={{width:'100%',marginTop:6,background:'#0369a1',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>＋ 新規追加</button>
                 <button onClick={()=>setTplEdit({ title: (subject||'').trim(), body: memo || '', size: memoStyle.size, underline: memoStyle.underline })}
                         style={{width:'100%',marginTop:8,background:'#0f766e',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>
@@ -45275,9 +45285,10 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
                   <button onClick={()=>setTplEdit(pv=>({...pv,underline:!pv.underline}))}
                           style={{padding:'6px 14px',borderRadius:8,fontWeight:'bold',fontSize:12,cursor:'pointer',border:'1px solid #cbd5e1',background:tplEdit.underline?'#1d4ed8':'white',color:tplEdit.underline?'white':'#334155',textDecoration:'underline'}}>下線</button>
                 </div>
+                {/* ★ ボタン配置をアプリ標準に統一(2026-09-07 店舗要望): 左=キャンセル・右=保存 */}
                 <div style={{display:'flex',gap:8}}>
-                  <button onClick={_upsertTemplate} style={{flex:1,background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
                   <button onClick={()=>setTplEdit(null)} style={{flex:1,background:'#e2e8f0',border:'none',color:'#334155',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>キャンセル</button>
+                  <button onClick={_upsertTemplate} style={{flex:1,background:'#2563eb',border:'none',color:'white',borderRadius:8,padding:'10px',fontWeight:'bold',fontSize:13,cursor:'pointer'}}>保存</button>
                 </div>
               </div>
             )}
