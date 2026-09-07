@@ -17965,7 +17965,10 @@ export default function App() {
           //   まだクラウドに無い/端末内が新しい記録が古いクラウド値で消える
           //   (体力測定を保存→一瞬出て消える、の原因)。 id 単位で「端末内が新しい/クラウドに無い」を保持。
           if (prev && prev._sbStoreId === newStoreId) {
-            const _RK = ['fitnessRecords','monitoringRecords','dailyLogs','initialReports','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory'];
+            // ★ 2026-09-07 定型文消失対応: 各種連絡の定型文(generalFaxTemplates)がこの保持リストに無く、
+            //   保存→push完了前のpullで消えていた。同様に漏れていた id持ち配列を一括追加
+            //   (familyAnnouncements/familyPersonalAnnouncements/familyPhotos/adlRecords/trashedAnnouncements。storeMembersは削除経路に墓石が無く復活リスクがあるため対象外)。
+            const _RK = ['fitnessRecords','monitoringRecords','dailyLogs','initialReports','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory','generalFaxTemplates','adlRecords','trashedAnnouncements','familyAnnouncements','familyPersonalAnnouncements','familyPhotos'];
             _RK.forEach(_key => {
               const _prevArr = prev[_key];
               if (!Array.isArray(_prevArr) || !_prevArr.length) return;
@@ -18048,6 +18051,50 @@ export default function App() {
               });
               if (_dlKept > 0) { merged.diaryLogs = outLogs; _mergedForPush = merged; syncLog('pull-preserve', { key: 'diaryLogs', kept: _dlKept }); }
             } catch (e) { console.warn('[pull preserve] diaryLogs failed', e); }
+          }
+          // ★ 休み連絡の状態(faxDataStore)・各種連絡の下書き(generalFaxDraft)・勤務表(workSchedule)も
+          //   pull で保持する(2026-09-07 定型文消失対応の水平展開。push側 mergeStates と同じ判定)。
+          if (prev && prev._sbStoreId === newStoreId) {
+            try {
+              // faxDataStore: 「日付|利用者」キー単位で _updatedAt の新しい方
+              const lf = prev.faxDataStore, cf = merged.faxDataStore;
+              if (lf && typeof lf === 'object') {
+                const out = { ...(cf && typeof cf === 'object' ? cf : {}) }; let ch = false;
+                Object.keys(lf).forEach(k => {
+                  const lv = lf[k], cv = out[k];
+                  if (!cv) { out[k] = lv; ch = true; return; }
+                  if ((Number(lv && lv._updatedAt) || 0) > (Number(cv._updatedAt) || 0)) { out[k] = lv; ch = true; }
+                });
+                if (ch) { merged.faxDataStore = out; _mergedForPush = merged; }
+              }
+              // generalFaxDraft: 全体で _updatedAt の新しい方
+              const ld = prev.generalFaxDraft, cd = merged.generalFaxDraft;
+              if (ld && typeof ld === 'object' && (Number(ld._updatedAt) || 0) > (Number(cd && cd._updatedAt) || 0)) {
+                merged.generalFaxDraft = ld; _mergedForPush = merged;
+              }
+              // workSchedule: 「月×スタッフ」セル単位で _wsTs の新しい方(手元が新しいセルだけ保持)
+              const lws = prev.workSchedule, cws = merged.workSchedule;
+              if (lws && typeof lws === 'object') {
+                const lTs = (prev._wsTs && typeof prev._wsTs === 'object') ? prev._wsTs : {};
+                const cTs = (merged._wsTs && typeof merged._wsTs === 'object') ? merged._wsTs : {};
+                const outWs = { ...(cws && typeof cws === 'object' ? cws : {}) };
+                const outTs = { ...cTs }; let wch = false;
+                Object.keys(lws).forEach(mk => {
+                  const lm = lws[mk] || {}, lmTs = lTs[mk] || {};
+                  Object.keys(lm).forEach(sid => {
+                    const lt2 = Number(lmTs[sid]) || 0;
+                    const ct2 = Number((cTs[mk] || {})[sid]) || 0;
+                    const hasC = outWs[mk] && Object.prototype.hasOwnProperty.call(outWs[mk], sid);
+                    if (!hasC ? lt2 >= ct2 : lt2 > ct2) {
+                      outWs[mk] = { ...(outWs[mk] || {}), [sid]: lm[sid] };
+                      outTs[mk] = { ...(outTs[mk] || {}), [sid]: lt2 };
+                      wch = true;
+                    }
+                  });
+                });
+                if (wch) { merged.workSchedule = outWs; merged._wsTs = outTs; _mergedForPush = merged; }
+              }
+            } catch (e) { console.warn('[pull preserve] fax/ws failed', e); }
           }
           // ★ お知らせの既読(noticeReads)は pull で巻き戻さない。 pull は丸ごと置換なので、
           //   既読にした直後(push完了前)に受信すると未読へ戻ってしまう
@@ -19088,7 +19135,9 @@ export default function App() {
       //   これで「意図的に空にした→反映」「触っていない空欄→他端末の入力を消さない(バイタル復活の事故防止)」を両立。
       const _FIELD_TS_KEYS = new Set(['ticketRecords','dailyLogs']);
       const _obsStat = { rows:0, un:0, mis:0, unEx:'', misEx:'' };   // ★ 観察モード集計(ticketRecordsのみ・挙動不変)
-      ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory'].forEach(_key => {
+      // ★ 2026-09-07 定型文消失対応: generalFaxTemplates/adlRecords/storeMembers/trashedAnnouncements/familyPhotos も
+      //   _savedAt を刻む(マージ・pull保持の対象にするため。id持ち配列であることを確認済み)
+      ['ticketRecords','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','dailyLogs','faxHistory','generalFaxTemplates','adlRecords','trashedAnnouncements'].forEach(_key => {
         if (!Array.isArray(newData[_key]) || !Array.isArray(prev[_key])) return;
         const _pm = new Map(prev[_key].map(r => [String(r && r.id), r]));
         const _fieldLevel = _FIELD_TS_KEYS.has(_key);
@@ -41741,7 +41790,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
     setEditing(null);
   };
   React.useEffect(()=>{ if(saveFnRef) saveFnRef.current = ()=>{ if(editing) save(); }; });
-  const delRec = (id)=>{ if(!window.confirm('このADL評価を削除しますか？')) return; onSave({ ...appData, adlRecords:(appData.adlRecords||[]).filter(r=>r.id!==id) }, { manual:true, message:'削除しました' }); if(editing?.id===id) setEditing(null); };
+  const delRec = (id)=>{ if(!window.confirm('このADL評価を削除しますか？')) return; const _t={...(appData.deletedIds||{})}; _t.adlRecords={...(_t.adlRecords||{}), [String(id)]: Date.now()}; /* ★墓石: id単位マージ対象化に伴い復活防止(2026-09-07) */ onSave({ ...appData, adlRecords:(appData.adlRecords||[]).filter(r=>r.id!==id), deletedIds: _t }, { manual:true, message:'削除しました' }); if(editing?.id===id) setEditing(null); };
   const enabledKasan = [
     ['kasan_kinou2','個別機能訓練加算Ⅱ','個別機能訓練計画（3-3/3-1/3-2）＋ADLをLIFEへ。'],
     ['kasan_kagaku','科学的介護推進体制加算','ADL・IADL・口腔・栄養・認知症・既往等の総論を概ね3ヶ月ごとにLIFEへ。'],
@@ -44770,7 +44819,12 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     _saveTemplates(list);
     setTplEdit(null);
   };
-  const _deleteTemplate = (id) => { _saveTemplates(faxTemplates.filter(t => t.id !== id)); };
+  const _deleteTemplate = (id) => {
+    // ★ 墓石を積む(2026-09-07): id単位マージの対象になったため、墓石が無いと他端末から削除済み定型文が復活する
+    const _t = { ...(appData.deletedIds || {}) };
+    _t.generalFaxTemplates = { ...(_t.generalFaxTemplates || {}), [String(id)]: Date.now() };
+    onSave && onSave({ ...appData, generalFaxTemplates: faxTemplates.filter(t => t.id !== id), deletedIds: _t });
+  };
   const _insertTemplate = (t) => {
     setMemo(m => (m && m.trim()) ? (m.replace(/\s+$/, '') + '\n' + (t.body || '')) : (t.body || ''));
     if (t.size || t.underline) setMemoStyle({ size: t.size || 'std', underline: !!t.underline });   // 定型文の書式を本文へ適用

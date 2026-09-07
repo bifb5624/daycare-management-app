@@ -1018,7 +1018,9 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
     // 記録系の配列は id 単位でマージ (どちらの端末の記録も残す)。
     // ※ patients/systemSettings は _savedAt が無く、 record 保存時に誤って古い内容で
     //   上書きする恐れがあるためマージ対象に含めない (= 従来どおり編集端末の値を採用)。
-    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory','auditLog'];
+    // ★ 2026-09-07: generalFaxTemplates(各種連絡の定型文)/adlRecords/storeMembers/trashedAnnouncements を追加。
+    //   マージ対象外のキーはローカル優先で丸ごと置換されるため、片方の端末で消えた状態が他端末の追加を潰していた。
+    const ARRAY_KEYS = ['ticketRecords','dailyLogs','monitoringRecords','fitnessRecords','initialReports','familyAnnouncements','familyPersonalAnnouncements','familyPhotos','kinouKeikakuRecords','seikatsuKinouRecords','kyomiKanshinRecords','tsushoKeikakuRecords','scheduleEvents','faxHistory','auditLog','generalFaxTemplates','adlRecords','trashedAnnouncements'];
     // ★ 削除した記録の墓石(tombstone)を local+cloud で統合。 これが無いと「id単位の和集合マージ」で
     //   削除した記録がもう片方(クラウド)から復活してしまう。 墓石にあるidはマージ後に除外する。
     // ★ 店舗タグ検証: 他店タグ付きの墓石一式は和集合前に読み捨てる(validateTombStore 参照)
