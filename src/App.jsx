@@ -40788,8 +40788,16 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                 <div key={k} className="mb-3 last:mb-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="text-xs font-bold text-slate-600 w-16">{t}</span>
-                    <div className="flex items-center gap-1"><input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-36"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing[k+'SetDate'])||parseJpMonth(editing[k+'SetDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({[k+'SetDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/></div>
-                    <div className="flex items-center gap-1"><input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing[k+'DueDate'])||parseJpMonth(editing[k+'DueDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({[k+'DueDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/></div>
+                    <div className="flex items-center gap-1 flex-wrap"><input value={editing[k+'SetDate']||''} onChange={e=>upd({[k+'SetDate']:e.target.value})} placeholder="設定日(例:令和7年4月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-36"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing[k+'SetDate'])||parseJpMonth(editing[k+'SetDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({[k+'SetDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/>
+                      {/* ★ 今日ボタン(2026-09-08 店舗要望): 手打ちせず今日の和暦を入れる */}
+                      <button type="button" onClick={()=>{const d=new Date();upd({[k+'SetDate']:`令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`});}} className="px-1.5 py-0.5 rounded border border-slate-300 bg-white text-[10px] font-bold text-slate-500 hover:bg-slate-100">今日</button></div>
+                    <div className="flex items-center gap-1 flex-wrap"><input value={editing[k+'DueDate']||''} onChange={e=>upd({[k+'DueDate']:e.target.value})} placeholder="達成予定日(例:令和8年3月)" className="px-2 py-1 border border-slate-300 rounded text-xs outline-none w-40"/><CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(editing[k+'DueDate'])||parseJpMonth(editing[k+'DueDate']);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{upd({[k+'DueDate']:v?`令和${new Date(v).getFullYear()-2018}年${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/>
+                      {/* ★ 達成予定日の自動入力(2026-09-08 店舗要望): 設定日(未入力なら今日)から加算。一般的には短期=3か月・長期=6か月〜1年 */}
+                      {[[3,'+3か月'],[6,'+6か月'],[12,'+1年']].map(([m,l])=>(
+                        <button key={m} type="button" title="設定日(未入力なら今日)から自動計算します"
+                          onClick={()=>{const base=parseJpDate(editing[k+'SetDate'])||parseJpMonth(editing[k+'SetDate'])||new Date();const d=new Date(base);d.setMonth(d.getMonth()+m);upd({[k+'DueDate']:`令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`});}}
+                          className="px-1.5 py-0.5 rounded border border-slate-300 bg-white text-[10px] font-bold text-slate-500 hover:bg-slate-100">{l}</button>
+                      ))}</div>
                     {k==='long' && <button onClick={copyLongPeriodToServices} className="px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-[11px] font-bold whitespace-nowrap">期間を①〜⑤へコピー</button>}
                     <span className="text-[11px] text-slate-400 ml-1">達成度</span>
                     {TK_ACHIEVE.map(o=>(
@@ -40808,11 +40816,12 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
                   <div key={i} className="bg-slate-50 rounded-lg p-3 border border-slate-200">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-base font-bold text-blue-700">{TK_MARU[i]}</span>
-                      <input value={sv.from||''} onChange={e=>updSvc(i,{from:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-20"/>
-                      <CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(sv.from);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{updSvc(i,{from:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/>
+                      {/* ★ 期間は和暦込みで入力(2026-09-08 店舗要望): カレンダー選択で「令和○年○月○日」が自動で入る */}
+                      <input value={sv.from||''} onChange={e=>updSvc(i,{from:e.target.value})} placeholder="令和○年○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-32"/>
+                      <CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(sv.from);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{const d=v?new Date(v):null; updSvc(i,{from:d?`令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`:''});}}/>
                       <span className="text-xs text-slate-400">〜</span>
-                      <input value={sv.to||''} onChange={e=>updSvc(i,{to:e.target.value})} placeholder="○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-20"/>
-                      <CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(sv.to);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{updSvc(i,{to:v?`${new Date(v).getMonth()+1}月${new Date(v).getDate()}日`:''});}}/>
+                      <input value={sv.to||''} onChange={e=>updSvc(i,{to:e.target.value})} placeholder="令和○年○月○日" className="px-2 py-1 bg-white border border-slate-300 rounded text-xs outline-none w-32"/>
+                      <CalendarPickBtn size="xs" iso={(()=>{const d=parseJpDate(sv.to);return d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';})()} onPick={v=>{const d=v?new Date(v):null; updSvc(i,{to:d?`令和${d.getFullYear()-2018}年${d.getMonth()+1}月${d.getDate()}日`:''});}}/>
                     </div>
                     <KKField label="目的とケアの提供方針・内容" value={sv.content} onChange={v=>updSvc(i,{content:v})} rows={2}/>
                     <div className="grid md:grid-cols-3 gap-3 mt-2">
@@ -41001,12 +41010,12 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
         // --- Ⅱ 利用目標 (固定ラベル列は細く、入力欄=利用目標を最大化) ---
         const goalRow=(t,setD,dueD,goal,ach)=>`<tr>`
           +`<td style="${lab}font-size:8.5px;">${t}<br/>目標</td>`
-          +`<td style="${csm}font-size:7.5px;vertical-align:middle;line-height:1.5;"><div>設定日　${esc(setD)||'　　年　　月'}</div><div>達成予定日　${esc(dueD)||'　　年　　月'}</div></td>`
+          +`<td style="${csm}font-size:7px;vertical-align:middle;line-height:1.35;"><div>設定日　${esc(setD)||'　　年　　月'}</div><div>達成予定日　${esc(dueD)||'　　年　　月'}</div></td>`
           +`<td style="${cs}">${esc(goal)}</td>`
           +`<td style="${lab}font-size:8px;">目標<br/>達成度</td>`
           +`<td style="${csm}text-align:center;vertical-align:middle;font-size:8px;">${TK_ACHIEVE.map(o=>circ(o,ach)).join('・')}</td>`
           +`</tr>`;
-        const goalTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(5,12,67,6,10)}`
+        const goalTbl=`<table style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed;">${cg(5,14,65,6,10)}`
           +`<tr style="height:1px;"><td colspan="5" style="${lab}font-size:9px;">利用目標</td></tr>`
           +goalRow('長期',rec.longSetDate,rec.longDueDate,rec.longGoal,rec.longAchieve)
           +goalRow('短期',rec.shortSetDate,rec.shortDueDate,rec.shortGoal,rec.shortAchieve)
@@ -41079,10 +41088,10 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
           +`<div style="flex:0 0 auto;text-align:center;font-size:13px;font-weight:bold;letter-spacing:1px;margin:0.8mm 0 1.5mm;">【（地域密着型）通所介護計画書】</div>`
           +`<div style="flex:0 0 auto;">${hdr1}${hdr2}${hdr3}</div>`
           +`<div style="flex:0 0 auto;font-size:9.5px;font-weight:bold;margin:1.6mm 0 0.6mm;border-bottom:1px solid #000;">Ⅰ　利用者の基本情報</div>`
-          +`<div style="flex:92 1 0;min-height:0;">${sec1}</div>`
+          +`<div style="flex:88 1 0;min-height:0;">${sec1}</div>`
           +`<div style="flex:0 0 auto;font-size:9.5px;font-weight:bold;margin:1.6mm 0 0.6mm;border-bottom:1px solid #000;">Ⅱ　サービス利用目標・サービス提供内容の設定</div>`
-          +`<div style="flex:28 1 0;min-height:0;">${goalTbl}</div>`
-          +`<div style="flex:152 1 0;min-height:0;margin-top:1.2mm;">${svcTbl}</div>`
+          +`<div style="flex:38 1 0;min-height:0;">${goalTbl}</div>`
+          +`<div style="flex:146 1 0;min-height:0;margin-top:1.2mm;">${svcTbl}</div>`
           +`<div style="flex:52 1 0;min-height:0;margin-top:1.2mm;">${bottom}</div>`
           +footer
           +`</div>`;
