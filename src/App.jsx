@@ -19998,9 +19998,11 @@ export default function App() {
               <div style={{flex:1,overflow:'auto',background:'#525659',padding:'24px 20px',display:'flex',justifyContent:'center',alignItems:'flex-start',position:'relative',zIndex:1}}>
                 {printPreviewContent.html ? (
                   <div style={{width:`${pageW*3.7795*scale}px`, height:`${ifH*scale}px`, overflow:'hidden', flexShrink:0}}>
-                    <iframe title="印刷プレビュー" srcDoc={previewSrcDoc}
-                      onLoad={e=>{ try { const d = e.target.contentWindow.document; const hh = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); if (hh && Math.abs(hh - ifH) > 8) setIfH(hh); } catch {} }}
-                      style={{width:`${pageW*3.7795}px`, height:`${ifH}px`, border:'none', background:'white', transform:`scale(${scale})`, transformOrigin:'top left', display:'block'}} />
+                    {/* ★ scrolling="no"+遅延再測定(2026-09-08 店舗要望): 内側スクロールバーを出さない
+                        (外側のスクロールで全体を見る。高さはフォント読込後にもう一度測って追従) */}
+                    <iframe title="印刷プレビュー" srcDoc={previewSrcDoc} scrolling="no"
+                      onLoad={e=>{ const t=e.target; const meas=()=>{ try { const d = t.contentWindow.document; const hh = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); if (hh) setIfH(h=>Math.abs(hh-h)>8?hh:h); } catch {} }; meas(); setTimeout(meas,700); setTimeout(meas,2000); }}
+                      style={{width:`${pageW*3.7795}px`, height:`${ifH}px`, border:'none', background:'white', transform:`scale(${scale})`, transformOrigin:'top left', display:'block', overflow:'hidden'}} />
                   </div>
                 ) : (
                   <div style={{background:'white',minWidth:595,padding:60,boxShadow:'0 4px 24px rgba(0,0,0,0.4)',textAlign:'center'}}>
