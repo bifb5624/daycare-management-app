@@ -11078,6 +11078,40 @@ const diaryPendingItems = (log, iso) => {
   return items;
 };
 
+// ★ AI呼び出しの共通ヘルパー(2026-09-08): 本部プロキシ(/api/ai-draft・Vercel環境変数のキー)を優先し、
+//   未設定なら従来どおり各店の「各種設定→モニタリング」のAPIキーで直接呼ぶ。
+//   これにより各事業所ごとのAPIキー設定が不要になる(本部が1回設定するだけ)。
+//   将来の料金プラン制御(店舗ごとにAI可否)のため storeId をプロキシへ渡しておく。
+let _tsumugiSrvAiProbe = null;
+const tsumugiServerAiAvailable = async () => {
+  if (_tsumugiSrvAiProbe != null) return _tsumugiSrvAiProbe;
+  try { const r = await fetch('/api/ai-draft'); const j = await r.json(); _tsumugiSrvAiProbe = !!j.configured; }
+  catch { _tsumugiSrvAiProbe = false; }
+  try { window.__tsumugiSrvAi = _tsumugiSrvAiProbe; } catch {}
+  return _tsumugiSrvAiProbe;
+};
+const tsumugiCallAi = async (apiKey, body, storeId) => {
+  if (await tsumugiServerAiAvailable()) {
+    const r = await fetch('/api/ai-draft', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...body, storeId: storeId || '' }) });
+    let data; try { data = await r.json(); } catch { throw new Error(`レスポンス解析エラー (HTTP ${r.status})`); }
+    if (!data.notConfigured) {
+      if (!r.ok) throw new Error(data?.error?.message || data?.error || `APIエラー (HTTP ${r.status})`);
+      return data;
+    }
+    _tsumugiSrvAiProbe = false; try { window.__tsumugiSrvAi = false; } catch {}
+  }
+  const key = String(apiKey || '').trim();
+  if (!key) throw new Error('AIが未設定です（本部のAI設定が無効で、店舗のAPIキーも未設定です）');
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json', 'x-api-key':key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+    body: JSON.stringify(body),
+  });
+  let data; try { data = await resp.json(); } catch { throw new Error(`レスポンス解析エラー (HTTP ${resp.status})`); }
+  if (!resp.ok) throw new Error(data?.error?.message || `APIエラー (HTTP ${resp.status})`);
+  return data;
+};
+
 // ★ 欠席理由の大分類(2026-09-07 店舗要望): 入力は「大分類を選択→詳細を自由記入」の2段構え。
 //   特記には「大分類（詳細）」形式(例: 体調不良（咳がひどい）)で記録され、分析の欠席理由ランキングは
 //   大分類で集計・詳細は内訳表示になる(従来は「発熱、咳がひどいから」等の自由文が1つずつ別枠になっていた)。
@@ -18242,6 +18276,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [staffSession?.storeId]);
 
+  // ★ 本部AI(サーバープロキシ)の有無を起動時に1回確認(2026-09-08): 有効なら各店のAPIキー設定は不要
+  useEffect(() => { tsumugiServerAiAvailable(); }, []);
   // ★ 同期診断のクラウド送信(2026-09-06): 「保存したのに届かない」端末を遠隔調査できるよう、
   //   syncLogの末尾を60秒ごと(初回は起動10秒後)に app_state の diag_<店舗> 行へ送る。
   //   本体データとは別行・ベストエフォート(失敗無害)。端末タグ=端末名|稼働中アプリ版。
@@ -18486,8 +18522,9 @@ export default function App() {
     // ★ 2026-09-08: 送付セット等はラッパーdivの中にページが入るため、直下(body>)限定をやめて
     //   どの深さのページ要素(page-break指定)にも白紙+影を付ける(送付状と計画書がつながって見える問題の修正)
     const _pageSepCss = `@media screen{ body{background:#525659!important;padding:14px!important;} body [style*="page-break-after"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
-    // ★ スクロールバーを背景色に(2026-09-08 店舗報告: 右端に白い縦線=既定の白いスクロールバーが繋がって見える)
-    const _sbCss = `@media screen{ html{scrollbar-color:#7a8090 #525659;} ::-webkit-scrollbar{width:12px;height:12px;background:#525659;} ::-webkit-scrollbar-track{background:#525659;} ::-webkit-scrollbar-thumb{background:#7a8090;border-radius:6px;border:2px solid #525659;} }`;
+    // ★ 内側スクロールバーは完全に出さない(2026-09-08 店舗要望): 高さはonLoad+遅延再測定で内容に追従し、
+    //   スクロールは外側(プレビュー枠)の1本に統一する
+    const _sbCss = `@media screen{ html,body{overflow:hidden!important;scrollbar-width:none!important;} ::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;} }`;
     return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}${_pageSepCss}${_sbCss}</style></head><body>${printHtmlEff}</body></html>`;
   }, [printHtmlEff]);
   // グローバルツールチップ（fixed）
@@ -42851,8 +42888,8 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 
   const generateOne = async (patient) => {
     const apiKey = (appData.systemSettings?.anthropicApiKey || '').trim();
-    if (!apiKey) {
-      setResults(prev => ({...prev, [patient.id]: {text:'', loading:false, error:'APIキーが未設定です。各種設定 → モニタリング で入力・保存してください。'}}));
+    if (!apiKey && window.__tsumugiSrvAi === false) {
+      setResults(prev => ({...prev, [patient.id]: {text:'', loading:false, error:'AIが未設定です（本部のAI設定が無効で、店舗のAPIキーも未設定）。'}}));
       return;
     }
     setResults(prev => ({...prev, [patient.id]: {text:'', loading:true, error:null}}));
@@ -42884,28 +42921,11 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
 ・2文目：「前回と比べて〜」または「引き続き〜」で変化や継続状態を記述
 ・専門的かつ丁寧な文体、具体的な数値を使用`;
 
-      const resp = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
-          messages: [{role:'user', content: prompt}]
-        })
-      });
-
-      let data;
-      try { data = await resp.json(); }
-      catch(e2) { throw new Error(`レスポンス解析エラー (HTTP ${resp.status})`); }
-
-      if (!resp.ok) {
-        throw new Error(data?.error?.message || `APIエラー (HTTP ${resp.status})`);
-      }
+      const data = await tsumugiCallAi(apiKey, {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 400,
+        messages: [{role:'user', content: prompt}]
+      }, staffSession?.storeId);
 
       const text = data.content?.[0]?.text?.trim() || 'エラー：テキストが取得できませんでした';
       setResults(prev => ({...prev, [patient.id]: {text, loading:false, error:null}}));
@@ -42957,7 +42977,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   const generateAllSheets = async () => {
     if (_monthLocked) { monAlert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。過去月はいつでも作成できます。'); return; }
     // ★ 通所がある人はAI下書き、 通所が無い人(一度も来ていない人)はAI不要で「実施できなかった」既定で作成。
-    const noKey = !(appData.systemSettings?.anthropicApiKey||'').trim();
+    const noKey = !(appData.systemSettings?.anthropicApiKey||'').trim() && window.__tsumugiSrvAi !== true; // ★ 本部AIが有効ならキー不要
     // ★ 利用者を選択していない場合は全員生成せず、選択を促す
     const targets = [...attendedPats, ...absentPats].filter(p => checkedIds.has(p.id));
     if (!targets.length) { monAlert('利用者を選択してください（チェックを付けた方のみ下書きします）'); return; }
@@ -43073,7 +43093,7 @@ function MonitoringView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // ★ 一覧の1行をAIで下書き (手入力済みの内容は残してAIは空欄のみ補完)。 確定はしない。
   const aiDraftRow = async (patient) => {
     if (_monthLocked) { monAlert('当月分のAI下書きは毎月15日以降にご利用いただけます（AIコスト管理のため）。'); return; }
-    if (!(appData.systemSettings?.anthropicApiKey||'').trim()) { monAlert('各種設定→モニタリングでAPIキーを設定してください'); return; }
+    if (!(appData.systemSettings?.anthropicApiKey||'').trim() && window.__tsumugiSrvAi === false) { monAlert('AIが未設定です（本部のAI設定が無効で、店舗のAPIキーも未設定です）'); return; }
     if (_aiRemaining <= 0) { monAlert(`${tM}月分のAI下書きの上限（利用者${_aiActiveCount}名×2回＝${_aiLimit}回）に達しました。\nこの月の分は手入力でご対応ください。`); return; }
     setResults(prev=>({...prev,[patient.id]:{...(prev[patient.id]||{}), loading:true, error:null}}));
     try {
@@ -43383,13 +43403,7 @@ ${optionsDesc}
 
 出力は次のJSONのみ（前後に説明文やコードブロックを付けない）:
 {"s1":{"sel":"","text":""},"goal":{"sel":"","text":""},"s2":{"sel":"","text":""},"s3":{"sel":"","text":""},"s4":{"sel":"","text":""}}`;
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'x-api-key':apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:1000, messages:[{role:'user', content:prompt}] })
-    });
-    let data; try { data = await resp.json(); } catch { throw new Error(`レスポンス解析エラー (HTTP ${resp.status})`); }
-    if (!resp.ok) throw new Error(data?.error?.message || `APIエラー (HTTP ${resp.status})`);
+    const data = await tsumugiCallAi(apiKey, { model:'claude-haiku-4-5-20251001', max_tokens:1000, messages:[{role:'user', content:prompt}] }, staffSession?.storeId);
     let txt = data.content?.[0]?.text?.trim() || '';
     const m = txt.match(/\{[\s\S]*\}/);
     let obj; try { obj = JSON.parse(m ? m[0] : txt); } catch { throw new Error('AIの出力を解釈できませんでした。もう一度お試しください。'); }
@@ -43841,7 +43855,7 @@ ${optionsDesc}
             onSave={(sheet)=>saveSheet(patient, sheet)}
             onPrint={(sheet, forFax)=>printSheet(patient, sheet, forFax)}
             onAiDraft={()=>aiDraftSheet(patient)}
-            hasApiKey={!!(appData.systemSettings?.anthropicApiKey||'').trim()}
+            hasApiKey={!!(appData.systemSettings?.anthropicApiKey||'').trim() || window.__tsumugiSrvAi === true}
           />
         );
       })()}
