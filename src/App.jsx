@@ -45755,6 +45755,30 @@ function PersonalFileModal({ patient: patientProp, appData, onSave, onClose, nav
     (patient.docUpdates||[]).forEach(u=>{ if(!u||!u.id) return; const _from = u.by==='caremanager'?'ケアマネ':(u.by==='family'?'ご家族':'当事業所'); const _c = Array.isArray(u.items)?u.items.join('・'):(u.items||'更新'); push(`du_${u.id}`, (u.at||'').slice(0,10), _from, _c); });
     // ★ 家族・関係者アカウントの発行を記録。
     (appData.familyAccounts||[]).filter(a=>a && String(a.patientId)===String(patient.id)).forEach(a=>push(`acc_${a.id}`, (a.createdAt||''), '当事業所', `アカウント発行：${a.displayName||a.username||''}${(a.kind==='caremanager'||a.relation==='ケアマネージャー')?'（ケアマネ）':(a.relation?`（${a.relation}）`:'')}`));
+    // ★ 提供記録の状態と特記を経過に記録(2026-09-08 店舗要望):
+    //   欠席=休み連絡(FAX)行が無い日だけ記載(重複防止)。休止/休業=連続する日はまとめて開始日のみ。
+    //   出席=特記(様子)に記入がある日だけ「特記：…」として記載。
+    {
+      const _isoOfRec = (r) => { const m=String(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return ''; const y=r.year||new Date().getFullYear(); return `${y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; };
+      const _faxAbsDates = new Set(fh.filter(h=>h.type==='absence'&&(h.patientId===patient.id||h.patientName===patient.name)&&h.dateIso).map(h=>String(h.dateIso).slice(0,10)));
+      const _stRecs = (appData.ticketRecords||[]).filter(r=>r&&r.patientId===patient.id&&r.id!=null)
+        .map(r=>({r, iso:_isoOfRec(r)})).filter(x=>x.iso).sort((a,b)=>a.iso.localeCompare(b.iso));
+      const _prevByStatus = {};
+      _stRecs.forEach(({r, iso})=>{
+        const _tk = String(r.tokki||'').replace(/\s+/g,' ').trim();
+        if (r.status==='欠席') {
+          if (_faxAbsDates.has(iso)) return; // 休み連絡の行があるので重複させない
+          push(`st_${r.id}`, iso, 'ご家族/ご本人', `欠席${_tk?`　理由: ${_tk}`:''}`);
+        } else if (r.status==='休止' || r.status==='休業') {
+          const prev = _prevByStatus[r.status]; _prevByStatus[r.status] = iso;
+          // 8日以内に同じ状態が続く場合は同じ期間とみなし開始日のみ記載(週1利用でも繋がるように)
+          if (prev && (new Date(iso) - new Date(prev)) / 86400000 <= 8) return;
+          push(`st_${r.id}`, iso, r.status==='休止'?'ご家族/ケアマネ':'当事業所', `${r.status==='休止'?'利用休止':'施設休業'}${_tk?`（${_tk}）`:''}`);
+        } else if (r.status==='出席' && _tk) {
+          push(`st_${r.id}`, iso, '当事業所', `特記：${_tk}`);
+        }
+      });
+    }
     return out;
   };
   // 表示用: 自動行(上書き反映) + 手動行 をマージ(削除済みは除外)
