@@ -1710,10 +1710,11 @@ const addTombstone = (appData, key, id) => {
   return t;
 };
 
-const computePlanDues = (appData, baseDate) => {
+const computePlanDues = (appData, baseDate, opts) => {
   const today = baseDate ? new Date(baseDate) : new Date();
   today.setHours(0,0,0,0);
   const addons = appData?.systemSettings?.addons || {};
+  const _includeFuture = !!(opts && opts.includeFuture); // ★ 2026-09-08: 月別ブラウズ用に先の予定も返す
   const out = [];
   const latestBy = (arr, pid, dateKey) => (arr||[])
     .filter(r => r && r.patientId === pid)
@@ -1723,7 +1724,7 @@ const computePlanDues = (appData, baseDate) => {
   const push = (patient, kind, label, due, view, note) => {
     if (!due) return;
     const daysLeft = Math.round((due - today) / 86400000);
-    if (daysLeft > PLAN_DUE_LEAD_DAYS) return; // まだ先 → 出さない
+    if (!_includeFuture && daysLeft > PLAN_DUE_LEAD_DAYS) return; // まだ先 → 出さない(月別ブラウズ時は返す)
     out.push({ patient, kind, label, due, view, note, daysLeft, overdue: daysLeft < 0, ym: ymKey(due) });
   };
   (appData?.patients || []).filter(p => p && (p.status === '利用中' || p.status === '休止')).forEach(p => {
@@ -18456,7 +18457,8 @@ export default function App() {
   const _maskPrintHtml = React.useCallback((html) => {
     try {
       let out = html;
-      const mask = (s) => s.replace(/[^\s　]/g, '●');
+      // ★ 1文字おきマスク(2026-09-08 店舗要望): 髙橋正樹→髙○正○ / 古川健二郎→古○健○郎(空白は数えない)
+      const mask = (s) => { let i = 0; return s.replace(/[^\s　]/g, (c) => (i++ % 2 === 0 ? c : '○')); };
       const variants = new Set();
       (appData?.patients || []).forEach(p => {
         [p?.name, p?.kana].forEach(n => {
@@ -18481,7 +18483,9 @@ export default function App() {
     }catch{}
     // ★ 画面プレビューでは各ページを1枚ずつ影付きで分離表示(2026-08-30 店舗要望: 紙が繋がって見えるのを解消)。
     //   印刷時(@media print)には影響しない。
-    const _pageSepCss = `@media screen{ body{background:#525659!important;padding:14px!important;} body>[style*="page-break"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
+    // ★ 2026-09-08: 送付セット等はラッパーdivの中にページが入るため、直下(body>)限定をやめて
+    //   どの深さのページ要素(page-break指定)にも白紙+影を付ける(送付状と計画書がつながって見える問題の修正)
+    const _pageSepCss = `@media screen{ body{background:#525659!important;padding:14px!important;} body [style*="page-break-after"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
     return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}${_pageSepCss}</style></head><body>${printHtmlEff}</body></html>`;
   }, [printHtmlEff]);
   // グローバルツールチップ（fixed）
@@ -19958,13 +19962,14 @@ export default function App() {
               <div className="no-print" style={{background:'#1e293b',padding:'12px 20px',display:'flex',alignItems:'center',gap:12,flexShrink:0,boxShadow:'0 2px 8px rgba(0,0,0,0.3)',position:'relative',zIndex:10,pointerEvents:'auto'}}>
                 <div style={{flex:1}}>
                   <span style={{color:'#64748b',fontSize:11,fontWeight:'bold',letterSpacing:1}}>印刷プレビュー</span>
-                  <label title="利用者の氏名・ふりがなを●●に置き換えて印刷/FAXできます(全ての印刷画面で共通)" style={{display:'flex',alignItems:'center',gap:5,marginLeft:10,cursor:'pointer',background:printMaskNames?'#fef3c7':'#f1f5f9',border:printMaskNames?'1px solid #f59e0b':'1px solid #cbd5e1',borderRadius:8,padding:'3px 10px'}}>
-                    <input type="checkbox" checked={printMaskNames} onChange={e=>setPrintMaskNames(e.target.checked)} style={{width:14,height:14}}/>
-                    <span style={{fontSize:11,fontWeight:'bold',color:printMaskNames?'#b45309':'#475569',whiteSpace:'nowrap'}}>氏名マスキング</span>
-                  </label>
                   <div style={{color:'white',fontWeight:'bold',fontSize:15,marginTop:2}}>{printPreviewContent.title}</div>
                 </div>
                 <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                  {/* ★ 氏名マスキングは印刷ボタンの横に大きく表示(2026-09-08 店舗要望: 左上の小さい表示は見づらい) */}
+                  <label title="利用者の氏名・ふりがなを1文字おきに○へ置き換えて印刷/FAXできます(例: 髙橋正樹→髙○正○・全印刷画面で共通)" style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer',background:printMaskNames?'#fef3c7':'#f1f5f9',border:printMaskNames?'2px solid #f59e0b':'2px solid #cbd5e1',borderRadius:10,padding:'9px 16px'}}>
+                    <input type="checkbox" checked={printMaskNames} onChange={e=>setPrintMaskNames(e.target.checked)} style={{width:18,height:18}}/>
+                    <span style={{fontSize:14,fontWeight:'bold',color:printMaskNames?'#b45309':'#475569',whiteSpace:'nowrap'}}>氏名マスキング</span>
+                  </label>
                   {/* 統合出力ボタン: 印刷/FAX/PDF すべて同じ印刷ダイアログを開くので統合 */}
                   <button onClick={()=>openPrintWindow(false)}
                     style={{background:'#2563eb',color:'white',border:'none',borderRadius:'10px 0 0 10px',padding:'10px 20px',fontWeight:'bold',fontSize:14,cursor:'pointer',display:'flex',alignItems:'center',gap:8,boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>
@@ -37679,6 +37684,16 @@ function DiarySettingsPanel({ appData, dsRef, markDirty, onSave }) {
       {['AM','PM'].map(ap=>(
         <SC key={ap} title={`スケジュール（${ap==='AM'?'午前':'午後'}）`}>
           <div className="space-y-2">
+            {/* ★ 午前→午後の複製(2026-09-08 店舗要望): 内容は午前と同じで時間だけ直せばよいケースが多いため */}
+            {ap==='PM' && (
+              <button onClick={()=>{
+                const src=(dsRef.current.scheduleAM||[]).filter(x=>String(x?.time||'').trim()||String(x?.content||'').trim());
+                if(!src.length){ alert('午前のスケジュールが空です。先に午前を入力してください。'); return; }
+                if((ds.schedulePM||[]).some(x=>String(x?.time||'').trim()||String(x?.content||'').trim()) && !window.confirm('午後のスケジュールを、午前の内容で置き換えます（行数・内容をコピーし、時間はあとから直せます）。よろしいですか？')) return;
+                mutate({...dsRef.current, schedulePM: src.map(x=>({ id:`pm${Date.now()}_${Math.random().toString(36).slice(2,5)}`, time:x.time||'', content:x.content||'' }))});
+                if(onSave) onSave({...appData, diarySettings: dsRef.current}, { manual:true, message:'✓ 午前のスケジュールを午後へ複製しました（時間を調整してください）' });
+              }} className="text-sm font-bold text-teal-700 bg-teal-50 border border-teal-300 rounded-lg px-3 py-1.5 hover:bg-teal-100">午前の内容を複製（時間だけ直せばOK）</button>
+            )}
             {(ds[`schedule${ap}`]||[]).map((item,i)=>(
               <div key={item.id} className="flex items-center gap-2">
                 <input defaultValue={item.time} onChange={e=>onBlurSched(ap,i,'time',e.target.value)} onBlur={e=>onBlurSched(ap,i,'time',e.target.value)} placeholder="時間" className="w-[130px] px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:border-blue-400"/>
@@ -39374,9 +39389,18 @@ function KeikakuTabs({ current, navigateTo, family }) {
 const PLAN_KIND_COLOR = { tsusho:'#0891b2', kinou:'#7c3aed', kagaku:'#059669', adl:'#d97706' };
 function KeikakuYoteiView({ appData, navigateTo, family = 'tsusho' }) {
   const [showDone, setShowDone] = React.useState(false); // 未作成(まだ1件も無い人)も含めるか
-  const _allDues = React.useMemo(() => computePlanDues(appData), [appData]);
+  // ★ 月別ブラウズ(2026-09-08 店舗要望): null=直近(従来の「期限1ヶ月前から」) / 1〜12=その月が期日の人を表示
+  const [duesMonth, setDuesMonth] = React.useState(null);
+  const _allDues = React.useMemo(() => computePlanDues(appData, null, { includeFuture: true }), [appData]);
   // ★ ファミリーで絞る: tsusho=通所介護計画書 / kinou=個別機能訓練(3-3)+科学的介護+ADL加算
-  const all = React.useMemo(() => _allDues.filter(d => family === 'tsusho' ? d.kind === 'tsusho' : d.kind !== 'tsusho'), [_allDues, family]);
+  const _famDues = React.useMemo(() => _allDues.filter(d => family === 'tsusho' ? d.kind === 'tsusho' : d.kind !== 'tsusho'), [_allDues, family]);
+  const all = React.useMemo(() => {
+    if (duesMonth == null) return _famDues.filter(d => d.daysLeft <= PLAN_DUE_LEAD_DAYS); // 従来の「直近」
+    const now = new Date();
+    const y = duesMonth >= (now.getMonth() + 1) ? now.getFullYear() : now.getFullYear() + 1; // 過ぎた月は翌年扱い
+    const ym = `${y}-${String(duesMonth).padStart(2,'0')}`;
+    return _famDues.filter(d => d.ym === ym);
+  }, [_famDues, duesMonth]);
   // 「未作成」は初回導入時に全員ぶん出て件数が膨らむため、既定では期限があるものだけ表示する
   const dues = showDone ? all : all.filter(d => d.note !== '未作成' && d.note !== 'ADL評価が未実施');
   const newN = all.length - dues.length;
@@ -39389,6 +39413,13 @@ function KeikakuYoteiView({ appData, navigateTo, family = 'tsusho' }) {
       <div className="sticky top-0 z-20 bg-white border-b border-slate-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
         <KeikakuTabs current={family === 'tsusho' ? 'keikaku_yotei' : 'kinou_yotei'} navigateTo={navigateTo} family={family}/>
         <div className="flex-1"/>
+        {/* ★ 月別ブラウズ(2026-09-08): 直近(既定)/1〜12月。過ぎた月は翌年のその月として表示 */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <button onClick={()=>setDuesMonth(null)} className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${duesMonth==null?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>直近</button>
+          {Array.from({length:12},(_,i)=>i+1).map(m=>(
+            <button key={m} onClick={()=>setDuesMonth(m)} className={`px-2 py-1 rounded-lg text-xs font-bold border ${duesMonth===m?'bg-slate-800 text-white border-slate-800':'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'}`}>{m}月</button>
+          ))}
+        </div>
         {overdueN > 0 && <span className="text-xs font-bold bg-red-100 text-red-700 px-2.5 py-1 rounded-lg">期限超過 {overdueN}件</span>}
         <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 cursor-pointer">
           <input type="checkbox" checked={showDone} onChange={e=>setShowDone(e.target.checked)} className="w-4 h-4"/>
@@ -40509,7 +40540,11 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     // ★ 空行(時間も内容も無い行)は反映しない(2026-08-16): 日誌設定の余白行が上部の空欄プログラムになっていた
     const _clean=(a)=>(a||[]).filter(x=>String(x?.time||'').trim()||String(x?.content||'').trim());
     const am=_clean(ds.scheduleAM), pm=_clean(ds.schedulePM);
-    if (hasAM && hasPM) return [...am, ...pm];   // 午前・午後とも利用 → 両方
+    // ★ 午前・午後とも利用 → 両方を載せ、どちらの時間帯か分かるよう時間に AM/PM を付ける(2026-09-08 店舗要望: 例 AM9:00・PM13:00)
+    if (hasAM && hasPM) return [
+      ...am.map(x=>({ ...x, time: String(x.time||'').trim() ? `AM${String(x.time).trim()}` : 'AM' })),
+      ...pm.map(x=>({ ...x, time: String(x.time||'').trim() ? `PM${String(x.time).trim()}` : 'PM' })),
+    ];
     if (hasPM) return pm;
     if (hasAM) return am;
     return am.length ? am : pm;                   // 基本利用日が未設定なら AM を既定に
@@ -44364,14 +44399,8 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
     // 2文字: 1文字目表示、2文字目● (山田→山●、タカ→タ●)
     // 3文字: 1文字目表示、2文字目●、3文字目表示 (ハルエ→ハ●エ)
     // 1文字: そのまま
-    const maskWord = (word) => {
-      if (!word) return '';
-      if (word.length === 1) return word;
-      if (word.length === 2) return word[0] + '●';
-      if (word.length === 3) return word[0] + '●' + word[2];
-      // 4文字以上: 1文字目と最後表示、中間を●
-      return word[0] + '●'.repeat(word.length - 2) + word[word.length - 1];
-    };
+    // ★ 1文字おきマスク(2026-09-08 店舗要望): 偶数番目の文字を残し奇数番目を○に(髙橋正樹→髙○正○)
+    const maskWord = (word) => String(word||'').split('').map((c,i)=> i % 2 === 0 ? c : '○').join('');
     const parts = name.trim().split(/\s+/);
     return parts.map(maskWord).join(' ');
   };
@@ -45011,13 +45040,8 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   // AbsenceFaxView と同じマスキング
   const maskName = (name) => {
     if (!name) return '●●';
-    const maskWord = (word) => {
-      if (!word) return '';
-      if (word.length === 1) return word;
-      if (word.length === 2) return word[0] + '●';
-      if (word.length === 3) return word[0] + '●' + word[2];
-      return word[0] + '●'.repeat(word.length - 2) + word[word.length - 1];
-    };
+    // ★ 1文字おきマスク(2026-09-08 店舗要望): 偶数番目の文字を残し奇数番目を○に(髙橋正樹→髙○正○)
+    const maskWord = (word) => String(word||'').split('').map((c,i)=> i % 2 === 0 ? c : '○').join('');
     return name.trim().split(/\s+/).map(maskWord).join(' ');
   };
 
