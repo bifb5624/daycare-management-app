@@ -1702,6 +1702,14 @@ const ymKey = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0'
 //   ADL維持等加算  : 評価開始から6ヶ月後に再評価(加算ONの店舗のみ)。
 //   いずれも「未作成」は即対象。 期限の1ヶ月前になったら一覧に出す。
 const PLAN_DUE_LEAD_DAYS = 30;
+// ★ 削除の墓石を積む共通ヘルパー(2026-09-08): id単位マージ(和集合)の対象配列は、墓石が無いと
+//   削除してもクラウド/他端末から数秒で復活する(通所介護計画書の削除が復活する報告の原因)。
+const addTombstone = (appData, key, id) => {
+  const t = { ...(appData.deletedIds || {}) };
+  t[key] = { ...(t[key] || {}), [String(id)]: Date.now() };
+  return t;
+};
+
 const computePlanDues = (appData, baseDate) => {
   const today = baseDate ? new Date(baseDate) : new Date();
   today.setHours(0,0,0,0);
@@ -1720,8 +1728,12 @@ const computePlanDues = (appData, baseDate) => {
   };
   (appData?.patients || []).filter(p => p && (p.status === '利用中' || p.status === '休止')).forEach(p => {
     // --- 通所介護計画書 ---
-    const tk = latestBy(appData?.tsushoKeikakuRecords, p.id, 'createdDate');
-    if (!tk) push(p, 'tsusho', '通所介護計画書', today, 'tsusho_keikaku', '未作成');
+    // ★ 一時保存(draft)対応(2026-09-08 店舗要望): 期日の計算は完成版(draftでない)だけで行い、
+    //   最新が一時保存中なら「作成予定」に残して続きから作成できるようにする。
+    const _tkDraft = latestBy((appData?.tsushoKeikakuRecords||[]).filter(r=>r&&r.draft), p.id, 'createdDate');
+    const tk = latestBy((appData?.tsushoKeikakuRecords||[]).filter(r=>r&&!r.draft), p.id, 'createdDate');
+    if (_tkDraft && (!tk || _tkDraft.d >= tk.d)) push(p, 'tsusho', '通所介護計画書', today, 'tsusho_keikaku', '一時保存中(続きから作成)');
+    else if (!tk) push(p, 'tsusho', '通所介護計画書', today, 'tsusho_keikaku', '未作成');
     else {
       const short = parseJpMonth(tk.r.shortDueDate) || parseJpMonth(tk.r.shortPeriod);
       const long  = parseJpMonth(tk.r.longDueDate)  || parseJpMonth(tk.r.longPeriod);
@@ -1731,8 +1743,10 @@ const computePlanDues = (appData, baseDate) => {
     }
     // --- 個別機能訓練計画書 (3ヶ月ごと) ---
     if (addons.kasan_kinou2 || (appData?.kinouKeikakuRecords||[]).some(r=>r.patientId===p.id)) {
-      const kk = latestBy(appData?.kinouKeikakuRecords, p.id, 'createdDate');
-      if (!kk) { if (addons.kasan_kinou2) push(p, 'kinou', '個別機能訓練計画書', today, 'kinou_keikaku', '未作成'); }
+      const _kkDraft = latestBy((appData?.kinouKeikakuRecords||[]).filter(r=>r&&r.draft), p.id, 'createdDate');
+      const kk = latestBy((appData?.kinouKeikakuRecords||[]).filter(r=>r&&!r.draft), p.id, 'createdDate');
+      if (_kkDraft && (!kk || _kkDraft.d >= kk.d)) push(p, 'kinou', '個別機能訓練計画書', today, 'kinou_keikaku', '一時保存中(続きから作成)');
+      else if (!kk) { if (addons.kasan_kinou2) push(p, 'kinou', '個別機能訓練計画書', today, 'kinou_keikaku', '未作成'); }
       else push(p, 'kinou', '個別機能訓練計画書', addMonths(kk.d, 3), 'kinou_keikaku', '前回作成から3ヶ月');
     }
     // --- 加算: ADL評価(Barthel)を起点に再評価時期を出す ---
@@ -28383,7 +28397,7 @@ function TicketView({ appData, targetPatientId, onSave, navigateTo, onPatientCha
     navigateTo && navigateTo('master');
   };
   const ticketHistory = (appData.faxHistory||[]).filter(h => h.type === 'ticket');
-  const deleteFaxHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
+  const deleteFaxHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id), deletedIds: addTombstone(appData,'faxHistory',id)});
   const sp = (appData.patients||[]).find(p => p.id === selId) || (appData.patients||[])[0];
   const tY = parseInt(curMonth.split('-')[0]); const tM = parseInt(curMonth.split('-')[1]);
   const fi = appData.systemSettings?.facilityInfo || {};
@@ -39618,7 +39632,7 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
     if (!editing) return;
     const list = [...(appData.kinouKeikakuRecords||[])];
     const idx = list.findIndex(r => r.id === editing.id);
-    const rec = { ...editing, _savedAt: syncNow() };
+    const rec = { ...editing, draft: !close, _savedAt: syncNow() }; // ★ draft=一時保存中(作成予定に「続きから作成」で残す・2026-09-08)
     if (idx >= 0) list[idx] = rec; else list.push(rec);
     // ★ 前回計画書の評価(達成度)も同時保存: 評価は前回レコード側に書き込む
     if (prevEvalPatch && _prevRec) {
@@ -39635,14 +39649,19 @@ function KinouKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
 
   const delRecord = (id) => {
     if (!window.confirm('この計画書を削除します。よろしいですか？')) return;
-    onSave({ ...appData, kinouKeikakuRecords: (appData.kinouKeikakuRecords||[]).filter(r=>r.id!==id) }, { manual:true, message:'削除しました' });
+    onSave({ ...appData, kinouKeikakuRecords: (appData.kinouKeikakuRecords||[]).filter(r=>r.id!==id), deletedIds: addTombstone(appData,'kinouKeikakuRecords',id) }, { manual:true, message:'削除しました' });
     if (editing?.id === id) setEditing(null);
   };
   const dupRecord = (r) => { setEditing({ ...r, id:`kk_${pid}_${Date.now()}`, createdAt:Date.now(), prevDate: r.createdDate||'', createdDate: toReiwa(new Date().toISOString().slice(0,10)), shortAchieve:'', longAchieve:'', henka:'', kadai:'', setsumeiDate:'', setsumeisha:'' }); };
-  // ★ 作成予定からの遷移(navFocus='start_edit'): 対象者選択済みで即編集開始(前回があれば「複製して更新」、無ければ新規)
+  // ★ 作成予定からの遷移(navFocus='start_edit'): 最新が一時保存(draft)ならそれを再開、
+  //   完成版があれば「複製して更新」、無ければ新規(2026-09-08 店舗要望: 一時保存の続きから作成)
   React.useEffect(() => {
     if (navFocus !== 'start_edit') return;
-    if (!editing) { if (records[0]) dupRecord(records[0]); else setEditing(newRecord()); }
+    if (!editing) {
+      if (records[0] && records[0].draft) setEditing({ ...records[0] });
+      else if (records[0]) dupRecord(records[0]);
+      else setEditing(newRecord());
+    }
     if (onFocusHandled) onFocusHandled();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navFocus]);
@@ -40210,9 +40229,9 @@ function SeikatsuKinouView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const newRecord = () => ({ id:`sk_${pid}_${Date.now()}`, patientId:pid, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10)), recorder:'', adl:{}, kikyo:{}, iadl:{}, shinshin:{}, ninchi:'', kadai:patient?.ryui||'', bikou:'' });
   const upd = (patch) => { setEditing(e=>({...e,...patch})); markDirty(); };
   const updMap = (group,key,val) => { setEditing(e=>({...e,[group]:{...(e[group]||{}),[key]:val}})); markDirty(); };
-  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:syncNow()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message: close?'✓ 生活機能チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
+  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.seikatsuKinouRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing, draft: !close, _savedAt:syncNow()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,seikatsuKinouRecords:list},{manual:true,message: close?'✓ 生活機能チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
-  const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,seikatsuKinouRecords:(appData.seikatsuKinouRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
+  const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,seikatsuKinouRecords:(appData.seikatsuKinouRecords||[]).filter(r=>r.id!==id), deletedIds: addTombstone(appData,'seikatsuKinouRecords',id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
   const dupRecord = (r) => setEditing({...r, id:`sk_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
   const printRec = editing || records[0] || null;
   const grpForm = (title, group, items, opts) => (
@@ -40335,9 +40354,9 @@ function KyomiKanshinView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPre
   const toggleCustom = (i,key) => { setEditing(e=>({...e, custom:e.custom.map((c,idx)=>idx===i?{...c,[key]:!c[key]}:c)})); markDirty(); };
   const addCustom = () => { if(!newItem.trim()) return; setEditing(e=>({...e, custom:[...(e.custom||[]), {name:newItem.trim()}]})); setNewItem(''); markDirty(); };
   const delCustom = (i) => { setEditing(e=>({...e, custom:e.custom.filter((_,idx)=>idx!==i)})); markDirty(); };
-  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing,_savedAt:syncNow()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message: close?'✓ 興味・関心チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
+  const saveRecord = (close=true) => { if(!editing) return; const list=[...(appData.kyomiKanshinRecords||[])]; const i=list.findIndex(r=>r.id===editing.id); const rec={...editing, draft: !close, _savedAt:syncNow()}; if(i>=0)list[i]=rec; else list.push(rec); onSave({...appData,kyomiKanshinRecords:list},{manual:true,message: close?'✓ 興味・関心チェックシートを保存しました':'✓ 一時保存しました'}); if(dirtyRef)dirtyRef.current=false; if(close) setEditing(null); else setEditing(rec); };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
-  const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,kyomiKanshinRecords:(appData.kyomiKanshinRecords||[]).filter(r=>r.id!==id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
+  const delRecord = (id) => { if(!window.confirm('削除しますか？')) return; onSave({...appData,kyomiKanshinRecords:(appData.kyomiKanshinRecords||[]).filter(r=>r.id!==id), deletedIds: addTombstone(appData,'kyomiKanshinRecords',id)},{manual:true,message:'削除しました'}); if(editing?.id===id)setEditing(null); };
   const dupRecord = (r) => setEditing({...r, id:`ki_${pid}_${Date.now()}`, createdAt:Date.now(), recordDate:toReiwa(new Date().toISOString().slice(0,10))});
   const printRec = editing || records[0] || null;
   const COLS = [['shiteiru','している'],['shitemitai','してみたい'],['kyomi','興味がある']];
@@ -40616,7 +40635,7 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     if(!editing) return;
     const list=[...(appData.tsushoKeikakuRecords||[])];
     const idx=list.findIndex(r=>r.id===editing.id);
-    const rec={...editing,_savedAt:syncNow()};
+    const rec={...editing, draft: !close, _savedAt:syncNow()}; // ★ draft=一時保存中(作成予定に「続きから作成」で残す・2026-09-08)
     if(idx>=0) list[idx]=rec; else list.push(rec);
     // ★ 前回計画書の評価(達成度・総括・再評価日)も同時保存: 前回レコード側へ書き込む
     if (prevEvalPatch && _prevRec) {
@@ -40630,12 +40649,17 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     else setEditing(rec); // 保存済みレコードで編集を継続(以降は上書き保存になる)
   };
   React.useEffect(()=>{ if(!saveFnRef) return; saveFnRef.current=()=>{ if(editing) saveRecord(); }; });
-  const delRecord=(id)=>{ if(!window.confirm('この計画書を削除します。よろしいですか？')) return; onSave({...appData, tsushoKeikakuRecords:(appData.tsushoKeikakuRecords||[]).filter(r=>r.id!==id)}, {manual:true, message:'削除しました'}); if(editing?.id===id) setEditing(null); };
+  const delRecord=(id)=>{ if(!window.confirm('この計画書を削除します。よろしいですか？')) return; onSave({...appData, tsushoKeikakuRecords:(appData.tsushoKeikakuRecords||[]).filter(r=>r.id!==id), deletedIds: addTombstone(appData,'tsushoKeikakuRecords',id)}, {manual:true, message:'削除しました'}); if(editing?.id===id) setEditing(null); };
   const dupRecord=(r)=>{ setEditing(_migrate({...r, id:`tk_${pid}_${Date.now()}`, createdAt:Date.now(), prevDate:r.createdDate||'', createdDate:toReiwa(new Date().toISOString().slice(0,10)), longAchieve:'', shortAchieve:'', soukatsu:'', saihyokaDate:'', setsumeiDate:'', setsumeisha:'', doui:''})); };
-  // ★ 作成予定からの遷移(navFocus='start_edit'): 対象者選択済みで即編集開始(前回があれば「複製して更新」、無ければ新規)
+  // ★ 作成予定からの遷移(navFocus='start_edit'): 最新が一時保存(draft)ならそれを再開、
+  //   完成版があれば「複製して更新」、無ければ新規(2026-09-08 店舗要望: 一時保存の続きから作成)
   React.useEffect(() => {
     if (navFocus !== 'start_edit') return;
-    if (!editing) { if (records[0]) dupRecord(records[0]); else setEditing(newRecord()); }
+    if (!editing) {
+      if (records[0] && records[0].draft) setEditing(_migrate({ ...records[0] }));
+      else if (records[0]) dupRecord(records[0]);
+      else setEditing(newRecord());
+    }
     if (onFocusHandled) onFocusHandled();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navFocus]);
@@ -44295,7 +44319,7 @@ function AbsenceFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   });
   const [showFaxHist, setShowFaxHist] = React.useState(false);
   const absHistory = (appData.faxHistory||[]).filter(h => h.type === 'absence');
-  const deleteAbsHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
+  const deleteAbsHist = (id) => onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id), deletedIds: addTombstone(appData,'faxHistory',id)});
   // 担当者プルダウン: 各種設定の従業員から選択。
   // ★ デフォルト優先順位: 1) 現在のアクティブ記録者 → 2) 管理者 → 3) リスト先頭
   const staffList = (appData.diarySettings?.staff || []).filter(s => s.name && s.name.trim());
@@ -44969,7 +44993,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
   if (saveFnRef) saveFnRef.current = flushSave;
   React.useEffect(() => () => { if (saveFnRef) saveFnRef.current = null; }, []);
   const genHistory = (appData.faxHistory||[]).filter(h => h.type === 'general');
-  const deleteGenHist = (id) => onSave && onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id)});
+  const deleteGenHist = (id) => onSave && onSave({...appData, faxHistory: (appData.faxHistory||[]).filter(h => h.id !== id), deletedIds: addTombstone(appData,'faxHistory',id)});
 
   const facility = appData.systemSettings?.facilityInfo || {};
   const patients = appData.patients || [];
