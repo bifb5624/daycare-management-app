@@ -18486,7 +18486,9 @@ export default function App() {
     // ★ 2026-09-08: 送付セット等はラッパーdivの中にページが入るため、直下(body>)限定をやめて
     //   どの深さのページ要素(page-break指定)にも白紙+影を付ける(送付状と計画書がつながって見える問題の修正)
     const _pageSepCss = `@media screen{ body{background:#525659!important;padding:14px!important;} body [style*="page-break-after"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
-    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}${_pageSepCss}</style></head><body>${printHtmlEff}</body></html>`;
+    // ★ スクロールバーを背景色に(2026-09-08 店舗報告: 右端に白い縦線=既定の白いスクロールバーが繋がって見える)
+    const _sbCss = `@media screen{ html{scrollbar-color:#7a8090 #525659;} ::-webkit-scrollbar{width:12px;height:12px;background:#525659;} ::-webkit-scrollbar-track{background:#525659;} ::-webkit-scrollbar-thumb{background:#7a8090;border-radius:6px;border:2px solid #525659;} }`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8">${head}<style>@page{margin:0;}html,body{margin:0;padding:0;background:white;}${_pageSepCss}${_sbCss}</style></head><body>${printHtmlEff}</body></html>`;
   }, [printHtmlEff]);
   // グローバルツールチップ（fixed）
   const [globalTip, setGlobalTip] = useState(null); // {text, x, y}
@@ -39388,7 +39390,7 @@ function KeikakuTabs({ current, navigateTo, family }) {
 //   期限の1ヶ月前から「誰の・何を・いつまでに」を月ごとにまとめて表示する。 行タップで該当画面へ。
 const PLAN_KIND_COLOR = { tsusho:'#0891b2', kinou:'#7c3aed', kagaku:'#059669', adl:'#d97706' };
 function KeikakuYoteiView({ appData, navigateTo, family = 'tsusho' }) {
-  const [showDone, setShowDone] = React.useState(false); // 未作成(まだ1件も無い人)も含めるか
+  const [showDone, setShowDone] = React.useState(true); // ★ 未作成も既定で表示(2026-09-08 店舗要望: 退所しない限り必要になるため)
   // ★ 月別ブラウズ(2026-09-08 店舗要望): null=直近(従来の「期限1ヶ月前から」) / 1〜12=その月が期日の人を表示
   const [duesMonth, setDuesMonth] = React.useState(null);
   const _allDues = React.useMemo(() => computePlanDues(appData, null, { includeFuture: true }), [appData]);
@@ -40540,10 +40542,12 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     // ★ 空行(時間も内容も無い行)は反映しない(2026-08-16): 日誌設定の余白行が上部の空欄プログラムになっていた
     const _clean=(a)=>(a||[]).filter(x=>String(x?.time||'').trim()||String(x?.content||'').trim());
     const am=_clean(ds.scheduleAM), pm=_clean(ds.schedulePM);
-    // ★ 午前・午後とも利用 → 両方を載せ、どちらの時間帯か分かるよう時間に AM/PM を付ける(2026-09-08 店舗要望: 例 AM9:00・PM13:00)
+    // ★ 午前・午後とも利用 → 「午前の部」「午後の部」の見出し行で区切る(2026-09-08 店舗要望・AM/PM表記は廃止)
     if (hasAM && hasPM) return [
-      ...am.map(x=>({ ...x, time: String(x.time||'').trim() ? `AM${String(x.time).trim()}` : 'AM' })),
-      ...pm.map(x=>({ ...x, time: String(x.time||'').trim() ? `PM${String(x.time).trim()}` : 'PM' })),
+      { time:'午前の部', content:'' },
+      ...am,
+      { time:'午後の部', content:'' },
+      ...pm,
     ];
     if (hasPM) return pm;
     if (hasAM) return am;
@@ -40629,12 +40633,13 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
     return o;
   };
   // ★ フェイスシートから再取込 (空欄のみ補完。入力済みは上書きしない)
-  const importFromFaceSheet = ()=>{
+  const importFromFaceSheet = (quiet)=>{
     const a=_fsAuto(patient);
     const fill=Object.keys(a).filter(k=>String(a[k]||'').trim() && !String(editing?.[k]||'').trim());
-    if(!fill.length){ alert('フェイスシートから補完できる空欄がありませんでした。（入力済みの欄は上書きしません）'); return; }
+    if(!fill.length){ if(!quiet) alert('フェイスシートから補完できる空欄がありませんでした。（入力済みの欄は上書きしません）'); return false; }
     setEditing(e=>{ const ne={...e}; fill.forEach(k=>{ ne[k]=a[k]; }); return ne; });
     markDirty();
+    return true;
   };
   // ★ プログラム(1日の流れ): 各種設定の日誌スケジュール(AM/PM)から反映
   const fillFlow = ()=>{
@@ -40704,12 +40709,12 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
   const latestKinou=(appData.kinouKeikakuRecords||[]).filter(r=>r.patientId===pid).sort((a,b)=>String(b.createdDate||'').localeCompare(String(a.createdDate||''))||((b.createdAt||0)-(a.createdAt||0)))[0]||null;
   const latestKyomi=(appData.kyomiKanshinRecords||[]).filter(r=>r.patientId===pid).sort((a,b)=>(b.recordDate||'').localeCompare(a.recordDate||'')||((b.createdAt||0)-(a.createdAt||0)))[0]||null;
   const _appendField=(key,text)=>{ if(!text) return; setEditing(e=>{ const cur=(e[key]||'').trim(); return {...e,[key]:cur?`${cur}\n${text}`:text}; }); markDirty(); };
-  const importFromKinou=()=>{
-    if(!latestKinou){ if(navigateTo && window.confirm('この利用者の個別機能訓練計画書がまだありません。作成画面を開きますか？')) navigateTo('kinou_keikaku'); return; }
+  const importFromKinou=(quiet)=>{
+    if(!latestKinou){ if(!quiet && navigateTo && window.confirm('この利用者の個別機能訓練計画書がまだありません。作成画面を開きますか？')) navigateTo('kinou_keikaku'); return false; }
     const k=latestKinou;
     const sg=[k.shortKinou,k.shortKatsudo,k.shortSanka].filter(Boolean).join('／');
     const lg=[k.longKinou,k.longKatsudo,k.longSanka].filter(Boolean).join('／');
-    if(!window.confirm(`個別機能訓練計画書（${k.createdDate||''}）から、本人・家族の意向／目標／機能訓練プログラムを取り込みます。よろしいですか？（空欄に反映・重複追加なし）`)) return;
+    if(!quiet && !window.confirm(`個別機能訓練計画書（${k.createdDate||''}）から、本人・家族の意向／目標／機能訓練プログラムを取り込みます。よろしいですか？（空欄に反映・重複追加なし）`)) return false;
     setEditing(e=>{
       const ne={...e};
       if((k.honninKibou||'').trim() && !(e.honninKibou||'').trim()) ne.honninKibou=k.honninKibou;
@@ -40721,16 +40726,30 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
       return ne;
     });
     markDirty();
+    return true;
   };
-  const importFromKyomi=()=>{
-    if(!latestKyomi){ if(navigateTo && window.confirm('この利用者の興味・関心チェックがまだありません。作成画面を開きますか？')) navigateTo('kyomi_kanshin'); return; }
+  const importFromKyomi=(quiet)=>{
+    if(!latestKyomi){ if(!quiet && navigateTo && window.confirm('この利用者の興味・関心チェックがまだありません。作成画面を開きますか？')) navigateTo('kyomi_kanshin'); return false; }
     const k=latestKyomi;
     const flag=(f)=>{ const o=[]; (KYOMI_DEFAULT).forEach(n=>{ if(k.items?.[n]?.[f]) o.push(n); }); (k.custom||[]).forEach(c=>{ if(c&&c[f]&&c.name) o.push(c.name); }); return o; };
     const st=flag('shitemitai'), si=flag('shiteiru'), bikou=(k.bikou||'').trim();
-    if(!st.length&&!si.length&&!bikou){ alert('取り込める項目がありませんでした。'); return; }
-    if(!window.confirm('興味・関心チェックから「ご本人の希望・意向」に取り込みます。よろしいですか？（既存の下に追記）')) return;
+    if(!st.length&&!si.length&&!bikou){ if(!quiet) alert('取り込める項目がありませんでした。'); return false; }
+    // ★ 一括時や既に取り込み済みの場合の重複追記を防ぐ: 同じ内容が既に含まれていたらスキップ
     const kibou=[ st.length?`してみたい：${st.join('、')}`:'', si.length?`している：${si.join('、')}`:'', bikou ].filter(Boolean).join('\n');
+    if(kibou && String(editing?.honninKibou||'').includes(kibou)) { if(!quiet) alert('興味・関心の内容は既に取り込み済みです。'); return false; }
+    if(!quiet && !window.confirm('興味・関心チェックから「ご本人の希望・意向」に取り込みます。よろしいですか？（既存の下に追記）')) return false;
     if(kibou) _appendField('honninKibou', kibou);
+    return true;
+  };
+  // ★ 一括自動生成(2026-09-08 店舗要望): フェイスシート補完+利用予定+個別機能訓練+興味関心を一度に取り込む(空欄のみ・上書きなし)
+  const importAll=()=>{
+    if(!window.confirm('フェイスシート・基本利用日・個別機能訓練計画書・興味関心チェックから、この計画書の空欄へまとめて取り込みます。\n（入力済みの欄は上書きしません）よろしいですか？')) return;
+    const done=[];
+    if(importFromFaceSheet(true)) done.push('フェイスシート');
+    if(!String(editing?.riyoubi||'').trim()){ const s2=_baseUseDays(patient); if(s2){ upd({riyoubi:s2}); done.push('利用予定'); } }
+    if(importFromKinou(true)) done.push('個別機能訓練');
+    if(importFromKyomi(true)) done.push('興味・関心');
+    alert(done.length?`取り込みました: ${done.join('・')}\n（空欄のみ反映。内容を確認して仕上げてください）`:'取り込める項目がありませんでした（入力済みの欄は上書きしません）。');
   };
   // ★ 利用予定: 基本利用日(scheduleAmPm)＋送迎時間(pickupTimes)から「曜日（区分 時間）」を組み立てて反映
   const fillRiyoubi=()=>{ const s=_baseUseDays(patient); if(!s){ alert('この利用者の基本利用日が登録されていません（利用者マスタで設定してください）。'); return; } upd({riyoubi:s}); };
@@ -40759,10 +40778,13 @@ function TsushoKeikakuView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPr
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="bg-indigo-50 rounded-xl border border-indigo-200 p-4">
               <div className="text-sm font-bold text-indigo-700 mb-1 flex items-center gap-2">他の様式から取り込む（計画書連携）</div>
-              <div className="text-[11px] text-indigo-900 opacity-70 mb-3">個別機能訓練計画書・興味関心チェックの最新内容を、この計画書の該当欄へ取り込みます（空欄に反映／追記）。</div>
-              <div className="flex flex-wrap gap-2">
-                <button onClick={importFromKinou} className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100">個別機能訓練計画書から取り込む <span className="font-normal opacity-70">{latestKinou?`（${latestKinou.createdDate||''}）`:'（未作成）'}</span></button>
-                <button onClick={importFromKyomi} className="px-3 py-2 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100">興味・関心から取り込む <span className="font-normal opacity-70">{latestKyomi?`（${latestKyomi.recordDate||''}）`:'（未作成）'}</span></button>
+              <div className="text-[11px] text-indigo-900 opacity-70 mb-3">最新の各様式から、この計画書の空欄へ取り込みます（入力済みの欄は上書きしません）。</div>
+              <div className="flex flex-wrap gap-2 items-stretch">
+                {/* ★ 一括自動生成(2026-09-08 店舗要望): 下の個別ボタンを一度に実行 */}
+                <button onClick={importAll} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 shadow">一括自動生成（全部まとめて取り込む）</button>
+                <button onClick={()=>importFromFaceSheet()} className="px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 text-left">フェイスシートから空欄を補完<br/><span className="font-normal opacity-70 text-[10px]">→ 経緯・生活状況・健康状態・自立度など</span></button>
+                <button onClick={()=>importFromKinou()} className="px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 text-left">個別機能訓練計画書から取り込む <span className="font-normal opacity-70">{latestKinou?`（${latestKinou.createdDate||''}）`:'（未作成）'}</span><br/><span className="font-normal opacity-70 text-[10px]">→ 本人・家族の希望／長期・短期目標／サービス提供内容(機能訓練)</span></button>
+                <button onClick={()=>importFromKyomi()} className="px-3 py-1.5 bg-white border border-indigo-300 text-indigo-700 rounded-lg text-xs font-bold hover:bg-indigo-100 text-left">興味・関心から取り込む <span className="font-normal opacity-70">{latestKyomi?`（${latestKyomi.recordDate||''}）`:'（未作成）'}</span><br/><span className="font-normal opacity-70 text-[10px]">→ ご本人の希望・意向（してみたい／している）</span></button>
               </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4">
