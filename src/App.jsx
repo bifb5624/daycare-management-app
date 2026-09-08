@@ -18521,7 +18521,8 @@ export default function App() {
     //   印刷時(@media print)には影響しない。
     // ★ 2026-09-08: 送付セット等はラッパーdivの中にページが入るため、直下(body>)限定をやめて
     //   どの深さのページ要素(page-break指定)にも白紙+影を付ける(送付状と計画書がつながって見える問題の修正)
-    const _pageSepCss = `@media screen{ body{background:#525659!important;padding:14px!important;} body [style*="page-break-after"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
+    // ★ html(キャンバス)も背景色に(2026-09-08 店舗報告: 縮小表示の丸め誤差でiframe土台の白が1px線として見える)
+    const _pageSepCss = `@media screen{ html{background:#525659!important;} body{background:#525659!important;padding:14px!important;} body [style*="page-break-after"],body>.tp,body>.diary-page-wrap,body>[data-page-break]{background:white;display:block;margin:0 auto 20px!important;box-shadow:0 4px 18px rgba(0,0,0,0.35);} }`;
     // ★ 内側スクロールバーは完全に出さない(2026-09-08 店舗要望): 高さはonLoad+遅延再測定で内容に追従し、
     //   スクロールは外側(プレビュー枠)の1本に統一する
     const _sbCss = `@media screen{ html,body{overflow:hidden!important;scrollbar-width:none!important;} ::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;} }`;
@@ -20039,7 +20040,7 @@ export default function App() {
                         (外側のスクロールで全体を見る。高さはフォント読込後にもう一度測って追従) */}
                     <iframe title="印刷プレビュー" srcDoc={previewSrcDoc} scrolling="no"
                       onLoad={e=>{ const t=e.target; const meas=()=>{ try { const d = t.contentWindow.document; const hh = Math.max(d.body.scrollHeight, d.documentElement.scrollHeight); if (hh) setIfH(h=>Math.abs(hh-h)>8?hh:h); } catch {} }; meas(); setTimeout(meas,700); setTimeout(meas,2000); }}
-                      style={{width:`${pageW*3.7795}px`, height:`${ifH}px`, border:'none', background:'white', transform:`scale(${scale})`, transformOrigin:'top left', display:'block', overflow:'hidden'}} />
+                      style={{width:`${pageW*3.7795}px`, height:`${ifH}px`, border:'none', background:'#525659', transform:`scale(${scale})`, transformOrigin:'top left', display:'block', overflow:'hidden'}} />
                   </div>
                 ) : (
                   <div style={{background:'white',minWidth:595,padding:60,boxShadow:'0 4px 24px rgba(0,0,0,0.4)',textAlign:'center'}}>
