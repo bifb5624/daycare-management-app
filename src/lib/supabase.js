@@ -745,7 +745,7 @@ export async function supabaseMergeAndSyncStateForStore(storeId, localData) {
   // ★ _fieldTs の「新しい方が空=意図的削除」判定から除外する項目。 これらは画面側が正規化/派生で空を書くため、
   //   除外しないと『別端末で入力済みの値』が空で消える(下の非空優先の保護に必ず委ねる)。
   const FIELDTS_EXCLUDE = new Set([
-    'nextDateOverride','nextTimeOverride', // 空=未設定(自動計算)
+    'nextDateOverride','nextTimeOverride','nextTimeOverrideFor', // 空=未設定(自動計算)
     'actualTime',                          // 空=施設の既定提供時間を使う(専用の入力UIが無い)
     'temp','bpUpSt','bpDnSt','bpUpEn','bpDnEn','plSt','plEn', // *_AM/*_PM からの旧形式互換の派生値
   ]);

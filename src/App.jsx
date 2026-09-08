@@ -21875,6 +21875,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                   //   ここで書き出さないと、他項目を保存した瞬間に再構築で消えてしまうため、既存値を必ず引き継ぐ。
                   ...(((existing?.nextDateOverride ?? p.nextDateOverride) ?? '') !== '' ? { nextDateOverride: existing?.nextDateOverride ?? p.nextDateOverride } : {}),
                   ...(((existing?.nextTimeOverride ?? p.nextTimeOverride) ?? '') !== '' ? { nextTimeOverride: existing?.nextTimeOverride ?? p.nextTimeOverride } : {}),
+                  ...(((existing?.nextTimeOverrideFor ?? p.nextTimeOverrideFor) ?? '') !== '' ? { nextTimeOverrideFor: existing?.nextTimeOverrideFor ?? p.nextTimeOverrideFor } : {}),
                   // ★ 担当者: スタッフ切替で選んでいるアクティブ記録者を保存
                   //   未選択の場合は 既存値を維持 (それ以外のフォールバックは使わない)
                   recorder: getRecorderName() || existing?.recorder || '',
@@ -29496,7 +29497,13 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
       const _rec = (appData.ticketRecords||[]).find(r => String(r.id) === String(recordId));
       const _cur = String((_rec && _rec[field]) ?? '').trim();
       const _fin = String(finalValue ?? '').trim();
-      if (_fin === _cur) return;                                   // 変化なし → 書かない
+      // ★ 2026-09-08: 値が同じでも「対象日(nextTimeOverrideFor)が未記録/不一致」なら書き直す。
+      //   これが無いと、修正前に入力済みの振替お迎え時間は再確定しても対象日が付かず表示されないまま。
+      const _needFor = field === 'nextTimeOverride' && _fin && (() => {
+        const _fd = String(((localOverrides[recordId] || {}).nextDateOverride) || '').trim();
+        return !!_fd && String((_rec && _rec.nextTimeOverrideFor) || '').trim() !== _fd;
+      })();
+      if (_fin === _cur && !_needFor) return;                      // 変化なし → 書かない
       if (!_cur || !/\d|未定/.test(_cur)) {
         // 現在実質未設定(空/残骸)の場合: 自動計算値と同じ内容や空の書き込みは「変更なし」として書かない
         //   (自動値の焼き付き=全員「変更済」化と、空の伝播を防ぐ)
@@ -29509,7 +29516,15 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           if (_fin === _auto) return;
         }
       }
-      persistOverride(recordId, { [field]: finalValue });
+      // ★ 2026-09-08: お迎え時間の手入力には「どの次回日付に対する時間か」(nextTimeOverrideFor)を併記して保存する。
+      //   次回が振替の場合、表示側は過去の手入力残骸を無視する仕様のため、対象日が一致する新しい入力だけを
+      //   表示に採用できるようにする(「振替の方のお迎え時間を入力しても表示されない」の修正)。
+      if (field === 'nextTimeOverride') {
+        const _forDate = String(((localOverrides[recordId] || {}).nextDateOverride) || '').trim();
+        persistOverride(recordId, { [field]: finalValue, ...(_forDate ? { nextTimeOverrideFor: _forDate } : {}) });
+      } else {
+        persistOverride(recordId, { [field]: finalValue });
+      }
   };
 
   const saveAllOverrides = () => {
@@ -29527,6 +29542,11 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           if (String(ov[f] ?? '') !== String(b[f] ?? '')) patch[f] = ov[f];
         });
         if (!Object.keys(patch).length) return;
+        // ★ 時間を編集した場合は対象日(表示中の次回日付)も併記(2026-09-08 振替のお迎え時間表示対応)
+        if (patch.nextTimeOverride !== undefined) {
+          const _forDate = String(ov.nextDateOverride || '').trim();
+          if (_forDate) patch.nextTimeOverrideFor = _forDate;
+        }
         _changed++;
         const idx = recs.findIndex(r => String(r.id) === String(rid));
         if (idx >= 0) { recs[idx] = { ...recs[idx], ...patch, _savedAt: now }; }
@@ -30016,12 +30036,19 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
       const info = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
       nextDateDisplay = info.date;
   }
-  // 時間: 次回が【振替/臨時】なら常に自動計算(過去の手入力を無視=区分に合った8時/13時)。
+  // 時間: 次回が【振替/臨時】の場合、過去の手入力残骸(通常日向けの時刻)は無視して自動計算(8時/13時)。
+  //   ★ 2026-09-08: ただし「この振替日向け」と分かる手入力(nextTimeOverrideForが表示中の次回日付と一致)は
+  //     表示に採用する(振替の方のお迎え時間を入力しても表示されなかった問題の修正)。
   //   通常の次回は手入力(nextTimeOverride)を優先し、無ければ自動計算。
   {
       const info2 = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
       if (info2.isFurikae) {
-          nextTimeDisplay = info2.time || "　時　分";
+          const _tf = String(record.nextTimeOverrideFor || '').trim();
+          if (/\d/.test(String(record.nextTimeOverride ?? '')) && _tf && _tf === String(nextDateDisplay || '').trim()) {
+              nextTimeDisplay = record.nextTimeOverride;
+          } else {
+              nextTimeDisplay = info2.time || "　時　分";
+          }
       } else if (/\d/.test(String(record.nextTimeOverride ?? ''))) {
           nextTimeDisplay = record.nextTimeOverride;
       } else {
