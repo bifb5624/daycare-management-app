@@ -23045,47 +23045,47 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
         const posStyle = below
           ? {top:massageMenu.cyB+8, transform:'translateX(-50%)'}
           : {top:massageMenu.cy-8, transform:'translate(-50%,-100%)'};
-        const bigBtn = {width:'100%',padding:'12px 10px',borderRadius:12,fontSize:17,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent',boxSizing:'border-box'};
+        const bigBtn = {width:'100%',padding:'8px 8px',borderRadius:10,fontSize:14,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent',boxSizing:'border-box'};
         return (
           <div onClick={(e)=>e.stopPropagation()}
-            style={{position:'fixed',left:massageMenu.cx,...posStyle,background:'white',border:'2px solid #1e293b',borderRadius:16,boxShadow:'0 10px 34px rgba(0,0,0,0.35)',zIndex:99999,padding:12,width:230,maxWidth:'92vw',maxHeight:'70vh',overflowY:'auto'}}>
+            style={{position:'fixed',left:massageMenu.cx,...posStyle,background:'white',border:'2px solid #1e293b',borderRadius:12,boxShadow:'0 10px 34px rgba(0,0,0,0.35)',zIndex:99999,padding:8,width:186,maxWidth:'92vw',maxHeight:'70vh',overflowY:'auto'}}>
             {isPick ? (
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+              <div style={{display:'flex',flexDirection:'column',gap:5}}>
                 {hist.length>0 && <>
-                  <div style={{fontSize:12,fontWeight:'bold',color:'#64748b'}}>直近の実施(タップで選択)</div>
+                  <div style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>直近の実施(タップで選択)</div>
                   {hist.map((r,ri)=>(
                     <button key={ri} onClick={()=>choose(r.massage)}
-                      style={{...bigBtn,background:'#f0fdfa',color:'#0f766e',border:'1.5px solid #99f6e4',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                      <span style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
+                      style={{...bigBtn,padding:'6px 8px',background:'#f0fdfa',color:'#0f766e',border:'1.5px solid #99f6e4',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <span style={{fontSize:11,color:'#64748b',fontWeight:'bold'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
                       <span>{r.massage||''}</span>
                     </button>
                   ))}
                   <div style={{borderTop:'1px solid #e2e8f0'}}/>
                 </>}
-                <div style={{fontSize:12,fontWeight:'bold',color:'#64748b'}}>担当を選ぶ</div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
+                <div style={{fontSize:10,fontWeight:'bold',color:'#64748b'}}>担当を選ぶ</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:5}}>
                   {staffList.map((st,i)=>(
                     <button key={i} onClick={()=>choose(st)}
-                      style={{padding:'12px 4px',borderRadius:12,fontSize:16,fontWeight:'bold',cursor:'pointer',background: rec.massage===st?'#eff6ff':'#f8fafc',color:'#1e293b',border: rec.massage===st?'2px solid #3b82f6':'1.5px solid #cbd5e1',WebkitTapHighlightColor:'transparent'}}>{st}</button>
+                      style={{padding:'8px 1px',borderRadius:10,fontSize:13,fontWeight:'bold',cursor:'pointer',whiteSpace:'nowrap',overflow:'hidden',background: rec.massage===st?'#eff6ff':'#f8fafc',color:'#1e293b',border: rec.massage===st?'2px solid #3b82f6':'1.5px solid #cbd5e1',WebkitTapHighlightColor:'transparent'}}>{st}</button>
                   ))}
                 </div>
                 {!!rec.massage && (
                   <button onClick={()=>{ updateRecord(rec.id,'massage',''); if(rec.done) updateRecord(rec.id,'done',false); close(); }}
-                    style={{...bigBtn,fontSize:14,padding:'9px 10px',background:'white',color:'#dc2626',border:'1.5px solid #fecaca'}}>空欄に戻す</button>
+                    style={{...bigBtn,fontSize:11,padding:'5px 8px',background:'white',color:'#dc2626',border:'1.5px solid #fecaca'}}>空欄に戻す</button>
                 )}
               </div>
             ) : (
-              <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                <div style={{fontSize:13,fontWeight:'bold',color:'#334155',textAlign:'center'}}>担当: {rec.massage}{rec.done ? '（実施済み）' : ''}</div>
+              <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                <div style={{fontSize:11,fontWeight:'bold',color:'#334155',textAlign:'center'}}>担当: {rec.massage}{rec.done ? '（実施済み）' : ''}</div>
                 {!rec.done ? (
                   <button onClick={()=>{ updateRecord(rec.id,'done',true); close(); }}
-                    style={{...bigBtn,fontSize:19,padding:'14px 10px',background:'#ea580c',color:'white',border:'none'}}>✓ 実施にする</button>
+                    style={{...bigBtn,fontSize:15,padding:'10px 8px',background:'#ea580c',color:'white',border:'none'}}>✓ 実施にする</button>
                 ) : (
                   <button onClick={()=>{ updateRecord(rec.id,'done',false); close(); }}
                     style={{...bigBtn,background:'white',color:'#334155',border:'1.5px solid #cbd5e1'}}>実施を取り消す</button>
                 )}
                 <button onClick={()=>setMassageMenu({...massageMenu, view:'pick'})}
-                  style={{...bigBtn,fontSize:15,padding:'10px',background:'#f8fafc',color:'#1d4ed8',border:'1.5px solid #bfdbfe'}}>担当変更</button>
+                  style={{...bigBtn,fontSize:12,padding:'7px 8px',background:'#f8fafc',color:'#1d4ed8',border:'1.5px solid #bfdbfe'}}>担当変更</button>
               </div>
             )}
           </div>
