@@ -17479,10 +17479,13 @@ export default function App() {
   //   従来はticketRecordsを丸ごと除外していたため、容量超過店舗では boot-merge prev:0 =
   //   再読み込みのたびに全欄が空→テーブル全量(997行)到着まで数秒〜十数秒の空白が生じ、
   //   その間の入力・誤解(消えた!)の温床になっていた。直近分だけ残せば当月画面は即表示される。
+  // ★ 2026-09-10(店舗承認): 端末控えに持つ提供記録は「直近1か月ぶん(35日)」だけ。
+  //   記録の正本はticket_recordsテーブル(起動時に全量取得・完了までは読込中オーバーレイ表示)のため、
+  //   古い記録を控えに持つ必要はない。扇橋実測で提供記録が控え容量の65%(3か月で1.4MB)を占めていた対策。
   const _slimTickets = (arr) => {
     try {
       const rs = Array.isArray(arr) ? arr : [];
-      const cut = Date.now() - 45 * 24 * 60 * 60 * 1000;
+      const cut = Date.now() - 35 * 24 * 60 * 60 * 1000;
       const out = rs.filter(r => {
         const dm = String((r && r.date) || '').match(/(\d+)月(\d+)日/);
         if (!dm || !r.year) return false;
@@ -17513,7 +17516,8 @@ export default function App() {
         catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [], faxDataStore: {}, generalFaxTemplates: [], trashedAnnouncements: [] })); } catch {} } }
     } else
     try {
-      localStorage.setItem('daycareAppData_v3', JSON.stringify(appData));
+      // ★ 2026-09-10: テーブル方式では控えの提供記録を直近35日に常時トリム(正本はテーブル・容量8割超対策)
+      localStorage.setItem('daycareAppData_v3', JSON.stringify(TABLE_ENABLED ? { ...appData, ticketRecords: _slimTickets(appData.ticketRecords) } : appData));
       // 成功時: 古い分離保存キーを掃除 (整合性確保)
       try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
     } catch (e) {
@@ -17521,7 +17525,7 @@ export default function App() {
       console.warn('localStorage 容量オーバー、写真を分離して再保存します', e);
       try {
         const photos = appData.familyPhotos || [];
-        localStorage.setItem('daycareAppData_v3', JSON.stringify({...appData, familyPhotos: []}));
+        localStorage.setItem('daycareAppData_v3', JSON.stringify(TABLE_ENABLED ? { ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) } : {...appData, familyPhotos: []}));
         try { localStorage.setItem('daycarePhotos_v1', JSON.stringify(photos)); } catch(_e){ console.warn('写真のローカル保存をスキップ', _e); }
       } catch(e2) {
         // ★ スマホの内蔵ブラウザ等はlocalStorage容量が極小で、ログイン画面でもここに来る。
