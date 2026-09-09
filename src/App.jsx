@@ -29512,6 +29512,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
 
   // ★ 次回予定の未入力判定(2026-09-09 店舗要望): 印刷時に空欄になる人を数える。印刷側の表示ロジックと同条件。
   //   「未定」は意図的な入力として未入力扱いしない。
+  //   ★ 2026-09-09b: 時刻は「時」「分」の両方に数字が入って初めて入力済み扱い(「8時 分」の片入力は未入力に数える)。
+  const _fullTime = (v) => /\d+\s*[:時]\s*\d+/.test(String(v ?? ''));
   const _nextPlanMissing = (r) => {
     const patient = (appData.patients||[]).find(pt => pt.id === r.patientId);
     if (!patient) return false;
@@ -29522,16 +29524,17 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     if (!/\d/.test(_ndS)) return true;               // 次回日付が空欄
     if (info.isFurikae) {                              // 振替: その振替日向けの手入力のみ有効
       const _tf = String(r.nextTimeOverrideFor || '').trim();
-      return !(/\d/.test(String(r.nextTimeOverride ?? '')) && _tf && _tf === _ndS);
+      return !(_fullTime(r.nextTimeOverride) && _tf && _tf === _ndS);
     }
-    if (/\d/.test(String(r.nextTimeOverride ?? ''))) return false;
+    if (_fullTime(r.nextTimeOverride)) return false;
+    if (/\d/.test(String(r.nextTimeOverride ?? ''))) return true;  // 時か分の片方だけ→未入力扱い
     const _dm = _ndS.match(/(\d+)月(\d+)日/);
     if (_dm) {
       const _y = r.year || new Date(selectedDate).getFullYear();
       const _dow = new Date(_y, parseInt(_dm[1],10)-1, parseInt(_dm[2],10)).getDay();
-      if (getPickupTimeForDow(patient, _dow, appData) || info.time) return false;
-    } else if (info.time) return false;
-    return true;                                       // 自動計算でも時間が出ない
+      if (_fullTime(getPickupTimeForDow(patient, _dow, appData) || info.time || '')) return false;
+    } else if (_fullTime(info.time)) return false;
+    return true;                                       // 自動計算でも完全な時刻(時+分)が出ない
   };
   const missingNextList = displayRecords.filter(_nextPlanMissing);
 
@@ -30286,10 +30289,14 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
   let nextDateDisplay = "　月　日（　）", nextTimeDisplay = "　時　分";
 
+  // ★ 空き面(2面印刷の余り)は「未定」等を出さず、月日・時分とも手書き用の空欄のまま(2026-09-09 店舗要望)
+  const _isBlankFace = patient && patient.id === '__blank__';
   // 日付: 数字入りの実値(または「未定」)があればそれ、なければ自動計算。
   //   ★ null/''/空白残骸(過去の消失バグの名残)は「値なし」として自動計算に落とす。
   //     旧実装(undefined以外を全て採用)では、null残骸のある利用者だけ空欄表示になっていた。
-  if (/\d|未定/.test(String(record.nextDateOverride ?? ''))) {
+  if (_isBlankFace) {
+      // 手書き用: 空欄テンプレのまま
+  } else if (/\d|未定/.test(String(record.nextDateOverride ?? ''))) {
       nextDateDisplay = record.nextDateOverride;
   } else {
       const info = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
@@ -30299,7 +30306,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
   //   ★ 2026-09-08: ただし「この振替日向け」と分かる手入力(nextTimeOverrideForが表示中の次回日付と一致)は
   //     表示に採用する(振替の方のお迎え時間を入力しても表示されなかった問題の修正)。
   //   通常の次回は手入力(nextTimeOverride)を優先し、無ければ自動計算。
-  {
+  if (!_isBlankFace) {
       const info2 = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
       if (info2.isFurikae) {
           const _tf = String(record.nextTimeOverrideFor || '').trim();
@@ -30458,7 +30465,7 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
 
           {/* ヘッダー（名前・日付） */}
           <div className="flex justify-between items-end mb-2 shrink-0">
-            <div className="text-3xl font-bold tracking-widest">{patient.name} <span className="text-xl font-normal ml-2">様</span></div>
+            <div className="text-3xl font-bold tracking-widest"><span style={{display:'inline-block',minWidth:'5.5em'}}>{patient.name}</span> <span className="text-xl font-normal ml-2">様</span></div>
             <div className="text-2xl font-bold tracking-widest">{dateStr}</div>
           </div>
 
@@ -30520,16 +30527,18 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
                   //   連絡事項を大きくして運動テーブルが縮むと、○/項目名も自動で小さくなる(はみ出さない)。
                   const _rowH = exBoxH > 0 ? (exBoxH / rows.length) : 40;
                   const labelFs = Math.max(8, Math.min(18, Math.round(_rowH * 0.48)));
+                  // ★ 長いメニュー名は「…」で切らず、文字数に応じて縮小して全文字を出す(2026-09-09 店舗要望)
+                  const _lblFs = (lbl) => { const n = String(lbl || '').length; return n > 7 ? Math.max(7, Math.round(labelFs * 7 / n)) : labelFs; };
                   // ★ 値(○/実施値)は項目名と同じフォントサイズ・太さで表示
                   const valueFs = labelFs;
                   // ★ 各行の高さを均等に分割 (空セル/値ありセルで揺れない)
                   const rowHeightPct = `${100/rows.length}%`;
                   return (
                   <tr key={idx} className={idx !== rows.length - 1 ? "border-b border-black" : ""} style={{height: rowHeightPct}}>
-                    <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[0].label}</th>
+                    <th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:_lblFs(row[0].label),whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}}>{row[0].label}</th>
                     <td className={`border-r-2 border-black w-[20%] ${cellCls(row[0])}`} style={{fontWeight:"normal",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[0], e)}>{renderItemValue(row[0])}</td>
                     {row[1]
-                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:labelFs,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',height: rowHeightPct}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"normal",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
+                      ? (<><th className="border-r border-black w-[30%] bg-white px-1" style={{fontWeight:"normal",fontSize:_lblFs(row[1].label),whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}}>{row[1].label}</th><td className={`w-[20%] ${cellCls(row[1])}`} style={{fontWeight:"normal",fontSize:valueFs,whiteSpace:'nowrap',overflow:'hidden',height: rowHeightPct}} onClick={e=>handleCellClick(row[1], e)}>{renderItemValue(row[1])}</td></>)
                       : (<><th className="border-r border-black w-[30%] bg-white" style={{height: rowHeightPct}}></th><td className="w-[20%]" style={{height: rowHeightPct}}></td></>)}
                   </tr>
                   );
