@@ -29312,6 +29312,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [renrakuModal, setRenrakuModal] = useState(null); // {patientId} 連絡事項の編集
   const [showPrintCards, setShowPrintCards] = useState(false); // ★ 印刷用の隠しカードは印刷時だけ描画(スマホのメモリ対策)
+  const [printMissingConfirm, setPrintMissingConfirm] = useState(null); // ★ 次回予定未入力の確認 {names:[]}(2026-09-09)
   const [showPrintSettings, setShowPrintSettings] = useState(false); // ★ 右上「詳細設定」パネル(面数/用紙/補助線)
   const [mobileCardLimit, setMobileCardLimit] = useState(6); // ★ スマホは重いカードを少しずつ描画(メモリ対策)
   const [mobileOpenCardId, setMobileOpenCardId] = useState(null); // ★ スマホは重いカードを描画せず、開いた1人だけ描画(メモリ対策)
@@ -29509,10 +29510,40 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     setPatientValueModal(null);
   };
 
+  // ★ 次回予定の未入力判定(2026-09-09 店舗要望): 印刷時に空欄になる人を数える。印刷側の表示ロジックと同条件。
+  //   「未定」は意図的な入力として未入力扱いしない。
+  const _nextPlanMissing = (r) => {
+    const patient = (appData.patients||[]).find(pt => pt.id === r.patientId);
+    if (!patient) return false;
+    const info = getNextVisitInfo(patient, selectedDate, appData.monthlyShifts, appData);
+    const nd = /\d|未定/.test(String(r.nextDateOverride ?? '')) ? r.nextDateOverride : info.date;
+    const _ndS = String(nd || '').trim();
+    if (_ndS === '未定') return false;
+    if (!/\d/.test(_ndS)) return true;               // 次回日付が空欄
+    if (info.isFurikae) {                              // 振替: その振替日向けの手入力のみ有効
+      const _tf = String(r.nextTimeOverrideFor || '').trim();
+      return !(/\d/.test(String(r.nextTimeOverride ?? '')) && _tf && _tf === _ndS);
+    }
+    if (/\d/.test(String(r.nextTimeOverride ?? ''))) return false;
+    const _dm = _ndS.match(/(\d+)月(\d+)日/);
+    if (_dm) {
+      const _y = r.year || new Date(selectedDate).getFullYear();
+      const _dow = new Date(_y, parseInt(_dm[1],10)-1, parseInt(_dm[2],10)).getDay();
+      if (getPickupTimeForDow(patient, _dow, appData) || info.time) return false;
+    } else if (info.time) return false;
+    return true;                                       // 自動計算でも時間が出ない
+  };
+  const missingNextList = displayRecords.filter(_nextPlanMissing);
+
   // モーダルを開く時、選択を初期化（デフォルトは全員）
-  const handlePrint = () => {
+  const _openPrintSelect = () => {
     setPrintSelectedIds(displayRecords.map(r => r.patientId));
     setPrintModeModal(true);
+  };
+  const handlePrint = () => {
+    // ★ 2026-09-09(店舗要望): 次回予定が未入力の方がいたら、プレビューへ進む前に確認する
+    if (missingNextList.length) { setPrintMissingConfirm({ names: missingNextList.map(r => r.name) }); return; }
+    _openPrintSelect();
   };
   const togglePrintId = (pid) => setPrintSelectedIds(prev => prev.includes(pid) ? prev.filter(x=>x!==pid) : [...prev, pid]);
   const selectAllPrint = () => setPrintSelectedIds(displayRecords.map(r => r.patientId));
@@ -29837,6 +29868,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         </button>
         <button onClick={() => setIsScheduleModalOpen(true)} className="border px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0 bg-white border-slate-300 hover:bg-slate-50 text-slate-700">
           次回予定
+          {/* ★ 未入力人数バッジ(2026-09-09 店舗要望): 印刷で空欄になる人数をひと目で */}
+          {missingNextList.length > 0 && <span className="ml-1.5 bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">未入力{missingNextList.length}名</span>}
         </button>
         <button onClick={() => setIsConfigOpen(true)} className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-bold flex items-center text-sm transition-all active:scale-95 whitespace-nowrap shrink-0">
           項目
@@ -29947,9 +29980,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" style={{maxHeight:'90vh'}}>
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-shrink-0">
-                <h2 className="text-lg font-bold text-slate-800 flex items-center"><Clock size={20} className="mr-2 text-blue-600"/> 次回予定の変更
-                  <button onClick={_scanOvZansai} title="全期間の記録から、保存済みの次回日付/時間が自動計算と食い違うものを一覧表示し、選んで自動計算に戻せます" className="ml-3 px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-700 rounded-lg text-xs font-bold">残骸チェック</button>
-                </h2>
+                <h2 className="text-lg font-bold text-slate-800 flex items-center"><Clock size={20} className="mr-2 text-blue-600"/> 次回予定の変更</h2>
+                {/* ★ 残骸チェックボタンは2026-09-09撤去(生成源の自動書込を全て塞ぎ振替も空欄化したため役目終了)。_scanOvZansai等の機能コードは温存 */}
                 <button onClick={() => setIsScheduleModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full"><X size={20}/></button>
               </div>
               <div className="flex-1 overflow-y-auto p-4">
@@ -30065,6 +30097,24 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
           </div>
         )}
 
+        {/* ★ 次回予定未入力の確認(2026-09-09 店舗要望): プレビュー前に空欄になる人を知らせる */}
+        {printMissingConfirm && ReactDOM.createPortal((
+          <div className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-start justify-center p-4 pt-24">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+              <div className="px-6 py-4 bg-amber-50 border-b border-amber-200">
+                <div className="font-bold text-slate-800 text-base">次回予定が未入力の方がいます（{printMissingConfirm.names.length}名）</div>
+                <div className="text-xs text-slate-500 mt-1">このまま進むと、連絡帳の「次回お迎え時間」が空欄で印刷されます。</div>
+              </div>
+              <div className="px-6 py-3 max-h-52 overflow-y-auto">
+                {printMissingConfirm.names.map((n,i)=>(<div key={i} className="text-sm font-bold text-slate-700 py-1 border-b border-slate-100 last:border-0">{n} 様</div>))}
+              </div>
+              <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                <button onClick={()=>{ setPrintMissingConfirm(null); setIsScheduleModalOpen(true); }} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm">入力しに戻る</button>
+                <button onClick={()=>{ setPrintMissingConfirm(null); _openPrintSelect(); }} className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl font-bold text-sm">このまま進む</button>
+              </div>
+            </div>
+          </div>
+        ), document.body)}
         {/* 印刷対象選択モーダル（チェックされた利用者だけ印刷） */}
         {printModeModal && ReactDOM.createPortal((
           <div className="fixed inset-0 bg-slate-900/50 z-[9999] flex items-center justify-center p-4" onClick={()=>setPrintModeModal(false)}>
