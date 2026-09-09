@@ -17459,6 +17459,11 @@ export default function App() {
   //   従来は保存のたびに フル→写真分離→軽量 と巨大JSONの変換を3回行ってから失敗しており、
   //   CPUの無駄と persist-fail ログの洪水になっていた(動作自体は軽量版成功で問題なし)。
   const persistQuotaUntilRef = React.useRef(0);
+  // ★ push単一実行キュー(2026-09-09 扇橋調査): 自動保存のたびに巨大JSONのCAS pushを同時多発させると、
+  //   遅いWi-Fiでは互いにCAS競合して1件も完了しないまま詰まる(diagで23save/0push-okを実測)。
+  //   実行中は最新データだけ控えて直列に流す。タイムアウト(20秒)で必ず決着させ、失敗は通知に到達させる。
+  const _pushBusyRef = React.useRef(false);
+  const _pushNextRef = React.useRef(null);
   // ★ 軽量保存でも「直近45日の提供記録」は残す(2026-09-01 扇橋の再読み込み空欄対策)。
   //   従来はticketRecordsを丸ごと除外していたため、容量超過店舗では boot-merge prev:0 =
   //   再読み込みのたびに全欄が空→テーブル全量(997行)到着まで数秒〜十数秒の空白が生じ、
@@ -17493,7 +17498,8 @@ export default function App() {
     // 容量超過モード中: 軽量版へ直行(10分ごとにフル保存を再挑戦)
     if (TABLE_ENABLED && Date.now() < persistQuotaUntilRef.current) {
       try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); }
-      catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); } catch {} }
+      catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); }
+        catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [], faxDataStore: {}, generalFaxTemplates: [], trashedAnnouncements: [] })); } catch {} } }
     } else
     try {
       localStorage.setItem('daycareAppData_v3', JSON.stringify(appData));
@@ -17517,10 +17523,22 @@ export default function App() {
           syncLog('persist-fail', { err: String((e2 && e2.name) || e2).slice(0, 40) });
           if (TABLE_ENABLED) {
             // ★ 直近45日の記録は残した軽量版を優先し、それでも入らなければ記録なし版へ(2026-09-01)
-            try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); }
-            catch { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); }
-            syncLog('persist-slim', {});
-            persistQuotaUntilRef.current = Date.now() + 10 * 60 * 1000; // ★ 以後10分は軽量版へ直行
+            // ★ 2026-09-09(扇橋実測): 軽量版2段とも失敗すると外側catchが握り潰して端末に何も残らなかった
+            //   (persist-fail 24回/persist-slim 0回)。第3段=FAX等の重量データも除いた最小版で必ず残す。
+            //   日誌(diaryLogs)・設定・利用者は最小版でも保持する。
+            let _slimOk = false;
+            try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); _slimOk = true; }
+            catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); _slimOk = true; } catch {} }
+            if (!_slimOk) {
+              try {
+                localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [], faxDataStore: {}, generalFaxTemplates: [], trashedAnnouncements: [] }));
+                _slimOk = true; syncLog('persist-slim2', {});
+              } catch { syncLog('persist-slim-fail', {}); }
+            }
+            if (_slimOk) {
+              syncLog('persist-slim', {});
+              persistQuotaUntilRef.current = Date.now() + 10 * 60 * 1000; // ★ 以後10分は軽量版へ直行
+            }
           }
         } catch {}
       }
@@ -19346,11 +19364,17 @@ export default function App() {
         // ★ 2台で同時に編集していると、書き込み権の奪い合い(CAS競合)で1回目が落ちることがある。
         //   以前はその都度「同期に失敗しました」と出していたが、実際は少し待てば通ることが多い。
         //   → 失敗したら自動で最大2回やり直し、それでも駄目なときだけ通知する。
-        const _retryPush = async () => {
+        const _retryPush = async (dataToPush) => {
           for (let i = 0; i < 3; i++) {
             try {
-              const ok = await supabaseMergeAndSyncStateForStore(staffSession.storeId, newData);
-              if (ok !== false) return true;
+              // ★ 20秒で必ず決着(2026-09-09): 遅いWi-Fiでpushが宙吊りになると、リトライも通知も永遠に
+              //   走らないまま端末を閉じられて消える。タイムアウトは失敗扱い→リトライ→最終的に通知へ。
+              const ok = await Promise.race([
+                supabaseMergeAndSyncStateForStore(staffSession.storeId, dataToPush),
+                new Promise(res => setTimeout(() => res('__timeout__'), 20000)),
+              ]);
+              if (ok === '__timeout__') { syncLog('push-timeout', { attempt: i + 1 }); }
+              else if (ok !== false) return true;
             } catch (e) { console.warn('[supabase] immediate save failed', e); }
             if (i < 2) {
               syncLog('push-retry', { attempt: i + 1 });
@@ -19359,13 +19383,24 @@ export default function App() {
           }
           return false;
         };
-        _retryPush().then(ok => {
-          if (!ok) {
-            syncLog('push-give-up', {});
-            setToastMsg('⚠ 同期に失敗しました（通信不良の可能性）。入力は端末に保持しています。通信を確認して、もう一度保存してください');
-            setShowToast(true); setTimeout(()=>setShowToast(false),6000);
-          }
-        });
+        // ★ 単一実行キュー: 実行中なら最新データだけ控える(同じ端末の状態は常に上位互換のため安全)
+        const _pumpPush = async (dataToPush) => {
+          if (_pushBusyRef.current) { _pushNextRef.current = dataToPush; return; }
+          _pushBusyRef.current = true;
+          try {
+            let cur = dataToPush;
+            while (cur) {
+              const ok = await _retryPush(cur);
+              if (!ok) {
+                syncLog('push-give-up', {});
+                setToastMsg('⚠ 同期に失敗しました（通信不良の可能性）。入力は端末に保持しています。通信を確認して、もう一度保存してください');
+                setShowToast(true); setTimeout(()=>setShowToast(false),6000);
+              }
+              cur = _pushNextRef.current; _pushNextRef.current = null;
+            }
+          } finally { _pushBusyRef.current = false; }
+        };
+        _pumpPush(newData);
         if (options.manual) {
           setToastMsg(options.message || '保存されました');
           setShowToast(true);
@@ -38856,19 +38891,23 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         <tbody>
           {ds.cars.map(car=>{
             const ct=(_log.carTimes||{})[car.id]||{};
+            // ★ 2026-09-09(店舗要望): 迎え・送りとも誰も割り当てられていない車は、編集画面では
+            //   グレーで塗りつぶして到着/出発/送迎者を入力不可に(誤タップ防止)。割り当てると解除。
+            const _carHasAny = (m) => !!m && Object.keys(m).some(k => k.endsWith('_'+car.id) && m[k]);
+            const _carUnused = !data && !_carHasAny(_log.pick) && !_carHasAny(_log.drop) && !(ct.arrive||ct.depart);
             return (
-              <tr key={car.id} style={{height:_carRowH,minHeight:_carRowH}}>
+              <tr key={car.id} style={{height:_carRowH,minHeight:_carRowH, ...(_carUnused?{backgroundColor:'#e2e8f0',opacity:0.55}:{})}} title={_carUnused?'この車は迎え・送りとも割り当てがないため入力できません（割り当てると入力可）':undefined}>
                 <td style={{...cs(60),textAlign:'center',fontWeight:'bold',fontSize:8,lineHeight:1.2,verticalAlign:'middle'}}><div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{car.name}</div><div style={{fontSize:7,fontWeight:'normal',color:'#000',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{car.type}</div></td>
-                <td style={{...cs(44),textAlign:'center',cursor:'pointer',fontSize:11,fontWeight:'bold',color:ct.arrive?'#1d4ed8':'#aaa'}}
-                  onClick={()=>openTimeKeypad(car.id,'arrive',ct.arrive)}>
-                  {ct.arrive||'__:__'}
+                <td style={{...cs(44),textAlign:'center',cursor:_carUnused?'not-allowed':'pointer',fontSize:11,fontWeight:'bold',color:ct.arrive?'#1d4ed8':'#aaa'}}
+                  onClick={()=>{ if(_carUnused) return; openTimeKeypad(car.id,'arrive',ct.arrive); }}>
+                  {_carUnused?'—':(ct.arrive||'__:__')}
                 </td>
-                <td style={cs(null)}>{DriverRow({carId:car.id, prefix:'a_'+car.id+'_'})}</td>
-                <td style={{...cs(44),textAlign:'center',cursor:'pointer',fontSize:11,fontWeight:'bold',color:ct.depart?'#1d4ed8':'#aaa'}}
-                  onClick={()=>openTimeKeypad(car.id,'depart',ct.depart)}>
-                  {ct.depart||'__:__'}
+                <td style={{...cs(null), ...(_carUnused?{pointerEvents:'none'}:{})}}>{DriverRow({carId:car.id, prefix:'a_'+car.id+'_'})}</td>
+                <td style={{...cs(44),textAlign:'center',cursor:_carUnused?'not-allowed':'pointer',fontSize:11,fontWeight:'bold',color:ct.depart?'#1d4ed8':'#aaa'}}
+                  onClick={()=>{ if(_carUnused) return; openTimeKeypad(car.id,'depart',ct.depart); }}>
+                  {_carUnused?'—':(ct.depart||'__:__')}
                 </td>
-                <td style={cs(null)}>{DriverRow({carId:car.id, prefix:'d_'+car.id+'_'})}</td>
+                <td style={{...cs(null), ...(_carUnused?{pointerEvents:'none'}:{})}}>{DriverRow({carId:car.id, prefix:'d_'+car.id+'_'})}</td>
               </tr>
             );
           })}
@@ -39410,6 +39449,32 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           const _recEmpty = !Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k]);
           if (_recEmpty) items.push({ label:'記録者', hint:'未入力' });
           if (!log.managerConfirmed) items.push({ label:'管理者確認', hint:'未確認' });
+          // ★ 2026-09-09(店舗要望): 車が未選択の利用者がいたら人数付きで要確認に出す。
+          //   先週欠席だった方はコピーで車が入らず、スタッフが素通りしてしまうため。
+          //   判定は送迎車割り当てモーダルと同一(徒歩=選択済み・欠席/休止/休業は対象外)。
+          const _unassignedFor = (prefix) => {
+            const _wm = log[prefix+'_walk']||{}, _sm = log[prefix]||{};
+            const out = [];
+            Array.from({length: totalRows}).forEach((_, i) => {
+              const pt = patients[i];
+              const sr = (log.patientRows||[])[i]||{};
+              const name = pt?.name || sr.name || '';
+              if (!name) return;
+              if (pt && (pt.status==='欠席'||pt.status==='休業'||pt.status==='休止')) return;
+              const _pid = _diaryPtKey(pt);
+              const _idHas = _pid != null && (_wm[String(_pid)] !== undefined || ds.cars.some(c=>_sm[_pid+'_'+c.id] !== undefined));
+              const _useId = _idHas || (_pid != null && selectedDate >= DIARY_PIDKEY_CUTOFF);
+              const _wKey = _useId ? String(_pid) : String(i);
+              const _cPre = _useId ? _pid : i;
+              if (_wm[_wKey]) return;
+              if (!ds.cars.some(c=>_sm[_cPre+'_'+c.id])) out.push(name);
+            });
+            return out;
+          };
+          const _upk = _unassignedFor('pick');
+          const _udr = _unassignedFor('drop');
+          if (_upk.length) items.push({ label:'迎えの車', hint:`未選択${_upk.length}名` });
+          if (_udr.length) items.push({ label:'送りの車', hint:`未選択${_udr.length}名` });
           if (!items.length) return null;
           return (
             <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2 flex-wrap">
@@ -39418,7 +39483,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
               {items.map(it=>{
                 const _aid = ({'送迎時間':'diary-sec-cars','記録者':'diary-sec-recorder','管理者確認':'diary-sec-manager'})[it.label];
                 // ★ 迎え/送りはスクロールではなく送迎車割り当てモーダルを直接開く(2026-08-31 店舗要望)
-                const _carPrefix = ({'迎え':'pick','送り':'drop'})[it.label];
+                const _carPrefix = ({'迎え':'pick','送り':'drop','迎えの車':'pick','送りの車':'drop'})[it.label];
                 return (
                 <button key={it.label} type="button" title={_carPrefix?'クリックで送迎車割り当てを開く':'クリックで該当箇所へ移動'}
                   onClick={()=>{ if(_carPrefix){ setCarAssignModal({prefix:_carPrefix}); setCarAssignSelections({}); return; } const el=_aid&&document.getElementById(_aid); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); const _o=el.style.outline; el.style.outline='3px solid #f59e0b'; el.style.outlineOffset='3px'; setTimeout(()=>{ el.style.outline=_o||''; el.style.outlineOffset=''; },1800); }}
