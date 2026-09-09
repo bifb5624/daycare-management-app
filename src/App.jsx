@@ -11072,9 +11072,13 @@ const diaryPendingItems = (log, iso, cars) => {
   const _hasAny = (o) => !!o && Object.values(o).some(v => Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : String(v ?? '').trim() !== ''));
   if (sp['迎え'] || (!_hasAny(log.pick) && !_hasAny(log.pick_walk))) items.push('迎え');
   if (sp['送り'] || (!_hasAny(log.drop) && !_hasAny(log.drop_walk))) items.push('送り');
-  if (!Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart))) items.push('送迎時間');
-  // ★ 送迎者(2026-09-10 店舗要望): 迎え/送りで使う車に運転者チェックが無ければ未完了(cars=diarySettings.cars)
+  // ★ 2026-09-10(店舗要望): 時間の必須は方向別(到着=迎えで使う車・出発=送りで使う車)。
+  //   使わない方向の車の時間は必須にしない。carsが未設定の店は時間チェック自体を行わない。
   if (Array.isArray(cars) && cars.length) {
+    const _used = (dirKey) => cars.filter(c => { const m = log[dirKey]; return !!m && Object.keys(m).some(k => k.endsWith('_'+c.id) && m[k]); });
+    if (_used('pick').some(c => !(((log.carTimes||{})[c.id]||{}).arrive))) items.push('到着時間');
+    if (_used('drop').some(c => !(((log.carTimes||{})[c.id]||{}).depart))) items.push('出発時間');
+    // ★ 送迎者: 迎え/送りで使う車に運転者チェックが無ければ未完了
     const _drv = log.driver || {};
     const _miss = (dirKey, dpre) => cars.some(c => {
       const m = log[dirKey];
@@ -11083,7 +11087,7 @@ const diaryPendingItems = (log, iso, cars) => {
       return !Object.keys(_drv).some(k => k.startsWith(dpre+c.id+'_') && _drv[k]);
     });
     if (_miss('pick','a_') || _miss('drop','d_')) items.push('送迎者');
-  }
+  } else if (!Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart))) items.push('送迎時間');
   if (!Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k])) items.push('記録者');
   if (!log.managerConfirmed) items.push('管理者確認');
   return items;
@@ -39500,7 +39504,11 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           });
           if (_drvMissing('pick','a_')) items.push({ key:'迎えの送迎者', label:'迎えの送迎者', aid:'diary-sec-cars' });
           if (_drvMissing('drop','d_')) items.push({ key:'送りの送迎者', label:'送りの送迎者', aid:'diary-sec-cars' });
-          if (!Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart))) items.push({ key:'送迎時間', label:'送迎時間', aid:'diary-sec-cars' });
+          // ★ 2026-09-10(店舗要望): 時間の必須は方向別。到着=迎えで使う車すべて・出発=送りで使う車すべて。
+          //   使わない方向の車は動かないので、その時間は未入力でも必須にしない。
+          const _usedCars = (dirKey) => ds.cars.filter(c => { const m = log[dirKey]; return !!m && Object.keys(m).some(k => k.endsWith('_'+c.id) && m[k]); });
+          if (_usedCars('pick').some(c => !(((log.carTimes||{})[c.id]||{}).arrive))) items.push({ key:'到着時間', label:'到着時間', aid:'diary-sec-cars' });
+          if (_usedCars('drop').some(c => !(((log.carTimes||{})[c.id]||{}).depart))) items.push({ key:'出発時間', label:'出発時間', aid:'diary-sec-cars' });
           if (!Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k])) items.push({ key:'記録者', label:'記録者', aid:'diary-sec-recorder' });
           if (!log.managerConfirmed) items.push({ key:'管理者確認', label:'管理者確認', aid:'diary-sec-manager' });
           if (!items.length) return null;
