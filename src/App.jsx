@@ -29453,7 +29453,14 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
               const _dispDate = _hasNum(r.nextDateOverride) ? r.nextDateOverride : info.date;
               // ★ 時間の自動表示は「表示中の日付」の曜日で計算(2026-08-17・印刷側と同ロジック)
               let _dispTime;
-              if (_hasNum(r.nextTimeOverride)) _dispTime = r.nextTimeOverride;
+              // ★ 2026-09-09(店舗要望): 次回が振替の場合はお迎え時間を自動で埋めない(空欄でスタッフが入力する)。
+              //   採用するのは「この振替日向け」と分かる手入力(nextTimeOverrideForが表示日付と一致)のみ。
+              //   印刷側(連絡帳)の表示条件と揃え、「入力欄には8時と出るのに印刷は空欄」の食い違いを解消。
+              if (info.isFurikae) {
+                  const _tf = String(r.nextTimeOverrideFor || '').trim();
+                  _dispTime = (_hasNum(r.nextTimeOverride) && _tf && _tf === String(_dispDate || '').trim()) ? r.nextTimeOverride : '';
+              }
+              else if (_hasNum(r.nextTimeOverride)) _dispTime = r.nextTimeOverride;
               else {
                   const _dm = String(_dispDate || '').match(/(\d+)月(\d+)日/);
                   if (_dm && p) {
@@ -30008,6 +30015,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                     return (
                       <div key={r.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-3 rounded-xl">
                         <div className="w-24 font-bold text-slate-800 shrink-0 text-sm">
+                          {/* ★ 振替バッジ(2026-09-09 店舗要望): 次回が基本利用日と別の振替日→日付確認とお迎え時間の手入力が必要と分かるように */}
+                          {_auto.isFurikae && <span className="block text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded font-bold mb-0.5 w-fit">振替</span>}
                           {r.name}
                           {isOverridden && <span className="block text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold mt-0.5 w-fit">変更済</span>}
                         </div>
@@ -30031,8 +30040,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
                           </div>
                         </div>
                         <div className="flex-1">
-                          <div className="text-[10px] font-bold text-slate-400 mb-1">お迎え時間</div>
-                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${/\d/.test(String(r.nextTimeOverride ?? '')) ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
+                          <div className="text-[10px] font-bold text-slate-400 mb-1">お迎え時間{_auto.isFurikae && !curHour && !curMin && <span className="ml-1 text-amber-600">要入力</span>}</div>
+                          <div className={`flex items-center gap-1 p-1.5 border rounded-lg ${_auto.isFurikae && !curHour && !curMin ? 'border-amber-400 bg-amber-50' : /\d/.test(String(r.nextTimeOverride ?? '')) ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white'}`}>
                             <input type="text" inputMode="numeric" value={curHour} maxLength={2}
                               onChange={e=>updateOverride('time', curMonth, curDay, e.target.value.replace(/\D/g,''), curMin)}
                               placeholder="—" className="w-9 px-1 py-0.5 text-center bg-transparent border-0 outline-none font-bold text-sm"/>
@@ -30247,7 +30256,9 @@ function ContactBookCard({ record, patient, selectedDate, config, appData, onOpe
           if (/\d/.test(String(record.nextTimeOverride ?? '')) && _tf && _tf === String(nextDateDisplay || '').trim()) {
               nextTimeDisplay = record.nextTimeOverride;
           } else {
-              nextTimeDisplay = info2.time || "　時　分";
+              // ★ 2026-09-09(店舗要望): 振替のお迎え時間は自動計算(8時/13時等)を出さず空欄に。
+              //   入力欄(次回予定の変更)も振替時は空欄+要入力表示にしており、スタッフの手入力だけを印字する。
+              nextTimeDisplay = "　時　分";
           }
       } else if (/\d/.test(String(record.nextTimeOverride ?? ''))) {
           nextTimeDisplay = record.nextTimeOverride;
