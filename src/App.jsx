@@ -10314,6 +10314,17 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
           <X size={14}/>
         </button>
       </div>
+      {/* ★ 体温などの先頭値クイックボタン(2026-08-26→2026-09-09: 7・8・9の真上へ移動+大型化・店舗要望) */}
+      {prefixButtons && prefixButtons.length > 0 && (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:6}}>
+          {prefixButtons.map((btn,i)=>(
+            <button key={i} onClick={()=>{ if (onInput) onInput(btn, false); }}
+              style={{height:btnSize*0.9,background:'#ecfdf5',color:'#047857',border:'1.5px solid #a7f3d0',borderRadius:10,fontSize:fontSize*1.05,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
+              {btn}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6}}>
         {keys.map((k,i)=>{
           const isSpecial = ['BS',':','TAB','ENTER','DEL','00','×'].includes(k);
@@ -10344,17 +10355,6 @@ function DigitalKeypad({ isOpen, anchorKey, value, isFirstInput, onInput, onEnte
             <button key={s} onClick={()=>{ if(onInput) onInput(s,false); if(onEnter) onEnter(s); onClose(); }}
               style={{flex:1,height:btnSize*0.8,background:bg,color:fg,border:`1.5px solid ${bd}`,borderRadius:10,fontSize:fontSize*0.95,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
               {s}
-            </button>
-          ))}
-        </div>
-      )}
-      {/* ★ 体温などの先頭値クイックボタン(2026-08-26): 押すと値がその値で始まり、続けて下1桁を打つだけ(例: 36.→5) */}
-      {prefixButtons && prefixButtons.length > 0 && (
-        <div style={{display:'flex',gap:6,marginTop:8}}>
-          {prefixButtons.map((btn,i)=>(
-            <button key={i} onClick={()=>{ if (onInput) onInput(btn, false); }}
-              style={{flex:1,height:btnSize*0.7,background:'#ecfdf5',color:'#047857',border:'1.5px solid #a7f3d0',borderRadius:10,fontSize:fontSize*0.85,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent'}}>
-              {btn}
             </button>
           ))}
         </div>
