@@ -20966,14 +20966,16 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const [kibunStep, setKibunStep] = useState('mood'); // 'mood' | 'reason'
   const [kibunTempMood, setKibunTempMood] = useState('');
   const [activeCell, setActiveCell] = useState(null); // "recordId-field"
-  const [massageHist, setMassageHist] = useState(null); // {pid, cx, cy} 介護整体の過去履歴ポップオーバー (body へ portal + fixed で最前面表示)
-  // ポップオーバー外をタップ/スクロールしたら閉じる (開いた瞬間のクリックでは閉じないよう次tickで登録)
+  // ★ 介護整体 操作メニュー(2026-09-09 案2): セルタップ→吹き出しで「過去3回+担当選択」「✓実施」「取り消し/担当変更」を大きなボタンで操作
+  //   {pid, recId, cx, cy, cyB, view:'pick'|'main'} — body へ portal + fixed で最前面表示
+  const [massageMenu, setMassageMenu] = useState(null);
+  // メニュー外をタップ/スクロールしたら閉じる (開いた瞬間のクリックでは閉じないよう次tickで登録)
   React.useEffect(() => {
-    if (!massageHist) return;
-    const close = () => setMassageHist(null);
+    if (!massageMenu) return;
+    const close = () => setMassageMenu(null);
     const t = setTimeout(() => { document.addEventListener('click', close); document.addEventListener('scroll', close, true); }, 0);
     return () => { clearTimeout(t); document.removeEventListener('click', close); document.removeEventListener('scroll', close, true); };
-  }, [massageHist]);
+  }, [massageMenu]);
   const [unsavedModal, setUnsavedModal] = useState({ isOpen: false, onConfirm: null });
 
   // 未保存チェック: localPatientsがappDataのticketsと異なるか
@@ -22881,41 +22883,25 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                        <div style={p.done ? {backgroundColor:'#fff7ed',color:'#1e293b',border:'2px solid #fb923c',borderRadius:8,padding:'2px 4px'} : {}} className={`w-full py-1 text-center font-bold ${getMassageFontSize(p.massage)}`}>{p.massage || "-"}</div>
                     ) : (() => {
                       const pid = p.patientId || p.id;
-                      // 日付に年情報が無いため、id（作成タイムスタンプ ≒ 時系列）降順で並べる
-                      const prevRecords = (appData.ticketRecords || []).filter(r => r.patientId === pid && r.massage).sort((a,b) => (Number(b.id)||0)-(Number(a.id)||0));
-                      const prev1 = prevRecords[0]?.massage || "";
-                      const prev2 = prevRecords[1]?.massage || "";
-                      const staffList = appData?.systemSettings?.massageStaff || appSettings.massageStaff;
-                      const showHints = !isAbsent && !isPause && !p.massage && (prev1 || prev2);
+                      // ★ 2026-09-09 案2: セル全体を1つの大きなタップ領域に。タップで吹き出しメニュー
+                      //   (未選択=過去3回+担当リスト / 選択済み=✓実施・担当変更 / 実施済み=取り消し・担当変更)
+                      const _mmOpen = massageMenu && massageMenu.recId === p.id;
                       return (
-                        <div style={{position:'relative',width:'100%',height:'100%',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:0}}>
-                          {!isAbsent && !isPause && !!p.massage && !p.done && (
-                            <button onClick={()=>updateRecord(p.id,'done',true)}
-                              style={{width:'100%',zIndex:10,fontSize:8,fontWeight:'bold',background:'rgba(255,237,213,0.95)',color:'#c2410c',border:'1px solid #fdba74',borderRadius:3,padding:'0 1px',lineHeight:1.4,cursor:'pointer',textAlign:'center',flexShrink:0}}
-                              className="hover:bg-orange-200 active:scale-95">
-                              ✓ 実施
-                            </button>
-                          )}
-                          {!isAbsent && !isPause && !p.massage && (
-                            <button onClick={(e)=>{ e.stopPropagation();
-                              if (massageHist && massageHist.pid===pid) { setMassageHist(null); return; }
-                              const btn=e.currentTarget; const r0=btn.getBoundingClientRect();
-                              const zoom=isFullscreen?1.2:1; const ratio=btn.offsetWidth?(r0.width/btn.offsetWidth):1;
-                              const corr=(zoom>1 && Math.abs(ratio-1)<0.08)?zoom:1; // 全画面zoomでgetBoundingClientRectがzoom未反映の端末を補正
-                              setMassageHist({ pid, cx:(r0.left+r0.width/2)*corr, cy:r0.top*corr });
-                            }}
-                            style={{width:'100%',zIndex:10,fontSize:8,fontWeight:'bold',background:'rgba(254,243,199,0.95)',color:'#92400e',border:'1px solid #fcd34d',borderRadius:3,padding:'0 1px',lineHeight:1.4,cursor:'pointer',textAlign:'center',flexShrink:0}}
-                            className="hover:bg-amber-200">確認</button>
-                          )}
-                          <select disabled={isAbsent || isPause} value={p.massage || ""}
-                            onChange={(e) => { updateRecord(p.id, 'massage', e.target.value); if(p.done) updateRecord(p.id, 'done', false); }}
-                            style={{appearance:'none',WebkitAppearance:'none',MozAppearance:'none',width:'100%',
-                              ...(p.done ? {backgroundColor:'#fff7ed',color:'#1e293b',border:'2px solid #fb923c',borderRadius:8,boxSizing:'border-box'} : {border:'1px solid #e2e8f0',backgroundColor:'white',boxSizing:'border-box'})}}
-                            className="py-1 rounded-lg font-bold outline-none cursor-pointer px-0.5 text-center disabled:opacity-40 text-xs">
-                            <option value="">--</option>
-                            {staffList.map((s, i) => <option key={i} value={s}>{s}</option>)}
-                          </select>
-                        </div>
+                        <button type="button" disabled={isAbsent || isPause}
+                          onClick={(e)=>{ e.stopPropagation();
+                            if (_mmOpen) { setMassageMenu(null); return; }
+                            const btn=e.currentTarget; const r0=btn.getBoundingClientRect();
+                            const zoom=isFullscreen?1.2:1; const ratio=btn.offsetWidth?(r0.width/btn.offsetWidth):1;
+                            const corr=(zoom>1 && Math.abs(ratio-1)<0.08)?zoom:1; // 全画面zoomでgetBoundingClientRectがzoom未反映の端末を補正
+                            setMassageMenu({ pid, recId:p.id, cx:(r0.left+r0.width/2)*corr, cy:r0.top*corr, cyB:r0.bottom*corr, view: p.massage ? 'main' : 'pick' });
+                          }}
+                          style={{width:'100%',height:'100%',minHeight:40,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',boxSizing:'border-box',
+                            ...(p.done ? {backgroundColor:'#fff7ed',color:'#1e293b',border:'2px solid #fb923c',borderRadius:8}
+                              : p.massage ? {backgroundColor:'white',color:'#1e293b',border:'1px solid #cbd5e1',borderRadius:8}
+                              : {backgroundColor:'#f8fafc',color:'#94a3b8',border:'1px dashed #cbd5e1',borderRadius:8})}}
+                          className={`font-bold disabled:opacity-40 ${_mmOpen ? 'ring-2 ring-blue-300' : ''} ${getMassageFontSize(p.massage)}`}>
+                          {p.massage || '選ぶ'}
+                        </button>
                       );
                     })()}
                   </td>
@@ -23036,28 +23022,72 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
           </div>
         );
       })(), document.body)}
-      {massageHist && ReactDOM.createPortal((()=>{
-        // ★ id は文字列(tr_...)で Number 化すると NaN になり並ばないため、実日付で判定する。
-        //   直近の過去3件を取得し、降順(新しい→古い)で表示する。 未来日は除外。
+      {massageMenu && ReactDOM.createPortal((()=>{
+        // ★ 介護整体 操作メニュー(2026-09-09 案2): 誤タップ防止のため、実施は「セルタップ→大きな✓実施ボタン」の2タップ制。
+        const rec = ((filterMode==='single' ? localPatients : localTicketRecords)||[]).find(x=>x.id===massageMenu.recId);
+        if (!rec) return null;
+        const staffList = appData?.systemSettings?.massageStaff || appSettings.massageStaff;
+        // ★ id は文字列(tr_...)で Number 化すると NaN になり並ばないため、実日付で判定する。未来日は除外。
         const _mhToday = new Date(); _mhToday.setHours(23,59,59,999);
         const _mhDate = (r) => { const m=(r.date||'').match(/(\d+)月(\d+)日/); if(!m) return null; const y=r.year||new Date().getFullYear(); return new Date(y, +m[1]-1, +m[2]); };
-        const recs=(appData.ticketRecords||[])
-          .filter(r=>r.patientId===massageHist.pid && r.massage)
+        const hist=(appData.ticketRecords||[])
+          .filter(r=>r.patientId===massageMenu.pid && r.massage && r.id!==rec.id)
           .map(r=>({r,d:_mhDate(r)}))
           .filter(x=>x.d && x.d<=_mhToday)
           .sort((a,b)=>b.d-a.d)
           .slice(0,3)
           .map(x=>x.r);
+        const close = () => setMassageMenu(null);
+        const choose = (name) => { updateRecord(rec.id,'massage',name); if(rec.done) updateRecord(rec.id,'done',false); close(); };
+        const isPick = massageMenu.view === 'pick' || !rec.massage;
+        // 画面上端に近い行は下側に表示(はみ出し防止)
+        const below = massageMenu.cy < 350;
+        const posStyle = below
+          ? {top:massageMenu.cyB+8, transform:'translateX(-50%)'}
+          : {top:massageMenu.cy-8, transform:'translate(-50%,-100%)'};
+        const bigBtn = {width:'100%',padding:'12px 10px',borderRadius:12,fontSize:17,fontWeight:'bold',cursor:'pointer',WebkitTapHighlightColor:'transparent',boxSizing:'border-box'};
         return (
-          <div onClick={(e)=>{e.stopPropagation(); setMassageHist(null);}}
-            style={{position:'fixed',left:massageHist.cx,top:massageHist.cy-8,transform:'translate(-50%,-100%)',background:'#1e293b',color:'white',borderRadius:10,boxShadow:'0 6px 20px rgba(0,0,0,0.45)',zIndex:99999,padding:'4px 0',whiteSpace:'nowrap',cursor:'pointer'}}>
-            {recs.length===0 ? <div style={{padding:'4px 12px',fontSize:12}}>履歴なし</div> :
-              recs.map((r,ri)=>(
-                <div key={ri} style={{padding:'4px 14px',fontSize:12}}>
-                  <span style={{color:'#64748b'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
-                  <b style={{color:'white',marginLeft:8}}>{r.massage||''}</b>
+          <div onClick={(e)=>e.stopPropagation()}
+            style={{position:'fixed',left:massageMenu.cx,...posStyle,background:'white',border:'2px solid #1e293b',borderRadius:16,boxShadow:'0 10px 34px rgba(0,0,0,0.35)',zIndex:99999,padding:12,width:230,maxWidth:'92vw',maxHeight:'70vh',overflowY:'auto'}}>
+            {isPick ? (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {hist.length>0 && <>
+                  <div style={{fontSize:12,fontWeight:'bold',color:'#64748b'}}>直近の実施(タップで選択)</div>
+                  {hist.map((r,ri)=>(
+                    <button key={ri} onClick={()=>choose(r.massage)}
+                      style={{...bigBtn,background:'#f0fdfa',color:'#0f766e',border:'1.5px solid #99f6e4',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                      <span style={{fontSize:13,color:'#64748b',fontWeight:'bold'}}>{(r.date||'').replace(/^\d{4}-/,'').replace('-','/')}</span>
+                      <span>{r.massage||''}</span>
+                    </button>
+                  ))}
+                  <div style={{borderTop:'1px solid #e2e8f0'}}/>
+                </>}
+                <div style={{fontSize:12,fontWeight:'bold',color:'#64748b'}}>担当を選ぶ</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8}}>
+                  {staffList.map((st,i)=>(
+                    <button key={i} onClick={()=>choose(st)}
+                      style={{padding:'12px 4px',borderRadius:12,fontSize:16,fontWeight:'bold',cursor:'pointer',background: rec.massage===st?'#eff6ff':'#f8fafc',color:'#1e293b',border: rec.massage===st?'2px solid #3b82f6':'1.5px solid #cbd5e1',WebkitTapHighlightColor:'transparent'}}>{st}</button>
+                  ))}
                 </div>
-              ))}
+                {!!rec.massage && (
+                  <button onClick={()=>{ updateRecord(rec.id,'massage',''); if(rec.done) updateRecord(rec.id,'done',false); close(); }}
+                    style={{...bigBtn,fontSize:14,padding:'9px 10px',background:'white',color:'#dc2626',border:'1.5px solid #fecaca'}}>空欄に戻す</button>
+                )}
+              </div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{fontSize:13,fontWeight:'bold',color:'#334155',textAlign:'center'}}>担当: {rec.massage}{rec.done ? '（実施済み）' : ''}</div>
+                {!rec.done ? (
+                  <button onClick={()=>{ updateRecord(rec.id,'done',true); close(); }}
+                    style={{...bigBtn,fontSize:19,padding:'14px 10px',background:'#ea580c',color:'white',border:'none'}}>✓ 実施にする</button>
+                ) : (
+                  <button onClick={()=>{ updateRecord(rec.id,'done',false); close(); }}
+                    style={{...bigBtn,background:'white',color:'#334155',border:'1.5px solid #cbd5e1'}}>実施を取り消す</button>
+                )}
+                <button onClick={()=>setMassageMenu({...massageMenu, view:'pick'})}
+                  style={{...bigBtn,fontSize:15,padding:'10px',background:'#f8fafc',color:'#1d4ed8',border:'1.5px solid #bfdbfe'}}>担当変更</button>
+              </div>
+            )}
           </div>
         );
       })(), document.body)}
