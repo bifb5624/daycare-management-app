@@ -20959,6 +20959,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const timeFilter = (sharedAmpm === 'all' || !sharedAmpm) ? 'AM' : sharedAmpm;
   const setTimeFilter = (v) => setSharedAmpm && setSharedAmpm(v);
   const [keypad, setKeypad] = useState({ isOpen: false, recordId: null, field: null, value: "", isFirstInput: false });
+  // ★ 拡大入力ビュー(2026-09-09 店舗要望): 高齢のスタッフでも見やすいよう、1名分のバイタル・運動・特記を大きな字で表示・入力
+  const [zoomPid, setZoomPid] = useState(null);
   const kpConfirmRef = React.useRef(false); // ★ PC Enter: 1回目=確定 / 2回目=右のセルへ移動
   const [kibunModal, setKibunModal] = useState({ isOpen: false, recordId: null, timing: null }); // timing: 'arrival'|'departure'
   const [kibunStep, setKibunStep] = useState('mood'); // 'mood' | 'reason'
@@ -21713,8 +21715,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
 
   // ★ テンキー(点キー)の表示ON/OFF。 OFFの店舗ではセルを直接キーボードで入力する。
   const _keypadOn = (appData.systemSettings?.keypadDisabled !== true);
-  const openKeypad = (recordId, field, currentValue, isAbsent) => {
-    if (isAbsent || !_keypadOn) return;
+  const openKeypad = (recordId, field, currentValue, isAbsent, force) => {
+    if (isAbsent || (!_keypadOn && !force)) return;
     kpConfirmRef.current = false; // 新しいセルを開いたら未確定に
     const isEx = !!(effExerciseItems(appData.systemSettings)).find(i => i.id === field);
     // ★ openedValue=開いた時点の値(2026-08-11): 「既に○が入っているセルを開いた時だけ」基準値を
@@ -22437,6 +22439,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <div key={`m-${p.id}`} className={`bg-white rounded-xl border-2 shadow-sm p-3 ${isAbsent||isPause?'border-slate-200 opacity-70':'border-slate-300'}`}>
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <button onClick={()=>setPatientInfoModal(masterData)} className="font-bold text-base text-slate-800 flex items-center gap-1 min-w-0"><span className="truncate">{p.name}</span><span className="text-[10px] text-blue-500 shrink-0">ⓘ</span></button>
+                  <button type="button" onClick={()=>setZoomPid(p.id)} title="この方だけを大きな文字で入力します" className="shrink-0 text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-300 rounded px-2 py-1 hover:bg-teal-100">拡大</button>
                   {isReadOnly||isPause ? <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${config.lightColor} ${config.textColor}`}>{p.status||'出席'}</span>
                     : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{(()=>{
                         if (p.status==='振替') return (<><option value="振替">振替</option><option value="取り消し">取り消し</option></>);
@@ -22632,6 +22635,9 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             <span className="text-sm">{nameParts[0]}</span>
                             {nameParts[1] && <span className="text-sm">{nameParts[1]}</span>}
                           </div>
+                          {/* ★ 拡大入力(2026-09-09 店舗要望): この方だけ大きな文字で入力 */}
+                          <button type="button" onClick={()=>setZoomPid(p.id)} title="この方だけを大きな文字で入力します"
+                            className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-300 rounded px-1.5 py-0.5 hover:bg-teal-100">拡大</button>
                         </div>
                       );
                     })()}
@@ -23064,6 +23070,89 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
       <DigitalKeypad isOpen={keypad.isOpen} anchorKey={`${keypad.recordId}-${keypad.field}`} zoom={isFullscreen ? 1.2 : 1} value={keypad.value} isFirstInput={keypad.isFirstInput} mode={keypad.mode} onClose={() => { _checkVitalRange(keypad.field, keypad.value); setKeypad({...keypad, isOpen: false}); }} onInput={handleKeypadInput} onEnter={handleKeypadEnter} onTab={handleTab} quickButtons={appData.systemSettings?.exerciseQuickButtons} prefixButtons={String(keypad.field||'').startsWith('temp') ? ['35.','36.','37.'] : null}
         unitSep={(()=>{ const _ei=(appData.systemSettings?.exerciseItems||appSettings.exerciseItems).find(i=>i.id===keypad.field); if(_ei && _ei.type!=='individual') return _ei.unitSep||''; const _rec=(filterMode==='single'?localPatients:localTicketRecords).find(x=>x.id===keypad.recordId); const _cur=_rec&&_rec.exercises&&_rec.exercises[keypad.field]; const _iid=(_cur&&typeof _cur==='object')?_cur.itemId:null; if(_iid){ const _ii=(appData.systemSettings?.individualExerciseItems||appSettings.individualExerciseItems||[]).find(x=>x.id===_iid); return (_ii&&_ii.unitSep)||''; } return ''; })()}/>
 
+      {/* ★ 拡大入力ビュー(2026-09-09 店舗要望): 1名分を大きな文字・濃い色で入力。テンキー等は通常入力と共通 */}
+      {zoomPid != null && ReactDOM.createPortal((() => {
+        const _src = (filterMode==='single' ? localPatients : localTicketRecords) || [];
+        const p = _src.find(x => x.id === zoomPid);
+        if (!p) return null;
+        const masterData = (appData.patients||[]).find(pt => pt.id === p.patientId || pt.id === p.id || pt.name === p.name) || {};
+        const plannedEx = getPlannedExercisesForDate(masterData, selectedDate) || {};
+        const exItems = effExerciseItems(appData.systemSettings);
+        const isReadOnly = !isEditMode;
+        const isAbsent = p.status === '欠席' || p.status === '休業';
+        const isPause = !!getPauseReasonOnDate(masterData, selectedDate) || (getPatientDisplayStatus(masterData) === '休止' && !(masterData.pauseHistory||[]).length);
+        const dis = isAbsent || isReadOnly || isPause;
+        const tf = (timeFilter==='AM'||timeFilter==='PM') ? timeFilter : 'AM';
+        const _vals = {
+          temp: p[`temp_${tf}`]||'', buSt: p[`bpUpSt_${tf}`]||'', bdSt: p[`bpDnSt_${tf}`]||'', plSt: p[`plSt_${tf}`]||'',
+          buEn: p[`bpUpEn_${tf}`]||'', bdEn: p[`bpDnEn_${tf}`]||'', plEn: p[`plEn_${tf}`]||'',
+        };
+        const _cell = (label, fieldKey, value, unit) => {
+          const _act = keypad.isOpen && keypad.recordId === p.id && keypad.field === fieldKey;
+          return (
+          <button type="button" disabled={dis}
+            onClick={()=>{ openKeypad(p.id, fieldKey, value, isAbsent, true); setActiveCell(`${p.id}-${fieldKey}`); }}
+            className={`rounded-2xl border-2 p-3 flex flex-col items-center gap-1 disabled:opacity-40 active:scale-95 ${_act?'border-blue-500 ring-2 ring-blue-300 bg-blue-50':'border-slate-400 bg-white'}`}>
+            <span style={{fontSize:17,fontWeight:'bold',color:'#1e293b'}}>{label}</span>
+            <span style={{fontSize:34,fontWeight:'bold',color: value?'#1d4ed8':'#94a3b8',lineHeight:1.1,fontVariantNumeric:'tabular-nums'}}>{value||'ー'}<span style={{fontSize:15,color:'#64748b'}}>{value?unit:''}</span></span>
+          </button>
+        ); };
+        return (
+          <div style={{position:'fixed',inset:0,zIndex:9980,background:'#f8fafc',display:'flex',flexDirection:'column'}}>
+            <div style={{flexShrink:0,background:'#0f766e',color:'white',padding:'12px 16px',display:'flex',alignItems:'center',gap:12}}>
+              <div style={{fontSize:24,fontWeight:'bold',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name} 様 <span style={{fontSize:15,opacity:0.85}}>（{p.status||'出席'}・{tf==='AM'?'午前':'午後'}）</span></div>
+              <button onClick={()=>setZoomPid(null)} style={{background:'white',color:'#0f766e',border:'none',borderRadius:12,padding:'12px 22px',fontSize:18,fontWeight:'bold',cursor:'pointer'}}>閉じる</button>
+            </div>
+            <div style={{flex:1,overflowY:'auto',padding:'14px 14px 40px'}}>
+              <div style={{maxWidth:720,margin:'0 auto',display:'flex',flexDirection:'column',gap:16}}>
+                {isReadOnly && <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:10,padding:'8px 12px',fontSize:14,fontWeight:'bold',color:'#92400e'}}>閲覧モードです（編集するには通常画面で「編集」をオンにしてください）</div>}
+                <div>
+                  <div style={{fontSize:16,fontWeight:'bold',color:'#0f172a',marginBottom:8}}>バイタル（開始）</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+                    {_cell('体温', `temp_${tf}`, _vals.temp, '℃')}
+                    {_cell('血圧', `bpSt_combo_${tf}`, (_vals.buSt&&_vals.bdSt)?`${_vals.buSt}/${_vals.bdSt}`:(_vals.buSt||''), '')}
+                    {_cell('脈拍', `plSt_${tf}`, _vals.plSt, '')}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:16,fontWeight:'bold',color:'#0f172a',marginBottom:8}}>バイタル（終了）</div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+                    <div/>
+                    {_cell('血圧', `bpEn_combo_${tf}`, (_vals.buEn&&_vals.bdEn)?`${_vals.buEn}/${_vals.bdEn}`:(_vals.buEn||''), '')}
+                    {_cell('脈拍', `plEn_${tf}`, _vals.plEn, '')}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:16,fontWeight:'bold',color:'#0f172a',marginBottom:8}}>運動メニュー <span style={{fontSize:13,fontWeight:'normal',color:'#334155'}}>（うすい字は本日の目安。タップで入力）</span></div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}}>
+                    {exItems.map(item => {
+                      const v = p.exercises?.[item.id];
+                      const vs = String((typeof v==='object'?'':v) ?? '');
+                      const disp = applyExUnits(vs, item);
+                      const ph = plannedEx[item.id] || '';
+                      return (
+                        <button key={item.id} type="button" disabled={dis}
+                          onClick={()=>{ openKeypad(p.id, item.id, (typeof v==='object'?'':v)||'', isAbsent, true); setActiveCell(`${p.id}-${item.id}`); }}
+                          className={`rounded-2xl border-2 p-3 flex flex-col items-center gap-1 disabled:opacity-40 active:scale-95 ${(keypad.isOpen && keypad.recordId === p.id && keypad.field === item.id)?'border-blue-500 ring-2 ring-blue-300 bg-blue-50':'border-slate-400 bg-white'}`}>
+                          <span style={{fontSize:15,fontWeight:'bold',color:'#1e293b',textAlign:'center',lineHeight:1.3}}>{item.name}</span>
+                          <span style={{fontSize:28,fontWeight:'bold',color: disp?'#1d4ed8':'#64748b',lineHeight:1.15,textAlign:'center'}}>{disp || (ph ? ph : 'ー')}</span>
+                          {disp && ph && <span style={{fontSize:12,color:'#475569'}}>目安: {ph}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <div style={{fontSize:16,fontWeight:'bold',color:'#0f172a',marginBottom:8}}>{isAbsent?'欠席理由':'様子・特記'}</div>
+                  <textarea disabled={isReadOnly} defaultValue={p.tokki||''} key={`zoom-tokki-${p.id}-${zoomPid}`}
+                    onBlur={e=>updateRecord(p.id,'tokki',e.target.value)} rows={4}
+                    style={{width:'100%',boxSizing:'border-box',fontSize:19,lineHeight:1.7,padding:'12px 14px',border:'2px solid #94a3b8',borderRadius:14,outline:'none',background:'white',color:'#0f172a'}}/>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })(), document.body)}
       {/* === 状態変更モーダル — ★ Portal + 上部固定 (欠席/振替/休業/休止) === */}
       {statusModal.isOpen && ReactDOM.createPortal(
         <div className="fixed inset-0 flex items-start justify-center bg-black/40 pt-10" style={{zIndex:10000}}>
@@ -29230,6 +29319,8 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
     setOvCleanup(null);
   };
   const [keypad, setKeypad] = useState({ isOpen: false, recordId: null, field: null, value: "", isFirstInput: false });
+  // ★ 拡大入力ビュー(2026-09-09 店舗要望): 高齢のスタッフでも見やすいよう、1名分のバイタル・運動・特記を大きな字で表示・入力
+  const [zoomPid, setZoomPid] = useState(null);
   const [isPrintPreview, setIsPrintPreview] = useState(false);
 
   const targetDateStr = `${new Date(selectedDate).getMonth() + 1}月${new Date(selectedDate).getDate()}日`;
