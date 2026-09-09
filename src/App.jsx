@@ -11065,7 +11065,7 @@ const diarySlotKyugyo = (appData, iso, dw, ap) => {
   if (_h) { const ha = _h.ampm; if (!ha || ha === '1日') return true; return ha === ap; }
   return (appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw);
 };
-const diaryPendingItems = (log, iso) => {
+const diaryPendingItems = (log, iso, cars) => {
   if (!log || Object.keys(log).length === 0) return null;
   const sp = (iso && iso < DIARY_SP_LEGACY_CUTOFF) ? {} : (log._sougeiPending || {});
   const items = [];
@@ -11073,6 +11073,17 @@ const diaryPendingItems = (log, iso) => {
   if (sp['迎え'] || (!_hasAny(log.pick) && !_hasAny(log.pick_walk))) items.push('迎え');
   if (sp['送り'] || (!_hasAny(log.drop) && !_hasAny(log.drop_walk))) items.push('送り');
   if (!Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart))) items.push('送迎時間');
+  // ★ 送迎者(2026-09-10 店舗要望): 迎え/送りで使う車に運転者チェックが無ければ未完了(cars=diarySettings.cars)
+  if (Array.isArray(cars) && cars.length) {
+    const _drv = log.driver || {};
+    const _miss = (dirKey, dpre) => cars.some(c => {
+      const m = log[dirKey];
+      const used = !!m && Object.keys(m).some(k => k.endsWith('_'+c.id) && m[k]);
+      if (!used) return false;
+      return !Object.keys(_drv).some(k => k.startsWith(dpre+c.id+'_') && _drv[k]);
+    });
+    if (_miss('pick','a_') || _miss('drop','d_')) items.push('送迎者');
+  }
   if (!Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k])) items.push('記録者');
   if (!log.managerConfirmed) items.push('管理者確認');
   return items;
@@ -11276,7 +11287,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
               const _dw = _t.getDay();
               // ★ 半日休業(ampm指定)の日は休業スロットだけを対象外にする(2026-09-04)
               if (diarySlotKyugyo(appData, _iso, _dw, 'AM') && diarySlotKyugyo(appData, _iso, _dw, 'PM')) return null;
-              const _seg = (ap) => { if (diarySlotKyugyo(appData, _iso, _dw, ap)) return { ap: ap==='AM'?'午前':'午後', missing: false, items: [] }; const l = (appData.diaryLogs||{})[`${_iso}_${ap}`]; const it = diaryPendingItems(l, _iso); return { ap: ap==='AM'?'午前':'午後', missing: it === null, items: it || [] }; };
+              const _seg = (ap) => { if (diarySlotKyugyo(appData, _iso, _dw, ap)) return { ap: ap==='AM'?'午前':'午後', missing: false, items: [] }; const l = (appData.diaryLogs||{})[`${_iso}_${ap}`]; const it = diaryPendingItems(l, _iso, appData.diarySettings?.cars); return { ap: ap==='AM'?'午前':'午後', missing: it === null, items: it || [] }; };
               const _segs = [_seg('AM'), _seg('PM')].filter(s => s.missing || s.items.length);
               if (!_segs.length) return null;
               // ★ スケジュールの邪魔にならないよう1行のスリム表示(2026-08-28)
@@ -17526,6 +17537,9 @@ export default function App() {
             // ★ 2026-09-09(扇橋実測): 軽量版2段とも失敗すると外側catchが握り潰して端末に何も残らなかった
             //   (persist-fail 24回/persist-slim 0回)。第3段=FAX等の重量データも除いた最小版で必ず残す。
             //   日誌(diaryLogs)・設定・利用者は最小版でも保持する。
+            // ★ 2026-09-10: 旧・写真分離キー(daycarePhotos_v1)が数MBの残骸として容量を食い潰し、
+            //   軽量版まで道連れに失敗させることがある。写真はクラウドが正のため、まず残骸を削除して空ける。
+            try { localStorage.removeItem('daycarePhotos_v1'); } catch {}
             let _slimOk = false;
             try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: _slimTickets(appData.ticketRecords) })); _slimOk = true; }
             catch { try { localStorage.setItem('daycareAppData_v3', JSON.stringify({ ...appData, familyPhotos: [], ticketRecords: [] })); _slimOk = true; } catch {} }
@@ -18485,7 +18499,7 @@ export default function App() {
       const closed = ((appData.systemSettings?.facilityInfo?.closedDays||[0]).includes(dw)) || ((appData.holidays||[]).some(h => (h && (h.date||h)) === iso && (!h.ampm || h.ampm === '1日')));
       if (closed) return 0;
       // ★ 半日休業のスロットは対象外(2026-09-04)
-      const bad = ['AM','PM'].filter(ap => !diarySlotKyugyo(appData, iso, dw, ap)).some(ap => { const it = diaryPendingItems((appData.diaryLogs||{})[`${iso}_${ap}`], iso); return it === null || it.length > 0; });
+      const bad = ['AM','PM'].filter(ap => !diarySlotKyugyo(appData, iso, dw, ap)).some(ap => { const it = diaryPendingItems((appData.diaryLogs||{})[`${iso}_${ap}`], iso, appData.diarySettings?.cars); return it === null || it.length > 0; });
       return bad ? 1 : 0;
     } catch { return 0; }
   }, [appData.diaryLogs, appData.holidays, appData.systemSettings?.facilityInfo?.closedDays]);
@@ -38891,23 +38905,29 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
         <tbody>
           {ds.cars.map(car=>{
             const ct=(_log.carTimes||{})[car.id]||{};
-            // ★ 2026-09-09(店舗要望): 迎え・送りとも誰も割り当てられていない車は、編集画面では
-            //   グレーで塗りつぶして到着/出発/送迎者を入力不可に(誤タップ防止)。割り当てると解除。
+            // ★ 2026-09-10(店舗要望): グレーアウトは迎え/送りで別々に。迎えで未使用なら「到着+迎えの送迎者」、
+            //   送りで未使用なら「出発+送りの送迎者」だけを塗りつぶして入力不可(誤タップ防止)。
+            //   両方未使用なら車両名もグレー。割り当てると解除。時間が既に入っている側はロックしない。
             const _carHasAny = (m) => !!m && Object.keys(m).some(k => k.endsWith('_'+car.id) && m[k]);
-            const _carUnused = !data && !_carHasAny(_log.pick) && !_carHasAny(_log.drop) && !(ct.arrive||ct.depart);
+            const _pickUnused = !data && !_carHasAny(_log.pick) && !ct.arrive;
+            const _dropUnused = !data && !_carHasAny(_log.drop) && !ct.depart;
+            const _rowUnused = _pickUnused && _dropUnused;
+            const _gy = {backgroundColor:'#e2e8f0',color:'#94a3b8'};
             return (
-              <tr key={car.id} style={{height:_carRowH,minHeight:_carRowH, ...(_carUnused?{backgroundColor:'#e2e8f0',opacity:0.55}:{})}} title={_carUnused?'この車は迎え・送りとも割り当てがないため入力できません（割り当てると入力可）':undefined}>
-                <td style={{...cs(60),textAlign:'center',fontWeight:'bold',fontSize:8,lineHeight:1.2,verticalAlign:'middle'}}><div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{car.name}</div><div style={{fontSize:7,fontWeight:'normal',color:'#000',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{car.type}</div></td>
-                <td style={{...cs(44),textAlign:'center',cursor:_carUnused?'not-allowed':'pointer',fontSize:11,fontWeight:'bold',color:ct.arrive?'#1d4ed8':'#aaa'}}
-                  onClick={()=>{ if(_carUnused) return; openTimeKeypad(car.id,'arrive',ct.arrive); }}>
-                  {_carUnused?'—':(ct.arrive||'__:__')}
+              <tr key={car.id} style={{height:_carRowH,minHeight:_carRowH}}>
+                <td title={_rowUnused?'この車は迎え・送りとも割り当てがありません（割り当てると入力できます）':undefined} style={{...cs(60),textAlign:'center',fontWeight:'bold',fontSize:8,lineHeight:1.2,verticalAlign:'middle', ...(_rowUnused?_gy:{})}}><div style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{car.name}</div><div style={{fontSize:7,fontWeight:'normal',color:_rowUnused?'#94a3b8':'#000',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{car.type}</div></td>
+                <td title={_pickUnused?'迎えの割り当てが無いため入力できません（割り当てると入力できます）':undefined}
+                  style={{...cs(44),textAlign:'center',cursor:_pickUnused?'not-allowed':'pointer',fontSize:11,fontWeight:'bold',color:ct.arrive?'#1d4ed8':'#aaa', ...(_pickUnused?_gy:{})}}
+                  onClick={()=>{ if(_pickUnused) return; openTimeKeypad(car.id,'arrive',ct.arrive); }}>
+                  {_pickUnused?'—':(ct.arrive||'__:__')}
                 </td>
-                <td style={{...cs(null), ...(_carUnused?{pointerEvents:'none'}:{})}}>{DriverRow({carId:car.id, prefix:'a_'+car.id+'_'})}</td>
-                <td style={{...cs(44),textAlign:'center',cursor:_carUnused?'not-allowed':'pointer',fontSize:11,fontWeight:'bold',color:ct.depart?'#1d4ed8':'#aaa'}}
-                  onClick={()=>{ if(_carUnused) return; openTimeKeypad(car.id,'depart',ct.depart); }}>
-                  {_carUnused?'—':(ct.depart||'__:__')}
+                <td style={{...cs(null), ...(_pickUnused?{..._gy,pointerEvents:'none',opacity:0.55}:{})}}>{DriverRow({carId:car.id, prefix:'a_'+car.id+'_'})}</td>
+                <td title={_dropUnused?'送りの割り当てが無いため入力できません（割り当てると入力できます）':undefined}
+                  style={{...cs(44),textAlign:'center',cursor:_dropUnused?'not-allowed':'pointer',fontSize:11,fontWeight:'bold',color:ct.depart?'#1d4ed8':'#aaa', ...(_dropUnused?_gy:{})}}
+                  onClick={()=>{ if(_dropUnused) return; openTimeKeypad(car.id,'depart',ct.depart); }}>
+                  {_dropUnused?'—':(ct.depart||'__:__')}
                 </td>
-                <td style={{...cs(null), ...(_carUnused?{pointerEvents:'none'}:{})}}>{DriverRow({carId:car.id, prefix:'d_'+car.id+'_'})}</td>
+                <td style={{...cs(null), ...(_dropUnused?{..._gy,pointerEvents:'none',opacity:0.55}:{})}}>{DriverRow({carId:car.id, prefix:'d_'+car.id+'_'})}</td>
               </tr>
             );
           })}
@@ -39341,7 +39361,7 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
             //   (以前は何かキーがあれば付いたため、入力して消しただけの空ログでもAM印が残っていた)
             //   休業のスロットは入力対象外扱い: 終日休業=印なし、半日休業=残りの営業スロット完了で●。
             const _kyu = (ap) => diarySlotKyugyo(appData, ds, dw2, ap);
-            const _done = (l) => { const it = diaryPendingItems(l, ds); return !!it && it.length === 0; };
+            const _done = (l) => { const it = diaryPendingItems(l, ds, appData.diarySettings?.cars); return !!it && it.length === 0; };
             const amKyu = _kyu('AM'), pmKyu = _kyu('PM');
             if (amKyu && pmKyu) return null;
             const amDone = !amKyu && _done(amLog);
@@ -39429,29 +39449,16 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           ))}
         </div>
 
-        {/* ★ 要確認バッジ: 迎え/送り=1週間前コピー未編集、 送迎時間=空欄、 記録者=未入力、 管理者確認=未確認。
-            入力/確認すると消える。 (黄色い枠は廃止しこのバッジに一本化) */}
+        {/* ★ 未完了バッジ(2026-09-10 店舗要望で刷新): 「これをやらないと日誌が完成しない」項目を一覧。
+            迎え/送り=未選択の人数を一本化(コピー未確認・全体未記入も同じチップ)。送迎者=使う車に運転者チェックなし。
+            ヒント括弧は廃止・チップ名に情報を含める。 */}
         {(() => {
-          // ★ 休業のスロットは担当職員も送迎も無いため要確認を出さない(2026-09-04 店舗要望)
+          // ★ 休業のスロットは担当職員も送迎も無いため出さない(2026-09-04 店舗要望)
           if (_dayIsKyugyo(selectedDate, dow)) return null;
           // ★ 2026-08-27以前の保存分はコピー未確認フラグの残骸があるため無視(diaryPendingItemsと同じ基準)
           const sp = selectedDate < DIARY_SP_LEGACY_CUTOFF ? {} : (log._sougeiPending || {});
-          const items = [];
-          if (sp['迎え']) items.push({ label:'迎え', hint:'コピー未確認' });
-          if (sp['送り']) items.push({ label:'送り', hint:'コピー未確認' });
-          // ★ 送迎そのものが未記入の場合も要確認に出す(2026-08-21): 従来はコピー未確認しか見ておらず、
-          //   何も記入していない日誌が「管理者確認のみ」の表示になっていた。
           const _hasAny = (o) => !!o && Object.values(o).some(v => Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : String(v ?? '').trim() !== ''));
-          if (!sp['迎え'] && !_hasAny(log.pick) && !_hasAny(log.pick_walk)) items.push({ label:'迎え', hint:'未入力' });
-          if (!sp['送り'] && !_hasAny(log.drop) && !_hasAny(log.drop_walk)) items.push({ label:'送り', hint:'未入力' });
-          const _timeEmpty = !Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart));
-          if (_timeEmpty) items.push({ label:'送迎時間', hint:'未入力' });
-          const _recEmpty = !Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k]);
-          if (_recEmpty) items.push({ label:'記録者', hint:'未入力' });
-          if (!log.managerConfirmed) items.push({ label:'管理者確認', hint:'未確認' });
-          // ★ 2026-09-09(店舗要望): 車が未選択の利用者がいたら人数付きで要確認に出す。
-          //   先週欠席だった方はコピーで車が入らず、スタッフが素通りしてしまうため。
-          //   判定は送迎車割り当てモーダルと同一(徒歩=選択済み・欠席/休止/休業は対象外)。
+          // 車未選択の利用者(判定は送迎車割り当てモーダルと同一・徒歩=選択済み・欠席/休止/休業は対象外)
           const _unassignedFor = (prefix) => {
             const _wm = log[prefix+'_walk']||{}, _sm = log[prefix]||{};
             const out = [];
@@ -39473,24 +39480,36 @@ function DailyLogView({ appData, onSave, selectedDate, setSelectedDate, sharedAm
           };
           const _upk = _unassignedFor('pick');
           const _udr = _unassignedFor('drop');
-          if (_upk.length) items.push({ label:'迎えの車', hint:`未選択${_upk.length}名` });
-          if (_udr.length) items.push({ label:'送りの車', hint:`未選択${_udr.length}名` });
+          const items = [];
+          // 迎え/送り: 「未選択◯名」に一本化(全体未記入=全員未選択として人数に含まれる)
+          if (_upk.length) items.push({ key:'迎え', label:`迎え 未選択${_upk.length}名`, prefix:'pick' });
+          else if (sp['迎え'] || (!_hasAny(log.pick) && !_hasAny(log.pick_walk))) items.push({ key:'迎え', label:'迎え', prefix:'pick' });
+          if (_udr.length) items.push({ key:'送り', label:`送り 未選択${_udr.length}名`, prefix:'drop' });
+          else if (sp['送り'] || (!_hasAny(log.drop) && !_hasAny(log.drop_walk))) items.push({ key:'送り', label:'送り', prefix:'drop' });
+          // ★ 送迎者(2026-09-10 店舗要望): 迎え/送りで使う車に運転者チェックが1人も無ければ未完了
+          const _drv = log.driver || {};
+          const _drvMissing = (dirKey, dpre) => ds.cars.some(c => {
+            const m = log[dirKey];
+            const used = !!m && Object.keys(m).some(k => k.endsWith('_'+c.id) && m[k]);
+            if (!used) return false;
+            return !Object.keys(_drv).some(k => k.startsWith(dpre+c.id+'_') && _drv[k]);
+          });
+          if (_drvMissing('pick','a_')) items.push({ key:'迎えの送迎者', label:'迎えの送迎者', aid:'diary-sec-cars' });
+          if (_drvMissing('drop','d_')) items.push({ key:'送りの送迎者', label:'送りの送迎者', aid:'diary-sec-cars' });
+          if (!Object.values(log.carTimes||{}).some(t => t && (t.arrive || t.depart))) items.push({ key:'送迎時間', label:'送迎時間', aid:'diary-sec-cars' });
+          if (!Object.keys(log.recorder||{}).some(k => (log.recorder||{})[k])) items.push({ key:'記録者', label:'記録者', aid:'diary-sec-recorder' });
+          if (!log.managerConfirmed) items.push({ key:'管理者確認', label:'管理者確認', aid:'diary-sec-manager' });
           if (!items.length) return null;
           return (
             <div style={{flexBasis:'100%'}} className="w-full bg-amber-100 border-2 border-amber-400 text-amber-900 rounded-xl px-3 py-2 text-sm font-bold flex items-center gap-2 flex-wrap">
               <span className="text-lg">⚠</span>
-              <span>要確認:</span>
-              {items.map(it=>{
-                const _aid = ({'送迎時間':'diary-sec-cars','記録者':'diary-sec-recorder','管理者確認':'diary-sec-manager'})[it.label];
-                // ★ 迎え/送りはスクロールではなく送迎車割り当てモーダルを直接開く(2026-08-31 店舗要望)
-                const _carPrefix = ({'迎え':'pick','送り':'drop','迎えの車':'pick','送りの車':'drop'})[it.label];
-                return (
-                <button key={it.label} type="button" title={_carPrefix?'クリックで送迎車割り当てを開く':'クリックで該当箇所へ移動'}
-                  onClick={()=>{ if(_carPrefix){ setCarAssignModal({prefix:_carPrefix}); setCarAssignSelections({}); return; } const el=_aid&&document.getElementById(_aid); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); const _o=el.style.outline; el.style.outline='3px solid #f59e0b'; el.style.outlineOffset='3px'; setTimeout(()=>{ el.style.outline=_o||''; el.style.outlineOffset=''; },1800); }}
-                  className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold cursor-pointer hover:bg-amber-50">{it.label}<span className="ml-1 text-[10px] font-normal text-amber-600">（{it.hint}）</span></button>
-                );
-              })}
-              <span className="text-xs font-normal text-amber-700">…入力/確認すると消えます</span>
+              <span>日誌が未完成です:</span>
+              {items.map(it=>(
+                <button key={it.key} type="button" title={it.prefix?'クリックで送迎車割り当てを開く':'クリックで該当箇所へ移動'}
+                  onClick={()=>{ if(it.prefix){ setCarAssignModal({prefix:it.prefix}); setCarAssignSelections({}); return; } const el=it.aid&&document.getElementById(it.aid); if(!el) return; el.scrollIntoView({behavior:'smooth',block:'center'}); const _o=el.style.outline; el.style.outline='3px solid #f59e0b'; el.style.outlineOffset='3px'; setTimeout(()=>{ el.style.outline=_o||''; el.style.outlineOffset=''; },1800); }}
+                  className="inline-flex items-center px-2 py-0.5 bg-white border border-amber-400 text-amber-800 rounded-full text-xs font-bold cursor-pointer hover:bg-amber-50">{it.label}</button>
+              ))}
+              <span className="text-xs font-normal text-amber-700">…すべて入力・確認すると完成します</span>
             </div>
           );
         })()}
