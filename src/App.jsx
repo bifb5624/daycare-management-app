@@ -22439,7 +22439,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
               <div key={`m-${p.id}`} className={`bg-white rounded-xl border-2 shadow-sm p-3 ${isAbsent||isPause?'border-slate-200 opacity-70':'border-slate-300'}`}>
                 <div className="flex items-center justify-between gap-2 mb-2.5">
                   <button onClick={()=>setPatientInfoModal(masterData)} className="font-bold text-base text-slate-800 flex items-center gap-1 min-w-0"><span className="truncate">{p.name}</span><span className="text-[10px] text-blue-500 shrink-0">ⓘ</span></button>
-                  <button type="button" onClick={()=>setZoomPid(p.id)} title="この方だけを大きな文字で入力します" className="shrink-0 text-[11px] font-bold text-teal-700 bg-teal-50 border border-teal-300 rounded px-2 py-1 hover:bg-teal-100">拡大</button>
+                  <button type="button" onClick={()=>setZoomPid(p.id)} title="この方だけを大きな文字で入力します" className="shrink-0 text-teal-600 hover:text-teal-800 bg-teal-50 border border-teal-200 rounded-md p-1.5" style={{lineHeight:0}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.6" y1="15.6" x2="21" y2="21"/><line x1="10.5" y1="8" x2="10.5" y2="13"/><line x1="8" y1="10.5" x2="13" y2="10.5"/></svg></button>
                   {isReadOnly||isPause ? <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${config.lightColor} ${config.textColor}`}>{p.status||'出席'}</span>
                     : <select value={p.status||'出席'} onChange={e=>handleStatusChange(p.id,e.target.value)} className={`px-2 py-1.5 rounded-lg text-sm font-bold border-0 shadow-sm outline-none ${config.lightColor} ${config.textColor} ring-1 ring-inset ${config.ring}`}>{(()=>{
                         if (p.status==='振替') return (<><option value="振替">振替</option><option value="取り消し">取り消し</option></>);
@@ -22634,10 +22634,10 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                             onClick={()=>setPatientInfoModal(masterData)}>
                             <span className="text-sm">{nameParts[0]}</span>
                             {nameParts[1] && <span className="text-sm">{nameParts[1]}</span>}
+                            {/* ★ 拡大入力(2026-09-09 店舗要望→09-09改善: 行高を増やさないよう名前と同じ行のアイコンに) */}
+                            <button type="button" onClick={(e)=>{ e.stopPropagation(); setZoomPid(p.id); }} title="この方だけを大きな文字で入力します"
+                              className="shrink-0 text-teal-600 hover:text-teal-800 hover:bg-teal-50 rounded p-0.5" style={{lineHeight:0}}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.6" y1="15.6" x2="21" y2="21"/><line x1="10.5" y1="8" x2="10.5" y2="13"/><line x1="8" y1="10.5" x2="13" y2="10.5"/></svg></button>
                           </div>
-                          {/* ★ 拡大入力(2026-09-09 店舗要望): この方だけ大きな文字で入力 */}
-                          <button type="button" onClick={()=>setZoomPid(p.id)} title="この方だけを大きな文字で入力します"
-                            className="text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-300 rounded px-1.5 py-0.5 hover:bg-teal-100">拡大</button>
                         </div>
                       );
                     })()}
