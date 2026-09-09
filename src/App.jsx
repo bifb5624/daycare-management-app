@@ -21028,6 +21028,8 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
   const getKibunReasons = (timing, mood) => getKibunReasonsFrom(appData.systemSettings, timing, mood);
 
   const openKibunModal = (recordId, timing) => {
+    // ★ 2026-09-09(Surface報告): 血圧等のテンキー(z99999)が気分モーダル(z10000)より上に残るため、開く時に必ず閉じる
+    if (keypad.isOpen) { _checkVitalRange(keypad.field, keypad.value); setKeypad(prev => ({ ...prev, isOpen: false })); }
     setKibunModal({ isOpen: true, recordId, timing });
     setKibunStep('mood');
     setKibunTempMood('');
@@ -23136,6 +23138,21 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
             <div style={{flex:1,overflowY:'auto',padding:'14px 14px 40px'}}>
               <div style={{maxWidth:720,margin:'0 auto',display:'flex',flexDirection:'column',gap:16}}>
                 {isReadOnly && <div style={{background:'#fffbeb',border:'1px solid #fcd34d',borderRadius:10,padding:'8px 12px',fontSize:14,fontWeight:'bold',color:'#92400e'}}>閲覧モードです（編集するには通常画面で「編集」をオンにしてください）</div>}
+                {/* ★ 状態+気分(2026-09-09 店舗要望): 状態は表示のみ(変更は一覧で)・気分はタップで既存の全画面気分モーダル */}
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
+                  <div style={{borderRadius:16,border:'2px solid #94a3b8',background:'white',padding:'10px 6px',display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                    <span style={{fontSize:15,fontWeight:'bold',color:'#1e293b'}}>状態</span>
+                    <span style={{fontSize:26,fontWeight:'bold',lineHeight:1.1,color:({'出席':'#2563eb','欠席':'#dc2626','振替':'#059669','休止':'#f97316','休業':'#64748b'})[p.status||'出席']||'#2563eb'}}>{p.status||'出席'}</span>
+                  </div>
+                  {['arrival','departure'].map(t=>{ const mo=KIBUN_MOODS.find(m=>m.key===p[t==='arrival'?'kibunArrival':'kibunDeparture']); return (
+                    <button key={t} type="button" disabled={dis} onClick={()=>openKibunModal(p.id,t)}
+                      className={`disabled:opacity-40 active:scale-95 ${mo?mo.color:''}`}
+                      style={{borderRadius:16,border:'2px solid #94a3b8',background:mo?undefined:'white',padding:'10px 6px',display:'flex',flexDirection:'column',alignItems:'center',gap:4,cursor:'pointer'}}>
+                      <span style={{fontSize:15,fontWeight:'bold',color:'#1e293b'}}>{t==='arrival'?'通所時の気分':'帰宅時の気分'}</span>
+                      <span style={{fontSize:26,lineHeight:1.1,fontWeight:'bold',color: mo?'#0f172a':'#94a3b8'}}>{mo?`${mo.emoji} ${mo.label}`:'ー'}</span>
+                    </button>
+                  );})}
+                </div>
                 <div>
                   <div style={{fontSize:16,fontWeight:'bold',color:'#0f172a',marginBottom:8}}>バイタル（開始）</div>
                   <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
@@ -23380,6 +23397,7 @@ function RecordView({ appData, activeRecorder, onSave, navigateTo, selectedDate,
                       const sel = cur.split('・').filter(r=>r&&known.includes(r));
                       updateRecord(recId, reasonKey, [...sel, ...(e.target.value?[e.target.value]:[])].join('・'));
                     }}
+                    onFocus={(e) => { if (Date.now() - _lpLastFireAt < 600) e.target.blur(); }}
                     placeholder="自由に入力..." className="w-full px-5 py-5 rounded-2xl bg-slate-100 text-slate-800 border-2 border-slate-300 outline-none text-2xl" />
                 </div>
                 <div className="flex gap-5 mt-6 pb-6">
