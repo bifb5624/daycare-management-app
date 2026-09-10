@@ -54,3 +54,14 @@ html, body, #root {
 
 /* ★ 薄いグレー(slate-400)の説明文・補足がWindowsで読めないため一段濃く (slate-500相当) */
 .text-slate-400 { color: #64748b !important; }
+
+/* ★ 2026-09-10(店舗報告): iPad Safari等はツールバー/ブックマークバーの分だけ実際の表示域が100vhより
+   小さく、下端の保存ボタンが隠れて押せなくなる。dvh(実表示域)対応ブラウザでは上限を実表示域で締め直す。
+   !important はインラインstyleのvh上限を上書きするために必要(非対応ブラウザは従来のvhのまま)。 */
+@supports (height: 100dvh) {
+  .tsu-cap-dvh { max-height: calc(100dvh - 12px) !important; }
+  .tsu-h-dvh { height: calc(100dvh - 0px) !important; max-height: 100dvh !important; }
+  @media (min-width: 640px) {
+    .tsu-h-dvh { height: calc(100dvh - 16px) !important; max-height: calc(100dvh - 16px) !important; }
+  }
+}

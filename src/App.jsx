@@ -1567,7 +1567,7 @@ function ConsentGateModal({ title, subtitle, policy, facility, tel, agreeLabel, 
   const [checked, setChecked] = React.useState(false);
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.72)',zIndex:100000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-      <div style={{background:'white',borderRadius:16,width:580,maxWidth:'96vw',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+      <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,width:580,maxWidth:'96vw',maxHeight:'92vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
         <div style={{padding:'16px 18px',borderBottom:'1px solid #e2e8f0'}}>
           <div style={{fontSize:16,fontWeight:'bold',color:'#166534'}}>{title}</div>
           {subtitle && <div style={{fontSize:11,color:'#64748b',marginTop:3,lineHeight:1.5}}>{subtitle}</div>}
@@ -11430,7 +11430,7 @@ function DashboardView({ appData, navigateTo, activeRecorder, notices, devNotes,
       {/* ★ お知らせ詳細モーダル */}
       {noticeDetail && (
         <div onClick={()=>setNoticeDetail(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:16}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,padding:20,width:460,maxWidth:'96vw',maxHeight:'85vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
+          <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,padding:20,width:460,maxWidth:'96vw',maxHeight:'85vh',overflow:'auto',boxShadow:'0 20px 60px rgba(0,0,0,0.25)'}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
               {noticeDetail.badge && <span style={{fontSize:11,fontWeight:'bold',color:'white',background:noticeDetail.badgeColor||'#64748b',borderRadius:6,padding:'2px 9px'}}>{noticeDetail.badge}</span>}
               {noticeDetail.date && <span style={{fontSize:11,color:'#64748b'}}>{noticeDetail.date}</span>}
@@ -11798,7 +11798,7 @@ function ScheduleView({ appData, onSave, navigateTo }) {
       ); })()}
       {modal && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setModal(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:440,maxWidth:'100%',maxHeight:'90vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:440,maxWidth:'100%',maxHeight:'90vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             {/* ★ Googleカレンダー風(2026-08-21): タイトルを最上部の大きな下線入力に、日付と時刻を1行に */}
             <div style={{fontSize:11,fontWeight:'bold',color:'#94a3b8',marginBottom:6}}>{modal.id?'予定を編集':'予定を追加'}</div>
             <input value={modal.title} onChange={e=>setModal(m=>({...m,title:e.target.value}))} placeholder="タイトルを追加"
@@ -11896,7 +11896,7 @@ function ScheduleView({ appData, onSave, navigateTo }) {
         const _closeL = () => { if (_dirtyL && !window.confirm('変更を保存せずに閉じます。よろしいですか？')) return; setLabelEditorOpen(false); setLabelDraft(null); };
         return (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={_closeL}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:460,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:460,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
               <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>色ラベル（分類）の編集</div>
               <button onClick={_closeL} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
@@ -11929,7 +11929,7 @@ function ScheduleView({ appData, onSave, navigateTo }) {
       })()}
       {repeatMgrOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:120,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={()=>setRepeatMgrOpen(false)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
+          <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'100%',maxHeight:'88vh',overflow:'auto',padding:20,boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
               <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>繰り返し設定の管理</div>
               <button onClick={()=>setRepeatMgrOpen(false)} style={{background:'none',border:'none',cursor:'pointer',color:'#64748b'}}><X size={18}/></button>
@@ -12729,7 +12729,7 @@ function LoginHelpModal({ kind, onClose }) {
   );
   return (
     <div onClick={onClose} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.72)',zIndex:100001,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'96vw',maxHeight:'90vh',overflow:'auto',padding:'20px 22px',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+      <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:520,maxWidth:'96vw',maxHeight:'90vh',overflow:'auto',padding:'20px 22px',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,gap:8}}>
           <div style={{fontSize:17,fontWeight:'bold',color:'#3d5021'}}>{kind==='home' ? '📱 ホーム画面に追加する方法' : '❓ ログインできない時（よくある質問）'}</div>
           <button onClick={onClose} aria-label="閉じる" style={{flexShrink:0,background:'#f1f5f9',border:'none',borderRadius:20,width:38,height:38,fontSize:18,fontWeight:'bold',color:'#475569',cursor:'pointer'}}>✕</button>
@@ -14286,7 +14286,7 @@ function CmDocsModal({ patient, storeId, byName, onSaved, onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: 'white', borderRadius: 18, maxWidth: 560, width: '100%', padding: '20px 18px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
+      <div className="tsu-cap-dvh" style={{ background: 'white', borderRadius: 18, maxWidth: 560, width: '100%', padding: '20px 18px', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
         <div style={{ fontSize: 17, fontWeight: 'bold', color: '#0f172a', marginBottom: 4 }}>保険証・負担割合証・アセスメント</div>
         <div style={{ fontSize: 11, color: '#64748b', marginBottom: 14, lineHeight: 1.5 }}>{patient?.name} 様。ここで登録・更新した書類は事業所側の個人ファイルに反映され、双方で最新のものを共有できます（既存の書類に追記され、上書きはしません）。</div>
         <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, padding: 12, marginBottom: 12 }}>
@@ -14950,7 +14950,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       </div>
       {termsOpen && (()=>{ const _pol = getEffectivePolicy('family', data.systemSettings); return (
         <div onClick={()=>setTermsOpen(false)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.72)',zIndex:100001,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:580,maxWidth:'96vw',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+          <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:580,maxWidth:'96vw',maxHeight:'90vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
             <div style={{padding:'16px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
               <div><div style={{fontSize:16,fontWeight:'bold',color:'#166534'}}>利用規約・プライバシーポリシー</div><div style={{fontSize:10,color:'#65a30d',fontWeight:'bold',marginTop:4}}>第{_pol.version}版{_pol.date?`（${String(_pol.date).replace(/-/g,'/')}改定）`:''}</div></div>
               <button onClick={()=>setTermsOpen(false)} aria-label="閉じる" style={{flexShrink:0,background:'#f1f5f9',border:'none',borderRadius:20,width:38,height:38,fontSize:18,fontWeight:'bold',color:'#475569',cursor:'pointer'}}>✕</button>
@@ -15069,7 +15069,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
       )}
       {myInfoOpen && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'22px 20px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}}>
             <div style={{fontSize:17,fontWeight:'bold',color:'#1e293b',marginBottom:10}}>利用者・登録者情報</div>
             {/* ★ タブ切替 (家族一覧は右上の独立ボタンに集約したのでここでは 2 タブのみ) */}
             <div style={{display:'flex',gap:6,marginBottom:14,borderBottom:'2px solid #e2e8f0'}}>
@@ -15677,7 +15677,7 @@ function FamilyPatientView({ data, setData, patientId, accountId, onLogout, onSw
         const titleIcon = isCmRelation ? '' : '';
         return (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.6)',zIndex:9000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'20px 18px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:18,maxWidth:460,width:'100%',padding:'20px 18px',boxShadow:'0 20px 60px rgba(0,0,0,0.4)',maxHeight:'92vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
             {/* タイトル: モードに応じて 一覧 / 新規登録 を切替 */}
             <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b',marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
               {inviteMode === 'new' ? `${titleIcon} ${relLabel}を新規登録` : `${listTitleIcon} ${listTitleLabel}`}
@@ -16540,7 +16540,7 @@ function SystemNoticesPanel({ stores, staffSession }) {
       )}
       {showForm && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}}>
             <div style={{fontSize:16,fontWeight:'bold',color:'#3d5021',marginBottom:16}}>📣 お知らせを追加</div>
             <form onSubmit={handleCreate} style={{display:'grid',gap:10}}>
               <div>
@@ -16943,7 +16943,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
       {/* ★ アドオン管理モーダル (本部が店舗ごとに ON/OFF) */}
       {addonModal && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}} onClick={()=>!addonBusy&&setAddonModal(null)}>
-          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:520,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,padding:24,maxWidth:520,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:2}}>アドオン管理</div>
             <div style={{fontSize:12,color:'#64748b',marginBottom:16}}>{addonModal.storeName}</div>
             <div style={{display:'grid',gap:10}}>
@@ -16974,7 +16974,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
       )}
       {editStore && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}} onClick={()=>!editStore.loading&&setEditStore(null)}>
-          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:4}}>店舗情報を編集</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:16}}>店舗ID（{editStore.id}）は変更できません。</div>
             {editStore.error && <div style={{background:'#fef2f2',color:'#dc2626',padding:'8px 12px',borderRadius:8,fontSize:12,fontWeight:'bold',marginBottom:12}}>{editStore.error}</div>}
@@ -17006,7 +17006,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
       )}
       {showAddStore && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}}>
-          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:16}}>新規店舗を追加</div>
             <form onSubmit={handleCreateStore}>
               <div style={{marginBottom:12}}>
@@ -17096,7 +17096,7 @@ function SuperAdminConsole({ staffSession, onSelectStore, onLogout }) {
       {/* スタッフ追加モーダル */}
       {showAddStaff && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',padding:16,zIndex:1000}}>
-          <div style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
+          <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,padding:24,maxWidth:480,width:'100%',maxHeight:'90vh',overflow:'auto'}} onClick={e=>e.stopPropagation()}>
             <div style={{fontSize:18,fontWeight:'bold',color:'#3d5021',marginBottom:8}}>店舗管理者を追加</div>
             <div style={{fontSize:11,color:'#64748b',marginBottom:16,lineHeight:1.6,padding:10,background:'#f4f8ed',borderRadius:8}}>
               この店舗にログインできる ID/パスワード を発行します。<br/>
@@ -20147,7 +20147,7 @@ export default function App() {
         const _fmt = (t)=>{ try { return new Date(Number(t)).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}); } catch { return ''; } };
         return (
           <div onClick={()=>setAuditLogOpen(false)} style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.55)',zIndex:99998,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:20,width:'100%',maxWidth:640,maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
+            <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:20,width:'100%',maxWidth:640,maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.35)'}}>
               <div style={{padding:'14px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',gap:8}}>
                 <div style={{fontWeight:'bold',color:'#1e293b'}}>変更ログ</div>
                 <div style={{fontSize:11,color:'#64748b'}}>いつ・どの端末で・何を変更したか（最新300件）</div>
@@ -24480,7 +24480,7 @@ function PersonalDashboardView({ appData, targetPatientId, navigateTo, onPatient
         {!familyMode && !cmViewerMode && !selfMode && showScopeInfo && (
           <div className="no-print" onClick={()=>setShowScopeInfo(false)}
             style={{position:'fixed',inset:0,zIndex:70,background:'rgba(15,23,42,0.55)',display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-            <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,boxShadow:'0 20px 60px rgba(0,0,0,0.3)',maxWidth:680,width:'100%',maxHeight:'85vh',overflowY:'auto',padding:'16px 18px'}}>
+            <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,boxShadow:'0 20px 60px rgba(0,0,0,0.3)',maxWidth:680,width:'100%',maxHeight:'85vh',overflowY:'auto',padding:'16px 18px'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
                 <div style={{fontSize:14,fontWeight:'bold',color:'#1e293b'}}>閲覧アカウント別の表示内容</div>
                 <button type="button" onClick={()=>setShowScopeInfo(false)} style={{background:'none',border:'none',color:'#94a3b8',fontSize:20,cursor:'pointer',lineHeight:1}}>×</button>
@@ -29998,7 +29998,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         {/* ★ 次回予定の焼き付き残骸チェック一覧 */}
         {ovCleanup && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{maxHeight:'88vh'}}>
+            <div className="tsu-cap-dvh bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{maxHeight:'88vh'}}>
               <div className="px-6 py-4 border-b border-slate-200 bg-amber-50 flex justify-between items-center flex-shrink-0">
                 <h2 className="text-base font-bold text-slate-800">次回予定の残骸チェック（自動計算と食い違う保存値）</h2>
                 <button onClick={()=>setOvCleanup(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">✕</button>
@@ -30038,7 +30038,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         )}
         {isScheduleModalOpen && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" style={{maxHeight:'90vh'}}>
+            <div className="tsu-cap-dvh bg-white rounded-3xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden" style={{maxHeight:'90vh'}}>
               <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-shrink-0">
                 <h2 className="text-lg font-bold text-slate-800 flex items-center"><Clock size={20} className="mr-2 text-blue-600"/> 次回予定の変更</h2>
                 {/* ★ 残骸チェックボタンは2026-09-09撤去(生成源の自動書込を全て塞ぎ振替も空欄化したため役目終了)。_scanOvZansai等の機能コードは温存 */}
@@ -30178,7 +30178,7 @@ function ContactBookView({ appData, selectedDate, setSelectedDate, onSave, dirty
         {/* 印刷対象選択モーダル（チェックされた利用者だけ印刷） */}
         {printModeModal && ReactDOM.createPortal((
           <div className="fixed inset-0 bg-slate-900/50 z-[9999] flex items-center justify-center p-4" onClick={()=>setPrintModeModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style={{maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
+            <div className="tsu-cap-dvh bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col" style={{maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
               <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
                 <div className="font-bold text-slate-800 text-base">印刷する利用者を選択</div>
                 <button onClick={()=>setPrintModeModal(false)} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"><X size={18}/></button>
@@ -30753,7 +30753,7 @@ function ContactBookConfigModal({ config, exerciseItems, onClose, onSave }) {
   // ★ Portal で body 直下にレンダリング → 親 div の scale/transform に影響されず画面上部に固定
   return ReactDOM.createPortal(
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-start justify-center p-0 sm:p-2 sm:pt-4">
-      <div className="bg-white rounded-none sm:rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden h-full sm:h-[95vh]" style={{maxHeight:'100vh'}}>
+      <div className="tsu-h-dvh bg-white rounded-none sm:rounded-3xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden h-full sm:h-[95vh]" style={{maxHeight:'100vh'}}>
         <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center flex-shrink-0">
           <h2 className="text-lg font-bold text-slate-800 flex items-center"><Settings size={20} className="mr-2 text-blue-600"/> 連絡帳フォーマット設定</h2>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-full transition-colors"><X size={20}/></button>
@@ -42501,7 +42501,7 @@ function LifeHubView({ appData, onSave, navigateTo, targetPatientId, navFocus, o
       {/* ★ LIFE CSV取込(移行)の突合プレビュー */}
       {lifeImport && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{maxHeight:'88vh'}}>
+          <div className="tsu-cap-dvh bg-white rounded-3xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden" style={{maxHeight:'88vh'}}>
             <div className="px-6 py-4 border-b border-slate-200 bg-teal-50 flex justify-between items-center flex-shrink-0">
               <h2 className="text-base font-bold text-slate-800">LIFEデータ取込(移行) — 突合結果の確認</h2>
               <button onClick={()=>setLifeImport(null)} className="text-slate-400 hover:text-slate-600 font-bold text-xl">✕</button>
@@ -44346,7 +44346,7 @@ function InsuranceOcrModal({ onApply, onClose }) {
 
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.75)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:18,width:'100%',maxWidth:780,maxHeight:'90vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
+      <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:18,width:'100%',maxWidth:780,maxHeight:'90vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)'}}>
         <div style={{padding:'16px 22px',borderBottom:'1px solid #e2e8f0',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,background:'white',zIndex:1}}>
           <div className="text-base font-bold text-slate-800 flex items-center gap-2">介護保険証 / 負担割合証 OCR 取り込み</div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-full">✕</button>
@@ -44467,7 +44467,7 @@ function FaxHistoryListModal({ history, typeLabel, onDelete, onClose }) {
   }).sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:10000,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div style={{background:'white',borderRadius:16,maxWidth:720,width:'100%',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
+      <div className="tsu-cap-dvh" style={{background:'white',borderRadius:16,maxWidth:720,width:'100%',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.3)'}} onClick={e=>e.stopPropagation()}>
         <div style={{padding:'16px 20px',background:'linear-gradient(135deg,#7c3aed,#a855f7)',color:'white',display:'flex',alignItems:'center',justifyContent:'space-between',borderRadius:'16px 16px 0 0'}}>
           <div>
             <div style={{fontSize:16,fontWeight:'bold'}}>{typeLabel}の送付履歴</div>
@@ -44523,7 +44523,7 @@ function FaxHelpModal({ onClose }) {
   const [tab, setTab] = useState('win');
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.7)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div style={{background:'white',borderRadius:20,maxWidth:680,width:'100%',maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.4)'}} onClick={e=>e.stopPropagation()}>
+      <div className="tsu-cap-dvh" style={{background:'white',borderRadius:20,maxWidth:680,width:'100%',maxHeight:'90vh',overflow:'hidden',display:'flex',flexDirection:'column',boxShadow:'0 20px 60px rgba(0,0,0,0.4)'}} onClick={e=>e.stopPropagation()}>
         {/* ヘッダー */}
         <div style={{padding:'18px 24px',background:'linear-gradient(135deg,#2563eb,#7c3aed)',color:'white',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div>
@@ -45709,7 +45709,7 @@ function GeneralFaxView({ appData, onSave, dirtyRef, saveFnRef, onShowPrintPrevi
       {showTemplates && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:100,display:'flex',alignItems:'center',justifyContent:'center',padding:20}}
              onClick={()=>{setShowTemplates(false);setTplEdit(null);}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:560,maxWidth:'100%',maxHeight:'85vh',overflow:'auto',padding:24,boxShadow:'0 10px 40px rgba(0,0,0,0.3)'}}>
+          <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:16,width:560,maxWidth:'100%',maxHeight:'85vh',overflow:'auto',padding:24,boxShadow:'0 10px 40px rgba(0,0,0,0.3)'}}>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
               <div style={{fontSize:16,fontWeight:'bold',color:'#1e293b'}}>定型文</div>
               <button onClick={()=>{setShowTemplates(false);setTplEdit(null);}} style={{background:'none',border:'none',fontSize:20,cursor:'pointer',color:'#64748b'}}>✕</button>
@@ -47843,7 +47843,7 @@ function MeetingPdfPreview({ patient, meeting, onClose }) {
   };
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.75)',zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'100%',maxWidth:'800px',maxHeight:'95vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)',display:'flex',flexDirection:'column'}}>
+      <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'100%',maxWidth:'800px',maxHeight:'95vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)',display:'flex',flexDirection:'column'}}>
         <div style={{padding:'12px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{fontWeight:'bold',color:'#1e293b'}}>サービス担当者会議録 プレビュー</div>
           <div style={{display:'flex',gap:8}}>
@@ -47925,7 +47925,7 @@ function MonthlyServicePdfPreview({ patient, snapshot, onClose }) {
   };
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.75)',zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'100%',maxWidth:'900px',maxHeight:'95vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)',display:'flex',flexDirection:'column'}}>
+      <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'100%',maxWidth:'900px',maxHeight:'95vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)',display:'flex',flexDirection:'column'}}>
         <div style={{padding:'12px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{fontWeight:'bold',color:'#1e293b'}}>サービス提供記録 {y}年{m}月分 ({patient.name})</div>
           <div style={{display:'flex',gap:8}}>
@@ -48589,7 +48589,7 @@ function FaceSheetPdfPreview({ patient, faceSheet, onClose }) {
   );
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(15,23,42,0.75)',zIndex:70,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'100%',maxWidth:'900px',maxHeight:'95vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)',display:'flex',flexDirection:'column'}}>
+      <div className="tsu-cap-dvh" onClick={e=>e.stopPropagation()} style={{background:'white',borderRadius:14,width:'100%',maxWidth:'900px',maxHeight:'95vh',overflow:'auto',boxShadow:'0 24px 60px rgba(0,0,0,0.4)',display:'flex',flexDirection:'column'}}>
         <div style={{padding:'12px 18px',borderBottom:'1px solid #e2e8f0',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{fontWeight:'bold',color:'#1e293b'}}>フェイスシート プレビュー ({patient.name})</div>
           <div style={{display:'flex',gap:8}}>
